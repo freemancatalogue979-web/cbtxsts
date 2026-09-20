@@ -122,9 +122,31 @@ def bootstrap(db: Session = Depends(get_db)) -> dict:
 
 @router.get("/courses")
 def list_courses(db: Session = Depends(get_db)) -> list[dict]:
+    from ..models import Question
+
     courses = db.scalars(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).all()
     counts = dict(db.execute(select(Quiz.course_id, func.count(Quiz.id)).group_by(Quiz.course_id)).all())
-    return [course_public(c, quiz_count=int(counts.get(c.id, 0))) for c in courses]
+    # Duel-ready question bank per course (same filters the duel pool uses).
+    question_counts = dict(
+        db.execute(
+            select(Question.course_id, func.count(Question.id))
+            .where(
+                Question.source_id.is_(None),
+                Question.visible.is_(True),
+                Question.status == "approved",
+                Question.duel_enabled.is_(True),
+            )
+            .group_by(Question.course_id)
+        ).all()
+    )
+    return [
+        course_public(
+            c,
+            quiz_count=int(counts.get(c.id, 0)),
+            question_count=int(question_counts.get(c.id, 0)),
+        )
+        for c in courses
+    ]
 
 
 @router.get("/quizzes")

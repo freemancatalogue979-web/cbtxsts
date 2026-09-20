@@ -15,13 +15,27 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {
   ArrowLeft,
+  Award,
+  BookOpen,
+  Brain,
+  Calculator,
+  CalendarDays,
   Check,
   ChevronUp,
+  Cpu,
   Eye,
+  FileText,
   Flame,
+  FlaskConical,
+  Globe2,
+  GraduationCap,
+  Landmark,
+  ListChecks,
   Loader2,
+  Microscope,
   Radio,
   RefreshCw,
+  Scale,
   SignalHigh,
   SkipForward,
   Swords,
@@ -33,11 +47,12 @@ import {
 } from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
-import {formatNumber} from '../lib/format';
+import {formatNumber, formatRelative} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
 import {LiveSocket} from '../lib/ws';
 import {useSession} from '../store/session';
 import type {
+  Course,
   QuestionPublic,
   RankedFinishPayload,
   RankedHistoryRow,
@@ -54,6 +69,33 @@ import type {
 type Phase = 'loading' | 'idle' | 'queue' | 'lobby' | 'live' | 'results' | 'review';
 
 const QUEUE_REFRESH_MS = 2000;
+
+/* Course picker dressing: every course gets a stable icon (keyed off its id)
+   and wears its own accent colour so the grid reads at a glance. */
+const COURSE_ICONS = [BookOpen, FlaskConical, Calculator, Globe2, Cpu, Scale, Landmark, Microscope, Brain, GraduationCap];
+const COURSE_ACCENTS: Record<string, {tile: string; selected: string}> = {
+  red: {
+    tile: 'border-flare-500/30 bg-flare-500/14 text-flare-300',
+    selected: 'border-flare-400/60 bg-flare-500/10 shadow-[0_0_0_1px] shadow-flare-400/30',
+  },
+  violet: {
+    tile: 'border-nova-500/30 bg-nova-500/14 text-nova-300',
+    selected: 'border-nova-400/60 bg-nova-500/10 shadow-[0_0_0_1px] shadow-nova-400/30',
+  },
+  blue: {
+    tile: 'border-pulse-500/30 bg-pulse-500/14 text-pulse-300',
+    selected: 'border-pulse-400/60 bg-pulse-500/10 shadow-[0_0_0_1px] shadow-pulse-400/30',
+  },
+  amber: {
+    tile: 'border-gold-500/30 bg-gold-500/14 text-gold-300',
+    selected: 'border-gold-400/60 bg-gold-500/10 shadow-[0_0_0_1px] shadow-gold-400/30',
+  },
+};
+const FALLBACK_ACCENT = COURSE_ACCENTS.violet;
+
+function courseIcon(course: Course) {
+  return COURSE_ICONS[course.id % COURSE_ICONS.length];
+}
 
 function parseTime(iso: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
@@ -206,7 +248,7 @@ export default function RankedPanel() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [meta, setMeta] = useState<RankedMeta | null>(null);
   const [status, setStatus] = useState<RankedStatus | null>(null);
-  const [courses, setCourses] = useState<{id: number; title: string; code: string}[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
   const [matchId, setMatchId] = useState<number | null>(null);
   const [match, setMatch] = useState<RankedMatchState | null>(null);
@@ -560,26 +602,78 @@ export default function RankedPanel() {
         </div>
 
         <Card className="p-4 sm:p-5">
-          <h2 className="text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
-          <p className="mt-1 text-[0.78rem] font-medium text-mist-500">Pick a course and the server will find opponents.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {courses.map((course) => (
-              <button
-                key={course.id}
-                onClick={() => {
-                  uiClick('select');
-                  setCourseId(course.id);
-                }}
-                className={`rounded-2xl border px-3.5 py-3 text-left transition-all active:translate-y-px ${
-                  courseId === course.id
-                    ? 'border-nova-400/60 bg-nova-400/10 shadow-[0_0_0_1px] shadow-nova-400/30'
-                    : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/8'
-                }`}
-              >
-                <p className="truncate text-[0.82rem] font-extrabold text-mist-100">{course.title}</p>
-                <p className="text-[0.66rem] font-bold text-mist-500">{course.code}</p>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
+            <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-300" icon={<SignalHigh className="size-3" />}>
+              {courses.length} arena{courses.length === 1 ? '' : 's'} open
+            </Chip>
+          </div>
+          <p className="mt-1 text-[0.78rem] font-medium text-mist-500">
+            Pick a course and the server will find opponents. Every card shows the bank you will be quizzed from.
+          </p>
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+            {courses.map((course) => {
+              const Icon = courseIcon(course);
+              const accent = COURSE_ACCENTS[course.accent] ?? FALLBACK_ACCENT;
+              const selected = courseId === course.id;
+              return (
+                <button
+                  key={course.id}
+                  type="button"
+                  onClick={() => {
+                    uiClick('select');
+                    setCourseId(course.id);
+                  }}
+                  aria-pressed={selected}
+                  className={`rounded-2xl border p-3.5 text-left transition-all active:translate-y-px ${
+                    selected ? accent.selected : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/8'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={`grid size-11 shrink-0 place-items-center rounded-xl border ${accent.tile}`}>
+                      <Icon className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-[0.86rem] font-extrabold text-mist-50">{course.title}</span>
+                        {selected && (
+                          <span className="grid size-4.5 shrink-0 place-items-center rounded-full bg-nova-500 text-white">
+                            <Check className="size-3" />
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-[0.62rem] font-black tracking-[0.14em] text-mist-500">
+                        {course.code} · {course.semester}
+                      </span>
+                    </span>
+                  </div>
+                  {course.description && (
+                    <p className="mt-2 line-clamp-2 text-[0.72rem] leading-relaxed font-medium text-mist-400">{course.description}</p>
+                  )}
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<ListChecks className="size-3" />}>
+                      {course.question_count ?? 0} questions
+                    </Chip>
+                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<FileText className="size-3" />}>
+                      {course.quiz_count ?? 0} exam{course.quiz_count === 1 ? '' : 's'}
+                    </Chip>
+                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<Award className="size-3" />}>
+                      {course.credit_units} CU
+                    </Chip>
+                    {course.lecturer && (
+                      <Chip className="hidden border-white/10 bg-white/6 text-mist-300 sm:inline-flex" icon={<GraduationCap className="size-3" />}>
+                        {course.lecturer}
+                      </Chip>
+                    )}
+                    {course.created_at && (
+                      <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<CalendarDays className="size-3" />}>
+                        added {formatRelative(course.created_at)}
+                      </Chip>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
           <Button className="mt-4 w-full" size="lg" loading={busy} disabled={courseId == null} onClick={findMatch} icon={<TrendingUp className="size-4" />}>
             Find match

@@ -13,6 +13,7 @@ import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamep
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Avatar, Button, Card, EmptyState, Modal, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
+import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
 import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
@@ -409,6 +410,15 @@ export default function FriendsPanel({
     setChatFocus(null);
   }, [setChatFocus]);
 
+  /* While a thread is open on mobile, ask the shell to tuck the bottom tab
+     bar away so the conversation gets the full screen (a floating pill can
+     bring it back temporarily). Closing the thread restores the bar. */
+  const chatNav = useChatNav();
+  useEffect(() => {
+    chatNav.setThreadOpen(Boolean(selected));
+    return () => chatNav.setThreadOpen(false);
+  }, [selected, chatNav.setThreadOpen]);
+
   const atBottom = useRef(true);
 
   const scrollToEnd = useCallback((smooth = true) => {
@@ -764,8 +774,13 @@ export default function FriendsPanel({
                the app header and the bottom nav: the message list scrolls
                INTERNALLY and the composer stays pinned in view, so the page
                itself never becomes the scroll container and the nav can never
-               cover the latest messages. Desktop keeps its natural height. */
-            <Card className="flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:h-[calc(100dvh-16rem)] max-lg:min-h-[20rem]">
+               cover the latest messages. While the tab bar is tucked away the
+               thread claims the freed space too. Desktop keeps natural height. */
+            <Card
+              className={`flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:min-h-[20rem] ${
+                chatNav.collapsed ? 'max-lg:h-[calc(100dvh-13rem)]' : 'max-lg:h-[calc(100dvh-16.5rem)]'
+              }`}
+            >
               <div className="flex items-center gap-2.5 border-b border-white/8 px-3 py-2.5 sm:px-4">
                 <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 lg:hidden" />
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />

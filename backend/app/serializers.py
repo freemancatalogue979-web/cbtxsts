@@ -198,7 +198,7 @@ def question_public(
     return question_student_public(question, reveal=reveal, order=order, extra=extra)
 
 
-def course_public(course: Course, *, quiz_count: int = 0) -> dict[str, Any]:
+def course_public(course: Course, *, quiz_count: int = 0, question_count: int = 0) -> dict[str, Any]:
     return {
         "id": course.id,
         "code": course.code,
@@ -210,6 +210,8 @@ def course_public(course: Course, *, quiz_count: int = 0) -> dict[str, Any]:
         "accent": course.accent,
         "is_active": course.is_active,
         "quiz_count": quiz_count,
+        "question_count": question_count,
+        "created_at": iso(course.created_at),
     }
 
 

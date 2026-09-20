@@ -1,7 +1,7 @@
 /** App chrome: desktop nav tabs, mobile bottom bar, header stats, notifications. */
-import {Bell, BellRing, CheckCircle2, ChevronDown, CircleHelp, Coins, Flame, Gem, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
+import {Bell, BellRing, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Coins, Flame, Gem, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
+import {createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import type {ReactNode} from 'react';
 import {Avatar, Button, Chip, IconButton, Modal} from './ui';
 import {Holdable} from './Holdable';
@@ -22,6 +22,29 @@ import {useSession} from '../store/session';
 const SEEN_KEY = 'arena.notices.seen';
 
 const NOTE_ICONS: Record<string, typeof Bell> = {help: CircleHelp, answer: CheckCircle2, nudge: BellRing};
+
+/**
+ * Mobile chat focus: while a friend thread is open the bottom tab bar
+ * temporarily collapses so the conversation gets the full screen. The thread
+ * reports its open state here and the shell draws a small floating pill to
+ * bring the tabs back (and hide them again) on demand.
+ */
+export interface ChatNavValue {
+  /** True while the mobile bottom nav is collapsed out of the way. */
+  collapsed: boolean;
+  /** Called by the chat panel when its thread opens or closes. */
+  setThreadOpen: (open: boolean) => void;
+  /** Temporary expand / collapse toggle driven by the floating pill. */
+  toggleNav: () => void;
+}
+
+export const ChatNavContext = createContext<ChatNavValue>({
+  collapsed: false,
+  setThreadOpen: () => {},
+  toggleNav: () => {},
+});
+
+export const useChatNav = () => useContext(ChatNavContext);
 
 /**
  * The browser refused autoplay (no gesture yet): float a simple start button
@@ -345,6 +368,24 @@ export function AppShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const desktopMoreRef = useRef<HTMLDivElement>(null);
 
+  /* Collapsible mobile nav: the chat thread asks to take the whole screen, the
+     floating pill can temporarily bring the tabs back. Leaving the thread
+     always restores the normal bar. */
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [navExpanded, setNavExpanded] = useState(false);
+  useEffect(() => {
+    setNavExpanded(false);
+  }, [threadOpen]);
+  const navCollapsed = threadOpen && !navExpanded;
+  const chatNavValue = useMemo<ChatNavValue>(
+    () => ({
+      collapsed: navCollapsed,
+      setThreadOpen,
+      toggleNav: () => setNavExpanded((value) => !value),
+    }),
+    [navCollapsed],
+  );
+
   const isMoreActive = DESKTOP_MORE_TABS.some((id) => tab === id);
 
   /* Close desktop more dropdown on outside click */
@@ -380,6 +421,7 @@ export function AppShell({
   }, []);
 
   return (
+    <ChatNavContext.Provider value={chatNavValue}>
     <div className="aurora min-h-dvh">
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-60" />
 
@@ -545,8 +587,15 @@ export function AppShell({
       {/* ------------------------------------------------- the game bottom bar
           A floating rounded dock rather than an edge-to-edge strip, with the
           active tab lifted into a coin. Safe-area padding keeps it clear of the
-          home indicator; nothing here can scroll sideways. */}
-      <nav className="print-hide fixed inset-x-0 bottom-0 z-50 px-2.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] lg:hidden">
+          home indicator; nothing here can scroll sideways. While a chat thread
+          is focused it slides away entirely (see the floating pill below). */}
+      <motion.nav
+        animate={{y: navCollapsed ? '118%' : '0%'}}
+        transition={{type: 'spring', stiffness: 380, damping: 36}}
+        aria-hidden={navCollapsed}
+        className="print-hide fixed inset-x-0 bottom-0 z-50 px-2.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] lg:hidden"
+        style={{pointerEvents: navCollapsed ? 'none' : undefined}}
+      >
         <div className="mx-auto flex max-w-lg items-stretch justify-between gap-1 rounded-[1.4rem] border-2 border-white/12 bg-ink-900/94 p-1.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.9)] backdrop-blur-xl">
           {MOBILE_TABS.map((id) => TABS.find((row) => row.id === id)!).map((item) => {
             const active = tab === item.id;
@@ -604,7 +653,35 @@ export function AppShell({
             </span>
           </button>
         </div>
-      </nav>
+      </motion.nav>
+
+      {/* The little lift-tab that brings the dock back while a chat thread is
+          focused: one tap expands the tabs for a moment, another hides them. */}
+      <AnimatePresence>
+        {threadOpen && (
+          <motion.button
+            key="nav-pill"
+            type="button"
+            onClick={chatNavValue.toggleNav}
+            aria-label={navCollapsed ? 'Show the tab bar' : 'Hide the tab bar'}
+            initial={{opacity: 0, x: '-50%', y: 10}}
+            animate={{opacity: 1, x: '-50%', y: navExpanded ? -78 : 0}}
+            exit={{opacity: 0, x: '-50%', y: 10}}
+            transition={{type: 'spring', stiffness: 420, damping: 32}}
+            className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-1/2 z-50 flex items-center gap-1.5 rounded-full border-2 border-white/14 bg-ink-900/95 px-3.5 py-2 text-[0.66rem] font-black tracking-wider text-mist-200 shadow-[0_10px_26px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl touch-manipulation active:scale-95 lg:hidden"
+          >
+            {navCollapsed ? (
+              <>
+                <ChevronUp className="size-3.5 text-nova-300" /> Menu
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-3.5 text-nova-300" /> Hide
+              </>
+            )}
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* The overflow menu: a game menu grid rather than a list of links. */}
       <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="Menu" subtitle="Everything else in the arena.">
@@ -795,6 +872,7 @@ export function AppShell({
         }}
       />
     </div>
+    </ChatNavContext.Provider>
   );
 }
 
