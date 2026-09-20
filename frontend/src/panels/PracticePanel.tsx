@@ -771,7 +771,6 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<RunStats>(run.stats ?? {answered: 0, correct: 0, wrong: 0, remaining: run.questions.length});
   const [summary, setSummary] = useState<RunSummary | null>(null);
-  const [remaining, setRemaining] = useState<number | null>(null);
   const askedAt = useRef(Date.now());
   const finishing = useRef(false);
   const skew = useRef(0);
@@ -779,17 +778,6 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
   if (run.server_now) {
     skew.current = Date.now() - Date.parse(run.server_now);
   }
-
-  // The countdown is computed from the server's ends_at (corrected for clock
-  // skew), so a refresh, a nap or a lying device clock cannot bend it.
-  useEffect(() => {
-    if (!run.ends_at) return undefined;
-    const endsAt = Date.parse(run.ends_at);
-    const update = () => setRemaining(Math.max(0, Math.ceil((endsAt - (Date.now() - skew.current)) / 1000)));
-    update();
-    const timer = window.setInterval(update, 500);
-    return () => window.clearInterval(timer);
-  }, [run.ends_at]);
 
   const finish = useCallback(async () => {
     if (finishing.current) return;
@@ -812,10 +800,14 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
     if (expired && !summary) void finish();
   }, [expired, summary, finish]);
 
-  // the clock reached 00:00 — end it, no more answers
+  // the clock reaching 00:00 ends the run: one timeout scheduled for the
+  // exact server deadline (skew-corrected) — no per-second state churn.
   useEffect(() => {
-    if (remaining === 0 && !summary) void finish();
-  }, [remaining, summary, finish]);
+    if (!run.ends_at || summary) return undefined;
+    const ms = Math.max(0, Date.parse(run.ends_at) - (Date.now() - skew.current)) + 300;
+    const timer = window.setTimeout(() => void finish(), ms);
+    return () => window.clearTimeout(timer);
+  }, [run.ends_at, summary, finish]);
 
   const question = run.questions[index];
   const total = run.questions.length;
@@ -987,8 +979,6 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
     );
   }
 
-  const timerLow = remaining !== null && remaining <= 60;
-
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -1001,11 +991,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
         <Chip className="ml-auto border-white/12 bg-white/6 text-mist-400">
           {index + 1} / {total}
         </Chip>
-        {remaining !== null && (
-          <Chip className={`${timerLow ? 'animate-pulse border-flare-500/40 bg-flare-500/12 text-flare-200' : 'border-white/12 bg-white/6 text-mist-300'}`} icon={<Timer className="size-3.5" />}>
-            {clock(remaining)}
-          </Chip>
-        )}
+        {run.ends_at && <RunClock endsAt={run.ends_at} skewRef={skew} />}
       </div>
 
       <ProgressBar value={(stats.answered / Math.max(total, 1)) * 100} />
@@ -1347,4 +1333,25 @@ export default function PracticePanel() {
 
 function formatHp(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value));
+}
+
+
+/* The run countdown owns its own 500ms tick so only this chip re-renders —
+   the whole practice screen stays perfectly still between answers. */
+function RunClock({endsAt, skewRef}: {endsAt: string; skewRef: {readonly current: number}}) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    const ends = Date.parse(endsAt);
+    const update = () => setRemaining(Math.max(0, Math.ceil((ends - (Date.now() - skewRef.current)) / 1000)));
+    update();
+    const timer = window.setInterval(update, 500);
+    return () => window.clearInterval(timer);
+  }, [endsAt, skewRef]);
+  if (remaining === null) return null;
+  const low = remaining <= 60;
+  return (
+    <Chip className={`${low ? 'animate-pulse border-flare-500/40 bg-flare-500/12 text-flare-200' : 'border-white/12 bg-white/6 text-mist-300'}`} icon={<Timer className="size-3.5" />}>
+      {clock(remaining)}
+    </Chip>
+  );
 }

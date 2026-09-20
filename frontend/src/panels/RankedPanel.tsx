@@ -211,14 +211,12 @@ export default function RankedPanel() {
   const [window_, setWindow] = useState<RankedQuestionWindow | null>(null);
   const [reveal, setReveal] = useState<RankedReveal | null>(null);
   const [myPick, setMyPick] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(0);
   const [busy, setBusy] = useState(false);
   const [finish, setFinish] = useState<RankedFinishPayload | null>(null);
   const [history, setHistory] = useState<RankedHistoryRow[]>([]);
   const [ladder, setLadder] = useState<RankedLadder | null>(null);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [queueSeconds, setQueueSeconds] = useState(0);
   const socketRef = useRef<LiveSocket | null>(null);
   const questionStartRef = useRef<number>(0);
 
@@ -299,8 +297,6 @@ export default function RankedPanel() {
   /* ------------------------------------------------------- queue phase */
   useEffect(() => {
     if (phase !== 'queue') return undefined;
-    const started = Date.now();
-    const tick = window.setInterval(() => setQueueSeconds(Math.floor((Date.now() - started) / 1000)), 500);
     const poll = window.setInterval(async () => {
       const payload = await loadStatus();
       if (!payload) return;
@@ -311,10 +307,7 @@ export default function RankedPanel() {
         void loadIdle();
       }
     }, QUEUE_REFRESH_MS);
-    return () => {
-      window.clearInterval(tick);
-      window.clearInterval(poll);
-    };
+    return () => window.clearInterval(poll);
   }, [phase, loadStatus, applyState, loadIdle]);
 
   /* ------------------------------------------------- match websocket */
@@ -407,18 +400,6 @@ export default function RankedPanel() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, match?.status, finish]);
-
-  /* -------------------------------------------------- question clock */
-  useEffect(() => {
-    if (!window_) return undefined;
-    const tick = () => {
-      if (window_.deadline) setSecondsLeft(Math.ceil(clock.remaining(window_.deadline) / 1000));
-      else setSecondsLeft(Math.max(0, window_.seconds - Math.floor((Date.now() - questionStartRef.current) / 1000)));
-    };
-    tick();
-    const timer = window.setInterval(tick, 250);
-    return () => window.clearInterval(timer);
-  }, [window_, clock]);
 
   /* -------------------------------------------------------- actions */
   const findMatch = async () => {
@@ -525,7 +506,6 @@ export default function RankedPanel() {
   const correctTotal = myRow?.correct ?? 0;
   const accuracy = answeredTotal ? Math.round((correctTotal / answeredTotal) * 100) : 0;
   const lobbySecondsLeft = match?.lobby_at ? Math.max(0, Math.ceil(clock.remaining(match.lobby_at) / 1000)) : 0;
-  const queueTarget = QUEUE_TARGETS[Math.min(QUEUE_TARGETS.length - 1, Math.floor(queueSeconds / 8))];
   const waiting = status?.waiting ?? 0;
 
   /* --------------------------------------------------------- renders */
@@ -673,16 +653,7 @@ export default function RankedPanel() {
           <p className="mt-1 text-[0.8rem] font-medium text-mist-400">
             {courses.find((c) => c.id === status?.queue_course_id)?.title ?? 'The course bank'} · expanding the search as you wait
           </p>
-          <div className="mx-auto mt-5 max-w-xs">
-            <div className="flex items-end justify-between text-[0.72rem] font-extrabold text-mist-300">
-              <span>{Math.max(waiting, 1)} found</span>
-              <span className="text-mist-500">aiming for {queueTarget}</span>
-            </div>
-            <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / queueTarget) * 100)} />
-            <p className="mt-2 text-[0.64rem] font-semibold text-mist-600">
-              A match starts as soon as {meta?.min_players ?? 2} players are ready — you will never wait for a full {meta?.match_size ?? 15}.
-            </p>
-          </div>
+          <QueueMeter waiting={waiting} meta={meta} />
           <Button variant="outline" className="mt-5" onClick={cancelQueue} icon={<X className="size-4" />}>
             Cancel
           </Button>
@@ -773,15 +744,7 @@ export default function RankedPanel() {
             <Card className="p-4 sm:p-5">
               {question ? (
                 <>
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-[0.9rem] font-black text-nova-200">{secondsLeft}s</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
-                      <div
-                        className="h-full rounded-full bg-nova-400 transition-all duration-300"
-                        style={{width: `${Math.min(100, (secondsLeft / Math.max(1, window_?.seconds ?? 20)) * 100)}%`}}
-                      />
-                    </div>
-                  </div>
+                  <QuestionClock window_={window_} clock={clock} />
                   <h2 className="mt-3 text-[0.98rem] font-extrabold leading-snug text-mist-50 sm:text-[1.05rem]">{question.text}</h2>
                   <div className="mt-4 grid gap-2">
                     {options.map(([letter, text]) => {
@@ -973,5 +936,58 @@ export default function RankedPanel() {
       detail="Queue up to find opponents."
       action={<Button onClick={backToIdle}>Back to ranked</Button>}
     />
+  );
+}
+
+
+/* ------------------------------------------------------------ clock leaves
+   These own their own tick so the 250ms/500ms countdowns re-render only this
+   small subtree, never the whole panel — that is what keeps matches smooth. */
+function QuestionClock({window_, clock}: {window_: RankedQuestionWindow | null; clock: {remaining: (iso: string) => number}}) {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const startRef = useRef(Date.now());
+  useEffect(() => {
+    startRef.current = Date.now();
+    if (!window_) return undefined;
+    const tick = () => {
+      if (window_.deadline) setSecondsLeft(Math.ceil(clock.remaining(window_.deadline) / 1000));
+      else setSecondsLeft(Math.max(0, window_.seconds - Math.floor((Date.now() - startRef.current) / 1000)));
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [window_, clock]);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-display text-[0.9rem] font-black text-nova-200">{secondsLeft}s</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
+        <div
+          className="h-full rounded-full bg-nova-400 transition-all duration-300"
+          style={{width: `${Math.min(100, (secondsLeft / Math.max(1, window_?.seconds ?? 20)) * 100)}%`}}
+        />
+      </div>
+    </div>
+  );
+}
+
+function QueueMeter({waiting, meta}: {waiting: number; meta: {min_players?: number; match_size?: number} | null}) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const tick = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => window.clearInterval(tick);
+  }, []);
+  const queueTarget = QUEUE_TARGETS[Math.min(QUEUE_TARGETS.length - 1, Math.floor(seconds / 8))];
+  return (
+    <div className="mx-auto mt-5 max-w-xs">
+      <div className="flex items-end justify-between text-[0.72rem] font-extrabold text-mist-300">
+        <span>{Math.max(waiting, 1)} found</span>
+        <span className="text-mist-500">aiming for {queueTarget}</span>
+      </div>
+      <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / queueTarget) * 100)} />
+      <p className="mt-2 text-[0.64rem] font-semibold text-mist-600">
+        A match starts as soon as {meta?.min_players ?? 2} players are ready — you will never wait for a full {meta?.match_size ?? 15}.
+      </p>
+    </div>
   );
 }

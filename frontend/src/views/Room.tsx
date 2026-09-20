@@ -124,7 +124,6 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(0);
   const socketRef = useRef<LiveSocket | null>(null);
   const myId = profile?.id ?? 0;
 
@@ -234,18 +233,6 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
 
   // Refresh the scoreboard whenever the global channel reports room updates.
   useEffect(() => on('rooms_update', () => api.roomDetail(roomId).then((d) => setRoom(d.room)).catch(() => undefined)), [on, roomId]);
-
-  /* ------------------------------------------------------- question clock */
-  useEffect(() => {
-    if (!question || reveal) {
-      setSecondsLeft(0);
-      return undefined;
-    }
-    const tick = () => setSecondsLeft(Math.max(0, Math.round((parseTime(question.deadline) - Date.now()) / 1000)));
-    tick();
-    const timer = window.setInterval(tick, 250);
-    return () => window.clearInterval(timer);
-  }, [question, reveal]);
 
   /* ------------------------------------------------------------ actions */
   const answer = async (letter: string) => {
@@ -427,17 +414,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
 
           {room.status === 'live' && question && (
             <Card className="relative overflow-hidden p-4 sm:p-5">
-              <div className="flex items-center gap-2">
-                <Chip className="border-nova-400/30 bg-nova-500/12 text-nova-200">Question {question.index + 1} / {question.total}</Chip>
-                <span className={`ml-auto font-display text-[0.95rem] font-black tabular-nums ${secondsLeft <= 5 && !reveal ? 'text-flare-400 animate-pulse' : 'text-gold-300'}`}>
-                  {reveal ? 'Locked' : `${secondsLeft}s`}
-                </span>
-              </div>
-              {!reveal && (
-                <div className="mt-2">
-                  <ProgressBar value={Math.round((secondsLeft / question.seconds) * 100)} tone="gold" barClassName={secondsLeft <= 5 ? 'bg-flare-500' : ''} />
-                </div>
-              )}
+              <RoomClock question={question} reveal={reveal} />
               <p className="mt-3 text-[0.95rem] font-bold leading-relaxed text-mist-50 sm:text-[1.05rem]">{question.question.text}</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {Object.entries(question.question.options).map(([letter, text]) => {
@@ -585,5 +562,37 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
         </div>
       </div>
     </div>
+  );
+}
+
+
+/* The question clock owns its own 250ms tick so only this chip re-renders,
+   never the whole room view. */
+function RoomClock({question, reveal}: {question: RoomQuestionPayload; reveal: RoomRevealPayload | null}) {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  useEffect(() => {
+    if (reveal) {
+      setSecondsLeft(0);
+      return undefined;
+    }
+    const tick = () => setSecondsLeft(Math.max(0, Math.round((parseTime(question.deadline) - Date.now()) / 1000)));
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [question, reveal]);
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Chip className="border-nova-400/30 bg-nova-500/12 text-nova-200">Question {question.index + 1} / {question.total}</Chip>
+        <span className={`ml-auto font-display text-[0.95rem] font-black tabular-nums ${secondsLeft <= 5 && !reveal ? 'text-flare-400 animate-pulse' : 'text-gold-300'}`}>
+          {reveal ? 'Locked' : `${secondsLeft}s`}
+        </span>
+      </div>
+      {!reveal && (
+        <div className="mt-2">
+          <ProgressBar value={Math.round((secondsLeft / question.seconds) * 100)} tone="gold" barClassName={secondsLeft <= 5 ? 'bg-flare-500' : ''} />
+        </div>
+      )}
+    </>
   );
 }
