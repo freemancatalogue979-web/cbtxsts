@@ -81,6 +81,8 @@ Interactive API docs: **http://localhost:3000/docs**.
 | --- | --- |
 | **Exams** | Server-authoritative timer, autosave on every answer, flag for review, **resumable after a refresh, crash or leaving mid-paper** — the clock keeps running on the server. When staff activate an exam every signed-in player gets a live **compulsory-exam banner** with the closing countdown; once the window shuts the paper is **results only**, no retakes. Per-quiz deterministic question order, instant grading (A1–F), rank within the cohort, XP + coins + badge rewards. Correct answers are never sent to the browser before submission. |
 | **Multiplayer rooms** | Quiz nights for **up to 15 players** over a dedicated WebSocket channel. The **host** picks the bank (one course or the whole arena), the length and the per-question clock, starts the run and paces it (reveal early, next question, kick); **guests** race the clock — points decay with speed, the scoreboard reorders live, every question reveals its answer and explanation to the whole room, and the **room chat** runs from lobby to final standings so players can talk, hype or ask about the question in front of them. Top three earn bonus XP and coins; everyone earns per correct answer. |
+| **Ranked matches** | A dedicated **Ranked** tab: pick a course, hit **Find match** and the server matchmakes you with up to **15 players** (a match starts as soon as **2** are ready — the queue screen's found-count and growing target show the search expanding, and it never demands a full room). The **lobby counts down on the server clock** with every player's photo, rating, tier, level, connection dot and ready check, then everyone answers the **same questions on one shared window** — answers are graded server-side, standings reorder **live over WebSocket**, and a subtle activity feed notes only what matters ("Alex moved into 1st", "Daniel completed question 8"). Scoring is **accuracy-dominant**: 60 base points for a correct answer, at most 30 for speed, 10 per streak step — a correct click always beats a fast wrong one, and the formula lives only on the server. Results show your place (2nd of 8), score, accuracy and correct count with **rating movement (1,248 → 1,276 +28)** across seven tiers — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster — plus a ladder of top players, your neighbours, full answer review and one-tap **Play again**. On phones the in-match leaderboard is a bottom sheet that never covers the question. |
+| **Arena events** | Staff-created, **no-cap** competitions with their own tab: upcoming cards count down on the **server's clock** (never the phone's) with the prize pool, entry requirement and player count; live events serve a fixed question order at each player's own pace — **join, leave and return with your progress intact** until the event ends, and closing the browser never pauses a timed one. The global leaderboard ships only the **top, your own row and your neighbours** (a 5,000-player event costs the same as a 50-player one), a lightweight activity line notes milestones only, and when the server finalizes, positions, placement-scaled rewards (XP, coins, diamonds, winner's badge) and results notifications land automatically. Past events keep your position, score, accuracy, rewards and a full answer review. |
 | **Duels** | Live 1v1 over WebSocket. Challenge a friend by phone, publish an open duel with a 6-character join code, or hit **Quick match** — and pick the question source first: **one course's bank or a random mix**. Each question is a **round**: round counter, what it is worth, a draining **speed-bonus meter** (decays over 20s), a live **combo meter** (4 correct in a row), and the server's own verdict banner — **POINT WON!** with the points banked, or **NOT QUITE** — while the answer key stays hidden until the duel ends. Stakes are escrowed at start and paid to the winner; cancels refund. |
 | **Progression** | XP → 60 levels (`125 × (L−1) × L`), titles from *Rookie* to *Arena Deity*, bronze/silver/gold/platinum tiers, daily streak bonus, 16 badges with one-off rewards. |
 | **Leaderboards** | All-time, weekly (resets Monday), friends-only and duel-wins scopes, pushed live to every connected client when someone submits. |
@@ -91,7 +93,7 @@ Interactive API docs: **http://localhost:3000/docs**.
 | **Custom Practice** | Play → **Practice**: pick a **course → topic → number of questions → duration** and start. The server draws **random unique questions** from that topic's bank (never more than exist — *"Only 15 questions are available for this topic"*), shuffles the question order per session and **shuffles each question's options** — the correct answer is bound to its option's canonical key, never to a display letter, so shuffling can never move it. The **timer is server-stamped** (`ends_at` on the run): refreshing restores the *same* paper — same questions, same order, same option shuffles, same progress — at the first unanswered question, and answers after 00:00 are refused server-side. Every answer gets an instant verdict with the **stored explanation**, and the finished run shows a full summary (score %, time used) plus a **review of every question** with your answer vs the right one. |
 | **Signature question cards** | Questions never render as plain text: every question — exam papers, blitz, sudden death, daily challenge, flashcards, Mind Match tiles — sits in a unique gradient-framed card with a ghost question number, shine sweep, difficulty chip and a brand-gradient quote bar. |
 | **Personal notifications** | Help requests, answers and nudges land in a personal inbox with live socket delivery; the bell merges them with announcements. Players carry a bio, a status line and a shareable 6-character player code for instant friend adds. |
-| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (Montserrat default, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
+| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**Quite Magical** hand-lettered default, Montserrat, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
 | **Background music** | Three uploaded tracks (**Arena Rock**, **Arcade Session**, **Sound Surfer**) played from `frontend/public/music`, with on/off, pause/resume, track switch and a volume slider in Profile → Make it yours plus a quick toggle in the header. Pause holds your place to the second, mute is a gain fade rather than a stop, and no two tracks ever sound at once; the generative synth only steps in when a device cannot play a file. It tries to autoplay; when the browser refuses, a floating **Start music** button waits for the first tap. |
 | **Shell & navigation** | A floating HUD instead of a banner: the top bar has no strip, blur or shadow — every control carries its own chip and rides on top of the scrolling world, so nothing is covered and nothing disappears. **Every screen is a real page** (`#/study`, `#/exam/42`, `#/duel/7`): the in-page back button, the Android back button, the iOS edge swipe and the browser's back all land on the page you actually came from, and a refresh puts you back where you were — including mid-exam, on the same attempt. |
 | **Fixed scale** | The arena renders at exactly the viewport it lands on: `maximum-scale=1` + `user-scalable=no`, `touch-action: pan-x pan-y` on the body, and a gesture guard for iOS Safari's `gesture*` events and desktop ctrl/cmd + wheel or `+`/`-` zoom. Pinch, double-tap and browser zoom are off on phones and desktops; panning, scrolling and every tap still work. |
@@ -111,6 +113,11 @@ rejected with a reason, never defaulted. Also: player management
 (search, XP/coin adjustments, ban, delete), results with per-exam CSV export,
 announcements that broadcast live to connected players, the prize vault, claim approvals, badge
 statistics, and arena settings (institution, season, grading scale, gameplay switches).
+Staff also create **arena events** from the console's *Arena events* section: name, description,
+course (+ optional topics), start/end on the server clock, question count, timing mode (fixed
+duration / timed per question / untimed), entry requirement, visibility, the reward stack
+(XP, coins, diamonds, winner's badge) and the join/leave/leaderboard rules — with edit for
+anything not finished and delete for anything not live.
 
 ---
 
@@ -120,19 +127,21 @@ statistics, and arena settings (institution, season, grading scale, gameplay swi
 
 | Module | Role |
 | --- | --- |
-| `main.py` | App factory, CORS, lifespan (seed + background ticker that expires overdue attempts/duels) |
+| `main.py` | App factory, CORS, lifespan (seed + the 5s game ticker that expires overdue attempts/duels and starts/finalizes events, plus the 1s ranked ticker that matchmakes and paces matches) |
 | `config.py` | Environment-driven settings and gameplay tuning constants |
 | `db.py` | SQLAlchemy engine/session (`SQLite` + WAL, foreign keys on) |
-| `models.py` | 31 tables: students, admins, friendships, courses, quizzes, questions, attempts, answers, duels, duel participants/questions/answers, **rooms, room members/questions/answers/messages**, badges, student badges, prizes, prize claims, activities, notifications, chat messages, help requests, rush runs, daily-challenge results, mission claims, reactions, inbox notes, config |
+| `models.py` | 31 tables: students, admins, friendships, courses, quizzes, questions, attempts, answers, duels, duel participants/questions/answers, **rooms, room members/questions/answers/messages**, badges, student badges, prizes, prize claims, activities, notifications, chat messages, help requests, rush runs, daily-challenge results, mission claims, reactions, inbox notes, config, **ranked queue/matches/participants/answers/questions, arena events + participants/answers/questions, practice runs** |
 | `security.py` | HMAC-signed JSON tokens (7-day TTL), phone normalisation (`+234` ↔ `0`), PBKDF2-SHA256 (240k) password hashing for staff **and** players |
 | `game.py` | Level curve, titles, tiers, grading scale, XP/coin reward maths, badge rules |
 | `services/exam.py` | Attempt lifecycle: start, autosave, expiry, grading, ranking, rewards |
 | `services/duel.py` | Duel lifecycle: invite, open code, quick match, live scoring, finalisation, expiry |
 | `services/room.py` | Room lifecycle: create, join-by-code (15-cap), host start/kick, per-question clocks with server-side auto-reveal, live standings, rewards, chat persistence |
-| `ws.py` | Connection hub with `live`, `duel:{id}`, `quizroom:{id}` and `admin` rooms plus presence tracking |
+| `services/ranked.py` | Matchmade matches: per-course queue (min 2, cap 15, 12s grace), server lobby countdown, shared question windows, accuracy-dominant scoring, multiplayer Elo + 7 configurable tiers, history/ladder payloads |
+| `services/events.py` | Arena events: server-clock start/end, pre-registration, resume-safe progress, top+own+nearby leaderboards, cooldown-gated activity, finalize with placement-scaled rewards and notifications |
+| `ws.py` | Connection hub with `live`, `duel:{id}`, `quizroom:{id}`, `ranked:{id}`, `event:{id}` and `admin` rooms plus presence tracking (incl. per-room student ids) |
 | `events.py` | Event objects the services return; routers dispatch them **after** commit |
 | `serializers.py` | The only place models become JSON — enforces the "never leak the answer key" rule |
-| `routers/*` | 126 REST endpoints + 3 WebSocket endpoints (`/ws/live`, `/ws/duel/{id}`, `/ws/room/{id}`) |
+| `routers/*` | 143 REST endpoints + 5 WebSocket endpoints (`/ws/live`, `/ws/duel/{id}`, `/ws/room/{id}`, `/ws/ranked/{id}`, `/ws/event/{id}`) |
 | `seed.py`, `seed_data/` | Idempotent content-only seeding (question bank, badges, prizes) — never fabricates players |
 
 Design rules that keep the game honest:
@@ -274,6 +283,26 @@ cd frontend && node scripts/music-check.mjs
 #                  the same CBT_DATABASE_URL the server was started with.
 cd backend && ARENA_API=http://127.0.0.1:3000/api .venv/bin/python scripts/verify_practice.py
 cd ../frontend && node scripts/practice-check.mjs
+
+# Ranked multiplayer: 39 backend checks (tier ladder, queue isolation per course,
+#                     matchmaking min-2, lobby countdown, hidden answers, accuracy-
+#                     dominant scoring, live standings, Elo zero-sum, history, ladder
+#                     slices, double/foreign-answer guards) — needs the live ticker,
+#                     i.e. a running server, and takes ~90s of real server pacing.
+cd backend && ARENA_API=http://127.0.0.1:3000/api .venv/bin/python scripts/verify_ranked.py
+
+# Arena events: 32 backend checks (admin creator round-trip, upcoming lobby, pre-
+#               registration, server-clock start, resume-safe progress, entry
+#               requirements, join rules, leaderboard slices, finalize with
+#               placement-scaled rewards, history, review, notifications).
+cd backend && ARENA_API=http://127.0.0.1:3000/api .venv/bin/python scripts/verify_events.py
+
+# Frontend: 26 checks — the real multiplayer loop through the real bundle: sign in,
+#           queue with a live API opponent, lobby countdown, ten questions answered
+#           by clicking, standings bottom sheet, results with rating movement,
+#           answer review, and the Events tab. Needs the API on :3000, the dev
+#           server on :5173 and /tmp/app.iife.js; takes ~2 minutes of real pacing.
+cd frontend && node scripts/ranked-check.mjs
 ```
 
 Both frontend harnesses build the bundle first:
@@ -320,3 +349,14 @@ its **data** was migrated into the database layer:
 * Firebase config, Firestore rules and the ~9 MB of duplicate logo imagery were deleted.
 
 Nothing is stored in the browser except the session token; the database is the only source of truth.
+
+---
+
+## Font licensing note
+
+The default UI typeface **Quite Magical** (by Misti's Fonts / Misti Hammers, 2018) ships as
+`frontend/public/fonts/quite-magical.woff2` and is free for **personal use**; commercial use
+requires a licence from the designer (mistifonts.com). If this project is deployed
+commercially, buy the licence or swap the default in `frontend/src/lib/prefs.ts` — the font
+switcher and the other four packs (Montserrat, Exo 2, Space Grotesk, Orbitron) are all
+libre-licensed fallbacks that keep the app fully functional.
