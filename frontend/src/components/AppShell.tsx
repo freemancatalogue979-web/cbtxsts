@@ -395,15 +395,11 @@ export function AppShell({
               <Menu className="size-4" />
             </button>
 
-            <div className="hidden shrink items-center gap-1.5 lg:flex">
-              <LogoMark size={26} className="size-6 shrink-0 sm:size-7" />
- <span className="font-display text-[0.80rem] font-black tracking-wider text-mist-50 sm:text-[0.92rem]">
-                Quiz <span className="text-nova-400">Arena</span>
-              </span>
-            </div>
+            <LogoMark size={null} className="hidden size-10 shrink-0 lg:block" />
+            <span className="sr-only">Quiz Arena</span>
 
             {profile && (
-              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular xl:inline-flex">
+              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:inline-flex">
                 LV{profile.progress.level}
               </span>
             )}
@@ -496,7 +492,7 @@ export function AppShell({
                   <Gem className="size-3 text-nova-400" />
                   {formatNumber(profile.diamonds ?? 0)}
                 </span>
-                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular xs:inline-flex lg:hidden 2xl:inline-flex" title="Credits">
+                <span className="hud-pill float-chip inline-flex shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular lg:hidden 2xl:inline-flex" title="Credits">
                   <Coins className="size-3 text-amber-400" />
                   {formatNumber(profile.coins)}
                 </span>

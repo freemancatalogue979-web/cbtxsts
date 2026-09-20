@@ -203,8 +203,8 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Quite Magical is the house default; a stored choice always wins. */
-export const DEFAULT_FONT: FontName = 'magic';
+/** Montserrat is the geometric house default; a stored choice always wins. */
+export const DEFAULT_FONT: FontName = 'montserrat';
 
 export function currentFont(): FontName {
   const stored = read(FONT_KEY, DEFAULT_FONT);
