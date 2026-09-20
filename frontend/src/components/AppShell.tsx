@@ -485,9 +485,9 @@ export function AppShell({
               onClick={() => setPaletteOpen(true)}
               aria-label="Quick jump"
               title="Quick jump — ⌘K"
-              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/12 text-mist-400 hover:border-nova-400/40 hover:text-mist-200 lg:hidden xl:grid"
+              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/20 text-mist-100 hover:border-nova-400/50 hover:text-white lg:hidden xl:grid"
             >
-              <Search className="size-4" />
+              <Search className="size-[1.1rem]" />
             </button>
             <LivePill />
             {profile && (

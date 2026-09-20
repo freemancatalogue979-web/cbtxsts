@@ -61,6 +61,9 @@
 }
 
 @theme {
+  /* extra small step used by the header HUD chips (`xs:inline-flex`) */
+  --breakpoint-xs: 30rem;
+
   --font-sans: "Quite Magical", "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Quite Magical", "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
 
@@ -365,6 +368,10 @@
 
   html {
     scroll-behavior: smooth;
+    /* Arena-wide text scale: every rem-based size and spacing steps up ~6%
+       together, so the type reads bigger and brighter without breaking the
+       layout's proportions. */
+    font-size: 17px;
     /* stop Android/Chrome from silently re-scaling the whole layout */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -384,7 +391,10 @@
     background-attachment: fixed;
     color: var(--color-mist-50);
     font-family: var(--font-sans);
-    font-weight: 500;
+    /* The house face ships as a single 400 cut; 600 lets the renderer thicken
+       the strokes, which is what keeps the lettering bright and readable on
+       the dark arena background instead of thin and washed out. */
+    font-weight: 600;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;
@@ -568,19 +578,25 @@
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)) drop-shadow(0 10px 26px rgba(251, 191, 36, 0.22));
 }
 
-/* Glossy HUD pill (coins / gems / streak) from the theme guide's top bar. */
-.hud-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 55%, rgba(0, 0, 0, 0.2));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.25);
-  padding: 0.3rem 0.7rem;
-  font-weight: 800;
+/* Glossy HUD pill (coins / gems / streak) from the theme guide's top bar.
+   Kept in the components layer on purpose, same reason as `.btag` below:
+   an unlayered `display: inline-flex` would always beat the layered
+   visibility utilities (`hidden`, `xl:inline-flex`, …), which is exactly
+   what made `hidden` dead code and kept the LV pill on phone screens. */
+@layer components {
+  .hud-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 55%, rgba(0, 0, 0, 0.2));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+    padding: 0.3rem 0.7rem;
+    font-weight: 800;
+  }
 }
 
 /*
