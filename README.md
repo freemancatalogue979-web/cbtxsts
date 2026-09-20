@@ -316,7 +316,9 @@ Both frontend harnesses build the bundle first:
 
 ```bash
 cd frontend && npx esbuild src/main.tsx --bundle --format=iife --outfile=/tmp/app.iife.js \
-  --loader:.css=empty --jsx=automatic --target=es2022
+  --loader:.css=empty --loader:.webp=file --loader:.png=file --loader:.jpg=file \
+  --loader:.jpeg=file --loader:.woff2=file --loader:.mp3=file \
+  --jsx=automatic --target=es2022
 ```
 
 Type checking and production build:
