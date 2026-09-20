@@ -1,7 +1,7 @@
 /** Navigation model shared by the desktop tabs and the mobile bottom bar. */
-import {Activity, BookOpen, Gamepad2, Gift, GraduationCap, Map, Shield, Store, Swords, Trophy, User, Users} from 'lucide-react';
+import {Activity, BookOpen, CalendarDays, Gamepad2, Gift, GraduationCap, Map, Shield, Store, Swords, TrendingUp, Trophy, User, Users} from 'lucide-react';
 
-export type Tab = 'play' | 'map' | 'study' | 'materials' | 'arena' | 'duels' | 'shop' | 'friends' | 'ranks' | 'prizes' | 'feed' | 'profile';
+export type Tab = 'play' | 'map' | 'study' | 'materials' | 'arena' | 'ranked' | 'events' | 'duels' | 'shop' | 'friends' | 'ranks' | 'prizes' | 'feed' | 'profile';
 
 export const TABS: {id: Tab; label: string; short: string; icon: typeof Gamepad2}[] = [
   {id: 'play', label: 'Play', short: 'Home', icon: Trophy},
@@ -9,6 +9,8 @@ export const TABS: {id: Tab; label: string; short: string; icon: typeof Gamepad2
   {id: 'study', label: 'Study Lab', short: 'Learn', icon: GraduationCap},
   {id: 'materials', label: 'Materials', short: 'Read', icon: BookOpen},
   {id: 'arena', label: 'Game Arena', short: 'Arena', icon: Gamepad2},
+  {id: 'ranked', label: 'Ranked', short: 'Ranked', icon: TrendingUp},
+  {id: 'events', label: 'Events', short: 'Events', icon: CalendarDays},
   {id: 'duels', label: 'Duels', short: 'Duels', icon: Swords},
   {id: 'shop', label: 'Shop', short: 'Shop', icon: Store},
   {id: 'friends', label: 'Friends', short: 'Friends', icon: Users},
@@ -30,5 +32,5 @@ export const MOBILE_TABS: Tab[] = ['play', 'map', 'study', 'duels'];
 
 export const MORE_TABS: Tab[] = TABS.map((row) => row.id).filter((id) => !MOBILE_TABS.includes(id));
 
-export const DESKTOP_PRIMARY_TABS: Tab[] = ['play', 'map', 'study', 'arena', 'shop'];
-export const DESKTOP_MORE_TABS: Tab[] = ['materials', 'duels', 'friends', 'ranks', 'prizes', 'feed', 'profile'];
+export const DESKTOP_PRIMARY_TABS: Tab[] = ['play', 'ranked', 'events', 'study', 'arena', 'shop'];
+export const DESKTOP_MORE_TABS: Tab[] = ['map', 'materials', 'duels', 'friends', 'ranks', 'prizes', 'feed', 'profile'];

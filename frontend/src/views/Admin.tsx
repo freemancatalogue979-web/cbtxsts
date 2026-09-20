@@ -1,5 +1,5 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {
+import {CalendarDays,
   Activity,
   Award,
   BarChart3,
@@ -28,6 +28,7 @@ import {Wordmark} from '../components/Brand';
 import ContentAdmin from '../admin/ContentAdmin';
 import PeopleAdmin from '../admin/PeopleAdmin';
 import BroadcastAdmin from '../admin/BroadcastAdmin';
+import EventsAdmin from '../admin/EventsAdmin';
 import StudioAdmin from '../admin/StudioAdmin';
 import {api} from '../lib/api';
 import {formatCompact, formatNumber, formatRelative} from '../lib/format';
@@ -35,13 +36,14 @@ import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
 import type {AdminOverview, Config} from '../lib/types';
 
-type Section = 'overview' | 'studio' | 'content' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'settings';
+type Section = 'overview' | 'studio' | 'content' | 'events' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'settings';
 
 const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[] = [
   {id: 'overview', label: 'Overview', icon: Gauge, group: 'Arena'},
   {id: 'studio', label: 'Arena studio', icon: Sparkles, group: 'Content'},
   {id: 'content', label: 'Courses & exams', icon: BookOpen, group: 'Content'},
   {id: 'broadcast', label: 'Announcements', icon: Megaphone, group: 'Content'},
+  {id: 'events', label: 'Arena events', icon: CalendarDays, group: 'Content'},
   {id: 'prizes', label: 'Prize vault', icon: Gift, group: 'Content'},
   {id: 'people', label: 'Players', icon: Users, group: 'People'},
   {id: 'results', label: 'Results', icon: BarChart3, group: 'People'},
@@ -402,6 +404,7 @@ export default function Admin({onExit}: {onExit: () => void}) {
               {section === 'overview' && <Overview key={`overview-${bump}`} onGoto={setSection} />}
               {section === 'studio' && <StudioAdmin key={`studio-${bump}`} />}
               {section === 'content' && <ContentAdmin key={`content-${bump}`} onChanged={refresh} />}
+              {section === 'events' && <EventsAdmin key={`events-${bump}`} onChanged={refresh} />}
               {(section === 'broadcast' || section === 'prizes') && (
                 <BroadcastAdmin key={`broadcast-${section}-${bump}`} tab={section === 'broadcast' ? 'notices' : 'prizes'} onChanged={refresh} />
               )}

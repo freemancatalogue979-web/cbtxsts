@@ -251,8 +251,8 @@ async function main() {
       click(options[0]);
       for (let attempt = 0; attempt < 14 && !verdict; attempt += 1) {
         await wait(60);
-        if (text().includes('POINT WON!')) verdict = 'POINT WON!';
-        else if (text().includes('NOT QUITE')) verdict = 'NOT QUITE';
+        if (text().includes('Point won!')) verdict = 'Point won!';
+        else if (text().includes('Not quite')) verdict = 'Not quite';
       }
     }
   }

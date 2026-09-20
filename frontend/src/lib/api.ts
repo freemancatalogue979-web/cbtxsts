@@ -63,6 +63,17 @@ import type {
   GameHub,
   GameRunResult,
   GameBoardRow,
+  ArenaEventSummary,
+  EventLeaderboard,
+  EventQuestionWindow,
+  EventsListing,
+  RankedHistoryRow,
+  RankedLadder,
+  RankedMatchState,
+  RankedMeta,
+  RankedReveal,
+  RankedStatus,
+  ReviewItem,
 } from './types';
 
 /** Shapes returned by the newer arena engines — documented in ``types.ts``. */
@@ -194,6 +205,48 @@ export const api = {
     request<{room: RoomState}>(`/api/rooms/${roomId}/kick/${targetId}`, {method: 'POST'}),
   leaveRoom: (roomId: number) => request<{deleted: boolean}>(`/api/rooms/${roomId}/leave`, {method: 'POST'}),
   roomMessages: (roomId: number) => request<{messages: RoomMessage[]}>(`/api/rooms/${roomId}/messages`),
+
+  /* -------------------------------------------------------------- ranked */
+  rankedMeta: () => request<RankedMeta>('/api/ranked/meta'),
+  rankedStatus: () => request<RankedStatus>('/api/ranked/status'),
+  rankedJoinQueue: (courseId: number) =>
+    request<{queued: boolean; match_id?: number; state?: RankedMatchState; waiting?: number}>('/api/ranked/queue', {
+      method: 'POST',
+      body: {course_id: courseId},
+    }),
+  rankedCancelQueue: () => request<{cancelled: boolean}>('/api/ranked/queue/cancel', {method: 'POST'}),
+  rankedMatch: (matchId: number) => request<{match: RankedMatchState}>(`/api/ranked/match/${matchId}`),
+  rankedAnswer: (matchId: number, selected: string, elapsedMs: number) =>
+    request<{result: {correct: boolean; points: number}; all_answered: boolean; reveal: RankedReveal | null; match: RankedMatchState}>(
+      `/api/ranked/match/${matchId}/answer`,
+      {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
+    ),
+  rankedReview: (matchId: number) => request<{match_id: number; items: ReviewItem[]}>(`/api/ranked/match/${matchId}/review`),
+  rankedHistory: () => request<{history: RankedHistoryRow[]}>('/api/ranked/history'),
+  rankedLadder: () => request<RankedLadder>('/api/ranked/leaderboard'),
+
+  /* -------------------------------------------------------------- events */
+  eventsList: () => request<EventsListing>('/api/events'),
+  eventDetail: (eventId: number) =>
+    request<{event: ArenaEventSummary; question: EventQuestionWindow | null; leaderboard: EventLeaderboard | null}>(
+      `/api/events/${eventId}`,
+    ),
+  joinEvent: (eventId: number) =>
+    request<{event: ArenaEventSummary; question: EventQuestionWindow | null}>(`/api/events/${eventId}/join`, {method: 'POST'}),
+  leaveEvent: (eventId: number) =>
+    request<{left: boolean; event: ArenaEventSummary}>(`/api/events/${eventId}/leave`, {method: 'POST'}),
+  answerEvent: (eventId: number, selected: string, elapsedMs: number) =>
+    request<{result: {correct: boolean; points: number; finished: boolean; progress: EventQuestionWindow}; leaderboard: EventLeaderboard | null}>(
+      `/api/events/${eventId}/answer`,
+      {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
+    ),
+  eventReview: (eventId: number) => request<{event_id: number; items: ReviewItem[]}>(`/api/events/${eventId}/review`),
+  adminEvents: () => request<{events: ArenaEventSummary[]}>('/api/admin/events'),
+  adminCreateEvent: (body: Record<string, unknown>) =>
+    request<{event: ArenaEventSummary}>('/api/admin/events', {method: 'POST', body}),
+  adminUpdateEvent: (eventId: number, body: Record<string, unknown>) =>
+    request<{event: ArenaEventSummary}>(`/api/admin/events/${eventId}`, {method: 'PATCH', body}),
+  adminDeleteEvent: (eventId: number) => request<{ok: boolean}>(`/api/admin/events/${eventId}`, {method: 'DELETE'}),
 
   /* ---------------------------------------------------------------- chat */
   chatWith: (friendId: number) => request<{messages: ChatMessage[]}>(`/api/chat?with=${friendId}`),

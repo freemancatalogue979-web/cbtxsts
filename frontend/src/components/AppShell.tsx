@@ -299,18 +299,24 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
 
 function LivePill() {
   const {socketStatus, online} = useSession();
-  const live = socketStatus === 'open';
+  const label = socketStatus === 'open' ? 'Connected' : socketStatus === 'connecting' ? 'Reconnecting…' : 'Offline';
+  const tone =
+    socketStatus === 'open'
+      ? 'border-mint-500/30 text-mint-300'
+      : socketStatus === 'connecting'
+        ? 'border-gold-500/30 text-gold-300'
+        : 'border-flare-500/30 text-flare-300';
   return (
     <div
-      className={`float-chip hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[0.72rem] font-bold md:flex ${
-        live ? 'border-mint-500/30 text-mint-300' : 'border-white/12 text-mist-500'
-      }`}
-      title={live ? 'Connected to the live channel' : 'Reconnecting…'}
+      className={`float-chip flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[0.7rem] font-bold sm:px-3 ${tone}`}
+      title={`${label} to the live channel — the app re-syncs silently when the connection returns`}
     >
-      {live ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5" />}
-      <span className="tabular">{online}</span>
-      <span className="opacity-70">online</span>
-      {live && <span className="size-1.5 animate-pulse rounded-full bg-mint-400" />}
+      {socketStatus === 'open' ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5 animate-pulse" />}
+      <span className="tabular">{label}</span>
+      <span className="hidden opacity-70 sm:inline">
+        · {online} online
+      </span>
+      {socketStatus === 'open' && <span className="size-1.5 animate-pulse rounded-full bg-mint-400" />}
     </div>
   );
 }

@@ -11,6 +11,8 @@ import ProfilePanel from '../panels/ProfilePanel';
 import ShopPanel from '../panels/ShopPanel';
 import MaterialsPanel from '../panels/MaterialsPanel';
 import GameArenaPanel from '../panels/GameArenaPanel';
+import RankedPanel from '../panels/RankedPanel';
+import EventsPanel from '../panels/EventsPanel';
 import WorldMapPanel from '../panels/WorldMapPanel';
 import type {Tab} from '../lib/nav';
 import type {Duel, Quiz} from '../lib/types';
@@ -50,6 +52,8 @@ export default function Dashboard({
         {tab === 'study' && <StudyPanel />}
         {tab === 'materials' && <MaterialsPanel />}
         {tab === 'arena' && <GameArenaPanel />}
+        {tab === 'ranked' && <RankedPanel />}
+        {tab === 'events' && <EventsPanel />}
         {tab === 'duels' && <DuelsPanel onOpenDuel={onOpenDuel} onOpenRoom={onOpenRoom} />}
         {tab === 'friends' && <FriendsPanel onOpenDuel={onOpenDuel} onStartExam={onStartExam} />}
         {tab === 'ranks' && <RanksPanel />}

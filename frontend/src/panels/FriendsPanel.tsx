@@ -8,9 +8,9 @@
  * painted on the bubble itself. Friends can also be nudged with one tap and
  * messages arrive live over the arena socket.
  */
-import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
+import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {motion} from 'motion/react';
+import {AnimatePresence, motion} from 'motion/react';
 import {Avatar, Button, Card, EmptyState, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
 import {Holdable} from '../components/Holdable';
 import {GroupsPanel} from './CommunityPanel';
@@ -18,7 +18,7 @@ import {api} from '../lib/api';
 import {bubbleOf} from '../lib/cosmetics';
 import {cacheAge, cacheRead, cacheWrite, userScope} from '../lib/cache';
 import {formatDateTime, formatRelative} from '../lib/format';
-import {sfx} from '../lib/sfx';
+import {sfx, uiClick} from '../lib/sfx';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
 import type {ChatMessage, Duel, PlayerSummary, Quiz} from '../lib/types';
@@ -215,6 +215,7 @@ export default function FriendsPanel({
   const [unseen, setUnseen] = useState(0);
   const [selected, setSelected] = useState<PlayerSummary | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [outbox, setOutbox] = useState<{key: number; body: string; kind: 'text' | 'duel' | 'quiz'; meta: Record<string, unknown>; failed: boolean}[]>([]);
   // Messages deleted from this device: the thread hides them for good, while
   // the other player keeps their copy.
   const [hidden, setHidden] = useState<Record<number, true>>(() => cacheRead(scope, 'chat.hidden') ?? {});
@@ -429,20 +430,31 @@ export default function FriendsPanel({
   );
 
   const send = useCallback(
-    async (kind: 'text' | 'duel' | 'quiz', body: string, meta: Record<string, unknown> = {}) => {
+    (kind: 'text' | 'duel' | 'quiz', body: string, meta: Record<string, unknown> = {}) => {
       if (!selected) return;
-      setBusy(true);
+      /* Optimistic send: the bubble appears instantly, the server confirms
+         or the row flips to a retry state — the composer is never blocked. */
+      const key = Date.now() + Math.random();
+      setOutbox((current) => [...current, {key, body, kind, meta, failed: false}]);
+      void deliver(key, kind, body, meta);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selected],
+  );
+
+  const deliver = useCallback(
+    async (key: number, kind: 'text' | 'duel' | 'quiz', body: string, meta: Record<string, unknown>) => {
+      if (!selected) return;
       try {
         const message = await api.sendChat({to: selected.id, kind, body, meta});
         setMessages((current) => (current.some((row) => row.id === message.id) ? current : [...current, message]));
-        sfx.play('tap');
-      } catch (error) {
-        toast('error', 'Message not sent', (error as Error).message);
-      } finally {
-        setBusy(false);
+        setOutbox((current) => current.filter((row) => row.key !== key));
+        sfx.play('chat');
+      } catch {
+        setOutbox((current) => current.map((row) => (row.key === key ? {...row, failed: true} : row)));
       }
     },
-    [selected, toast],
+    [selected],
   );
 
   const inviteDuel = async () => {
@@ -794,6 +806,55 @@ export default function FriendsPanel({
                       );
                     })}
                   </motion.ul>
+                )}
+                {/* Optimistic outbox: rows appear instantly and flip to a
+                    retry state if the server does not confirm them. */}
+                {outbox.length > 0 && (
+                  <ul className="mt-2 space-y-2">
+                    <AnimatePresence>
+                      {outbox.map((row) => (
+                        <motion.li
+                          key={row.key}
+                          initial={{opacity: 0, y: 6, scale: 0.98}}
+                          animate={{opacity: 1, y: 0, scale: 1}}
+                          exit={{opacity: 0, scale: 0.97}}
+                          transition={{duration: 0.18, ease: [0.22, 1, 0.36, 1]}}
+                          className="flex justify-end"
+                        >
+                          <div
+                            className={`max-w-[78%] rounded-2xl border px-3 py-2 text-[0.82rem] font-medium ${
+                              row.failed
+                                ? 'border-flare-400/40 bg-flare-400/10 text-flare-200'
+                                : 'border-nova-500/30 bg-nova-500/15 text-mist-200 opacity-80'
+                            }`}
+                          >
+                            <p>{row.body}</p>
+                            <p className="mt-1 flex items-center gap-1.5 text-[0.6rem] font-bold">
+                              {row.failed ? (
+                                <>
+                                  <span>Not sent</span>
+                                  <button
+                                    onClick={() => {
+                                      uiClick('tap');
+                                      setOutbox((current) => current.map((entry) => (entry.key === row.key ? {...entry, failed: false} : entry)));
+                                      void deliver(row.key, row.kind, row.body, row.meta);
+                                    }}
+                                    className="rounded-full border border-flare-400/40 px-2 py-0.5 text-flare-200 transition-colors hover:bg-flare-400/15 active:translate-y-px"
+                                  >
+                                    Retry
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <Loader2 className="size-3 animate-spin" /> Sending…
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
                 )}
                 {unseen > 0 ? (
                   <button

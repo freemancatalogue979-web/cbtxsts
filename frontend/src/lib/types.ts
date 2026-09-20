@@ -1253,3 +1253,245 @@ export interface WorldMap {
   quests: QuestRow[];
   worlds: WorldRow[];
 }
+
+/* ------------------------------------------------- ranked + events types */
+export interface RankedTier {
+  key: string;
+  name: string;
+  min: number;
+  max: number | null;
+  color: string;
+  icon: string;
+}
+
+export interface RankedMeta {
+  tiers: RankedTier[];
+  match_size: number;
+  min_players: number;
+  question_count: number;
+  question_seconds: number;
+  base_points: number;
+  speed_bonus: number;
+  streak_bonus: number;
+}
+
+export interface RankedPlayer {
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  rating: number;
+  tier: string;
+  tier_name: string;
+  level: number;
+  score: number;
+  correct: number;
+  wrong: number;
+  answered: number;
+  streak: number;
+  best_streak: number;
+  questions_total: number;
+  position: number | null;
+  connected: boolean;
+  ready: boolean;
+}
+
+export interface RankedQuestionWindow {
+  index: number;
+  total: number;
+  seconds: number;
+  deadline: string;
+  server_now: string;
+  question: QuestionPublic;
+}
+
+export interface RankedReveal {
+  index: number;
+  question_id: number;
+  correct: string;
+  explanation: string;
+  correct_ids: number[];
+  answered: number;
+  standings: RankedPlayer[];
+  server_now: string;
+}
+
+export interface RankedMatchState {
+  id: number;
+  status: 'lobby' | 'live' | 'finished';
+  course_id: number | null;
+  course_title: string;
+  question_count: number;
+  per_question_seconds: number;
+  round_index: number;
+  questions_total: number;
+  lobby_at: string;
+  server_now: string;
+  participants: RankedPlayer[];
+  question: QuestionPublic | null;
+  reveal: RankedReveal | null;
+  me: {answered: boolean; selected: string | null; correct: boolean | null; points: number | null} | null;
+  activity: {text: string; at: string}[];
+}
+
+export interface RankedStatus {
+  rating: number;
+  tier: string;
+  tier_name: string;
+  played: number;
+  won: number;
+  in_queue: boolean;
+  queue_course_id: number | null;
+  waiting: number;
+  queue_joined_at: string | null;
+  server_now: string;
+  match_id: number | null;
+  match: RankedMatchState | null;
+}
+
+export interface RankedRatingRow {
+  student_id: number;
+  name: string;
+  position: number;
+  before: number;
+  after: number;
+  delta: number;
+}
+
+export interface RankedFinishPayload {
+  match_id: number;
+  standings: RankedPlayer[];
+  ratings: RankedRatingRow[];
+  server_now: string;
+}
+
+export interface RankedHistoryRow {
+  match_id: number;
+  course_title: string;
+  played_at: string;
+  position: number;
+  players: number;
+  score: number;
+  correct: number;
+  rating_before: number;
+  rating_after: number | null;
+}
+
+export interface RankedLadderRow {
+  position: number;
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  rating: number;
+  tier: string;
+  tier_name: string;
+  level: number;
+  played: number;
+  won: number;
+}
+
+export interface RankedLadder {
+  top: RankedLadderRow[];
+  mine: number;
+  nearby: RankedLadderRow[];
+}
+
+export interface ReviewItem {
+  index: number;
+  question: QuestionPublic;
+  selected: string | null;
+  correct: boolean;
+  points: number;
+}
+
+export interface ArenaEventSummary {
+  id: number;
+  name: string;
+  description: string;
+  course_id: number | null;
+  course_title: string;
+  topics: string[];
+  starts_at: string;
+  ends_at: string;
+  question_count: number;
+  time_mode: 'untimed' | 'fixed' | 'per_question';
+  duration_minutes: number;
+  per_question_seconds: number;
+  entry_xp: number;
+  visibility: string;
+  rewards: Record<string, unknown>;
+  prize_pool: string;
+  banner: string;
+  scoring_note: string;
+  allow_join_during: boolean;
+  allow_leave: boolean;
+  leaderboard_visible: boolean;
+  status: 'scheduled' | 'live' | 'finished' | 'cancelled';
+  participants: number;
+  joined: boolean;
+  me: EventMe | null;
+  server_now: string;
+}
+
+export interface EventMe {
+  student_id: number;
+  name: string;
+  score: number;
+  correct: number;
+  wrong: number;
+  answered: number;
+  questions_total: number;
+  streak: number;
+  best_streak: number;
+  finished: boolean;
+  position: number | null;
+  rewards: Record<string, unknown>;
+  connected: boolean;
+}
+
+export interface EventQuestionWindow {
+  done: boolean;
+  index: number;
+  total: number;
+  question: QuestionPublic;
+  answered: number;
+  me: {answered: boolean; selected: string | null};
+  server_now: string;
+}
+
+export interface EventLeaderboardRow {
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  level: number;
+  score: number;
+  correct: number;
+  wrong: number;
+  answered: number;
+  questions_total: number;
+  streak: number;
+  best_streak: number;
+  finished: boolean;
+  position: number | null;
+  connected: boolean;
+}
+
+export interface EventLeaderboard {
+  top: EventLeaderboardRow[];
+  mine: EventLeaderboardRow | null;
+  nearby: EventLeaderboardRow[];
+  total: number;
+  active: number;
+}
+
+export interface EventsListing {
+  upcoming: ArenaEventSummary[];
+  live: ArenaEventSummary[];
+  past: ArenaEventSummary[];
+  server_now: string;
+}
