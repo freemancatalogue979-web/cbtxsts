@@ -403,7 +403,7 @@ export function AppShell({
             </div>
 
             {profile && (
-              <span className="hud-pill float-chip shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:hidden xl:inline-flex">
+              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular xl:inline-flex">
                 LV{profile.progress.level}
               </span>
             )}
