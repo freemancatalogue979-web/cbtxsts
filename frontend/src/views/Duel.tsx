@@ -471,6 +471,15 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
           sfx.play('lose');
         }
       }),
+      on('duel_result', (data) => {
+        // Personal companion to duel_finished: carries THIS player's rewards.
+        // App.tsx defers the reveal to this screen while it is open, so the
+        // XP/coins breakdown merges in here.
+        const payload = data as Duel & {rewards?: RewardEvent[]};
+        if (payload.id !== duelId) return;
+        setFinished((current) => (current ? {...current, ...payload} : payload));
+        setDuel((current) => (current && current.id === duelId ? {...current, ...payload} : current));
+      }),
       on('duel_cancelled', (data) => {
         const payload = data as {id?: number; duel_id?: number};
         if ((payload.id ?? payload.duel_id) === duelId) {
