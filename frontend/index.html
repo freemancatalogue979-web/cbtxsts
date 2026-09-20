@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Night is the default skin; the pre-paint script below restores a saved
+     "daylight" choice before the first frame, so the choice never flashes. -->
+<html lang="en" data-skin="night">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- One fixed scale: the arena is drawn for the viewport it lands on. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#07030f" />
+    <link rel="icon" type="image/png" href="/brand/logo-96.png" />
+    <link rel="apple-touch-icon" href="/brand/logo-256.png" />
+    <link
+      rel="icon-old"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='4' y1='2' x2='60' y2='62' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%23f43f5e'/%3E%3Cstop offset='.5' stop-color='%23a855f7'/%3E%3Cstop offset='1' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='3' y='3' width='58' height='58' rx='17' fill='url(%23b)'/%3E%3Ccircle cx='32' cy='32' r='17.5' fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='2.6' stroke-linecap='round' stroke-dasharray='82 28' transform='rotate(-52 32 32)'/%3E%3Cpath d='M35.6 15.5 22.8 34.6h7.6l-2.6 13.9L40.6 29h-7.9l2.9-13.5Z' fill='%23fff'/%3E%3Ccircle cx='46.5' cy='17.5' r='2.6' fill='%23ffd76a'/%3E%3C/svg%3E"
+    />
+    <title>Quiz Arena — Compete. Conquer. Climb.</title>
+    <meta
+      name="description"
+      content="Quiz Arena is a real-time computer-based testing and quiz competition platform: timed exams, live 1v1 duels, XP, streaks, leaderboards and prizes."
+    />
+    <meta property="og:title" content="Quiz Arena" />
+    <meta property="og:description" content="Timed CBT exams, live duels with friends, XP, streaks, leaderboards and real prizes." />
+    <meta property="og:type" content="website" />
+    <script>
+      // Apply saved theme, mode, skin and font before first paint — no flash of defaults.
+      try {
+        var theme = localStorage.getItem('arena.theme');
+        if (theme) document.documentElement.dataset.theme = theme;
+        var mode = localStorage.getItem('arena.mode');
+        if (mode) document.documentElement.dataset.mode = mode;
+        var skin = localStorage.getItem('arena.skin');
+        if (skin) document.documentElement.dataset.skin = skin;
+        var FONTS = {
+          montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
+          arena: ["'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Orbitron', 'Exo 2', sans-serif"],
+          grotesk: ["'Space Grotesk Variable', ui-sans-serif, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
+          orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
+        };
+        // Space Grotesk is the default; an explicit choice always wins.
+        var font = localStorage.getItem('arena.font') || 'grotesk';
+        if (FONTS[font]) {
+          document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
+          document.documentElement.style.setProperty('--font-display', FONTS[font][1]);
+        }
+      } catch (error) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

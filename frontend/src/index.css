@@ -1,0 +1,2047 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Quite Magical';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/quite-magical.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Exo 2';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/exo-2-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/orbitron-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Audiowide';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/audiowide-latin-400-normal.woff2') format('woff2');
+}
+
+/* ==========================================================================
+   Quiz Arena design system
+   Palette: violet/indigo/magenta on a near-black base — "purple & black".
+     flare: hot magenta-pink (danger / hot badges / accent highlight)
+     nova : main violet        (buttons, chips, primary CTA)
+     pulse: deep indigo        (info / links / secondary glow)
+     mint : success green      (unchanged — keeps the answer-correct meaning)
+     gold : reward amber       (unchanged — keeps XP/season meaning)
+   Type: Montserrat (body default) + Audiowide (display); switchable font packs.
+   Themes: arena (default), ember, ocean, venom, candy, mono via [data-theme].
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Accent tint steps (100/200).
+   The five brand families only declared 300-700, so every `text-mint-200`,
+   `text-nova-100`, `from-gold-200` in the app was a class Tailwind silently
+   dropped — those elements inherited whatever colour their container had,
+   which is what made a few labels vanish on the bright skin. The tints are
+   derived from each family's 300 step with color-mix, so all six accent themes
+   get consistent ones for free, and the two knobs below let the daylight skin
+   shade them toward ink instead of tinting them toward white.
+   ========================================================================== */
+:root {
+  --qa-tint-100-mix: 30%;
+  --qa-tint-200-mix: 55%;
+  --qa-tint-base: #ffffff;
+}
+
+@theme {
+  --font-sans: "Quite Magical", "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Quite Magical", "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
+
+  /* surfaces — true black base, violet-tinted raised steps */
+  --color-ink-950: #050308;
+  --color-ink-900: #0a0712;
+  --color-ink-850: #100b1c;
+  --color-ink-800: #15102a;
+  --color-ink-700: #1c1638;
+  --color-ink-600: #261c4a;
+  --color-ink-500: #322360;
+
+  /* text */
+  --color-mist-50: #f8fafc;
+  --color-mist-100: #e2e8f0;
+  --color-mist-200: #cbd5e1;
+  --color-mist-300: #94a3b8;
+  --color-mist-400: #64748b;
+  --color-mist-500: #475569;
+  --color-mist-600: #334155;
+
+  /* brand families are runtime-themeable: see the theme block after @theme */
+
+  /* motion */
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-pop: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-rise: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-shake: shake 0.4s ease-in-out both;
+  --animate-shimmer: shimmer 2.2s linear infinite;
+  --animate-glow: glow 2.8s ease-in-out infinite;
+  --animate-spin-slow: spin 14s linear infinite;
+  --animate-gradient-pan: gradient-pan 8s ease infinite;
+  --animate-pulse-ring: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ==========================================================================
+   Runtime themes. Colour utilities resolve through @theme inline below, so
+   setting data-theme on <html> reskins every surface, chip and glow at once.
+   ========================================================================== */
+:root,
+[data-theme='arena'] {
+  /* flare: hot magenta-pink (danger / hot badge) */
+  --qa-flare-300: #ffb4d8;
+  --qa-flare-400: #ff7ab3;
+  --qa-flare-500: #ec3d92;
+  --qa-flare-600: #c81f76;
+  --qa-flare-700: #92145a;
+  /* nova: main violet — the new primary */
+  --qa-nova-300: #e9defe;
+  --qa-nova-400: #c9a8fc;
+  --qa-nova-500: #a855f7;
+  --qa-nova-600: #8b2bd9;
+  --qa-nova-700: #6b1bb0;
+  /* pulse: deep indigo (info / secondary glow) — was blue, now dark violet */
+  --qa-pulse-300: #b8a6f5;
+  --qa-pulse-400: #8a73e8;
+  --qa-pulse-500: #5b3fd6;
+  --qa-pulse-600: #4328b8;
+  --qa-pulse-700: #2d1988;
+  --qa-mint-300: #6ee7b7;
+  --qa-mint-400: #34d399;
+  --qa-mint-500: #10b981;
+  --qa-mint-600: #059669;
+  --qa-gold-300: #fde68a;
+  --qa-gold-400: #fbbf24;
+  --qa-gold-500: #f59e0b;
+  --qa-gold-600: #d97706;
+  /* arena-specific ambient glows (purple & black) */
+  --wash-1: rgba(139, 43, 217, 0.22);
+  --wash-2: rgba(75, 24, 167, 0.18);
+  --wash-3: rgba(0, 0, 0, 0.55);
+  --xp-grad: linear-gradient(90deg, #c9a8fc, #a855f7 55%, #5b3fd6);
+  --goldtext-grad: linear-gradient(180deg, #f3e6ff 0%, #d2a8ff 38%, #a855f7 62%, #4a1f8c 100%);
+}
+[data-theme='ember'] {
+  --qa-flare-300: #f29898;
+  --qa-flare-400: #f17070;
+  --qa-flare-500: #ef4444;
+  --qa-flare-600: #ec1e1e;
+  --qa-flare-700: #d41212;
+  --qa-nova-300: #f5a770;
+  --qa-nova-400: #f78e45;
+  --qa-nova-500: #f97316;
+  --qa-nova-600: #e05f06;
+  --qa-nova-700: #be5105;
+  --qa-pulse-300: #f7d67e;
+  --qa-pulse-400: #f9cb54;
+  --qa-pulse-500: #fbbf24;
+  --qa-pulse-600: #f2b004;
+  --qa-pulse-700: #cf9604;
+  --qa-mint-300: #3ae6ad;
+  --qa-mint-400: #17e09d;
+  --qa-mint-500: #10b981;
+  --qa-mint-600: #0d9367;
+  --qa-gold-300: #f2be64;
+  --qa-gold-400: #f4af3a;
+  --qa-gold-500: #f59e0b;
+  --qa-gold-600: #cf8508;
+}
+[data-theme='ocean'] {
+  --qa-flare-300: #fbc8cf;
+  --qa-flare-400: #fb9fac;
+  --qa-flare-500: #fb7185;
+  --qa-flare-600: #fa4963;
+  --qa-flare-700: #f92745;
+  --qa-nova-300: #3fd8f2;
+  --qa-nova-400: #13d4f5;
+  --qa-nova-500: #06b6d4;
+  --qa-nova-600: #0594ac;
+  --qa-nova-700: #04768a;
+  --qa-pulse-300: #92b8f5;
+  --qa-pulse-400: #699ff6;
+  --qa-pulse-500: #3b82f6;
+  --qa-pulse-600: #1469f4;
+  --qa-pulse-700: #0a59da;
+  --qa-mint-300: #79ded2;
+  --qa-mint-400: #55dac9;
+  --qa-mint-500: #2dd4bf;
+  --qa-mint-600: #25b3a2;
+  --qa-gold-300: #fae6a6;
+  --qa-gold-400: #fbdd7c;
+  --qa-gold-500: #fcd34d;
+  --qa-gold-600: #fbc925;
+}
+[data-theme='venom'] {
+  --qa-flare-300: #f29898;
+  --qa-flare-400: #f17070;
+  --qa-flare-500: #ef4444;
+  --qa-flare-600: #ec1e1e;
+  --qa-flare-700: #d41212;
+  --qa-nova-300: #ace553;
+  --qa-nova-400: #9be52b;
+  --qa-nova-500: #84cc16;
+  --qa-nova-600: #6ca712;
+  --qa-nova-700: #57870f;
+  --qa-pulse-300: #3ae6ad;
+  --qa-pulse-400: #17e09d;
+  --qa-pulse-500: #10b981;
+  --qa-pulse-600: #0d9367;
+  --qa-pulse-700: #0a7350;
+  --qa-mint-300: #97e8b4;
+  --qa-mint-400: #73e39c;
+  --qa-mint-500: #4ade80;
+  --qa-mint-600: #27d868;
+  --qa-gold-300: #f6db70;
+  --qa-gold-400: #f8d445;
+  --qa-gold-500: #facc15;
+  --qa-gold-600: #e1b505;
+}
+[data-theme='candy'] {
+  --qa-flare-300: #f09ac5;
+  --qa-flare-400: #ee73b0;
+  --qa-flare-500: #ec4899;
+  --qa-flare-600: #e82384;
+  --qa-flare-700: #d21673;
+  --qa-nova-300: #ebdafd;
+  --qa-nova-400: #d7b2fc;
+  --qa-nova-500: #c084fc;
+  --qa-nova-600: #ac5cfb;
+  --qa-nova-700: #9a39fa;
+  --qa-pulse-300: #d5d8fb;
+  --qa-pulse-400: #aeb5f9;
+  --qa-pulse-500: #818cf8;
+  --qa-pulse-600: #5a69f6;
+  --qa-pulse-700: #394af4;
+  --qa-mint-300: #7fdebc;
+  --qa-mint-400: #5cd9ab;
+  --qa-mint-500: #34d399;
+  --qa-mint-600: #28b782;
+  --qa-gold-300: #f7d67e;
+  --qa-gold-400: #f9cb54;
+  --qa-gold-500: #fbbf24;
+  --qa-gold-600: #f2b004;
+
+  /* game-HUD extras from the brand theme guide: violet washes, gold XP, gold headings */
+  --wash-1: rgba(168, 85, 247, 0.17);
+  --wash-2: rgba(59, 130, 246, 0.13);
+  --wash-3: rgba(244, 63, 94, 0.1);
+  --xp-grad: linear-gradient(90deg, #fde68a, #fbbf24 55%, #f59e0b);
+  --goldtext-grad: linear-gradient(180deg, #fff3c4 0%, #ffd76a 38%, #fbbf24 62%, #b45309 100%);
+}
+[data-theme='mono'] {
+  --wash-1: rgba(255, 255, 255, 0.05);
+  --wash-2: rgba(255, 255, 255, 0.04);
+  --wash-3: rgba(255, 255, 255, 0.03);
+  --xp-grad: linear-gradient(90deg, #f5f5f5, #a3a3a3);
+  --goldtext-grad: linear-gradient(180deg, #ffffff 0%, #e5e5e5 45%, #737373 100%);
+  --qa-flare-300: #e5e5e5;
+  --qa-flare-400: #d4d4d4;
+  --qa-flare-500: #a3a3a3;
+  --qa-flare-600: #737373;
+  --qa-flare-700: #525252;
+  --qa-nova-300: #ffffff;
+  --qa-nova-400: #f5f5f5;
+  --qa-nova-500: #d4d4d4;
+  --qa-nova-600: #a3a3a3;
+  --qa-nova-700: #737373;
+  --qa-pulse-300: #e5e5e5;
+  --qa-pulse-400: #d4d4d4;
+  --qa-pulse-500: #a3a3a3;
+  --qa-pulse-600: #737373;
+  --qa-pulse-700: #525252;
+  --qa-mint-300: #fafafa;
+  --qa-mint-400: #e5e5e5;
+  --qa-mint-500: #d4d4d4;
+  --qa-mint-600: #a3a3a3;
+  --qa-gold-300: #f5f5f5;
+  --qa-gold-400: #e5e5e5;
+  --qa-gold-500: #d4d4d4;
+  --qa-gold-600: #a3a3a3;
+}
+
+@theme inline {
+  --color-flare-100: color-mix(in oklab, var(--qa-flare-300) var(--qa-tint-100-mix), var(--qa-tint-base));
+  --color-flare-200: color-mix(in oklab, var(--qa-flare-300) var(--qa-tint-200-mix), var(--qa-tint-base));
+  --color-nova-100: color-mix(in oklab, var(--qa-nova-300) var(--qa-tint-100-mix), var(--qa-tint-base));
+  --color-nova-200: color-mix(in oklab, var(--qa-nova-300) var(--qa-tint-200-mix), var(--qa-tint-base));
+  --color-pulse-100: color-mix(in oklab, var(--qa-pulse-300) var(--qa-tint-100-mix), var(--qa-tint-base));
+  --color-pulse-200: color-mix(in oklab, var(--qa-pulse-300) var(--qa-tint-200-mix), var(--qa-tint-base));
+  --color-mint-100: color-mix(in oklab, var(--qa-mint-300) var(--qa-tint-100-mix), var(--qa-tint-base));
+  --color-mint-200: color-mix(in oklab, var(--qa-mint-300) var(--qa-tint-200-mix), var(--qa-tint-base));
+  --color-gold-100: color-mix(in oklab, var(--qa-gold-300) var(--qa-tint-100-mix), var(--qa-tint-base));
+  --color-gold-200: color-mix(in oklab, var(--qa-gold-300) var(--qa-tint-200-mix), var(--qa-tint-base));
+  --color-flare-300: var(--qa-flare-300);
+  --color-flare-400: var(--qa-flare-400);
+  --color-flare-500: var(--qa-flare-500);
+  --color-flare-600: var(--qa-flare-600);
+  --color-flare-700: var(--qa-flare-700);
+  --color-nova-300: var(--qa-nova-300);
+  --color-nova-400: var(--qa-nova-400);
+  --color-nova-500: var(--qa-nova-500);
+  --color-nova-600: var(--qa-nova-600);
+  --color-nova-700: var(--qa-nova-700);
+  --color-pulse-300: var(--qa-pulse-300);
+  --color-pulse-400: var(--qa-pulse-400);
+  --color-pulse-500: var(--qa-pulse-500);
+  --color-pulse-600: var(--qa-pulse-600);
+  --color-pulse-700: var(--qa-pulse-700);
+  --color-mint-300: var(--qa-mint-300);
+  --color-mint-400: var(--qa-mint-400);
+  --color-mint-500: var(--qa-mint-500);
+  --color-mint-600: var(--qa-mint-600);
+  --color-mint-600: var(--qa-mint-600);
+  --color-gold-300: var(--qa-gold-300);
+  --color-gold-400: var(--qa-gold-400);
+  --color-gold-500: var(--qa-gold-500);
+  --color-gold-600: var(--qa-gold-600);
+  --color-gold-600: var(--qa-gold-600);
+}
+
+
+@keyframes float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -18px, 0) scale(1.04); }
+}
+
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.86); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes rise {
+  0% { opacity: 0; transform: translate3d(0, 14px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes gradient-pan {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.5); }
+  70% { box-shadow: 0 0 0 14px rgba(168, 85, 247, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+}
+
+/* ---------------------------------------------------------------- base --- */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    /* stop Android/Chrome from silently re-scaling the whole layout */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    /* nothing may scroll sideways on a phone — glows are decorative only */
+    max-width: 100vw;
+    overflow-x: clip;
+    background-color: var(--color-ink-950);
+    background-image:
+      radial-gradient(900px 620px at 12% -8%, var(--wash-1), transparent 70%),
+      radial-gradient(1000px 700px at 106% 16%, var(--wash-2), transparent 72%),
+      radial-gradient(820px 620px at 50% 116%, var(--wash-3), transparent 70%);
+    background-attachment: fixed;
+    color: var(--color-mist-50);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+    /* The arena is built at one fixed scale: panning is fine, zooming is not.
+       `pan-x pan-y` (without `pinch-zoom`) removes pinch zoom and double-tap
+       zoom, which is what keeps every panel in the shape it was designed in. */
+    touch-action: pan-x pan-y;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  button {
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* No 300ms double-tap-zoom delay, no accidental text selection while tapping. */
+  button,
+  a,
+  summary,
+  [role='button'] {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Sticky headers/footers must clear the notch and the home indicator. */
+  header,
+  nav {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input, textarea, select {
+    font-family: inherit;
+  }
+
+  ::selection {
+    background: var(--color-nova-500);
+    color: white;
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.28);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(168, 85, 247, 0.5);
+  }
+
+  /* ------------------------------------------------------------ phones ---
+     Anything below 640px gets a denser, thumb-first treatment: bigger touch
+     targets, 16px inputs (iOS zooms the page on focus below that), tighter
+     radii and cheaper blur so scrolling stays smooth on low-end devices. */
+  @media (max-width: 639px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+
+    .card {
+      border-radius: 1.1rem;
+    }
+
+    .glass,
+    .glass-strong {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* decorative glows cost fill-rate on phones — keep them, dim them */
+    .aurora::before {
+      opacity: 0.85;
+    }
+
+    ::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+    }
+  }
+
+  @media (hover: none) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* Respect the OS "reduce motion" setting: no floating, pulsing or shimmering. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ----------------------------------------------------------- utilities --- */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@utility safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+@utility safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/** Comfortable touch target (Apple HIG / Material both land on ~44px). */
+@utility tap {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/** Bottom-sheet chrome: rounded top, grab handle, safe-area aware. */
+@utility sheet {
+  border-radius: 1.5rem 1.5rem 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility sheet-handle {
+  width: 2.5rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.glass {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-strong {
+  background: linear-gradient(160deg, rgba(20, 24, 51, 0.92), rgba(9, 11, 28, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.card {
+  border-radius: 1.5rem;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.9);
+}
+
+/* Chunky game heading: gold gradient face with a hard drop, per the theme guide. */
+.game-title {
+  background: var(--goldtext-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)) drop-shadow(0 10px 26px rgba(251, 191, 36, 0.22));
+}
+
+/* Glossy HUD pill (coins / gems / streak) from the theme guide's top bar. */
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 55%, rgba(0, 0, 0, 0.2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  padding: 0.3rem 0.7rem;
+  font-weight: 800;
+}
+
+/*
+ * Floating header chip.
+ *
+ * The top bar is no longer a bar: there is no full-width strip, blur or shadow
+ * covering the world. Each control floats on the game and carries its own small
+ * surface, so it stays readable while content scrolls underneath it.
+ */
+.float-chip {
+  background: color-mix(in srgb, var(--color-ink-950) 82%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 18px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* ==========================================================================
+   SHOP COSMETICS
+   --------------------------------------------------------------------------
+   Everything the arena shop sells renders through these classes: auras and
+   motes around an avatar, animated frames, profile theme washes, chat bubbles,
+   victory celebrations and answer effects. They are all decoration — nothing
+   here can change a score, an XP number or a reward — and all of it is off
+   under `prefers-reduced-motion` and `data-fx='low'`.
+   ========================================================================== */
+
+@keyframes aura-drift {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-42px) scale(0.6); opacity: 0; }
+}
+@keyframes frame-spin {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(40deg); }
+}
+@keyframes victory-pop {
+  0% { transform: scale(0.6) rotate(-6deg); opacity: 0; }
+  55% { transform: scale(1.12) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes answer-flash {
+  0% { transform: scale(0.9); text-shadow: 0 0 0 rgba(255, 255, 255, 0); }
+  40% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.hero-aura {
+  animation: aura-pulse 3.2s ease-in-out infinite;
+}
+@keyframes aura-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.hero-mote {
+  animation: aura-drift 3.6s ease-in infinite;
+}
+.hero-frame-spin {
+  animation: frame-spin 7s ease-in-out infinite alternate;
+}
+
+/* The shelf card: a soft sheen that says "this is an object, not a row". */
+.shelf-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.28)),
+    var(--color-ink-900);
+}
+.shelf-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.12) 50%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.shelf-card:hover::after { opacity: 1; }
+
+/* Profile themes — a wash over the profile card, per owned theme. */
+.cosy-library { background-image: radial-gradient(120% 90% at 15% 0%, #7c4a12 0%, #2a1b0a 60%, #150e06 100%); }
+.cosy-ocean { background-image: radial-gradient(120% 90% at 20% 0%, #0e7490 0%, #0b2942 60%, #061420 100%); }
+.cosy-jungle { background-image: radial-gradient(120% 90% at 15% 0%, #15803d 0%, #0d2f1e 60%, #06160e 100%); }
+.cosy-volcano { background-image: radial-gradient(120% 90% at 50% 0%, #b91c1c 0%, #3b0d0d 55%, #170404 100%); }
+.cosy-royal { background-image: radial-gradient(120% 90% at 20% 0%, #7c3aed 0%, #2a1257 55%, #120726 100%); }
+.cosy-space { background-image: radial-gradient(120% 90% at 80% 0%, #4338ca 0%, #131044 55%, #05051a 100%); }
+.cosy-haunted { background-image: radial-gradient(120% 90% at 30% 0%, #4c1d95 0%, #1b1030 60%, #08050f 100%); }
+.cosy-castle { background-image: radial-gradient(120% 90% at 50% 0%, #a16207 0%, #33230a 55%, #120c03 100%); }
+.cosy-city { background-image: radial-gradient(120% 90% at 70% 0%, #0891b2 0%, #10233b 55%, #04080f 100%); }
+.cosy-golden { background-image: radial-gradient(120% 90% at 50% 0%, #f59e0b 0%, #4a2c05 55%, #1a0f02 100%); }
+.cosy-cyber-forest { background-image: radial-gradient(120% 90% at 20% 0%, #064e3b 0%, #06281e 55%, #03130d 100%); }
+.cosy-neon-jungle { background-image: radial-gradient(120% 90% at 30% 0%, #4c1d95 0%, #064e3b 55%, #051410 100%); }
+.cosy-techno-nature { background-image: radial-gradient(120% 90% at 70% 0%, #0f766e 0%, #042f2e 55%, #021717 100%); }
+.cosy-preview {
+  background-image: linear-gradient(140deg, rgba(255, 255, 255, 0.25), rgba(0, 0, 0, 0.35));
+}
+
+/* The player's own chat bubbles — a cosmetic look, same message. */
+.bubble-sky { background-image: linear-gradient(135deg, #0ea5e9, #1d4ed8); color: #fff; }
+.bubble-sunset { background-image: linear-gradient(135deg, #f97316, #db2777); color: #fff; }
+.bubble-neon {
+  background-image: linear-gradient(135deg, #22d3ee, #a855f7);
+  color: #fff;
+  box-shadow: 0 0 14px -2px rgba(34, 211, 238, 0.7);
+}
+.bubble-dragon {
+  background-image: linear-gradient(135deg, #047857, #065f46 55%, #7c2d12);
+  color: #fff;
+  box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.35);
+}
+
+/* Victory animations — played on the duel result screen. */
+.victory-classic { animation: victory-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.victory-confetti { animation: victory-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.victory-dragon { animation: victory-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; text-shadow: 0 0 18px rgba(52, 211, 153, 0.6); }
+.victory-galaxy { animation: victory-pop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both; text-shadow: 0 0 20px rgba(167, 139, 250, 0.75); }
+
+/* Answer effects — the headline over a correct answer. */
+.fx-answer-sparkle { animation: answer-flash 0.4s ease both; }
+.fx-answer-perfect {
+  animation: answer-flash 0.5s ease both;
+  text-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+}
+.fx-answer-knowledge {
+  animation: answer-flash 0.7s ease both;
+  text-shadow: 0 0 16px rgba(167, 139, 250, 0.8);
+  background-image: linear-gradient(90deg, #f0abfc, #a5b4fc, #fde68a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Cyber-nature bioluminescence */
+@keyframes biolum-pulse {
+  0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 8px rgba(20, 184, 166, 0.4)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 16px rgba(20, 184, 166, 0.8)); }
+}
+.biolum-glow {
+  animation: biolum-pulse 4s ease-in-out infinite;
+}
+.evolution-track {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.glow-cyber {
+  box-shadow: 0 0 0 1px rgba(20, 184, 166, 0.4), 0 12px 36px -12px rgba(6, 182, 212, 0.5);
+}
+
+/* Low-end devices and reduced-motion users keep the cosmetics, lose the motion. */
+[data-fx='low'] .hero-mote,
+[data-fx='low'] .hero-frame-spin,
+[data-fx='low'] .victory-classic,
+[data-fx='low'] .victory-confetti,
+[data-fx='low'] .victory-dragon,
+[data-fx='low'] .victory-galaxy,
+[data-fx='low'] .fx-answer-sparkle,
+[data-fx='low'] .fx-answer-perfect,
+[data-fx='low'] .fx-answer-knowledge,
+[data-fx='low'] .hero-aura {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-mote, .hero-frame-spin, .hero-aura,
+  .victory-classic, .victory-confetti, .victory-dragon, .victory-galaxy,
+  .fx-answer-sparkle, .fx-answer-perfect, .fx-answer-knowledge {
+    animation: none !important;
+  }
+}
+
+.brand-gradient {
+  background-image: linear-gradient(
+    120deg,
+    var(--color-flare-500) 0%,
+    var(--color-nova-500) 48%,
+    var(--color-pulse-500) 100%
+  );
+}
+
+/* ==========================================================================
+   Modes — [data-mode] on <html>: game (default), pro, fun.
+   Game keeps every glow and mascot; pro strips the arcade chrome down to a
+   clean professional surface; fun adds bounce, wiggle and extra sparkle.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ pro: clean */
+[data-mode='pro'] .mascot {
+  display: none !important;
+}
+
+[data-mode='pro'] .game-title {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--color-mist-50);
+  filter: none;
+}
+
+[data-mode='pro'] .hud-pill {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-mode='pro'] .aurora::before {
+  opacity: 0.3;
+}
+
+[data-mode='pro'] .grid-lines {
+  opacity: 0.2;
+}
+
+[data-mode='pro'] .animate-float-slow,
+[data-mode='pro'] .animate-float,
+[data-mode='pro'] .animate-bounce {
+  animation: none !important;
+}
+
+/* ------------------------------------------------------------ fun: bouncy */
+@keyframes fun-hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(4deg) scale(1.07);
+  }
+}
+
+@keyframes fun-wiggle {
+  0%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg) scale(1.02);
+  }
+}
+
+@keyframes fun-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+[data-mode='fun'] .mascot {
+  animation: fun-hop 1.7s ease-in-out infinite;
+}
+
+[data-mode='fun'] .game-title {
+  animation: fun-wiggle 2.6s ease-in-out infinite;
+}
+
+[data-mode='fun'] .hud-pill {
+  animation: fun-pulse 2.2s ease-in-out infinite;
+}
+
+[data-mode='fun'] .aurora::before {
+  filter: saturate(1.35);
+}
+
+[data-mode='fun'] button:not(:disabled):hover {
+  transform: translateY(-2px) rotate(-0.5deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-mode='fun'] .mascot,
+  [data-mode='fun'] .game-title,
+  [data-mode='fun'] .hud-pill {
+    animation: none;
+  }
+}
+
+.brand-gradient-animated {
+  background-image: linear-gradient(
+    120deg,
+    var(--color-flare-500),
+    var(--color-nova-500),
+    var(--color-pulse-500),
+    var(--color-nova-500),
+    var(--color-flare-500)
+  );
+  background-size: 300% 300%;
+  animation: var(--animate-gradient-pan);
+}
+
+.text-gradient {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-flare-400) 0%,
+    var(--color-nova-400) 45%,
+    var(--color-pulse-400) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.aurora {
+  position: relative;
+  isolation: isolate;
+}
+
+.aurora::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(52rem 36rem at 10% -6%, rgba(16, 185, 129, 0.16), transparent 62%),
+    radial-gradient(48rem 32rem at 90% 4%, rgba(139, 92, 246, 0.18), transparent 60%),
+    radial-gradient(56rem 40rem at 50% 108%, rgba(139, 43, 217, 0.22), transparent 64%),
+    linear-gradient(180deg, #05080d 0%, #070d16 45%, #05080d 100%);
+}
+
+.grid-lines {
+  background-image:
+    linear-gradient(rgba(20, 184, 166, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+
+.glow-brand {
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.35), 0 18px 45px -18px rgba(168, 85, 247, 0.65);
+}
+
+.glow-flare {
+  box-shadow: 0 18px 45px -18px rgba(244, 63, 94, 0.7);
+}
+
+.glow-mint {
+  box-shadow: 0 18px 45px -18px rgba(16, 185, 129, 0.65);
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.35) 20%,
+    rgba(255, 255, 255, 0.95) 40%,
+    rgba(255, 255, 255, 0.35) 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-shimmer);
+}
+
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.1) 45%,
+    rgba(255, 255, 255, 0.04) 65%
+  );
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Thin gradient rule used under section headings */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.5), rgba(59, 130, 246, 0.35), transparent);
+}
+
+/* --------------------------------------------------------------- print --- */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .aurora::before,
+  .grid-lines {
+    display: none !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-slip {
+    position: absolute;
+    inset: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .print-slip * {
+    color: #0f172a !important;
+    background: transparent !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 1.4cm;
+  }
+}
+
+/* ---------------------------------------------------------- mascot rig */
+/* Arms and bodies rotate around exact user-space pivots. */
+.mascot * {
+  transform-box: view-box;
+}
+
+.mascot .m-body {
+  animation: mascot-bob 2.6s ease-in-out infinite;
+}
+
+.mascot .m-eye {
+  animation: mascot-blink 4.4s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.mascot .m-arm-l,
+.mascot .m-arm-r {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mascot-cheer .m-body,
+.mascot-dance .m-body {
+  animation: mascot-bounce 0.72s ease-in-out infinite;
+}
+
+.mascot-cheer .m-arm-l,
+.mascot-dance .m-arm-l {
+  animation: mascot-wave-l 0.5s ease-in-out infinite alternate;
+}
+
+.mascot-cheer .m-arm-r,
+.mascot-dance .m-arm-r {
+  animation: mascot-wave-r 0.5s ease-in-out infinite alternate;
+}
+
+.mascot-dance .m-body {
+  animation: mascot-dance 0.55s ease-in-out infinite;
+}
+
+.mascot-sad .m-body {
+  animation: mascot-droop 0.9s ease-in-out both;
+}
+
+.mascot-sad .m-arm-l {
+  transform: rotate(26deg);
+}
+
+.mascot-sad .m-arm-r {
+  transform: rotate(-26deg);
+}
+
+.mascot-think .m-body {
+  animation: mascot-tilt 2.4s ease-in-out infinite;
+}
+
+.mascot-think .m-arm-r {
+  transform: rotate(-72deg);
+}
+
+.mascot .m-squish {
+  animation: mascot-bob 2.6s ease-in-out infinite, mascot-squish 2.6s ease-in-out infinite;
+}
+
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+
+@keyframes mascot-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-6px) scale(1.03); }
+  70% { transform: translateY(0) scale(0.98); }
+}
+
+@keyframes mascot-droop {
+  from { transform: translateY(0) rotate(0deg); }
+  to { transform: translateY(2.5px) rotate(-4deg); }
+}
+
+@keyframes mascot-dance {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+
+@keyframes mascot-squish {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.06, 0.94); }
+}
+
+@keyframes mascot-wave-l {
+  from { transform: rotate(-122deg); }
+  to { transform: rotate(-152deg); }
+}
+
+@keyframes mascot-wave-r {
+  from { transform: rotate(122deg); }
+  to { transform: rotate(152deg); }
+}
+
+@keyframes mascot-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+}
+
+@keyframes mascot-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot * {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------- hero reel */
+/* Slow drift on the active frame so the stills read like a clip. */
+@keyframes hero-kenburns {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.15) translate3d(-1.6%, -1.4%, 0);
+  }
+}
+
+.hero-kenburns {
+  animation: hero-kenburns 7.6s ease-out forwards;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-kenburns {
+    animation: none;
+  }
+}
+
+/* Captions and chips on the landing page breathe in on first paint. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ==========================================================================
+   GAME WORLD DESIGN SYSTEM
+   --------------------------------------------------------------------------
+   The arena used to read as a cyber dashboard: flat 1px panels, neon washes and
+   terminal type. This layer turns the same markup into a chunky cartoon-game
+   surface — physical cards with a hard bottom edge, bevel buttons that actually
+   press down, collectible badge tags, XP bars that shine, and a reusable set of
+   game animations. Nothing here changes layout, routing or data: it is purely
+   the visual language, so every existing screen inherits it at once.
+   ========================================================================== */
+
+:root {
+  /* radius scale (tactical technical geometry: sharp, clean, slightly rounded) */
+  --qa-r-xs: 0.25rem;
+  --qa-r-sm: 0.375rem;
+  --qa-r-md: 0.5rem;
+  --qa-r-lg: 0.75rem;
+  --qa-r-xl: 1rem;
+
+  /* depth ladder: 0 background, 1 card, 2 raised, 3 modal, 4 reward */
+  --qa-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  --qa-depth-1: 0 2px 4px rgba(0, 0, 0, 0.5), 0 6px 14px -3px rgba(0, 0, 0, 0.7);
+  --qa-depth-2: 0 4px 8px rgba(0, 0, 0, 0.6), 0 12px 24px -5px rgba(0, 0, 0, 0.85);
+  --qa-depth-3: 0 8px 16px rgba(0, 0, 0, 0.7), 0 20px 40px -8px rgba(0, 0, 0, 0.95);
+  --qa-depth-4: 0 12px 24px rgba(0, 0, 0, 0.8), 0 32px 64px -12px rgba(0, 0, 0, 1);
+
+  /* tactical command surfaces: deep gunmetal, graphite and dark steel */
+  --qa-surface: linear-gradient(180deg, #0e0820 0%, #07030f 100%);
+  --qa-surface-raised: linear-gradient(180deg, #160c2e 0%, #0b0518 100%);
+  --qa-surface-sunken: linear-gradient(180deg, #030108 0%, #0a0418 100%);
+  --qa-outline: rgba(255, 255, 255, 0.08);
+  --qa-outline-strong: rgba(168, 85, 247, 0.45);
+
+  /* meaning colours: tactical green / warning amber / danger red / active violet */
+  --qa-success: #10b981;
+  --qa-warning: #f59e0b;
+  --qa-danger: #ef4444;
+  --qa-special: #a855f7;
+  --qa-xp: var(--xp-grad, linear-gradient(90deg, #c9a8fc, #5b3fd6));
+
+  --qa-press: 0.12s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+/* ---------------------------------------------------------------- surfaces */
+/* `.card` is the single most-used class in the app: tactical layered modules */
+.card {
+  position: relative;
+  border-radius: var(--qa-r-lg);
+  background: var(--qa-surface);
+  border: 1px solid var(--qa-outline);
+  box-shadow: var(--qa-edge), var(--qa-depth-1);
+}
+
+.card-raised {
+  background: var(--qa-surface-raised);
+  border: 1px solid var(--qa-outline-strong);
+  box-shadow: var(--qa-edge), var(--qa-depth-2);
+}
+
+.panel-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--qa-r-xl);
+  border: 1px solid var(--qa-outline-strong);
+  background:
+    radial-gradient(120% 130% at 12% -10%, rgba(168, 85, 247, 0.12), transparent 55%),
+    var(--qa-surface-raised);
+  box-shadow: var(--qa-edge), var(--qa-depth-3);
+}
+
+/* A carved strip used for headers inside hero panels. */
+.panel-band {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.2));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.sunken {
+  border-radius: var(--qa-r-md);
+  background: var(--qa-surface-sunken);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------------------------------------------------------------- buttons */
+/* ---------------------------------------------------------------- buttons */
+/* CHAMFER TILE — a hexagonal-ish control with cut top-left & bottom-right
+   corners, a violet→indigo→magenta gradient ring that flows around its
+   perimeter, and a press beam that sweeps the face on tap.
+
+   Three layers:
+     .gbtn       outer <button>      — press/focus host + outer violet halo
+                                       (must not be clipped so the halo spills)
+     .gbtn-face  inner painted slab  — the chamfered silhouette + sheen
+     .gbtn-ring  conic gradient halo — clipped to the same silhouette, but only
+                                       the 1.5px "frame" shows because we
+                                       inset the surface inside the clip
+
+   Conic-gradient + clip-path + a slow rotation = the live HUD ring. */
+.gbtn {
+  position: relative;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: transform var(--qa-press), filter 0.2s ease;
+  will-change: transform;
+}
+.gbtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: drop-shadow(0 6px 16px rgba(91, 63, 214, 0.55))
+          drop-shadow(0 0 22px rgba(168, 85, 247, 0.45));
+}
+.gbtn:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: drop-shadow(0 2px 6px rgba(91, 63, 214, 0.7))
+          drop-shadow(0 0 14px rgba(168, 85, 247, 0.65));
+}
+.gbtn:disabled {
+  filter: grayscale(0.5) brightness(0.7);
+  cursor: not-allowed;
+}
+
+/* The chamfered silhouette: top-left + bottom-right corners sliced at 16px,
+   every other corner stays at 90°. The cut on the same diagonal axis as the
+   variant gradient gives the button a clear "this side faces up" stance. */
+.gbtn-face {
+  --qa-chamfer: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  clip-path: polygon(
+    var(--qa-chamfer) 0,
+    100% 0,
+    100% calc(100% - var(--qa-chamfer)),
+    calc(100% - var(--qa-chamfer)) 100%,
+    0 100%,
+    0 var(--qa-chamfer)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 6px 14px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow 0.2s ease, filter 0.2s ease;
+}
+.gbtn-face > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Animated gradient ring: a conic-gradient disk behind the face, clipped to
+   the same chamfered silhouette, with a hard center cut so only the outer
+   rim (≈1.5px) shows. It rotates slowly — the lit section travels around the
+   perimeter like a HUD scanning the control.
+
+   The gradient uses a static conic-gradient; we rotate the element itself so
+   every browser (including ones that don't animate custom properties in
+   conic-gradients) gets the same live HUD effect. */
+.gbtn-ring {
+  /* The ring lives inside .gbtn-face, whose own chamfered clip-path is static.
+     `overflow: hidden` on the face is enough to constrain the ring's bounding
+     box; the ring itself is a square (we use a larger inset) so the rotation
+     keeps it the same shape and the gradient sweeps around the centre. */
+  position: absolute;
+  inset: -50%;                                  /* oversized square = conic gradient fills the rim */
+  z-index: 1;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    rgba(168, 85, 247, 0)    0deg,
+    rgba(168, 85, 247, 0)    30deg,
+    rgba(217, 188, 255, 0.95) 70deg,
+    rgba(236, 61, 146, 0.95)  140deg,
+    rgba(91, 63, 214, 0.95)   210deg,
+    rgba(168, 85, 247, 0)    280deg,
+    rgba(168, 85, 247, 0)    360deg
+  );
+  /* Inner mask cuts the centre out so only the outer rim stays lit. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  padding: 1.5px;
+  opacity: 0.9;
+  transform-origin: 50% 50%;
+  animation: gbtn-ring-spin 4.2s linear infinite;
+}
+@keyframes gbtn-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Press beam: a single violet flash that crosses the face when the button is
+   held. It rides on a separate ::before and runs on a transform so it can
+   replay cheaply without re-painting the gradient. */
+.gbtn-face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 70%);
+  background-size: 260% 100%;
+  background-position: 200% 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, background-position 0.7s ease;
+  z-index: 3;
+}
+.gbtn:hover:not(:disabled) .gbtn-face::before {
+  opacity: 1;
+  background-position: 0 0;
+  transition-delay: 0.05s;
+}
+.gbtn:active:not(:disabled) .gbtn-face::before {
+  /* Quicker flash on tap so the press feels mechanical. */
+  transition: opacity 0.08s ease, background-position 0.35s ease;
+  background-position: -100% 0;
+}
+
+/* Press the surface a touch deeper on tap, so the chamfer's top edge catches
+   the highlight. The inner shadow flips to feel pressed. */
+.gbtn:active:not(:disabled) .gbtn-face {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Focus gets the same love as hover: the ring brightens, the beam sweeps. */
+.gbtn:focus-visible .gbtn-face {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 6px 18px rgba(91, 63, 214, 0.5);
+}
+.gbtn:focus-visible .gbtn-ring {
+  opacity: 1;
+}
+
+/* The disabled state kills motion + ring so the button reads inert. */
+.gbtn:disabled .gbtn-ring,
+.gbtn:disabled .gbtn-face::before {
+  animation: none;
+  opacity: 0;
+}
+
+/* Reduced motion: keep the chamfered shape, drop the spin & beam so the
+   control still looks alive but doesn't move. */
+@media (prefers-reduced-motion: reduce) {
+  .gbtn-ring { animation: none; }
+  .gbtn-face::before { transition: none; }
+}
+
+/* Card as a tappable control (tactical press feedback instead of bouncy hover). */
+.gpress {
+  transition: transform var(--qa-press), box-shadow var(--qa-press), border-color 0.15s ease;
+}
+@media (hover: hover) {
+  .gpress:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--qa-edge), var(--qa-depth-2);
+    border-color: var(--qa-outline-strong);
+  }
+}
+.gpress:active {
+  transform: translateY(1px);
+  box-shadow: var(--qa-edge), 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ----------------------------------------------------------- badge / tags */
+/* Collectible tactical badge rather than a developer label.
+   Kept in the components layer on purpose: GameTag passes its own text colour
+   (`text-mist-300`, a tone ramp, ...) and an unlayered rule would always beat
+   it, painting every tag white — which is exactly what broke on paper. */
+@layer components {
+.btag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border-radius: var(--qa-r-xs);
+  padding: 0.18rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.4);
+  color: #fff;
+}
+.btag-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btag-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  background-size: 260% 100%;
+  animation: shimmer 3.4s linear infinite;
+  pointer-events: none;
+}
+}
+
+/* -------------------------------------------------------------- XP / bars */
+.xpbar {
+  position: relative;
+  height: 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.32));
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4) inset, 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.xpbar-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--qa-xp);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.xpbar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.5) 50%, transparent 70%);
+  background-size: 240% 100%;
+  animation: shimmer 2.6s linear infinite;
+  opacity: 0.7;
+}
+
+/* A notched "ribbon" progress bar used on the world map. */
+.ribbon {
+  height: 0.7rem;
+  border-radius: 999px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 10px, transparent 10px 14px);
+}
+
+/* ------------------------------------------------------------- map nodes */
+.map-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 999px;
+  border: 3px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 0 -1px rgba(0, 0, 0, 0.5), inset 0 3px 0 rgba(255, 255, 255, 0.4);
+  transition: transform var(--qa-press), box-shadow var(--qa-press);
+}
+@media (min-width: 640px) {
+  .map-node {
+    width: 4.1rem;
+    height: 4.1rem;
+  }
+}
+.map-node:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 -1px rgba(0, 0, 0, 0.5), inset 0 3px 0 rgba(255, 255, 255, 0.3);
+}
+.map-node-current {
+  animation: node-bounce 2.4s ease-in-out infinite;
+}
+.map-node-locked {
+  filter: grayscale(0.75) brightness(0.75);
+}
+
+.map-path {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 6;
+  stroke-linecap: round;
+  fill: none;
+}
+.map-path-done {
+  stroke: url(#map-path-grad);
+  stroke-dasharray: 0.5 12;
+  animation: path-march 1.6s linear infinite;
+}
+
+/* ------------------------------------------------------------- scenery --- */
+.scenery {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cloud {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  filter: blur(1px);
+  animation: cloud-drift linear infinite;
+}
+.twinkle {
+  position: absolute;
+  border-radius: 999px;
+  background: #fff;
+  animation: twinkle ease-in-out infinite;
+}
+.float-prop {
+  position: absolute;
+  animation: float-prop ease-in-out infinite;
+}
+.sway {
+  transform-origin: 50% 100%;
+  animation: sway 4.4s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------ animations */
+@keyframes node-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes path-march {
+  to { stroke-dashoffset: -24; }
+}
+@keyframes cloud-drift {
+  from { transform: translateX(-30%); }
+  to { transform: translateX(130%); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes float-prop {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-9px) rotate(2deg); }
+}
+@keyframes sway {
+  0%, 100% { transform: rotate(-2.5deg); }
+  50% { transform: rotate(2.5deg); }
+}
+@keyframes game-pop {
+  0% { transform: scale(0.82); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes game-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-14px); }
+  55% { transform: translateY(0); }
+  72% { transform: translateY(-5px); }
+}
+@keyframes game-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+@keyframes game-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-8px) rotate(-1deg); }
+  35% { transform: translateX(7px) rotate(1deg); }
+  55% { transform: translateX(-5px); }
+  75% { transform: translateX(4px); }
+}
+@keyframes game-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5), var(--qa-edge), var(--qa-depth-1); }
+  50% { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0), var(--qa-edge), var(--qa-depth-1); }
+}
+@keyframes game-levelup {
+  0% { transform: scale(0.5) rotate(-8deg); opacity: 0; }
+  55% { transform: scale(1.12) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes coin-pop {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.22) rotate(-6deg); }
+}
+@keyframes xp-rise {
+  0% { transform: translateY(6px) scale(0.9); opacity: 0; }
+  25% { transform: translateY(-2px) scale(1.06); opacity: 1; }
+  100% { transform: translateY(-34px) scale(0.94); opacity: 0; }
+}
+@keyframes chest-open {
+  0% { transform: rotate(0) scale(1); }
+  35% { transform: rotate(-4deg) scale(1.05); }
+  70% { transform: rotate(4deg) scale(1.04); }
+  100% { transform: rotate(0) scale(1); }
+}
+@keyframes sparkle-burst {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+  100% { transform: translate(var(--dx, 0), var(--dy, -40px)) scale(0.9); opacity: 0; }
+}
+
+.anim-pop { animation: game-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.anim-bounce { animation: game-bounce 0.7s ease both; }
+.anim-wiggle { animation: game-wiggle 0.5s ease both; }
+.anim-shake { animation: game-shake 0.45s ease both; }
+.anim-glow { animation: game-glow 2.4s ease-in-out infinite; }
+.anim-levelup { animation: game-levelup 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.anim-coin { animation: coin-pop 0.6s ease both; }
+.anim-chest { animation: chest-open 1.1s ease-in-out both; }
+.anim-xp { animation: xp-rise 1.5s ease-out forwards; }
+
+/* Success / error feedback that the question screens can reuse. */
+.feedback-good {
+  border-color: rgba(52, 211, 153, 0.65) !important;
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.28), rgba(52, 211, 153, 0.1)) !important;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18), var(--qa-edge);
+  animation: game-pop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.feedback-bad {
+  border-color: rgba(244, 63, 94, 0.6) !important;
+  background: linear-gradient(180deg, rgba(244, 63, 94, 0.26), rgba(244, 63, 94, 0.09)) !important;
+  animation: game-shake 0.45s ease both;
+}
+
+/* -------------------------------------------------- low-end device profile */
+/* Set by lib/fx.ts when the device reports reduced motion, few cores or little
+   memory: keep the art direction, drop the expensive parts. */
+[data-fx='low'] .gbtn,
+[data-fx='low'] .gpress,
+[data-fx='low'] .card,
+[data-fx='low'] .panel-hero {
+  box-shadow: 0 3px 0 -1px rgba(0, 0, 0, 0.45);
+}
+[data-fx='low'] .glass,
+[data-fx='low'] .glass-strong,
+[data-fx='low'] .xpbar-fill::after,
+[data-fx='low'] .btag-shimmer::after {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: none;
+}
+[data-fx='low'] .scenery,
+[data-fx='low'] .map-node-current,
+[data-fx='low'] .anim-glow {
+  animation: none;
+}
+[data-fx='low'] .scenery {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-node-current,
+  .scenery .cloud,
+  .scenery .twinkle,
+  .scenery .float-prop,
+  .scenery .sway,
+  .xpbar-fill::after,
+  .btag-shimmer::after {
+    animation: none !important;
+  }
+}
+
+/* The two little "treasure" orbs that flank an empty-state illustration. */
+.tf-orb {
+  animation: float-prop 5.2s ease-in-out infinite;
+}
+.tf-orb:last-child {
+  animation-delay: -2.1s;
+}
+
+/* ==========================================================================
+   DAYLIGHT SKIN
+   --------------------------------------------------------------------------
+   The arena boots into the night skin; the daylight cartoon world is an opt-in
+   under [data-skin='day']. Rather than editing every panel, that layer re-maps
+   the token meanings:
+
+     ink-*    was "deep surface"        -> now a light surface (white/parchment)
+     mist-*   was "light type"         -> now dark type
+     accent 300/400 (used for type)     -> deepened so they stay readable on white
+     white/*  translucent borders/fills -> re-tinted to ink so cards keep edges
+
+   Accent families, gradients and text-white on coloured buttons keep working
+   untouched, so the six themes still tint a daylight app. Anything that must
+   stay dark in daylight (a night-mode artwork, a gradient chip) opts out with
+   `.keep-dark`, and `[data-fx='low']` still strips the expensive parts.
+   ========================================================================== */
+
+[data-skin='day'] {
+  /* Tint steps shade toward ink on paper, so a pastel label that was readable
+     on a night sky is still readable on white. */
+  --qa-tint-100-mix: 55%;
+  --qa-tint-200-mix: 42%;
+  --qa-tint-base: #0f1734;
+
+  /* surfaces: page -> raised -> sunken */
+  --color-ink-950: #eef6ff;
+  --color-ink-900: #ffffff;
+  --color-ink-850: #f6faff;
+  --color-ink-800: #edf4ff;
+  --color-ink-700: #e2ecfd;
+  --color-ink-600: #d4e1f8;
+  --color-ink-500: #c3d4f2;
+
+  /* type: dark navy family, still blue-tinted so it reads as the same brand */
+  --color-mist-50: #101a3a;
+  --color-mist-100: #16224a;
+  --color-mist-200: #1c2a52;
+  --color-mist-300: #2c3b6b;
+  --color-mist-400: #46567f;
+  --color-mist-500: #566792;
+  --color-mist-600: #6b7ba6;
+
+  /* deepened accents (the 300/400 steps are used as text on panels) */
+  --qa-flare-300: #e11d48;
+  --qa-flare-400: #dc2647;
+  --qa-nova-300: #7c3aed;
+  --qa-nova-400: #8b5cf6;
+  --qa-pulse-300: #1d4ed8;
+  --qa-pulse-400: #2563eb;
+  --qa-mint-300: #047857;
+  --qa-mint-400: #059669;
+  --qa-gold-300: #b45309;
+  --qa-gold-400: #d97706;
+
+  /* cartoon depth on paper: soft tinted shadows instead of black voids */
+  --qa-edge: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 -3px 0 rgba(16, 26, 58, 0.1) inset;
+  --qa-depth-1: 0 3px 0 -1px rgba(16, 26, 58, 0.16), 0 12px 26px -20px rgba(16, 26, 58, 0.45);
+  --qa-depth-2: 0 5px 0 -1px rgba(16, 26, 58, 0.18), 0 20px 40px -24px rgba(16, 26, 58, 0.5);
+  --qa-depth-3: 0 8px 0 -2px rgba(16, 26, 58, 0.2), 0 34px 60px -28px rgba(16, 26, 58, 0.5);
+  --qa-depth-4: 0 12px 0 -3px rgba(16, 26, 58, 0.22), 0 50px 90px -36px rgba(16, 26, 58, 0.55);
+
+  --qa-surface: linear-gradient(168deg, #ffffff 0%, #f8fbff 55%, #eef5ff 100%);
+  --qa-surface-raised: linear-gradient(168deg, #ffffff 0%, #f4f9ff 50%, #e8f1ff 100%);
+  --qa-surface-sunken: linear-gradient(180deg, rgba(16, 26, 58, 0.05), rgba(16, 26, 58, 0.02));
+  --qa-outline: rgba(16, 26, 58, 0.16);
+  --qa-outline-strong: rgba(16, 26, 58, 0.26);
+
+  --qa-success: #059669;
+  --qa-warning: #d97706;
+  --qa-danger: #e11d48;
+  --qa-special: #7c3aed;
+
+  /* Gold is the one family whose *light* end (amber) carries white type on its
+     gradients, so the day skin deepens 500/600 as well as 300/400. */
+  --qa-gold-500: #d97706;
+  --qa-gold-600: #b45309;
+
+  /* A handful of screens lean on Tailwind's default ramps (deck grading,
+     accuracy chips, bronze/silver/diamond tiers). Their 200-400 steps are the
+     "type on a dark panel" end; on paper they wash out completely, so the day
+     skin swaps them for the deep step of the same ramp. */
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+  --color-amber-200: #92400e;
+  --color-amber-400: #b45309;
+  --color-cyan-200: #155e75;
+  --color-cyan-400: #0e7490;
+}
+
+/* The page itself: sky at the top, meadow at the bottom, sunshine in between. */
+[data-skin='day'] body {
+  background-color: #eaf4ff;
+  background-image:
+    radial-gradient(1200px 640px at 12% -10%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(900px 520px at 88% 0%, #fff2cc 0%, rgba(255, 242, 204, 0) 62%),
+    linear-gradient(180deg, #d7ecff 0%, #eaf6ff 34%, #eefbf0 68%, #fff8e7 100%);
+  background-attachment: fixed;
+}
+
+[data-skin='day'] ::selection {
+  background: var(--color-nova-500);
+  color: #fff;
+}
+
+/* Translucent white utilities read as "glassy dark edges" on ink; on paper they
+   vanish. Re-tint them to ink so every card, divider and ring keeps its shape.
+   `.keep-dark` (and anything inside it) opts out — that's how gradient buttons,
+   boss bars and night artwork stay exactly as designed. */
+[data-skin='day'] [class*='border-white/']:not(.keep-dark):not(.keep-dark *) {
+  border-color: rgba(16, 26, 58, 0.14);
+}
+[data-skin='day'] [class*='border-white/8']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='border-white/10']:not(.keep-dark):not(.keep-dark *) {
+  border-color: rgba(16, 26, 58, 0.1);
+}
+[data-skin='day'] [class*='border-white/20']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='border-white/25']:not(.keep-dark):not(.keep-dark *) {
+  border-color: rgba(16, 26, 58, 0.24);
+}
+[data-skin='day'] [class*='bg-white/[']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-white/4']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-white/5']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-white/6']:not(.keep-dark):not(.keep-dark *) {
+  background-color: rgba(16, 26, 58, 0.045);
+}
+[data-skin='day'] [class*='bg-white/8']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-white/12']:not(.keep-dark):not(.keep-dark *) {
+  background-color: rgba(16, 26, 58, 0.08);
+}
+[data-skin='day'] [class*='divide-white/']:not(.keep-dark):not(.keep-dark *) > * + * {
+  border-color: rgba(16, 26, 58, 0.1);
+}
+[data-skin='day'] [class*='ring-white/']:not(.keep-dark):not(.keep-dark *) {
+  --tw-ring-color: rgba(16, 26, 58, 0.18);
+}
+
+/* Glass on paper is white glass, not smoked glass. */
+[data-skin='day'] .glass {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.7));
+  border-color: rgba(16, 26, 58, 0.14);
+}
+[data-skin='day'] .glass-strong {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(240, 247, 255, 0.95));
+  border-color: rgba(16, 26, 58, 0.16);
+}
+[data-skin='day'] .aurora::before {
+  background:
+    radial-gradient(900px 600px at 8% -6%, rgba(90, 200, 250, 0.35), transparent 62%),
+    radial-gradient(820px 560px at 104% 12%, rgba(255, 204, 0, 0.28), transparent 64%),
+    radial-gradient(760px 520px at 50% 112%, rgba(52, 199, 89, 0.24), transparent 62%);
+}
+[data-skin='day'] .grid-lines {
+  opacity: 0.25;
+  background-image: linear-gradient(rgba(16, 26, 58, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 26, 58, 0.06) 1px, transparent 1px);
+}
+[data-skin='day'] .skeleton {
+  background: linear-gradient(100deg, rgba(16, 26, 58, 0.06) 30%, rgba(16, 26, 58, 0.12) 50%, rgba(16, 26, 58, 0.06) 70%);
+}
+[data-skin='day'] ::-webkit-scrollbar-thumb {
+  background: rgba(16, 26, 58, 0.22);
+}
+[data-skin='day'] .hud-pill {
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.72));
+  box-shadow: inset 0 1px 0 #fff, 0 2px 0 rgba(16, 26, 58, 0.14);
+}
+[data-skin='day'] .xpbar {
+  background: linear-gradient(180deg, rgba(16, 26, 58, 0.16), rgba(16, 26, 58, 0.08));
+  border-color: rgba(16, 26, 58, 0.18);
+  box-shadow: 0 2px 5px rgba(16, 26, 58, 0.14) inset;
+}
+[data-skin='day'] .game-title {
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.9)) drop-shadow(0 6px 14px rgba(16, 26, 58, 0.18));
+}
+[data-skin='day'] .scenery .cloud {
+  background: rgba(255, 255, 255, 0.85);
+}
+[data-skin='day'] .scenery .twinkle,
+[data-skin='day'] .scenery .float-prop {
+  color: rgba(16, 26, 58, 0.16) !important;
+}
+[data-skin='day'] .sunken {
+  border-color: rgba(16, 26, 58, 0.12);
+  box-shadow: 0 2px 6px rgba(16, 26, 58, 0.1) inset;
+}
+[data-skin='day'] .map-path {
+  stroke: rgba(16, 26, 58, 0.18);
+}
+[data-skin='day'] .ribbon {
+  background: repeating-linear-gradient(90deg, rgba(16, 26, 58, 0.14) 0 10px, transparent 10px 14px);
+}
+
+/* A few surfaces are artwork-like and stay dark in daylight too. */
+.keep-dark {
+  color-scheme: dark;
+}
+
+/* -------------------------------------------------------------- the hero ---
+   A gentle breathing bob so the character feels alive while you read. The
+   follow-through (scale from the feet) is what stops it looking like the whole
+   sprite is sliding up and down. */
+@keyframes hero-breathe {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-3px) scaleY(1.012); }
+}
+
+.hero-sprite img {
+  filter: drop-shadow(0 10px 14px rgba(16, 26, 58, 0.28));
+}
+[data-skin='night'] .hero-sprite img {
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55));
+}
+
+/* On paper the sprite needs a whisper of contrast against busy scenery. */
+[data-skin='day'] .hero-sprite[data-tone='day'] img {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 10px 14px rgba(16, 26, 58, 0.3));
+}
+
+[data-fx='low'] .hero-sprite img,
+[data-skin='day'][data-fx='low'] .hero-sprite img {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-sprite img {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------- skin-aware values */
+/* A couple of places need a literal colour that must flip with the skin: the
+   score flash that settles back to normal type, and the scenery's floating
+   props (white glyphs vanish in a daylight sky). */
+:root {
+  --qa-score-ink: #f6f7ff;
+  --qa-scenery-pop: rgba(255, 255, 255, 0.16);
+}
+[data-skin='day'] {
+  --qa-score-ink: #101a3a;
+  --qa-scenery-pop: rgba(16, 26, 58, 0.14);
+}
+
+@keyframes score-pop {
+  0% { color: #fbbf24; }
+  100% { color: var(--qa-score-ink); }
+}
+.score-pop {
+  animation: score-pop 0.4s ease both;
+}
+
+/* ------------------------------------------------------------------ scrims */
+/* Modal/dim backdrops are their own token: on the daylight skin an ink-tinted
+   wash would brighten the page behind a dialog instead of dimming it. */
+.scrim {
+  background-color: rgba(6, 10, 30, 0.6);
+}
+.scrim-soft {
+  background-color: rgba(6, 10, 30, 0.28);
+}
+[data-skin='day'] .scrim {
+  background-color: rgba(16, 26, 58, 0.42);
+}
+[data-skin='day'] .scrim-soft {
+  background-color: rgba(16, 26, 58, 0.16);
+}
+
+/* The hundred-level track: ten columns of thumb-sized chips that fill the
+   width of whatever they are dropped into, from a 320px phone up. */
+.level-track {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  width: 100%;
+}
+
+/* ---------------------------------------------------------- season badges ---
+   A rank badge is a metal shield built from the server's rank palette: an
+   outer ring, a brushed face and a warm bevel. Everything is CSS, so a badge
+   is equally crisp at 26px next to a name and at 104px as a hero. */
+.season-badge {
+  filter: drop-shadow(0 3px 5px rgba(6, 10, 30, 0.35));
+}
+.season-badge-shell {
+  background: linear-gradient(160deg, var(--badge-bright) 0%, var(--badge-deep) 62%, #1a1230 100%);
+  box-shadow:
+    inset 0 0 0 var(--badge-ring) rgba(255, 255, 255, 0.5),
+    inset 0 -6px 10px -6px rgba(0, 0, 0, 0.6);
+}
+.season-badge-face {
+  background: linear-gradient(170deg, var(--badge-bright) 0%, var(--badge-deep) 88%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+  color: #1b1030;
+}
+.season-badge-level {
+  color: #1b1030;
+}
+/* Locked ranks keep their identity but read as "not yet". */
+.season-badge-locked {
+  filter: grayscale(0.85) brightness(0.72) drop-shadow(0 2px 3px rgba(6, 10, 30, 0.3));
+  opacity: 0.75;
+}
+.season-badge-locked .season-badge-level {
+  color: #2b2440;
+}
+/* The badge you are standing on breathes. */
+.season-badge-current {
+  animation: badge-breathe 2.8s ease-in-out infinite;
+}
+@keyframes badge-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.04); }
+}
+.season-level-now {
+  animation: level-now 1.6s ease-in-out infinite;
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 1px;
+}
+@keyframes level-now {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); }
+}
+/* On paper the bevel needs a touch more contrast to read. */
+[data-skin='day'] .season-badge-shell {
+  box-shadow:
+    inset 0 0 0 var(--badge-ring) rgba(255, 255, 255, 0.7),
+    inset 0 -6px 10px -6px rgba(16, 26, 58, 0.45);
+}
+[data-fx='low'] .season-badge-current,
+[data-fx='low'] .season-level-now {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .season-badge-current,
+  .season-level-now {
+    animation: none;
+  }
+}
