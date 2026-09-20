@@ -1,14 +1,6 @@
 @import "tailwindcss";
 
 @font-face {
-  font-family: 'Quite Magical';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/quite-magical.woff2') format('woff2');
-}
-
-@font-face {
   font-family: 'Exo 2';
   font-style: normal;
   font-weight: 400 900;
@@ -40,7 +32,7 @@
      pulse: deep indigo        (info / links / secondary glow)
      mint : success green      (unchanged — keeps the answer-correct meaning)
      gold : reward amber       (unchanged — keeps XP/season meaning)
-   Type: Montserrat (body default) + Audiowide (display); switchable font packs.
+   Type: Space Grotesk (body + display default); switchable font packs.
    Themes: arena (default), ember, ocean, venom, candy, mono via [data-theme].
    ========================================================================== */
 
@@ -64,8 +56,8 @@
   /* extra small step used by the header HUD chips (`xs:inline-flex`) */
   --breakpoint-xs: 30rem;
 
-  --font-sans: "Quite Magical", "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Quite Magical", "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
+  --font-sans: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
 
   /* surfaces — true black base, violet-tinted raised steps */
   --color-ink-950: #050308;

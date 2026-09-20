@@ -37,7 +37,9 @@
           orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
         };
         // Space Grotesk is the default; an explicit choice always wins.
-        var font = localStorage.getItem('arena.font') || 'grotesk';
+        // prefs.ts persists under 'arena.font.v2'; the old 'arena.font' key is
+        // honoured as a fallback so an earlier choice still applies pre-paint.
+        var font = localStorage.getItem('arena.font.v2') || localStorage.getItem('arena.font') || 'grotesk';
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
           document.documentElement.style.setProperty('--font-display', FONTS[font][1]);

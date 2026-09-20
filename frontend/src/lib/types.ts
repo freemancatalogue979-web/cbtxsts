@@ -1272,6 +1272,11 @@ export interface RankedTier {
   name: string;
   min: number;
   max: number | null;
+  /** Metal family the division belongs to (drives match rules). */
+  metal: string;
+  /** Badge art: deep + bright stops of the shield gradient. */
+  deep: string;
+  bright: string;
   color: string;
   icon: string;
 }

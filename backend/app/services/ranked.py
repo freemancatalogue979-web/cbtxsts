@@ -65,6 +65,8 @@ QUEUE_LADDER: list[tuple[int, int]] = [
 
 # Match shape by the tier of the queue's average rating: beginners get more
 # time and fewer questions; the top of the ladder answers faster, longer sets.
+# Rules key off the *metal* so every division inside a metal plays the same
+# shape (Silver III and Silver I share the Silver rules).
 TIER_RULES: dict[str, dict[str, int]] = {
     "bronze": {"questions": 6, "seconds": 30},
     "silver": {"questions": 7, "seconds": 26},
@@ -75,15 +77,29 @@ TIER_RULES: dict[str, dict[str, int]] = {
     "grandmaster": {"questions": 12, "seconds": 10},
 }
 
-# Tier ladder (names/icons/colours configurable in one place).
+# The ranked ladder: fifteen badges. Each metal climbs through divisions
+# (III → II → I) before the next metal starts; Master and Grandmaster stand
+# alone at the top. `deep`/`bright` feed the badge art, `metal` picks the
+# match rules, `icon` picks the glyph drawn on the badge.
+def _tier(key: str, name: str, minimum: int, metal: str, icon: str, deep: str, bright: str) -> dict:
+    return {"key": key, "name": name, "min": minimum, "metal": metal, "icon": icon, "deep": deep, "bright": bright, "color": bright}
+
 TIERS: list[dict] = [
-    {"key": "bronze", "name": "Bronze", "min": 0, "color": "#b0794a", "icon": "shield"},
-    {"key": "silver", "name": "Silver", "min": 900, "color": "#a8b3c4", "icon": "shield"},
-    {"key": "gold", "name": "Gold", "min": 1100, "color": "#e3b341", "icon": "medal"},
-    {"key": "platinum", "name": "Platinum", "min": 1300, "color": "#7fd4c1", "icon": "medal"},
-    {"key": "diamond", "name": "Diamond", "min": 1500, "color": "#7db8f0", "icon": "gem"},
-    {"key": "master", "name": "Master", "min": 1700, "color": "#b98cf0", "icon": "crown"},
-    {"key": "grandmaster", "name": "Grandmaster", "min": 1900, "color": "#f0729a", "icon": "crown"},
+    _tier("bronze_3", "Bronze III", 0, "bronze", "shield", "#7a4a22", "#d99a5b"),
+    _tier("bronze_2", "Bronze II", 250, "bronze", "shield", "#7a4a22", "#d99a5b"),
+    _tier("bronze_1", "Bronze I", 500, "bronze", "shield", "#7a4a22", "#e2aa70"),
+    _tier("silver_3", "Silver III", 700, "silver", "medal", "#6b7a90", "#c3cedd"),
+    _tier("silver_2", "Silver II", 850, "silver", "medal", "#6b7a90", "#d2dcea"),
+    _tier("silver_1", "Silver I", 1000, "silver", "medal", "#6b7a90", "#e3ecf7"),
+    _tier("gold_3", "Gold III", 1100, "gold", "trophy", "#a06b00", "#f6c945"),
+    _tier("gold_2", "Gold II", 1200, "gold", "trophy", "#a06b00", "#ffd75e"),
+    _tier("gold_1", "Gold I", 1300, "gold", "trophy", "#a06b00", "#ffe27e"),
+    _tier("platinum_2", "Platinum II", 1400, "platinum", "star", "#0f8f7a", "#6fe8cf"),
+    _tier("platinum_1", "Platinum I", 1500, "platinum", "star", "#0f8f7a", "#8ff5de"),
+    _tier("diamond_2", "Diamond II", 1600, "diamond", "gem", "#2563c4", "#7fc4ff"),
+    _tier("diamond_1", "Diamond I", 1700, "diamond", "gem", "#2563c4", "#9fd4ff"),
+    _tier("master", "Master", 1850, "master", "crown", "#7c3aed", "#c9a6ff"),
+    _tier("grandmaster", "Grandmaster", 2000, "grandmaster", "flame", "#e11d5b", "#ff9ab0"),
 ]
 
 PLACE_XP = (30, 20, 10)
@@ -131,7 +147,8 @@ def queue_ladder_payload() -> list[dict]:
 
 
 def tier_rules_payload() -> dict[str, dict[str, int]]:
-    return {key: dict(rules) for key, rules in TIER_RULES.items()}
+    """Match shape for every badge on the ladder (divisions share their metal's rules)."""
+    return {tier["key"]: dict(TIER_RULES[tier["metal"]]) for tier in TIERS}
 
 
 def match_rules_for(ratings: list[int]) -> tuple[int, int]:
@@ -139,7 +156,7 @@ def match_rules_for(ratings: list[int]) -> tuple[int, int]:
     if not ratings:
         return QUESTION_COUNT, QUESTION_SECONDS
     tier = tier_for(round(sum(ratings) / len(ratings)))
-    rules = TIER_RULES.get(tier["key"])
+    rules = TIER_RULES.get(tier["metal"])
     if rules is None:
         return QUESTION_COUNT, QUESTION_SECONDS
     return rules["questions"], rules["seconds"]

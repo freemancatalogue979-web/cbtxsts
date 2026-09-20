@@ -23,6 +23,7 @@ import {
   Check,
   ChevronUp,
   Cpu,
+  Crown,
   Eye,
   FileText,
   Flame,
@@ -32,6 +33,7 @@ import {
   Landmark,
   ListChecks,
   Loader2,
+  Medal,
   Microscope,
   Radio,
   RefreshCw,
@@ -46,6 +48,7 @@ import {
   Zap,
 } from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile} from '../components/ui';
+import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
@@ -63,6 +66,7 @@ import type {
   RankedQuestionWindow,
   RankedReveal,
   RankedStatus,
+  RankedTier,
   ReviewItem,
 } from '../lib/types';
 
@@ -71,25 +75,14 @@ type Phase = 'loading' | 'idle' | 'queue' | 'lobby' | 'live' | 'results' | 'revi
 const QUEUE_REFRESH_MS = 2000;
 
 /* Course picker dressing: every course gets a stable icon (keyed off its id)
-   and wears its own accent colour so the grid reads at a glance. */
+   and wears its own accent colour so the grid reads at a glance. Accents are
+   hex pairs (deep → bright) so cards can paint real gradients and glows. */
 const COURSE_ICONS = [BookOpen, FlaskConical, Calculator, Globe2, Cpu, Scale, Landmark, Microscope, Brain, GraduationCap];
-const COURSE_ACCENTS: Record<string, {tile: string; selected: string}> = {
-  red: {
-    tile: 'border-flare-500/30 bg-flare-500/14 text-flare-300',
-    selected: 'border-flare-400/60 bg-flare-500/10 shadow-[0_0_0_1px] shadow-flare-400/30',
-  },
-  violet: {
-    tile: 'border-nova-500/30 bg-nova-500/14 text-nova-300',
-    selected: 'border-nova-400/60 bg-nova-500/10 shadow-[0_0_0_1px] shadow-nova-400/30',
-  },
-  blue: {
-    tile: 'border-pulse-500/30 bg-pulse-500/14 text-pulse-300',
-    selected: 'border-pulse-400/60 bg-pulse-500/10 shadow-[0_0_0_1px] shadow-pulse-400/30',
-  },
-  amber: {
-    tile: 'border-gold-500/30 bg-gold-500/14 text-gold-300',
-    selected: 'border-gold-400/60 bg-gold-500/10 shadow-[0_0_0_1px] shadow-gold-400/30',
-  },
+const COURSE_ACCENTS: Record<string, {deep: string; bright: string}> = {
+  red: {deep: '#92145a', bright: '#ff7ab3'},
+  violet: {deep: '#6d28d9', bright: '#c9a8fc'},
+  blue: {deep: '#1d4ed8', bright: '#7cc0ff'},
+  amber: {deep: '#a06b00', bright: '#ffd75e'},
 };
 const FALLBACK_ACCENT = COURSE_ACCENTS.violet;
 
@@ -129,18 +122,12 @@ function ConnectionDot({connected}: {connected: boolean}) {
   );
 }
 
-function TierBadge({tier, tierName}: {tier: string; tierName: string}) {
-  const tone: Record<string, string> = {
-    bronze: 'border-amber-700/40 bg-amber-700/15 text-amber-300',
-    silver: 'border-slate-400/30 bg-slate-400/10 text-slate-300',
-    gold: 'border-yellow-500/40 bg-yellow-500/12 text-yellow-300',
-    platinum: 'border-teal-300/30 bg-teal-300/10 text-teal-200',
-    diamond: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
-    master: 'border-violet-400/40 bg-violet-400/12 text-violet-300',
-    grandmaster: 'border-pink-400/40 bg-pink-400/12 text-pink-300',
-  };
+function TierBadge({tier, tierName}: {tier: RankedTier | undefined; tierName: string}) {
+  /* Full metal-shield art when the tier list has loaded; a tinted text tag
+     keeps the row readable until then. */
+  if (tier) return <RankedTierPill tier={tier} />;
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide ${tone[tier] ?? tone.bronze}`}>
+    <span className="rounded-full border border-white/14 bg-white/6 px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide text-mist-300">
       {tierName}
     </span>
   );
@@ -570,6 +557,19 @@ export default function RankedPanel() {
   const lobbySecondsLeft = match?.lobby_at ? Math.max(0, Math.ceil(clock.remaining(match.lobby_at) / 1000)) : 0;
   const waiting = status?.waiting ?? 0;
 
+  /* Badge art for any tier key, straight from the server's ladder. */
+  const tierByKey = useMemo(() => {
+    const map = new Map<string, RankedTier>();
+    for (const tier of meta?.tiers ?? []) map.set(tier.key, tier);
+    return map;
+  }, [meta]);
+  const tierOf = (key: string | undefined | null) => (key ? tierByKey.get(key) : undefined);
+  const myTier = tierOf(status?.tier);
+  const nextTier = useMemo(() => {
+    if (!meta || status == null) return undefined;
+    return meta.tiers.find((tier) => tier.min > status.rating);
+  }, [meta, status]);
+
   /* --------------------------------------------------------- renders */
   if (phase === 'loading') {
     return (
@@ -582,12 +582,13 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------- course select */
   if (phase === 'idle') {
+    const heroBright = myTier?.bright ?? '#a855f7';
     return (
-      <div className="w-full space-y-4 p-3 sm:p-4">
+      <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Swords className="size-5 text-nova-300" />
           <h1 className="font-display text-[1.15rem] font-black tracking-tight text-mist-50 sm:text-[1.35rem]">Ranked</h1>
-          {status && <TierBadge tier={status.tier} tierName={status.tier_name} />}
+          {status && <TierBadge tier={myTier} tierName={status.tier_name} />}
         </div>
         <p className="max-w-2xl text-[0.82rem] font-medium text-mist-400">
           Same questions, one shared clock, live standings. Your rating moves with every result — accuracy
@@ -595,15 +596,64 @@ export default function RankedPanel() {
           bonus XP, and you can skip a question you would rather not guess.
         </p>
 
+        {/* Your standing: the badge you currently hold and the climb to the next one. */}
+        <Card className="relative overflow-hidden p-4 sm:p-5">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{background: `radial-gradient(560px 190px at 18% -30%, ${heroBright}2e, transparent 70%)`}}
+          />
+          <div className="relative flex items-center gap-3.5 sm:gap-4">
+            {myTier ? (
+              <RankedBadge tier={myTier} size="lg" current />
+            ) : (
+              <span className="grid size-18 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/4">
+                <Trophy className="size-8 text-mist-500" />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Your rank</p>
+              <p className="mt-0.5 truncate font-display text-[1.2rem] leading-tight font-black text-mist-50 sm:text-[1.35rem]">
+                {myTier?.name ?? status?.tier_name ?? 'Unranked'}
+              </p>
+              {nextTier ? (
+                <p className="mt-0.5 text-[0.68rem] font-bold text-mist-400">
+                  <span className="tabular">{Math.max(0, nextTier.min - (status?.rating ?? 1000))}</span> rating to{' '}
+                  <span style={{color: nextTier.bright}}>{nextTier.name}</span>
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[0.68rem] font-bold text-gold-300">Top of the ladder — defend the crown.</p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-display text-[1.6rem] leading-none font-black text-mist-50 tabular sm:text-[1.9rem]">
+                {formatNumber(status?.rating ?? 1000)}
+              </p>
+              <p className="mt-1 text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Rating</p>
+            </div>
+          </div>
+          {nextTier && myTier && (
+            <div className="relative mt-3.5">
+              <ProgressBar
+                value={Math.max(2, Math.min(98, Math.round(((status?.rating ?? 1000) - myTier.min) / Math.max(1, nextTier.min - myTier.min)) * 100))}
+              />
+              <div className="mt-1.5 flex items-center justify-between text-[0.58rem] font-bold text-mist-500">
+                <span className="tabular">{myTier.min}</span>
+                <span className="tabular">{nextTier.min}</span>
+              </div>
+            </div>
+          )}
+        </Card>
+
         <div className="grid gap-3 sm:grid-cols-3">
-          <StatTile label="Rating" value={formatNumber(status?.rating ?? 1000)} hint={status?.tier_name ?? 'Bronze'} />
+          <StatTile label="Rating" value={formatNumber(status?.rating ?? 1000)} hint={status?.tier_name ?? 'Bronze III'} />
           <StatTile label="Matches" value={String(status?.played ?? 0)} hint={`${status?.won ?? 0} won`} />
           <StatTile label="Players per match" value={`${meta?.min_players ?? 2}–${meta?.match_size ?? 15}`} hint="server-matchmade" />
         </div>
 
         <Card className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
+            <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
             <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-300" icon={<SignalHigh className="size-3" />}>
               {courses.length} arena{courses.length === 1 ? '' : 's'} open
             </Chip>
@@ -611,7 +661,7 @@ export default function RankedPanel() {
           <p className="mt-1 text-[0.78rem] font-medium text-mist-500">
             Pick a course and the server will find opponents. Every card shows the bank you will be quizzed from.
           </p>
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+          <div className="mt-3 grid min-w-0 gap-2.5 sm:grid-cols-2">
             {courses.map((course) => {
               const Icon = courseIcon(course);
               const accent = COURSE_ACCENTS[course.accent] ?? FALLBACK_ACCENT;
@@ -625,48 +675,61 @@ export default function RankedPanel() {
                     setCourseId(course.id);
                   }}
                   aria-pressed={selected}
-                  className={`rounded-2xl border p-3.5 text-left transition-all active:translate-y-px ${
-                    selected ? accent.selected : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/8'
+                  className={`group relative w-full min-w-0 overflow-hidden rounded-2xl border text-left transition-all active:translate-y-px ${
+                    selected ? 'bg-white/[0.05]' : 'border-white/10 bg-white/[0.03] hover:border-white/22 hover:bg-white/[0.06]'
                   }`}
+                  style={
+                    selected
+                      ? {borderColor: `${accent.bright}99`, boxShadow: `0 0 0 1px ${accent.bright}55, 0 18px 40px -22px ${accent.bright}cc`}
+                      : undefined
+                  }
                 >
-                  <div className="flex items-start gap-3">
-                    <span className={`grid size-11 shrink-0 place-items-center rounded-xl border ${accent.tile}`}>
-                      <Icon className="size-5" />
+                  {/* top light-line: the card reads machined, not flat */}
+                  <span aria-hidden className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/22 to-transparent" />
+                  <div className="flex min-w-0 items-start gap-3 p-3.5">
+                    <span
+                      aria-hidden
+                      className="grid size-12 shrink-0 place-items-center rounded-2xl border border-white/20"
+                      style={{background: `linear-gradient(150deg, ${accent.bright}, ${accent.deep})`, boxShadow: `0 10px 22px -12px ${accent.deep}`}}
+                    >
+                      <Icon className="size-6 text-white drop-shadow" />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[0.86rem] font-extrabold text-mist-50">{course.title}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="min-w-0 truncate font-display text-[0.92rem] font-extrabold text-mist-50">{course.title}</h3>
                         {selected && (
-                          <span className="grid size-4.5 shrink-0 place-items-center rounded-full bg-nova-500 text-white">
-                            <Check className="size-3" />
+                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-white/30 text-white" style={{background: accent.bright, color: '#171030'}}>
+                            <Check className="size-3.5" strokeWidth={3} />
                           </span>
                         )}
-                      </span>
-                      <span className="mt-0.5 block text-[0.62rem] font-black tracking-[0.14em] text-mist-500">
+                      </div>
+                      <p className="mt-0.5 truncate text-[0.62rem] font-black tracking-[0.16em] uppercase" style={{color: accent.bright}}>
                         {course.code} · {course.semester}
-                      </span>
-                    </span>
+                      </p>
+                      {course.description && (
+                        <p className="mt-1.5 line-clamp-2 min-w-0 text-[0.72rem] leading-relaxed font-medium break-words text-mist-400">
+                          {course.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {course.description && (
-                    <p className="mt-2 line-clamp-2 text-[0.72rem] leading-relaxed font-medium text-mist-400">{course.description}</p>
-                  )}
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<ListChecks className="size-3" />}>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-white/8 bg-black/15 px-3.5 py-2.5">
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<ListChecks className="size-3" />}>
                       {course.question_count ?? 0} questions
                     </Chip>
-                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<FileText className="size-3" />}>
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<FileText className="size-3" />}>
                       {course.quiz_count ?? 0} exam{course.quiz_count === 1 ? '' : 's'}
                     </Chip>
-                    <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<Award className="size-3" />}>
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<Award className="size-3" />}>
                       {course.credit_units} CU
                     </Chip>
                     {course.lecturer && (
-                      <Chip className="hidden border-white/10 bg-white/6 text-mist-300 sm:inline-flex" icon={<GraduationCap className="size-3" />}>
+                      <Chip className="hidden border-white/12 bg-white/8 text-mist-200 md:inline-flex" icon={<GraduationCap className="size-3" />}>
                         {course.lecturer}
                       </Chip>
                     )}
                     {course.created_at && (
-                      <Chip className="border-white/10 bg-white/6 text-mist-300" icon={<CalendarDays className="size-3" />}>
+                      <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<CalendarDays className="size-3" />}>
                         added {formatRelative(course.created_at)}
                       </Chip>
                     )}
@@ -719,7 +782,7 @@ export default function RankedPanel() {
                   <span className="w-6 text-center font-display text-[0.74rem] font-black text-mist-400">{row.position}</span>
                   <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={28} photo={{id: row.student_id, has: row.has_photo}} />
                   <p className="min-w-0 flex-1 truncate text-[0.76rem] font-bold text-mist-100">{row.name}</p>
-                  <TierBadge tier={row.tier} tierName={row.tier_name} />
+                  <TierBadge tier={tierOf(row.tier)} tierName={row.tier_name} />
                   <span className="font-display text-[0.8rem] font-black text-mist-50">{formatNumber(row.rating)}</span>
                 </li>
               ))}
@@ -739,15 +802,44 @@ export default function RankedPanel() {
                 </ul>
               </>
             )}
-            {meta && (
-              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/8 pt-3">
-                {meta.tiers.map((tier) => (
-                  <Chip key={tier.key}>
-                    {tier.name} {tier.min}+
-                  </Chip>
-                ))}
-              </div>
-            )}
+          </Card>
+        )}
+
+        {/* The full fifteen-badge ladder: every division, its gate and its rules. */}
+        {meta && meta.tiers.length > 0 && (
+          <Card className="p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Crown className="size-4 text-gold-300" />
+              <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">The ranked ladder</h2>
+              <Chip className="border-gold-400/30 bg-gold-400/12 text-gold-200" icon={<Medal className="size-3" />}>
+                {meta.tiers.length} badges
+              </Chip>
+            </div>
+            <p className="mt-1 text-[0.72rem] font-medium text-mist-500">
+              Win matches to climb divisions. Each metal plays its own shape — higher badges mean longer sets on a tighter clock.
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {meta.tiers.map((tier) => {
+                const isMe = status?.tier === tier.key;
+                const reached = (status?.rating ?? 1000) >= tier.min;
+                const rules = meta.tier_rules?.[tier.key];
+                return (
+                  <div
+                    key={tier.key}
+                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl border px-1 py-2.5 text-center ${
+                      isMe ? '' : 'border-white/8 bg-white/[0.025]'
+                    }`}
+                    style={isMe ? {borderColor: `${tier.bright}88`, background: `${tier.bright}14`} : undefined}
+                  >
+                    <RankedBadge tier={tier} size="md" current={isMe} locked={!reached} />
+                    <p className="w-full truncate text-[0.62rem] font-black text-mist-100">{tier.name}</p>
+                    <p className="text-[0.54rem] font-bold text-mist-500 tabular">
+                      {tier.min}+{rules ? ` · ${rules.questions}Q/${rules.seconds}s` : ''}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         )}
       </div>
@@ -807,7 +899,7 @@ export default function RankedPanel() {
                     <span className="truncate">{player.name}</span>
                   </p>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    <TierBadge tier={player.tier} tierName={player.tier_name} />
+                    <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
                     <span className="text-[0.6rem] font-bold text-mist-500">Lv {player.level}</span>
                   </div>
                 </div>
@@ -971,9 +1063,15 @@ export default function RankedPanel() {
     return (
       <div className="w-full space-y-4 p-3 sm:p-4">
         <Card className="mx-auto max-w-xl p-5 text-center sm:p-7">
-          <div className="mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white shadow-lg shadow-nova-500/20">
-            <Trophy className="size-7" />
-          </div>
+          {myTier ? (
+            <div className="flex justify-center">
+              <RankedBadge tier={myTier} size="lg" current />
+            </div>
+          ) : (
+            <div className="mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white shadow-lg shadow-nova-500/20">
+              <Trophy className="size-7" />
+            </div>
+          )}
           <h2 className="game-title mt-3 font-display text-[1.5rem] font-black tracking-tight">
             {ordinal(position)} of {players}
           </h2>
@@ -995,7 +1093,7 @@ export default function RankedPanel() {
               {(myRating.speed_xp ?? 0) > 0 ? ` · includes +${myRating.speed_xp} speed bonus for fast answers` : ''}
             </p>
           )}
-          {status && <div className="mt-2 flex items-center justify-center"><TierBadge tier={status.tier} tierName={status.tier_name} /></div>}
+          {status && <div className="mt-2 flex items-center justify-center"><TierBadge tier={tierOf(status.tier)} tierName={status.tier_name} /></div>}
           <div className="mt-5 grid grid-cols-3 gap-2">
             <StatTile label="Score" value={formatNumber(myRow?.score ?? 0)} />
             <StatTile label="Accuracy" value={`${accuracy}%`} />
