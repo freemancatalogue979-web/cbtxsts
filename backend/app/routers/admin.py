@@ -18,6 +18,7 @@ from ..events import dispatch, to_everyone
 from ..models import (
     Activity,
     Admin,
+    ArenaEvent,
     Attempt,
     Badge,
     Config,
@@ -39,6 +40,8 @@ from ..schemas import (
     BlueprintIn,
     ClaimStatusIn,
     ConfigIn,
+    EventCreateInUtc,
+    EventUpdateInUtc,
     CourseIn,
     NotificationIn,
     PrizeIn,
@@ -1038,3 +1041,90 @@ def list_admins(db: Session = Depends(get_db)) -> list[dict]:
         {"id": a.id, "email": a.email, "name": a.name, "role": a.role, "created_at": iso(a.created_at)}
         for a in db.scalars(select(Admin)).all()
     ]
+
+
+# ---------------------------------------------------------------------------
+# arena events
+# ---------------------------------------------------------------------------
+def _event_or_404(db: Session, event_id: int) -> ArenaEvent:
+    event = db.get(ArenaEvent, event_id)
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Event not found.")
+    return event
+
+
+@router.get("/events")
+def admin_list_events(db: Session = Depends(get_db)) -> dict:
+    from ..services.events import event_public
+
+    rows = db.scalars(select(ArenaEvent).order_by(ArenaEvent.starts_at.desc()).limit(100)).all()
+    return {"events": [event_public(db, row, None) for row in rows]}
+
+
+@router.post("/events")
+def admin_create_event(payload: EventCreateInUtc, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    from ..services.events import event_public
+
+    if payload.ends_at <= payload.starts_at:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "The event must end after it starts.")
+    event = ArenaEvent(
+        name=payload.name.strip(),
+        description=payload.description,
+        course_id=payload.course_id,
+        topics=payload.topics,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+        question_count=payload.question_count,
+        time_mode=payload.time_mode,
+        duration_minutes=payload.duration_minutes,
+        per_question_seconds=payload.per_question_seconds,
+        entry_xp=payload.entry_xp,
+        visibility=payload.visibility,
+        rewards=payload.rewards,
+        banner=payload.banner,
+        scoring_note=payload.scoring_note,
+        allow_join_during=payload.allow_join_during,
+        allow_leave=payload.allow_leave,
+        leaderboard_visible=payload.leaderboard_visible,
+        status="scheduled",
+        created_by=admin.email,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return {"event": event_public(db, event, None)}
+
+
+@router.patch("/events/{event_id}")
+def admin_update_event(
+    event_id: int,
+    payload: EventUpdateInUtc,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    from ..services.events import event_public
+
+    event = _event_or_404(db, event_id)
+    if event.status == "finished":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This event already finished.")
+    data = payload.model_dump(exclude_unset=True)
+    if "starts_at" in data or "ends_at" in data:
+        starts = data.get("starts_at", event.starts_at)
+        ends = data.get("ends_at", event.ends_at)
+        if ends <= starts:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "The event must end after it starts.")
+    for field, value in data.items():
+        setattr(event, field, value)
+    db.commit()
+    db.refresh(event)
+    return {"event": event_public(db, event, None)}
+
+
+@router.delete("/events/{event_id}")
+def admin_delete_event(event_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    event = _event_or_404(db, event_id)
+    if event.status == "live":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cancel the event before deleting it.")
+    db.delete(event)
+    db.commit()
+    return {"ok": True}

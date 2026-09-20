@@ -26,6 +26,7 @@ from .routers import (
     competitive,
     content,
     duels,
+    events,
     exams,
     flashcards,
     game,
@@ -33,13 +34,16 @@ from .routers import (
     live,
     materials,
     practice,
+    ranked,
     rooms,
     social,
     studio,
     study, shop,)
 from .seed import seed_all
 from .services.duel import expire_duels
+from .services.events import poll_events
 from .services.exam import expire_overdue
+from .services.ranked import advance_matches, poll_queue
 from .events import dispatch
 from .ws import hub
 
@@ -47,22 +51,42 @@ logger = logging.getLogger("arena")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s | %(message)s")
 
 TICK_SECONDS = 5
+RANKED_TICK_SECONDS = 1  # question windows and lobbies need a fine-grained clock
 
 
 async def game_ticker() -> None:
-    """Server-side clocks: auto-submit expired exams and finish timed-out duels."""
+    """Server-side clocks: auto-submit expired exams, finish timed-out duels,
+    start and finalize arena events."""
     while True:
         try:
             await asyncio.sleep(TICK_SECONDS)
             with session_scope() as db:
                 events = expire_overdue(db)
                 events += expire_duels(db)
+                events += poll_events(db)
             if events:
                 await dispatch(events)
         except asyncio.CancelledError:  # pragma: no cover
             raise
         except Exception as error:  # pragma: no cover - keep the loop alive
             logger.warning("game ticker error: %s", error)
+
+
+async def ranked_ticker() -> None:
+    """Matchmaking + ranked match pacing: lobby countdowns, question windows,
+    reveals and finishes all run on the server clock here."""
+    while True:
+        try:
+            await asyncio.sleep(RANKED_TICK_SECONDS)
+            with session_scope() as db:
+                events = poll_queue(db)
+                events += advance_matches(db)
+            if events:
+                await dispatch(events)
+        except asyncio.CancelledError:  # pragma: no cover
+            raise
+        except Exception as error:  # pragma: no cover - keep the loop alive
+            logger.warning("ranked ticker error: %s", error)
 
 
 @asynccontextmanager
@@ -77,12 +101,16 @@ async def lifespan(app: FastAPI):
         summary["quizzes"],
     )
     ticker = asyncio.create_task(game_ticker())
+    ranked = asyncio.create_task(ranked_ticker())
     try:
         yield
     finally:
         ticker.cancel()
+        ranked.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await ticker
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await ranked
 
 
 app = FastAPI(
@@ -127,6 +155,8 @@ app.include_router(exams.router, prefix=API_PREFIX)
 app.include_router(exams.results_router, prefix=API_PREFIX)
 app.include_router(duels.router, prefix=API_PREFIX)
 app.include_router(rooms.router, prefix=API_PREFIX)
+app.include_router(ranked.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(social.router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
 app.include_router(study.router, prefix=API_PREFIX)

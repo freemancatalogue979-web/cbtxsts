@@ -1,7 +1,7 @@
 """Pydantic request bodies + a few response envelopes."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
@@ -784,3 +784,91 @@ class GameChallengeIn(BaseModel):
 class GameCosmeticsIn(BaseModel):
     character: str | None = Field(default=None, max_length=24)
     trail: str | None = Field(default=None, max_length=24)
+
+
+class RankedQueueIn(BaseModel):
+    """Join the matchmaking queue for one course."""
+
+    course_id: int
+
+
+class RankedAnswerIn(BaseModel):
+    selected: str
+    elapsed_ms: int = 0
+
+
+class EventCreateIn(BaseModel):
+    """Admin fields for a new arena event."""
+
+    name: str = Field(min_length=3, max_length=160)
+    description: str = ""
+    course_id: int | None = None
+    topics: list[str] = []
+    starts_at: datetime
+    ends_at: datetime
+    question_count: int = Field(default=15, ge=3, le=100)
+    time_mode: Literal["untimed", "fixed", "per_question"] = "fixed"
+    duration_minutes: int = Field(default=20, ge=1, le=600)
+    per_question_seconds: int = Field(default=30, ge=5, le=300)
+    entry_xp: int = Field(default=0, ge=0, le=100_000)
+    visibility: Literal["public", "course"] = "public"
+    rewards: dict = {}
+    banner: str = ""
+    scoring_note: str = ""
+    allow_join_during: bool = True
+    allow_leave: bool = True
+    leaderboard_visible: bool = True
+
+
+class EventUpdateIn(BaseModel):
+    """Admin edits to an event that has not finished."""
+
+    name: str | None = None
+    description: str | None = None
+    topics: list[str] | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    question_count: int | None = Field(default=None, ge=3, le=100)
+    time_mode: Literal["untimed", "fixed", "per_question"] | None = None
+    duration_minutes: int | None = Field(default=None, ge=1, le=600)
+    per_question_seconds: int | None = Field(default=None, ge=5, le=300)
+    entry_xp: int | None = Field(default=None, ge=0, le=100_000)
+    visibility: Literal["public", "course"] | None = None
+    rewards: dict | None = None
+    banner: str | None = None
+    scoring_note: str | None = None
+    allow_join_during: bool | None = None
+    allow_leave: bool | None = None
+    leaderboard_visible: bool | None = None
+    status: Literal["scheduled", "live", "finished", "cancelled"] | None = None
+
+
+class EventAnswerIn(BaseModel):
+    selected: str
+    elapsed_ms: int = 0
+
+
+def _naive_utc(value: datetime) -> datetime:
+    """Events are stored naive-UTC (SQLite convention across the app)."""
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+class _NaiveUtc(BaseModel):
+    """Mixin: normalizes any inbound datetime to naive UTC."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _to_naive_utc(cls, value, info: ValidationInfo):  # noqa: ANN001
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+
+class EventCreateInUtc(_NaiveUtc, EventCreateIn):
+    pass
+
+
+class EventUpdateInUtc(_NaiveUtc, EventUpdateIn):
+    pass

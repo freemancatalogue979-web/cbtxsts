@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from ..db import session_scope
 from ..game import level_progress, title_for_level
-from ..models import Duel, Room, RoomMember, Student
+from ..models import ArenaEvent, Duel, EventParticipant, RankedMatch, RankedParticipant, Room, RoomMember, Student
 from ..security import ROLE_ADMIN, ROLE_STUDENT, decode_token
 from ..serializers import duel_public
 from ..services import room as room_service
@@ -213,6 +213,105 @@ async def room_socket(websocket: WebSocket, room_id: int) -> None:
         pump.cancel()
         await hub.disconnect(client)
         await hub.broadcast("room_presence", {"student_id": student_id, "left": True}, room=room_key)
+
+
+@router.websocket("/ws/ranked/{match_id}")
+async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
+    """Ranked match channel: live standings, question pacing, activity."""
+    principal = decode_token(websocket.query_params.get("token"))
+    if not principal or principal.role != ROLE_STUDENT:
+        await websocket.close(code=4401)
+        return
+    student_id = int(principal.subject)
+
+    with session_scope() as db:
+        match = db.get(RankedMatch, match_id)
+        member = (
+            db.scalar(
+                select(RankedParticipant).where(
+                    RankedParticipant.match_id == match_id, RankedParticipant.student_id == student_id
+                )
+            )
+            if match
+            else None
+        )
+        if match is None or member is None:
+            await websocket.close(code=4403)
+            return
+        student = db.get(Student, student_id)
+        name = student.name if student else principal.name
+        from ..services.ranked import match_state
+
+        state = match_state(db, match, student_id, hub.student_ids_in_room(f"ranked:{match_id}"))
+
+    room_key = f"ranked:{match_id}"
+    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    hub.join_room(client, room_key)
+    pump = asyncio.create_task(_pump(client))
+    try:
+        await hub.send(client, "ranked_state", state)
+        await hub.broadcast(
+            "ranked_presence",
+            {"student_id": student_id, "connected": True},
+            room=room_key,
+        )
+        await _consume(client, websocket, None)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        pump.cancel()
+        await hub.disconnect(client)
+        await hub.broadcast(
+            "ranked_presence",
+            {"student_id": student_id, "connected": False},
+            room=room_key,
+        )
+
+
+@router.websocket("/ws/event/{event_id}")
+async def event_socket(websocket: WebSocket, event_id: int) -> None:
+    """Event channel: leaderboard deltas, activity, start/end transitions."""
+    principal = decode_token(websocket.query_params.get("token"))
+    if not principal or principal.role != ROLE_STUDENT:
+        await websocket.close(code=4401)
+        return
+    student_id = int(principal.subject)
+
+    with session_scope() as db:
+        event = db.get(ArenaEvent, event_id)
+        if event is None:
+            await websocket.close(code=4403)
+            return
+        student = db.get(Student, student_id)
+        name = student.name if student else principal.name
+        from ..services.events import event_public, leaderboard_payload
+
+        payload = {
+            "event": event_public(db, event, student_id),
+            "leaderboard": (
+                leaderboard_payload(db, event, student_id, hub.student_ids_in_room(f"event:{event_id}"))
+                if event.leaderboard_visible
+                else None
+            ),
+        }
+
+    room_key = f"event:{event_id}"
+    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    hub.join_room(client, room_key)
+    pump = asyncio.create_task(_pump(client))
+    try:
+        await hub.send(client, "event_state", payload)
+        await _consume(client, websocket, None)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        pump.cancel()
+        await hub.disconnect(client)
+        await hub.broadcast("event_presence", {"student_id": student_id, "left": True}, room=room_key)
 
 
 @router.get("/live/presence")

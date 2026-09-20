@@ -78,6 +78,9 @@ class Student(Base):
     duels_played: Mapped[int] = mapped_column(Integer, default=0)
     duels_won: Mapped[int] = mapped_column(Integer, default=0)
     duels_lost: Mapped[int] = mapped_column(Integer, default=0)
+    ranked_rating: Mapped[int] = mapped_column(Integer, default=1000, index=True)
+    ranked_played: Mapped[int] = mapped_column(Integer, default=0)
+    ranked_won: Mapped[int] = mapped_column(Integer, default=0)
     correct_answers: Mapped[int] = mapped_column(Integer, default=0)
     questions_answered: Mapped[int] = mapped_column(Integer, default=0)
     best_run: Mapped[int] = mapped_column(Integer, default=0)  # longest correct streak
@@ -607,6 +610,85 @@ class RoomMessage(Base):
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Ranked multiplayer (matchmade competitive matches)
+# ---------------------------------------------------------------------------
+
+class RankedQueue(Base):
+    """One row per player per course waiting for a ranked match."""
+
+    __tablename__ = "ranked_queue"
+    __table_args__ = (UniqueConstraint("course_id", "student_id", name="uq_ranked_queue"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer, default=1000)  # snapshot for fair pairing
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class RankedMatch(Base):
+    """A server-matchmade competitive match: everyone answers the same
+    questions on a shared server clock; ratings move at the end."""
+
+    __tablename__ = "ranked_matches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="lobby", index=True)  # lobby|live|finished
+    question_count: Mapped[int] = mapped_column(Integer, default=10)
+    per_question_seconds: Mapped[int] = mapped_column(Integer, default=20)
+    round_index: Mapped[int] = mapped_column(Integer, default=-1)
+    lobby_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # countdown end
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RankedQuestion(Base):
+    __tablename__ = "ranked_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("ranked_matches.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class RankedParticipant(Base):
+    __tablename__ = "ranked_participants"
+    __table_args__ = (UniqueConstraint("match_id", "student_id", name="uq_ranked_participant"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("ranked_matches.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    rating_before: Mapped[int] = mapped_column(Integer, default=1000)
+    rating_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    answered: Mapped[int] = mapped_column(Integer, default=0)  # questions completed
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-based final place
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RankedAnswer(Base):
+    __tablename__ = "ranked_answers"
+    __table_args__ = (Index("ix_ranked_answer_unique", "match_id", "question_id", "student_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("ranked_matches.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    selected: Mapped[str] = mapped_column(String(8), default="")
+    correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    points: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -1401,6 +1483,92 @@ class PlaytimeBalance(Base):
     claimed_thresholds: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of xp thresholds paid
     bonus_keys: Mapped[str] = mapped_column(Text, default="[]")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ArenaEvent(Base):
+    """Admin-created arena event: a timed, no-cap competitive run.
+
+    Everyone works through the same fixed question order at their own pace
+    (or on a shared clock for per-question events); the server owns every
+    score, the leaderboard and the rewards. Players may join, leave and
+    resume with their progress intact until the event ends.
+    """
+
+    __tablename__ = "arena_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    topics: Mapped[list] = mapped_column(JSON, default=list)  # optional topic filter
+    starts_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    question_count: Mapped[int] = mapped_column(Integer, default=15)
+    time_mode: Mapped[str] = mapped_column(String(16), default="fixed")  # untimed|fixed|per_question
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=20)  # fixed mode
+    per_question_seconds: Mapped[int] = mapped_column(Integer, default=30)  # per_question mode
+    entry_xp: Mapped[int] = mapped_column(Integer, default=0)  # entry requirement (and cost)
+    visibility: Mapped[str] = mapped_column(String(16), default="public")  # public|course
+    rewards: Mapped[dict] = mapped_column(JSON, default=dict)  # {xp, coins, diamonds, badge_key, title, frame, avatar}
+    banner: Mapped[str] = mapped_column(String(240), default="")
+    scoring_note: Mapped[str] = mapped_column(String(400), default="")  # scoring rules shown to players
+    allow_join_during: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_leave: Mapped[bool] = mapped_column(Boolean, default=True)
+    leaderboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(16), default="scheduled", index=True)  # scheduled|live|finished|cancelled
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    course: Mapped[Course | None] = relationship()
+
+
+class EventQuestion(Base):
+    __tablename__ = "event_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("arena_events.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class EventParticipant(Base):
+    __tablename__ = "event_participants"
+    __table_args__ = (UniqueConstraint("event_id", "student_id", name="uq_event_participant"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("arena_events.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    answered: Mapped[int] = mapped_column(Integer, default=0)  # questions completed
+    current_index: Mapped[int] = mapped_column(Integer, default=0)  # next question to serve
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished: Mapped[bool] = mapped_column(Boolean, default=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # final place
+    rewards: Mapped[dict] = mapped_column(JSON, default=dict)  # what was granted at finalize
+
+    student: Mapped[Student] = relationship()
+
+
+class EventAnswer(Base):
+    __tablename__ = "event_answers"
+    __table_args__ = (Index("ix_event_answer_unique", "event_id", "question_id", "student_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("arena_events.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    selected: Mapped[str] = mapped_column(String(8), default="")
+    correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    points: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class GameProfile(Base):

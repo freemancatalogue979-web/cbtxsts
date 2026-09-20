@@ -86,6 +86,10 @@ class Hub:
     def clients_for(self, student_id: int) -> list[Client]:
         return list(self._clients.get(student_id, ()))
 
+    def student_ids_in_room(self, room: str) -> set[int]:
+        """Which players currently hold a socket in a named room (presence)."""
+        return {client.student_id for client in self._rooms.get(room, ()) if client.student_id is not None}
+
     # -------------------------------------------------------------- messaging
     async def send(self, client: Client, event: str, payload: dict[str, Any] | None = None) -> None:
         await self._emit([client], event, payload)
