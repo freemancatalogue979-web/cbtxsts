@@ -1,11 +1,21 @@
-"""SQLAlchemy engine / session plumbing (SQLite by default)."""
+"""SQLAlchemy engine / session plumbing (SQLite by default).
+
+Two engines share the same database file:
+
+* ``engine``      – the classic sync engine used by REST routers, services and
+  the startup migrations.
+* ``async_engine`` – an ``sqlalchemy.ext.asyncio`` engine used by the websocket
+  hot paths (snapshots, presence, chat writes) so SQL I/O never blocks the
+  event loop while chat/heartbeat traffic is in flight.
+"""
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import DATABASE_URL
@@ -32,6 +42,34 @@ def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001 - SQLAlchemy hoo
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
+
+
+def _async_database_url(url: str) -> str:
+    """Map the configured sync URL onto the matching async driver.
+
+    SQLite uses aiosqlite, PostgreSQL asyncpg, MySQL aiomysql. Anything else
+    is returned unchanged (and will raise loudly at import time if it has no
+    async support, which is what we want)."""
+    if url.startswith("sqlite:///") or url == "sqlite://":
+        return url.replace("sqlite", "sqlite+aiosqlite", 1)
+    if url.startswith("postgres"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1).replace(
+            "postgres://", "postgresql+asyncpg://", 1
+        )
+    if url.startswith("mysql"):
+        return url.replace("mysql://", "mysql+aiomysql://", 1)
+    return url
+
+
+ASYNC_DATABASE_URL = _async_database_url(DATABASE_URL)
+
+async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, future=True)
+
+
+@event.listens_for(async_engine.sync_engine, "connect")
+def _sqlite_pragmas_async(dbapi_connection, _record):  # noqa: ANN001 - SQLAlchemy hook signature
+    """Same pragmas as the sync engine — both engines share the SQLite file."""
+    _sqlite_pragmas(dbapi_connection, _record)
 
 
 class Base(DeclarativeBase):
@@ -62,6 +100,35 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         db.close()
+
+
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    autoflush=False,
+    expire_on_commit=False,  # attributes stay readable after commit — no lazy refresh on the loop
+)
+
+
+@asynccontextmanager
+async def async_session_scope() -> AsyncIterator[AsyncSession]:
+    """Async transactional scope for the websocket hot paths.
+
+    Usage::
+
+        async with async_session_scope() as db:
+            result = await db.execute(...)
+            await db.commit()  # or let the scope commit on clean exit
+    """
+    db = AsyncSessionLocal()
+    try:
+        yield db
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
 
 
 def init_db() -> None:

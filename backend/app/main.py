@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import APP_NAME, APP_TAGLINE, CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_ORIGINS, HOST, PORT
-from .db import init_db, session_scope
+from .db import async_engine, init_db, session_scope
 from .routers import (
     admin,
     auth,
@@ -54,16 +54,22 @@ TICK_SECONDS = 5
 RANKED_TICK_SECONDS = 1  # question windows and lobbies need a fine-grained clock
 
 
+def _game_tick_sync() -> list:
+    with session_scope() as db:
+        events = expire_overdue(db)
+        events += expire_duels(db)
+        events += poll_events(db)
+    return events
+
+
 async def game_ticker() -> None:
     """Server-side clocks: auto-submit expired exams, finish timed-out duels,
-    start and finalize arena events."""
+    start and finalize arena events. The sync SQL runs on a worker thread so
+    the tick never stalls websocket traffic."""
     while True:
         try:
             await asyncio.sleep(TICK_SECONDS)
-            with session_scope() as db:
-                events = expire_overdue(db)
-                events += expire_duels(db)
-                events += poll_events(db)
+            events = await asyncio.to_thread(_game_tick_sync)
             if events:
                 await dispatch(events)
         except asyncio.CancelledError:  # pragma: no cover
@@ -72,15 +78,22 @@ async def game_ticker() -> None:
             logger.warning("game ticker error: %s", error)
 
 
+def _ranked_tick_sync() -> list:
+    with session_scope() as db:
+        events = poll_queue(db)
+        events += advance_matches(db)
+    return events
+
+
 async def ranked_ticker() -> None:
     """Matchmaking + ranked match pacing: lobby countdowns, question windows,
-    reveals and finishes all run on the server clock here."""
+    reveals and finishes all run on the server clock here. The sync SQL runs
+    on a worker thread (this ticks every second — it must never block the
+    loop that carries chat and presence)."""
     while True:
         try:
             await asyncio.sleep(RANKED_TICK_SECONDS)
-            with session_scope() as db:
-                events = poll_queue(db)
-                events += advance_matches(db)
+            events = await asyncio.to_thread(_ranked_tick_sync)
             if events:
                 await dispatch(events)
         except asyncio.CancelledError:  # pragma: no cover
@@ -89,11 +102,16 @@ async def ranked_ticker() -> None:
             logger.warning("ranked ticker error: %s", error)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def _startup_db() -> dict:
+    """Schema + seed on a worker thread so the loop is free from the start."""
     init_db()
     with session_scope() as db:
-        summary = seed_all(db)
+        return seed_all(db)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    summary = await asyncio.to_thread(_startup_db)
     logger.info(
         "database ready | %s students, %s questions across %s quizzes",
         summary["students_total"],
@@ -111,6 +129,7 @@ async def lifespan(app: FastAPI):
             await ticker
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await ranked
+        await async_engine.dispose()
 
 
 app = FastAPI(
@@ -201,7 +220,18 @@ def health() -> dict:
 def run() -> None:  # pragma: no cover - convenience entrypoint
     import uvicorn
 
-    uvicorn.run("app.main:app", host=HOST, port=PORT, reload=False)
+    # workers=1 is required: the websocket hub keeps connection state in memory.
+    # ws_ping_interval/timeout make uvicorn probe every socket at the protocol
+    # level and drop half-dead connections the frontend ping cannot reach.
+    uvicorn.run(
+        "app.main:app",
+        host=HOST,
+        port=PORT,
+        reload=False,
+        workers=1,
+        ws_ping_interval=20,
+        ws_ping_timeout=30,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

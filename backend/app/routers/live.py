@@ -1,56 +1,68 @@
-"""Websocket endpoints: the global live channel and per-duel rooms."""
+"""Websocket endpoints: the global live channel and per-duel rooms.
+
+Hot-path rule: no synchronous SQL ever runs on the event loop here. Recurring
+work (heartbeats, presence, chat writes) uses ``AsyncSession`` via
+``app.live_queries``; the one-shot state builders for ranked/event sockets
+reuse their existing sync service chains but execute on a worker thread, so a
+connecting client can never stall everyone else's realtime traffic.
+"""
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
-from ..db import session_scope
-from ..game import level_progress, title_for_level
-from ..models import ArenaEvent, Duel, EventParticipant, RankedMatch, RankedParticipant, Room, RoomMember, Student
+from ..db import AsyncSessionLocal, session_scope
+from ..live_queries import (
+    add_room_message_async,
+    duel_initial_state,
+    messages_payload_async,
+    room_initial_state,
+    snapshot_payload,
+    student_name,
+)
+from ..models import ArenaEvent, Duel, RankedMatch, RankedParticipant, Room, RoomMember, Student
 from ..security import ROLE_ADMIN, ROLE_STUDENT, decode_token
 from ..serializers import duel_public
-from ..services import room as room_service
-from ..services.exam import top_leaderboard
 from ..ws import Client, hub
 
 router = APIRouter(tags=["live"])
 
-HEARTBEAT_SECONDS = 25
+HEARTBEAT_SECONDS = float(os.getenv("ARENA_HEARTBEAT_SECONDS", "25"))
+
+#: The browser client pings every 20s; allow three missed pings plus grace
+#: before declaring a socket dead. Uvicorn's protocol-level ping/pong
+#: (ws_ping_interval / ws_ping_timeout) enforces the same on the wire.
+STALE_AFTER_SECONDS = float(os.getenv("ARENA_STALE_AFTER_SECONDS", "70"))
 
 
 async def _snapshot(client: Client) -> dict:
-    with session_scope() as db:
-        if client.student_id:
-            student = db.get(Student, client.student_id)
-            profile = None
-            if student:
-                progress = level_progress(student.xp)
-                profile = {
-                    "id": student.id,
-                    "name": student.name,
-                    "xp": student.xp,
-                    "coins": student.coins,
-                    "level": progress["level"],
-                    "title": progress["title"],
-                    "streak": student.streak,
-                }
-            return {
-                "profile": profile,
-                "leaderboard": top_leaderboard(db, limit=10),
-                "online": hub.online_count(),
-                "online_ids": hub.online_student_ids,
-            }
-        return {"leaderboard": top_leaderboard(db, limit=10), "online": hub.online_count()}
+    """Heartbeat / welcome payload.
+
+    Order matters: the in-memory online snapshot is taken first (quick, under
+    the hub lock), then the async DB reads run with no lock held at all.
+    """
+    online = await hub.online_snapshot()
+    return await snapshot_payload(client.student_id, online)
 
 
 async def _pump(client: Client) -> None:
-    """Periodic heartbeat + leaderboard refresh so idle tabs stay accurate."""
+    """Periodic heartbeat + leaderboard refresh so idle tabs stay accurate.
+
+    Doubles as the dead-client reaper: a socket that has sent us nothing for
+    ``STALE_AFTER_SECONDS`` is disconnected, which also frees it from every
+    broadcast fan-out.
+    """
     try:
         while True:
             await asyncio.sleep(HEARTBEAT_SECONDS)
+            if time.monotonic() - client.last_seen > STALE_AFTER_SECONDS:
+                await hub.disconnect(client)
+                return
             snapshot = await _snapshot(client)
             await hub.send(client, "heartbeat", snapshot)
     except asyncio.CancelledError:  # pragma: no cover - normal shutdown path
@@ -62,6 +74,7 @@ async def _pump(client: Client) -> None:
 async def _consume(client: Client, websocket: WebSocket, duel_room_name: str | None) -> None:
     while True:
         raw = await websocket.receive_text()
+        client.touch()  # any inbound traffic proves the socket is alive
         try:
             message = json.loads(raw)
         except json.JSONDecodeError:
@@ -89,9 +102,9 @@ async def live_socket(websocket: WebSocket) -> None:
     student_id = int(principal.subject) if principal and principal.role == ROLE_STUDENT else None
     admin_id = int(principal.subject) if principal and principal.role == ROLE_ADMIN else None
 
-    with session_scope() as db:
-        student = db.get(Student, student_id) if student_id else None
-        name = student.name if student else (principal.name if principal else "guest")
+    name = await student_name(student_id)
+    if name is None:
+        name = principal.name if principal else "guest"
 
     client = await hub.connect(websocket, student_id=student_id, admin_id=admin_id, name=name)
     pump = asyncio.create_task(_pump(client))
@@ -116,21 +129,19 @@ async def duel_socket(websocket: WebSocket, duel_id: int) -> None:
         return
     student_id = int(principal.subject)
 
-    with session_scope() as db:
-        duel = db.get(Duel, duel_id)
-        if duel is None or not any(p.student_id == student_id for p in duel.participants):
-            await websocket.close(code=4403)
-            return
-        student = db.get(Student, student_id)
-        name = student.name if student else principal.name
-        state = duel_public(duel, viewer_id=student_id, include_questions=True, reveal=duel.status == "finished")
+    entry = await duel_initial_state(duel_id, student_id)
+    if entry is None:
+        await websocket.close(code=4403)
+        return
 
     room = f"duel:{duel_id}"
-    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    client = await hub.connect(
+        websocket, student_id=student_id, admin_id=None, name=entry["name"] or principal.name
+    )
     hub.join_room(client, room)
     pump = asyncio.create_task(_pump(client))
     try:
-        await hub.send(client, "duel_state", state)
+        await hub.send(client, "duel_state", entry["state"])
         await _consume(client, websocket, room)
     except WebSocketDisconnect:
         pass
@@ -155,21 +166,23 @@ async def room_socket(websocket: WebSocket, room_id: int) -> None:
         return
     student_id = int(principal.subject)
 
-    with session_scope() as db:
-        room = db.get(Room, room_id)
+    async with AsyncSessionLocal() as session:
+        room = await session.get(Room, room_id)
         member = (
-            db.scalar(select(RoomMember).where(RoomMember.room_id == room_id, RoomMember.student_id == student_id))
+            await session.scalar(
+                select(RoomMember).where(RoomMember.room_id == room_id, RoomMember.student_id == student_id)
+            )
             if room
             else None
         )
         if room is None or member is None:
             await websocket.close(code=4403)
             return
-        student = db.get(Student, student_id)
+        student = await session.get(Student, student_id)
         name = student.name if student else principal.name
         state = {
-            "room": room_service.room_state(db, room, student_id),
-            "messages": room_service.messages_payload(db, room),
+            "room": await room_initial_state(session, room, student_id),
+            "messages": await messages_payload_async(session, room),
         }
 
     room_key = f"quizroom:{room_id}"
@@ -180,6 +193,7 @@ async def room_socket(websocket: WebSocket, room_id: int) -> None:
         await hub.send(client, "room_state", state)
         while True:
             raw = await websocket.receive_text()
+            client.touch()
             try:
                 message = json.loads(raw)
             except json.JSONDecodeError:
@@ -191,14 +205,11 @@ async def room_socket(websocket: WebSocket, room_id: int) -> None:
             elif kind == "chat":
                 body = str(message.get("body", ""))
                 try:
-                    with session_scope() as db2:
-                        room = db2.get(Room, room_id)
-                        student = db2.get(Student, student_id)
-                        if room is None or student is None:
-                            continue
-                        payload = room_service.add_message(db2, room, student, body)
+                    payload = await add_room_message_async(room_id, student_id, body)
                 except Exception as exc:  # noqa: BLE001 - relay the reason to the sender
                     await hub.send(client, "error", {"message": str(exc)})
+                    continue
+                if payload is None:  # room or sender vanished: silently skip, as before
                     continue
                 await hub.broadcast("room_chat", payload, room=room_key)
             elif kind == "hello":
@@ -215,14 +226,14 @@ async def room_socket(websocket: WebSocket, room_id: int) -> None:
         await hub.broadcast("room_presence", {"student_id": student_id, "left": True}, room=room_key)
 
 
-@router.websocket("/ws/ranked/{match_id}")
-async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
-    """Ranked match channel: live standings, question pacing, activity."""
-    principal = decode_token(websocket.query_params.get("token"))
-    if not principal or principal.role != ROLE_STUDENT:
-        await websocket.close(code=4401)
-        return
-    student_id = int(principal.subject)
+def _ranked_handshake(match_id: int, student_id: int, connected_ids: set[int]) -> dict | None:
+    """One-shot connect state for a ranked match.
+
+    Runs on a worker thread (see ``ranked_socket``): it reuses the deep sync
+    service chain in ``services.ranked`` wholesale instead of porting it, and
+    off-thread it cannot block the event loop.
+    """
+    from ..services.ranked import match_state
 
     with session_scope() as db:
         match = db.get(RankedMatch, match_id)
@@ -236,20 +247,34 @@ async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
             else None
         )
         if match is None or member is None:
-            await websocket.close(code=4403)
-            return
+            return None
         student = db.get(Student, student_id)
-        name = student.name if student else principal.name
-        from ..services.ranked import match_state
+        return {
+            "name": student.name if student else None,
+            "state": match_state(db, match, student_id, connected_ids),
+        }
 
-        state = match_state(db, match, student_id, hub.student_ids_in_room(f"ranked:{match_id}"))
+
+@router.websocket("/ws/ranked/{match_id}")
+async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
+    """Ranked match channel: live standings, question pacing, activity."""
+    principal = decode_token(websocket.query_params.get("token"))
+    if not principal or principal.role != ROLE_STUDENT:
+        await websocket.close(code=4401)
+        return
+    student_id = int(principal.subject)
 
     room_key = f"ranked:{match_id}"
-    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    info = await asyncio.to_thread(_ranked_handshake, match_id, student_id, hub.student_ids_in_room(room_key))
+    if info is None:
+        await websocket.close(code=4403)
+        return
+
+    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=info["name"] or principal.name)
     hub.join_room(client, room_key)
     pump = asyncio.create_task(_pump(client))
     try:
-        await hub.send(client, "ranked_state", state)
+        await hub.send(client, "ranked_state", info["state"])
         await hub.broadcast(
             "ranked_presence",
             {"student_id": student_id, "connected": True},
@@ -270,6 +295,29 @@ async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
         )
 
 
+def _event_handshake(event_id: int, student_id: int, connected_ids: set[int]) -> dict | None:
+    """One-shot connect state for an arena event (worker thread — same reason
+    as ``_ranked_handshake``)."""
+    from ..services.events import event_public, leaderboard_payload
+
+    with session_scope() as db:
+        event = db.get(ArenaEvent, event_id)
+        if event is None:
+            return None
+        student = db.get(Student, student_id)
+        return {
+            "name": student.name if student else None,
+            "payload": {
+                "event": event_public(db, event, student_id),
+                "leaderboard": (
+                    leaderboard_payload(db, event, student_id, connected_ids)
+                    if event.leaderboard_visible
+                    else None
+                ),
+            },
+        }
+
+
 @router.websocket("/ws/event/{event_id}")
 async def event_socket(websocket: WebSocket, event_id: int) -> None:
     """Event channel: leaderboard deltas, activity, start/end transitions."""
@@ -279,30 +327,17 @@ async def event_socket(websocket: WebSocket, event_id: int) -> None:
         return
     student_id = int(principal.subject)
 
-    with session_scope() as db:
-        event = db.get(ArenaEvent, event_id)
-        if event is None:
-            await websocket.close(code=4403)
-            return
-        student = db.get(Student, student_id)
-        name = student.name if student else principal.name
-        from ..services.events import event_public, leaderboard_payload
-
-        payload = {
-            "event": event_public(db, event, student_id),
-            "leaderboard": (
-                leaderboard_payload(db, event, student_id, hub.student_ids_in_room(f"event:{event_id}"))
-                if event.leaderboard_visible
-                else None
-            ),
-        }
-
     room_key = f"event:{event_id}"
-    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    info = await asyncio.to_thread(_event_handshake, event_id, student_id, hub.student_ids_in_room(room_key))
+    if info is None:
+        await websocket.close(code=4403)
+        return
+
+    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=info["name"] or principal.name)
     hub.join_room(client, room_key)
     pump = asyncio.create_task(_pump(client))
     try:
-        await hub.send(client, "event_state", payload)
+        await hub.send(client, "event_state", info["payload"])
         await _consume(client, websocket, None)
     except WebSocketDisconnect:
         pass
