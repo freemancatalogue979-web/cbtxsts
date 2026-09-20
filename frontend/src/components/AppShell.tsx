@@ -7,7 +7,7 @@ import {Avatar, Button, Chip, IconButton, Modal} from './ui';
 import {Holdable} from './Holdable';
 import {api} from '../lib/api';
 import {cacheRead, cacheWrite, userScope} from '../lib/cache';
-import {LogoMark, Wordmark} from './Brand';
+import {LogoMark} from './Brand';
 import SeasonBadge from './SeasonBadge';
 import {music} from '../lib/music';
 import {sfx} from '../lib/sfx';
@@ -228,11 +228,11 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
           what turns it into a pill, and that only appears from sm up. */}
       <button
         onClick={() => setOpen((value) => !value)}
-        className="float-chip flex aspect-square shrink-0 items-center justify-center rounded-full border border-white/12 p-1 transition-colors hover:border-nova-400/40 sm:aspect-auto sm:gap-2 sm:pr-3"
+        className="float-chip flex aspect-square shrink-0 items-center justify-center rounded-full border border-white/12 p-1 transition-colors hover:border-nova-400/40 sm:aspect-auto sm:gap-2 sm:pr-3 lg:aspect-square lg:gap-0 lg:pr-1 xl:aspect-auto xl:gap-2 xl:pr-3"
         aria-label="Account menu"
       >
         <Avatar name={profile.name} hue={profile.avatar_hue} initials={profile.initials} size={30} />
-        <span className="hidden text-[0.8rem] font-bold text-mist-200 sm:block">{profile.name.split(' ')[0]}</span>
+        <span className="hidden text-[0.8rem] font-bold text-mist-200 sm:block lg:hidden xl:block">{profile.name.split(' ')[0]}</span>
       </button>
 
       <AnimatePresence>
@@ -308,12 +308,12 @@ function LivePill() {
         : 'border-flare-500/30 text-flare-300';
   return (
     <div
-      className={`float-chip flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[0.7rem] font-bold sm:px-3 ${tone}`}
+      className={`float-chip flex items-center gap-2 rounded-full border px-2 py-1.5 text-[0.7rem] font-bold sm:px-3 ${tone}`}
       title={`${label} to the live channel — the app re-syncs silently when the connection returns`}
     >
       {socketStatus === 'open' ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5 animate-pulse" />}
-      <span className="tabular">{label}</span>
-      <span className="hidden opacity-70 sm:inline">
+      <span className="hidden tabular sm:inline">{label}</span>
+      <span className="hidden opacity-70 sm:inline lg:hidden 2xl:inline">
         · {online} online
       </span>
       {socketStatus === 'open' && <span className="size-1.5 animate-pulse rounded-full bg-mint-400" />}
@@ -403,7 +403,7 @@ export function AppShell({
             </div>
 
             {profile && (
-              <span className="hud-pill float-chip shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular">
+              <span className="hud-pill float-chip shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:hidden xl:inline-flex">
                 LV{profile.progress.level}
               </span>
             )}
@@ -419,7 +419,7 @@ export function AppShell({
                 <button
                   key={item.id}
                   onClick={() => onTab(item.id)}
- className={`relative flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[0.80rem] font-bold tracking-wide transition-colors ${
+ className={`relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-bold tracking-wide transition-colors 2xl:gap-2 2xl:px-3.5 2xl:text-[0.80rem] ${
                     active ? 'text-white' : 'text-mist-400 hover:text-mist-100'
                   }`}
                 >
@@ -430,8 +430,9 @@ export function AppShell({
                       transition={{type: 'spring', stiffness: 400, damping: 32}}
                     />
                   )}
-                  <Icon className="size-4" />
-                  {item.label}
+                  <Icon className="size-4 shrink-0" />
+                  <span className="2xl:hidden">{item.short}</span>
+                  <span className="hidden 2xl:inline">{item.label}</span>
                 </button>
               );
             })}
@@ -484,7 +485,7 @@ export function AppShell({
               onClick={() => setPaletteOpen(true)}
               aria-label="Quick jump"
               title="Quick jump — ⌘K"
-              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/12 text-mist-400 hover:border-nova-400/40 hover:text-mist-200"
+              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/12 text-mist-400 hover:border-nova-400/40 hover:text-mist-200 lg:hidden xl:grid"
             >
               <Search className="size-4" />
             </button>
@@ -495,11 +496,11 @@ export function AppShell({
                   <Gem className="size-3 text-nova-400" />
                   {formatNumber(profile.diamonds ?? 0)}
                 </span>
-                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular xs:inline-flex" title="Credits">
+                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular xs:inline-flex lg:hidden 2xl:inline-flex" title="Credits">
                   <Coins className="size-3 text-amber-400" />
                   {formatNumber(profile.coins)}
                 </span>
-                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex" title="Daily streak">
+                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex lg:hidden xl:inline-flex" title="Daily streak">
                   <Flame className="size-3.5 text-rose-400" />
                   {profile.streak}d
                 </span>
@@ -514,7 +515,7 @@ export function AppShell({
                           : 'Play background music'
                   }
                   variant="outline"
-                  className={`float-chip hidden sm:grid ${musicState === 'blocked' ? 'border-amber-400/50' : ''}`}
+                  className={`float-chip hidden sm:grid lg:hidden xl:grid ${musicState === 'blocked' ? 'border-amber-400/50' : ''}`}
                   onClick={() => music.toggle()}
                 >
                   {musicState === 'playing' ? (
@@ -527,7 +528,7 @@ export function AppShell({
                     <VolumeX className="size-[17px] text-mist-500" />
                   )}
                 </IconButton>
-                <NoticeBell className="hidden sm:inline-flex" />
+                <NoticeBell className="hidden sm:inline-flex lg:hidden xl:inline-flex" />
                 {role === 'admin' && (
                   <IconButton label="Admin console" variant="outline" className="hidden lg:inline-flex" onClick={onAdmin}>
                     <Shield className="size-[18px] text-rose-400" />

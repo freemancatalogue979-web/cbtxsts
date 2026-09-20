@@ -303,6 +303,13 @@ cd backend && ARENA_API=http://127.0.0.1:3000/api .venv/bin/python scripts/verif
 #           answer review, and the Events tab. Needs the API on :3000, the dev
 #           server on :5173 and /tmp/app.iife.js; takes ~2 minutes of real pacing.
 cd frontend && node scripts/ranked-check.mjs
+
+# Layout arithmetic: computes the real rendered width of the AppShell header at
+#                    every breakpoint from 320 to 1920px (student, staff and
+#                    long-display-name variants) from the actual Quite Magical
+#                    font metrics, so the desktop nav cannot overcrowd and no
+#                    viewport can horizontally overflow. Needs fonttools + brotli.
+cd frontend && python3 scripts/header-fit.py
 ```
 
 Both frontend harnesses build the bundle first:
