@@ -12,7 +12,7 @@
 import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, EmptyState, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, EmptyState, Modal, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
 import {Holdable} from '../components/Holdable';
 import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
@@ -760,7 +760,12 @@ export default function FriendsPanel({
               />
             </Card>
           ) : (
-            <Card className="flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0">
+            /* On phones the thread is a self-contained column that fits between
+               the app header and the bottom nav: the message list scrolls
+               INTERNALLY and the composer stays pinned in view, so the page
+               itself never becomes the scroll container and the nav can never
+               cover the latest messages. Desktop keeps its natural height. */
+            <Card className="flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:h-[calc(100dvh-16rem)] max-lg:min-h-[20rem]">
               <div className="flex items-center gap-2.5 border-b border-white/8 px-3 py-2.5 sm:px-4">
                 <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 lg:hidden" />
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />
@@ -785,7 +790,7 @@ export default function FriendsPanel({
                   atBottom.current = bottom;
                   if (bottom) setUnseen(0);
                 }}
-                className="relative min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 max-h-[58dvh] sm:px-4 lg:max-h-none"
+                className="relative min-h-0 min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pt-3 pb-4 sm:px-4 lg:max-h-none"
               >
                 {messages.length === 0 ? (
                   <p className="py-8 text-center text-[0.78rem] font-semibold text-mist-500">
@@ -1068,37 +1073,23 @@ export default function FriendsPanel({
       </div>
       )}
 
-      {/* -------------------------------------------------- quiz plan modal */}
-      {planFor && selected && (
-        <div className="fixed inset-0 z-80 grid place-items-center scrim p-3 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <Card className="w-full max-w-sm p-4 sm:p-5">
-            <p className="text-[0.95rem] font-black text-mist-50">Plan a quiz with {selected.name.split(' ')[0]}</p>
-            <p className="mt-1 text-[0.76rem] font-medium text-mist-400">They get a card in the chat with the exam and your proposed time.</p>
- <label className="mt-3 block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">Exam</label>
-            <select
-              value={planFor.quizId}
-              onChange={(event) => setPlanFor({...planFor, quizId: Number(event.target.value)})}
-              className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
-            >
-              {quizzes.map((quiz) => (
-                <option key={quiz.id} value={quiz.id}>
-                  {quiz.title}
-                </option>
-              ))}
-            </select>
- <label className="mt-3 block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">When (optional)</label>
-            <input
-              type="datetime-local"
-              value={planFor.when}
-              onChange={(event) => setPlanFor({...planFor, when: event.target.value})}
-              className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
-            />
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" block onClick={() => setPlanFor(null)}>
+      {/* -------------------------------------------------- quiz plan modal
+          Uses the shared Modal so the dialog gets a max-height + internal
+          scroll and the action bar stays pinned in its footer: the Send button
+          can never escape the panel on tall screens, and a mobile keyboard can
+          never push it out of reach. */}
+      <Modal
+        open={Boolean(planFor && selected)}
+        onClose={() => setPlanFor(null)}
+        title={selected ? `Plan a quiz with ${selected.name.split(' ')[0]}` : 'Plan a quiz'}
+        subtitle="They get a card in the chat with the exam and your proposed time."
+        footer={
+          planFor ? (
+            <>
+              <Button variant="outline" onClick={() => setPlanFor(null)}>
                 Cancel
               </Button>
               <Button
-                block
                 disabled={busy || !planFor.quizId}
                 onClick={() => {
                   const quiz = quizzes.find((row) => row.id === planFor.quizId);
@@ -1114,10 +1105,38 @@ export default function FriendsPanel({
               >
                 Send plan
               </Button>
+            </>
+          ) : null
+        }
+      >
+        {planFor && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">Exam</label>
+              <select
+                value={planFor.quizId}
+                onChange={(event) => setPlanFor({...planFor, quizId: Number(event.target.value)})}
+                className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
+              >
+                {quizzes.map((quiz) => (
+                  <option key={quiz.id} value={quiz.id}>
+                    {quiz.title}
+                  </option>
+                ))}
+              </select>
             </div>
-          </Card>
-        </div>
-      )}
+            <div>
+              <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">When (optional)</label>
+              <input
+                type="datetime-local"
+                value={planFor.when}
+                onChange={(event) => setPlanFor({...planFor, when: event.target.value})}
+                className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

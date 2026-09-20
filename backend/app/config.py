@@ -41,7 +41,10 @@ DEFAULT_ADMIN_NAME = "Arena Administrator"
 # ---------------------------------------------------------------------------
 EXAM_GRACE_SECONDS = 20          # extra seconds allowed after the deadline before auto-expiry
 DUEL_QUESTION_COUNT = 10         # default head-to-head length
-DUEL_TIME_LIMIT_SECONDS = 180    # hard clock for a live duel
+DUEL_TIME_LIMIT_SECONDS = 180    # whole-duel hard clock (outer safety net)
+DUEL_PER_QUESTION_SECONDS = 20   # server-paced clock applied to every question
+DUEL_MIN_QUESTIONS = 3           # smallest duel the arena will build
+DUEL_MAX_QUESTIONS = 100         # largest duel the arena will build (hard cap)
 DUEL_STAKE_COINS = 25            # coins each player puts into the winner's pot
 DUEL_SPEED_BONUS_MAX = 40        # fastest answer bonus points
 DUEL_BASE_POINTS = 60            # points for a correct duel answer

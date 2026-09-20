@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, CopyCode, copyText, EmptyState, ProgressBar, Skeleton, TextInput} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {sfx} from '../lib/sfx';
@@ -299,12 +299,9 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
 
   const copyCode = async () => {
     if (!room) return;
-    try {
-      await navigator.clipboard.writeText(room.code);
-      toast('success', 'Room code copied', `Share ${room.code} with friends.`);
-    } catch {
-      toast('info', 'Room code', room.code);
-    }
+    const ok = await copyText(room.code);
+    if (ok) toast('success', 'Room code copied', `Share ${room.code} with friends.`);
+    else toast('info', 'Room code', room.code);
   };
 
   const sendChat = useCallback((body: string) => {
@@ -369,7 +366,8 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
               <div className="flex flex-wrap items-center gap-2">
                 <Users className="size-4 text-nova-300" />
                 <h2 className="text-[0.95rem] font-extrabold text-mist-50">Lobby</h2>
-                <Chip>Share code {room.code}</Chip>
+                <span className="text-[0.72rem] font-bold text-mist-500">Share code:</span>
+                <CopyCode code={room.code} size="sm" />
               </div>
               <p className="mt-1.5 text-[0.8rem] font-medium text-mist-400">
                 {room.question_count} questions · {room.per_question_seconds}s each ·{' '}

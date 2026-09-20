@@ -453,9 +453,16 @@ class Duel(Base):
     quiz_id: Mapped[int | None] = mapped_column(ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True)
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
     question_count: Mapped[int] = mapped_column(Integer, default=10)
-    status: Mapped[str] = mapped_column(String(16), default="invited")  # invited|live|finished|cancelled|expired
+    status: Mapped[str] = mapped_column(String(16), default="invited")  # invited|starting|live|finished|cancelled|expired
+    visibility: Mapped[str] = mapped_column(String(10), default="private", index=True)  # public|private
     stake_coins: Mapped[int] = mapped_column(Integer, default=0)
     time_limit_seconds: Mapped[int] = mapped_column(Integer, default=180)
+    # Server-paced round clock: which question is on the wire (0-based, -1 while
+    # the starting countdown runs) and when it opened / runs out. Both clocks are
+    # owned by the server; clients only display them.
+    round_index: Mapped[int] = mapped_column(Integer, default=-1)
+    round_opened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    round_deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     winner_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

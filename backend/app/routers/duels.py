@@ -36,6 +36,10 @@ def _mine(duel: Duel, student: Student) -> bool:
     return any(p.student_id == student.id for p in duel.participants)
 
 
+def _playable(duel: Duel) -> bool:
+    return duel.status in {"starting", "live"}
+
+
 @router.get("")
 def my_duels(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     active = duel_service.active_duels_for(db, student.id)
@@ -50,12 +54,16 @@ def my_duels(db: Session = Depends(get_db), student: Student = Depends(require_s
     ).all()
     online_ids = hub.online_student_ids
     return {
-        "active": [duel_public(d, viewer_id=student.id, include_questions=d.status == "live") for d in active],
+        "active": [duel_public(d, viewer_id=student.id, include_questions=_playable(d)) for d in active],
         "history": [duel_public(d, viewer_id=student.id, reveal=True) for d in history],
+        # The open arena: public duels anyone can join. Private duels never
+        # appear here — they are only reachable by code or direct invite.
+        "open": [duel_public(d, viewer_id=student.id) for d in duel_service.public_duels(db)],
         "online": len(online_ids),
         "online_ids": online_ids,
         "stake_default": DUEL_STAKE_COINS,
         "question_count_default": DUEL_QUESTION_COUNT,
+        "question_count_max": duel_service.DUEL_MAX_QUESTIONS,
     }
 
 
@@ -119,7 +127,7 @@ async def quick_match(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     await dispatch(events)
-    return duel_public(duel, viewer_id=student.id, include_questions=duel.status == "live")
+    return duel_public(duel, viewer_id=student.id, include_questions=_playable(duel))
 
 
 @router.post("/open")
@@ -148,6 +156,13 @@ async def open_duel(
     return duel_public(duel, viewer_id=student.id)
 
 
+@router.get("/open")
+def open_list(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> list[dict]:
+    """Public duels that still have a free seat. Declared before ``/{duel_id}``
+    so the literal path wins; private duels are never listed here."""
+    return [duel_public(d, viewer_id=student.id) for d in duel_service.public_duels(db)]
+
+
 @router.post("/join/{code}")
 async def join_duel(
     code: str,
@@ -162,7 +177,7 @@ async def join_duel(
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
     await dispatch(events)
-    return duel_public(duel, viewer_id=student.id, include_questions=duel.status == "live")
+    return duel_public(duel, viewer_id=student.id, include_questions=_playable(duel))
 
 
 @router.post("/{duel_id}/accept")
@@ -176,6 +191,25 @@ async def accept(duel_id: int, db: Session = Depends(get_db), student: Student =
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
     await dispatch(events)
     return duel_public(duel, viewer_id=student.id, include_questions=True)
+
+
+@router.post("/{duel_id}/join")
+async def join_by_id(
+    duel_id: int,
+    db: Session = Depends(get_db),
+    student: Student = Depends(require_student),
+) -> dict:
+    """Join a PUBLIC duel straight from the open-arena list (no code needed)."""
+    _duels_enabled(db)
+    duel = _duel_or_404(db, duel_id)
+    try:
+        duel, events = duel_service.join_open_duel(db, student, duel)
+        db.commit()
+    except DuelError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+    await dispatch(events)
+    return duel_public(duel, viewer_id=student.id, include_questions=_playable(duel))
 
 
 @router.post("/{duel_id}/decline")
@@ -208,6 +242,11 @@ async def cancel(duel_id: int, db: Session = Depends(get_db), student: Student =
 def read_duel(duel_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     duel = _duel_or_404(db, duel_id)
     if not _mine(duel, student):
+        # A PUBLIC duel still waiting for a rival may be inspected (and joined)
+        # by anyone — e.g. from a chat invite bubble. Questions stay hidden for
+        # outsiders; everything else is lobby information.
+        if duel.status == "invited" and duel.visibility == "public":
+            return duel_public(duel, viewer_id=student.id, include_questions=False)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This duel is not yours.")
     finished = duel.status == "finished"
     return duel_public(duel, viewer_id=student.id, include_questions=True, reveal=finished)
@@ -237,4 +276,4 @@ async def answer(
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
     await dispatch(events)
-    return duel_public(duel, viewer_id=student.id, include_questions=duel.status == "live", reveal=duel.status == "finished")
+    return duel_public(duel, viewer_id=student.id, include_questions=_playable(duel), reveal=duel.status == "finished")

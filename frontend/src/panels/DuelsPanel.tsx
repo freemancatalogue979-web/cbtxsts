@@ -18,8 +18,8 @@ import {
   Zap,
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Avatar, Button, Card, Chip, CopyCode, EmptyState, Field, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -29,17 +29,15 @@ import RoomsSection from './RoomsSection';
 import type {Course, Duel, DuelList, DuelMode, PlayerSummary} from '../lib/types';
 
 const STAKES = [10, 25, 50, 100];
-const LENGTHS = [5, 10, 15];
+const LENGTHS = [5, 10, 15, 20];
+const MIN_QUESTIONS = 3;
+const MAX_QUESTIONS = 100;
 
 function countdownLabel(duel: Duel): string | null {
-  if (duel.status === 'live' && duel.started_at) {
-    const started = new Date(duel.started_at.endsWith('Z') ? duel.started_at : `${duel.started_at}Z`).getTime();
-    const ends = started + duel.time_limit_seconds * 1000;
-    const left = Math.max(0, Math.round((ends - Date.now()) / 1000));
-    const mm = String(Math.floor(left / 60)).padStart(2, '0');
-    const ss = String(left % 60).padStart(2, '0');
-    return `${mm}:${ss}`;
-  }
+  /* Live clocks are per-question and server-owned — the arena view renders the
+     real countdown; the card only labels the format. */
+  if (duel.status === 'live') return `${duel.time_limit_seconds}s/question`;
+  if (duel.status === 'starting') return 'starting…';
   if (duel.expires_at) {
     const expires = new Date(duel.expires_at.endsWith('Z') ? duel.expires_at : `${duel.expires_at}Z`).getTime();
     const left = Math.round((expires - Date.now()) / 1000);
@@ -116,7 +114,7 @@ function DuelCard({
                 <CoinsGlyph /> {duel.stake_coins} stake
               </span>
               <span className="inline-flex items-center gap-1">
-                <Clock className="size-3" /> {duel.question_count} Q · {duel.time_limit_seconds}s
+                <Clock className="size-3" /> {duel.question_count} Q · {duel.time_limit_seconds}s/Q
               </span>
               {timer && (
                 <span className={`inline-flex items-center gap-1 tabular ${duel.status === 'live' ? 'text-flare-300' : 'text-mist-500'}`}>
@@ -130,6 +128,11 @@ function DuelCard({
             {duel.status === 'live' && (
               <Chip className="animate-pulse border-flare-500/40 bg-flare-500/16 text-flare-300" icon={<Zap className="size-3" />}>
                 Live
+              </Chip>
+            )}
+            {duel.status === 'starting' && (
+              <Chip className="animate-pulse border-nova-500/40 bg-nova-500/16 text-nova-200" icon={<Hourglass className="size-3" />}>
+                Starting
               </Chip>
             )}
             {duel.status === 'invited' && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">Invite</Chip>}
@@ -150,10 +153,12 @@ function DuelCard({
         </div>
 
         {duel.status === 'invited' && duel.code && (
-          <p className="mt-3 flex items-center gap-2 rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-[0.76rem] font-semibold text-mist-400">
-            <Link2 className="size-3.5 text-nova-400" />
-            Share code <span className="font-black tracking-[0.2em] text-mist-100">{duel.code}</span> to invite anyone
-          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/8 bg-white/4 px-3 py-2">
+            <span className="inline-flex items-center gap-1.5 text-[0.76rem] font-semibold text-mist-400">
+              <Link2 className="size-3.5 text-nova-400" /> Share code to invite anyone
+            </span>
+            <CopyCode code={duel.code} size="sm" className="ml-auto" />
+          </div>
         )}
 
         <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
@@ -416,7 +421,7 @@ function ChallengeModal({
               ))}
             </div>
           </Field>
-          <Field label="Questions">
+          <Field label="Questions" hint={`Any number from ${MIN_QUESTIONS} to ${MAX_QUESTIONS} — every question runs on a 20-second server clock.`}>
             <div className="flex gap-2">
               {LENGTHS.map((value) => (
                 <button
@@ -430,6 +435,27 @@ function ChallengeModal({
                 </button>
               ))}
             </div>
+            <label className="mt-2 flex items-center gap-2">
+              <span className="shrink-0 text-[0.7rem] font-bold text-mist-500">Custom</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_QUESTIONS}
+                max={MAX_QUESTIONS}
+                value={Number.isFinite(count) ? count : ''}
+                onChange={(event) => {
+                  const value = parseInt(event.target.value, 10);
+                  if (!Number.isNaN(value)) setCount(Math.max(MIN_QUESTIONS, Math.min(MAX_QUESTIONS, value)));
+                }}
+                aria-label="Custom question count"
+                className="w-full min-w-0 flex-1 rounded-xl border border-white/12 bg-ink-900/70 px-3 py-2.5 text-[0.9rem] font-bold tabular text-mist-50 focus:border-nova-400/60 focus:outline-none"
+              />
+            </label>
+            {count < MIN_QUESTIONS || count > MAX_QUESTIONS ? (
+              <p className="mt-1.5 text-[0.7rem] font-bold text-flare-300">
+                Pick between {MIN_QUESTIONS} and {MAX_QUESTIONS} questions.
+              </p>
+            ) : null}
           </Field>
         </div>
 
@@ -526,10 +552,12 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
 
   useEffect(load, [load]);
 
-  // Any duel lifecycle event should refresh the lobby.
+  // Any duel lifecycle event should refresh the lobby (the open arena included:
+  // a published duel appears for everyone the moment it is created, and
+  // disappears the moment a rival takes the seat).
   useEffect(() => {
-    const off = ['duel_invite', 'duel_started', 'duel_finished', 'duel_cancelled', 'friend_added'].map((event) =>
-      on(event, () => load()),
+    const off = ['duel_invite', 'duel_started', 'duel_finished', 'duel_cancelled', 'duel_open', 'duel_joined', 'duel_expired', 'friend_added'].map(
+      (event) => on(event, () => load()),
     );
     return () => off.forEach((dispose) => dispose());
   }, [on, load]);
@@ -567,6 +595,24 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
     }
   };
 
+  // The open arena: join a PUBLIC duel straight from the list. The server
+  // re-validates that a seat is still free; a stale card surfaces as an error.
+  const joinOpenBusyId = useRef<number | null>(null);
+  const joinOpen = async (duel: Duel) => {
+    if (joinOpenBusyId.current === duel.id) return;
+    joinOpenBusyId.current = duel.id;
+    try {
+      const joined = await api.joinDuelById(duel.id);
+      toast('success', 'Joined the duel', `Code ${joined.code}`);
+      onOpenDuel(joined);
+    } catch (error) {
+      toast('error', 'Could not join that duel', (error as Error).message);
+      load();
+    } finally {
+      joinOpenBusyId.current = null;
+    }
+  };
+
   const [record, setRecord] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
@@ -581,7 +627,7 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
       const next = await api.arena.rematch(duel.id, {best_of: 1});
       toast('success', 'Rematch sent', `Code ${next.code}`);
       load();
-      if (next.status === 'live') onOpenDuel(next);
+      if (next.status === 'live' || next.status === 'starting' || next.status === 'invited') onOpenDuel(next);
     } catch (error) {
       toast('error', 'Could not rematch', (error as Error).message);
     }
@@ -620,6 +666,9 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
 
   const active = data?.active ?? [];
   const history = data?.history ?? [];
+  /* Public duels with a free seat — never includes private challenges. Duels
+     I already sit in stay out of the join list. */
+  const openArena = (data?.open ?? []).filter((duel) => !duel.is_yours && duel.participants.length < 2);
   const onlineFriends = useMemo(
     () => active.filter((duel) => duel.participants.some((p) => p.student_id !== profile?.id && onlineIds.includes(p.student_id))),
     [active, onlineIds, profile?.id],
@@ -674,6 +723,40 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
           </div>
         </Card>
       </div>
+
+      {/* The open arena: public duels anyone can join. Private duels never
+          show here — the server only lists visibility=public matches. */}
+      {openArena.length > 0 && (
+        <section aria-label="Open arena">
+          <SectionHeading
+            title="Open arena"
+            subtitle="Public duels anyone can jump into — no code needed."
+            icon={<Users className="size-4" />}
+          />
+          <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+            {openArena.map((duel) => {
+              const host = duel.participants.find((p) => p.seat === 'challenger');
+              return (
+                <Card key={duel.id} className="flex min-w-0 items-center gap-3 p-3.5 sm:p-4">
+                  <Avatar name={host?.name ?? '?'} hue={host?.avatar_hue ?? 260} initials={host?.initials} size={38} photo={host ? {id: host.student_id, has: host.has_photo} : null} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.86rem] font-extrabold text-mist-50">{host?.name ?? 'A player'} is waiting</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.7rem] font-semibold text-mist-500">
+                      <span>{duel.question_count} Q · {duel.time_limit_seconds}s/Q</span>
+                      <span className="inline-flex items-center gap-1">
+                        <CoinsGlyph /> {duel.stake_coins * 2 + 25} pot
+                      </span>
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => joinOpen(duel)} icon={<Zap className="size-3.5" />}>
+                    Join
+                  </Button>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {record && (
         <Card className="min-w-0 p-4 sm:p-5">
@@ -786,7 +869,9 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
         onClose={() => setChallengeOpen(false)}
         onCreated={(duel) => {
           load();
-          if (duel.status === 'live') onOpenDuel(duel);
+          /* The creator is ALREADY inside the duel — drop them straight into
+             their waiting room; no re-join, no "not ready" errors. */
+          onOpenDuel(duel);
         }}
         coins={profile?.coins ?? 0}
       />

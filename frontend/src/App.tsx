@@ -377,7 +377,7 @@ export default function App() {
 
           {route.view === 'duel' && (
             <FocusShell onBack={() => goBack('duels')} backLabel={backLabel()}>
-              <DuelArena duelId={route.duelId} onExit={() => goBack('duels')} onOpenDuels={() => backToDashboard('duels')} />
+              <DuelArena key={route.duelId} duelId={route.duelId} onExit={() => goBack('duels')} onOpenDuels={() => backToDashboard('duels')} />
             </FocusShell>
           )}
 

@@ -19,6 +19,7 @@ from sqlalchemy import select
 from ..db import AsyncSessionLocal, session_scope
 from ..live_queries import (
     add_room_message_async,
+    duel_chat_async,
     duel_initial_state,
     messages_payload_async,
     room_initial_state,
@@ -71,7 +72,9 @@ async def _pump(client: Client) -> None:
         return
 
 
-async def _consume(client: Client, websocket: WebSocket, duel_room_name: str | None) -> None:
+async def _consume(
+    client: Client, websocket: WebSocket, duel_room_name: str | None, duel_id: int | None = None
+) -> None:
     while True:
         raw = await websocket.receive_text()
         client.touch()  # any inbound traffic proves the socket is alive
@@ -89,6 +92,13 @@ async def _consume(client: Client, websocket: WebSocket, duel_room_name: str | N
         elif kind == "leave_duel" and duel_room_name:
             hub.leave_room(client, duel_room_name)
             await hub.send(client, "left_room", {"room": duel_room_name})
+        elif kind == "chat" and duel_room_name and duel_id is not None:
+            # Waiting-room chat: relayed to this duel's room only, and only
+            # while the duel is still in the lobby (duel_chat_async enforces
+            # both — it returns None once the match has started).
+            payload = await duel_chat_async(duel_id, client.student_id, str(message.get("body", "")))
+            if payload is not None:
+                await hub.broadcast("duel_chat", payload, room=duel_room_name)
         elif kind == "hello":
             await hub.send(client, "welcome", await _snapshot(client))
         else:
@@ -142,7 +152,7 @@ async def duel_socket(websocket: WebSocket, duel_id: int) -> None:
     pump = asyncio.create_task(_pump(client))
     try:
         await hub.send(client, "duel_state", entry["state"])
-        await _consume(client, websocket, room)
+        await _consume(client, websocket, room, duel_id=duel_id)
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -357,9 +367,8 @@ def presence() -> dict:
 
 @router.get("/live/duels/open")
 def open_duels() -> list[dict]:
-    """Public open-arena challenges anyone can join with a code."""
+    """Public open-arena challenges anyone can join (private duels stay hidden)."""
+    from ..services.duel import public_duels
+
     with session_scope() as db:
-        duels = db.scalars(
-            select(Duel).where(Duel.status == "invited").order_by(Duel.id.desc()).limit(40)
-        ).all()
-        return [duel_public(d) for d in duels if len(d.participants) < 2][:10]
+        return [duel_public(d) for d in public_duels(db)][:10]

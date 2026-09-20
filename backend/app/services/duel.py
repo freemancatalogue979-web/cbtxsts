@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 from .. import game
 from ..config import (
     DUEL_BASE_POINTS,
+    DUEL_MAX_QUESTIONS,
+    DUEL_MIN_QUESTIONS,
+    DUEL_PER_QUESTION_SECONDS,
     DUEL_QUESTION_COUNT,
     DUEL_SPEED_BONUS_MAX,
     DUEL_STAKE_COINS,
-    DUEL_TIME_LIMIT_SECONDS,
 )
 from ..events import Event, to_everyone, to_room, to_student
 from ..models import Duel, DuelAnswer, DuelParticipant, DuelQuestion, Question, Quiz, Student, utcnow
@@ -28,6 +30,8 @@ INVITE_TTL_SECONDS = 600  # 10 minutes to accept before an invite expires
 COMBO_STEP = 4
 COMBO_CAP = 24
 SPEED_WINDOW_SECONDS = 20
+COUNTDOWN_SECONDS = 5          # shared waiting-room countdown before question 1
+BETWEEN_QUESTIONS_SECONDS = 1  # beat between rounds so verdicts can land
 
 
 class DuelError(Exception):
@@ -87,6 +91,7 @@ def build_duel_questions(
     topic: str = "",
     difficulty: str = "",
 ) -> list[Question]:
+    count = max(DUEL_MIN_QUESTIONS, min(int(count or DUEL_QUESTION_COUNT), DUEL_MAX_QUESTIONS))
     pool = question_pool(db, quiz_id, course_id=course_id, topic=topic, difficulty=difficulty)
     if not pool and topic:
         # A topic that matches nothing must never dead-end a challenge (older
@@ -95,7 +100,14 @@ def build_duel_questions(
         pool = question_pool(db, quiz_id, course_id=course_id, topic="", difficulty=difficulty)
     if not pool:
         raise DuelError("No duel-ready questions are available yet. Ask an admin to activate a quiz.")
-    picks = random.sample(pool, min(count, len(pool)))
+    if len(pool) < count:
+        # Never silently serve fewer questions than the creator asked for: the
+        # arena reports the shortage instead of building an invalid duel.
+        raise DuelError(
+            f"Only {len(pool)} duel-ready question{'s' if len(pool) != 1 else ''} available for that "
+            f"setup — ask for {len(pool)} or fewer, or pick another course."
+        )
+    picks = random.sample(pool, count)
     for position, question in enumerate(picks, start=1):
         db.add(DuelQuestion(duel=duel, question_id=question.id, position=position))
     duel.question_count = len(picks)
@@ -145,9 +157,10 @@ def create_duel(
         quiz_id=quiz_id,
         course_id=course_id if quiz_id is None else None,
         status="invited",
+        visibility="private",
         stake_coins=stake,
         question_count=question_count,
-        time_limit_seconds=DUEL_TIME_LIMIT_SECONDS,
+        time_limit_seconds=DUEL_PER_QUESTION_SECONDS,
         expires_at=utcnow() + timedelta(seconds=INVITE_TTL_SECONDS),
         mode=mode if mode in {"casual", "ranked", "friendly", "tournament"} else "casual",
         best_of=best_of if best_of in {1, 3, 5} else 1,
@@ -176,10 +189,26 @@ def create_duel(
     ]
 
 
+def _duel_budget_seconds(duel: Duel) -> int:
+    """Outer safety net: enough wall time for every round plus slack.
+
+    The per-question clock drives the match; this only mops up duels the
+    round ticker could never reach (e.g. a server restart mid-match).
+    """
+    per_question = max(5, duel.time_limit_seconds or DUEL_PER_QUESTION_SECONDS)
+    return COUNTDOWN_SECONDS + duel.question_count * (per_question + BETWEEN_QUESTIONS_SECONDS) + 90
+
+
 def start_duel(db: Session, duel: Duel) -> list[Event]:
+    """Both seats are filled: take stakes and run the shared countdown.
+
+    The duel enters ``starting`` — both players sit in the SAME waiting room
+    and watch one server-owned countdown. The round ticker flips it to
+    ``live`` and serves question 1; clients never start themselves.
+    """
     if duel.status == "finished":
         raise DuelError("This duel is already over.")
-    if duel.status == "live":
+    if duel.status in {"starting", "live"}:
         return []
     if len(duel.participants) < 2:
         raise DuelError("Waiting for a second player.")
@@ -191,20 +220,103 @@ def start_duel(db: Session, duel: Duel) -> list[Event]:
     now = utcnow()
     for participant in duel.participants:
         participant.student.coins -= duel.stake_coins
-    duel.status = "live"
+    duel.status = "starting"
     duel.started_at = now
-    duel.expires_at = now + timedelta(seconds=duel.time_limit_seconds)
+    duel.round_index = -1
+    duel.round_opened_at = None
+    duel.round_deadline_at = now + timedelta(seconds=COUNTDOWN_SECONDS)
+    duel.expires_at = now + timedelta(seconds=_duel_budget_seconds(duel))
     db.flush()
 
-    from ..serializers import duel_public, iso
+    from ..serializers import duel_public
 
     room = duel_room(duel.id)
     events: list[Event] = []
     for participant in duel.participants:
         payload = duel_public(duel, viewer_id=participant.student_id, include_questions=True)
-        payload["deadline"] = iso(duel.expires_at)
         events.append(to_student(participant.student_id, "duel_start", payload))
-    events.append(to_room(room, "duel_live", {"duel_id": duel.id, "status": "live", "stake": duel.stake_coins}))
+    events.append(to_room(room, "duel_live", {"duel_id": duel.id, "status": "starting", "stake": duel.stake_coins}))
+    return events
+
+
+def _round_payload(duel: Duel, index: int) -> dict:
+    """Question window descriptor — identical for both players."""
+    from ..serializers import iso
+
+    slot = next((row for row in duel.questions if row.position == index + 1), None)
+    return {
+        "duel_id": duel.id,
+        "index": index,
+        "round": index + 1,
+        "total": duel.question_count,
+        "question_id": slot.question_id if slot else None,
+        "deadline": iso(duel.round_deadline_at),
+        "opened": iso(duel.round_opened_at),
+        "server_now": iso(utcnow()),
+    }
+
+
+def _open_round(db: Session, duel: Duel, index: int, now) -> list[Event]:
+    """Put one question on the clock and tell the room."""
+    duel.round_index = index
+    duel.round_opened_at = now
+    duel.round_deadline_at = now + timedelta(seconds=max(5, duel.time_limit_seconds or DUEL_PER_QUESTION_SECONDS))
+    db.flush()
+    return [to_room(duel_room(duel.id), "duel_question", _round_payload(duel, index))]
+
+
+def _close_round(db: Session, duel: Duel, now) -> list[Event]:
+    """The current question's clock hit zero.
+
+    Players who never answered simply have no answer row for it — the review
+    shows 'no answer' and the score stays untouched, exactly like a wrong
+    answer worth zero points. Then the server advances or finishes.
+    """
+    index = duel.round_index if duel.round_index is not None else 0
+    if index + 1 >= duel.question_count:
+        for participant in duel.participants:
+            if participant.finished_at is None:
+                participant.finished_at = now
+        db.flush()
+        return finalize_duel(db, duel, reason="completed")
+    return _open_round(db, duel, index + 1, now)
+
+
+def advance_duels(db: Session) -> list[Event]:
+    """Server clock for duels: run countdowns, enforce per-question deadlines.
+
+    Called from the 1-second ticker. Both players share one round cursor and
+    one deadline, so nobody can stall, extend or desync the match — a page
+    refresh simply re-reads the same state.
+    """
+    now = utcnow()
+    events: list[Event] = []
+
+    starting = db.scalars(
+        select(Duel).where(
+            Duel.status == "starting",
+            Duel.round_deadline_at.is_not(None),
+            Duel.round_deadline_at <= now,
+        )
+    ).all()
+    for duel in starting:
+        if len(duel.participants) < 2:  # defensive: a start without two seats
+            continue
+        duel.status = "live"
+        events.extend(_open_round(db, duel, 0, now))
+
+    live = db.scalars(
+        select(Duel).where(
+            Duel.status == "live",
+            Duel.round_deadline_at.is_not(None),
+            Duel.round_deadline_at <= now,
+        )
+    ).all()
+    for duel in live:
+        events.extend(_close_round(db, duel, now))
+
+    if starting or live:
+        db.commit()
     return events
 
 
@@ -280,6 +392,11 @@ def record_answer(
     slot = next((row for row in duel.questions if row.question_id == question_id), None)
     if slot is None:
         raise DuelError("That question is not part of this duel.")
+    # Server pacing: only the question currently on the clock accepts answers.
+    if duel.round_index is None or duel.round_index < 0 or slot.position - 1 != duel.round_index:
+        raise DuelError("That question is not on the clock right now.")
+    if duel.round_deadline_at is not None and utcnow() >= duel.round_deadline_at:
+        raise DuelError("Too late — that round is already over.")
     if db.scalar(
         select(DuelAnswer.id).where(
             DuelAnswer.duel_id == duel.id,
@@ -288,6 +405,13 @@ def record_answer(
         )
     ):
         raise DuelError("You have already answered that question.")
+
+    # Timing is server-measured from the moment the round opened. The client's
+    # elapsed_ms travels for compatibility but never influences scoring, so a
+    # tampered client cannot buy speed points or stall the clock.
+    opened = duel.round_opened_at or utcnow()
+    window_ms = max(5, duel.time_limit_seconds or DUEL_PER_QUESTION_SECONDS) * 1000
+    elapsed_ms = int(max(0.0, min((utcnow() - opened).total_seconds() * 1000.0, window_ms)))
 
     question: Question = slot.question
     is_correct = answer_matches(question.correct, selected)
@@ -340,8 +464,23 @@ def record_answer(
         participant.finished_at = utcnow()
         db.flush()
 
-    if all(p.answered_count >= duel.question_count for p in duel.participants):
-        events.extend(finalize_duel(db, duel))
+    # Snappy pacing: once BOTH fighters have answered the current question there
+    # is nothing left to wait for, so pull the round deadline in. The 1-second
+    # ticker then advances (or finishes) the duel — progression never happens
+    # client-side, so both clocks stay in lockstep.
+    if duel.round_index is not None and duel.round_index >= 0:
+        current_question_id = next(
+            (row.question_id for row in duel.questions if row.position == duel.round_index + 1), None
+        )
+        if current_question_id is not None:
+            answered_this_round = db.scalar(
+                select(func.count(DuelAnswer.id)).where(
+                    DuelAnswer.duel_id == duel.id, DuelAnswer.question_id == current_question_id
+                )
+            )
+            if answered_this_round is not None and answered_this_round >= len(duel.participants):
+                duel.round_deadline_at = utcnow()
+                db.flush()
     return events
 
 
@@ -410,7 +549,7 @@ def expire_duels(db: Session) -> list[Event]:
     events: list[Event] = []
 
     live = db.scalars(
-        select(Duel).where(Duel.status == "live", Duel.expires_at.is_not(None), Duel.expires_at < now)
+        select(Duel).where(Duel.status.in_(["starting", "live"]), Duel.expires_at.is_not(None), Duel.expires_at < now)
     ).all()
     for duel in live:
         for participant in duel.participants:
@@ -489,17 +628,47 @@ def quick_match(
     return duel, events
 
 
+def _take_open_seat(db: Session, duel: Duel, student: Student) -> list[Event]:
+    """Fill the empty seat of a waiting duel and kick off the shared countdown."""
+    if duel.status != "invited":
+        raise DuelError("That duel is already underway.")
+    if len(duel.participants) >= 2:
+        raise DuelError("That duel is already full.")
+    if student.is_banned:
+        raise DuelError("Your account cannot join duels right now.")
+    challenger = next((p for p in duel.participants if p.seat == "challenger"), None)
+    if challenger is not None and challenger.student_id == student.id:
+        raise DuelError("You already own this duel.")
+    db.add(DuelParticipant(duel=duel, student_id=student.id, seat="opponent"))
+    db.flush()
+    joined = {"duel_id": duel.id, "student_id": student.id, "name": student.name, "seat": "opponent"}
+    events: list[Event] = [
+        to_room(duel_room(duel.id), "duel_joined", dict(joined)),
+        to_student(student.id, "duel_joined", dict(joined)),
+    ]
+    if challenger is not None:
+        events.append(to_student(challenger.student_id, "duel_joined", dict(joined)))
+    events.extend(start_duel(db, duel))
+    return events
+
+
 def join_by_code(db: Session, student: Student, code: str) -> tuple[Duel, list[Event]]:
+    """Codes are the shared secret for PRIVATE duels: possession is the invite."""
     duel = db.scalar(select(Duel).where(Duel.code == (code or "").strip().upper()))
     if duel is None:
         raise DuelError("No duel found with that code.")
     if _participant_for(duel, student.id):
         return duel, (accept_duel(db, duel, student) if duel.status == "invited" else [])
-    if duel.status != "invited":
-        raise DuelError("That duel is already underway.")
-    db.add(DuelParticipant(duel=duel, student_id=student.id, seat="opponent"))
-    db.flush()
-    return duel, start_duel(db, duel)
+    return duel, _take_open_seat(db, duel, student)
+
+
+def join_open_duel(db: Session, student: Student, duel: Duel) -> tuple[Duel, list[Event]]:
+    """Join a PUBLIC duel by id (the public list never exposes private duels)."""
+    if _participant_for(duel, student.id):
+        return duel, (accept_duel(db, duel, student) if duel.status == "invited" else [])
+    if duel.visibility != "public":
+        raise DuelError("That duel is private — you need its code to join.")
+    return duel, _take_open_seat(db, duel, student)
 
 
 def open_duel(
@@ -515,7 +684,7 @@ def open_duel(
     best_of: int = 1,
     difficulty: str = "",
 ) -> tuple[Duel, list[Event]]:
-    """Public challenge anyone can join with the code."""
+    """Public challenge anyone can join — listed in the open arena."""
     stake = max(0, min(stake_coins, student.coins))
     duel = Duel(
         code=_make_code(db),
@@ -523,9 +692,10 @@ def open_duel(
         quiz_id=quiz_id,
         course_id=course_id if quiz_id is None else None,
         status="invited",
+        visibility="public",
         stake_coins=stake,
         question_count=question_count,
-        time_limit_seconds=DUEL_TIME_LIMIT_SECONDS,
+        time_limit_seconds=DUEL_PER_QUESTION_SECONDS,
         expires_at=utcnow() + timedelta(seconds=INVITE_TTL_SECONDS),
         mode=mode if mode in {"casual", "ranked", "friendly", "tournament"} else "casual",
         best_of=best_of if best_of in {1, 3, 5} else 1,
@@ -551,8 +721,24 @@ def active_duels_for(db: Session, student_id: int) -> list[Duel]:
             .join(DuelParticipant, DuelParticipant.duel_id == Duel.id)
             .where(
                 DuelParticipant.student_id == student_id,
-                or_(Duel.status == "invited", Duel.status == "live"),
+                or_(Duel.status == "invited", Duel.status == "starting", Duel.status == "live"),
             )
             .order_by(Duel.created_at.desc())
         ).all()
     )
+
+
+def public_duels(db: Session) -> list[Duel]:
+    """Duels listed in the open arena: public, waiting, and with a free seat."""
+    duels = db.scalars(
+        select(Duel)
+        .where(
+            Duel.visibility == "public",
+            Duel.status == "invited",
+            Duel.expires_at.is_not(None),
+            Duel.expires_at > utcnow(),
+        )
+        .order_by(Duel.id.desc())
+        .limit(20)
+    ).all()
+    return [duel for duel in duels if len(duel.participants) < 2]

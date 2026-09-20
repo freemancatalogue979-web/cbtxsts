@@ -469,10 +469,17 @@ export interface Duel {
   topic: string;
   quiz_id: number | null;
   course_id?: number | null;
-  status: 'invited' | 'live' | 'finished' | 'cancelled' | 'expired';
+  status: 'invited' | 'starting' | 'live' | 'finished' | 'cancelled' | 'expired';
+  visibility?: 'public' | 'private';
   question_count: number;
   stake_coins: number;
   time_limit_seconds: number;
+  /* Server-paced round clock — the arena tells us which question is on the
+     wire and when it runs out; the client only ever displays it. */
+  round_index?: number;
+  round_deadline?: string | null;
+  round_opened?: string | null;
+  server_now?: string;
   winner_id: number | null;
   created_at: string;
   started_at: string | null;
@@ -491,10 +498,13 @@ export interface Duel {
 export interface DuelList {
   active: Duel[];
   history: Duel[];
+  /** Public duels anyone can join — the open arena. */
+  open?: Duel[];
   online: number;
   online_ids: number[];
   stake_default: number;
   question_count_default: number;
+  question_count_max?: number;
 }
 
 export interface Prize {

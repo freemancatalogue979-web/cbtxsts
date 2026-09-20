@@ -418,6 +418,12 @@ def duel_public(
         "question_count": duel.question_count,
         "stake_coins": duel.stake_coins,
         "time_limit_seconds": duel.time_limit_seconds,
+        "visibility": getattr(duel, "visibility", "private") or "private",
+        # Server-paced round clock — clients display these, never derive them.
+        "round_index": int(getattr(duel, "round_index", -1)) if getattr(duel, "round_index", None) is not None else -1,
+        "round_deadline": iso(getattr(duel, "round_deadline_at", None)) if getattr(duel, "round_deadline_at", None) else None,
+        "round_opened": iso(getattr(duel, "round_opened_at", None)) if getattr(duel, "round_opened_at", None) else None,
+        "server_now": iso(utcnow()),
         "mode": getattr(duel, "mode", "casual") or "casual",
         "best_of": int(getattr(duel, "best_of", 1) or 1),
         "series_id": getattr(duel, "series_id", "") or "",

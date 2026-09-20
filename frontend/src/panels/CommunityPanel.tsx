@@ -5,7 +5,7 @@
  */
 import {Crown, Flag, Plus, Swords, Trophy, Users, Zap} from 'lucide-react';
 import {useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {Button, Card, Chip, CopyCode, EmptyState, Modal, ProgressBar, SectionHeading, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -286,7 +286,7 @@ export function GroupsPanel() {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button variant="primary" size="sm" onClick={() => open(group.id)}>Open</Button>
-                      <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
+                      <CopyCode code={group.code} size="sm" pillClassName="border-nova-500/25 bg-nova-500/10 text-nova-200" />
                     </div>
                   </Card>
                 </li>

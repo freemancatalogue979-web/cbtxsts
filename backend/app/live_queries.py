@@ -117,6 +117,41 @@ async def duel_initial_state(duel_id: int, student_id: int) -> dict | None:
         }
 
 
+async def duel_chat_async(duel_id: int, student_id: int, body: str) -> dict | None:
+    """Waiting-room chat gate for duel rooms.
+
+    Returns the broadcast payload, or ``None`` when the message must be
+    dropped: the sender is not a participant, or the duel has already left
+    the waiting room. Chat stays open while the lobby fills (``invited``) and
+    through the shared countdown (``starting``); it locks the moment the first
+    question goes live.
+    """
+    from .models import utcnow
+
+    clean = (body or "").strip()[:300]
+    if not clean:
+        return None
+    async with async_session_scope() as session:
+        duel = await session.get(Duel, duel_id)
+        if duel is None or duel.status not in {"invited", "starting"}:
+            return None
+        member = await session.scalar(
+            select(DuelParticipant).where(
+                DuelParticipant.duel_id == duel_id, DuelParticipant.student_id == student_id
+            )
+        )
+        if member is None:
+            return None
+        student = await session.get(Student, student_id)
+        return {
+            "duel_id": duel_id,
+            "student_id": student_id,
+            "name": student.name if student else "",
+            "body": clean,
+            "at": utcnow().isoformat(timespec="seconds") + "Z",
+        }
+
+
 # ---------------------------------------------------------------------------
 # Room socket handshake + chat writes
 # ---------------------------------------------------------------------------

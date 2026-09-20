@@ -566,7 +566,7 @@ class DuelCreateIn(BaseModel):
     quiz_id: int | None = None
     course_id: int | None = None
     topic: str = "General Arena"
-    question_count: int = Field(default=10, ge=3, le=30)
+    question_count: int = Field(default=10, ge=3, le=100)
     stake_coins: int = Field(default=25, ge=0, le=500)
     mode: Literal["casual", "ranked", "friendly", "tournament"] = "casual"
     best_of: Literal[1, 3, 5] = 1

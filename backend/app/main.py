@@ -79,9 +79,14 @@ async def game_ticker() -> None:
 
 
 def _ranked_tick_sync() -> list:
+    from .services.duel import advance_duels
+
     with session_scope() as db:
         events = poll_queue(db)
         events += advance_matches(db)
+        # Duels share this 1-second clock: countdowns flip to question 1 and
+        # every per-question deadline auto-advances both players in lockstep.
+        events += advance_duels(db)
     return events
 
 
