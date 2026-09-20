@@ -4,15 +4,17 @@
  * Conversations support plain text plus two playable message kinds: a duel
  * invite (join straight from the bubble) and a quiz plan (pick an exam and a
  * time, and the card carries both). Hold any bubble for the whole action menu:
- * reply, react, copy, edit, delete (yours) or report (theirs). Nothing is
- * painted on the bubble itself. Friends can also be nudged with one tap and
- * messages arrive live over the arena socket.
+ * reply, react, copy, edit, delete (yours) or report (theirs) — or swipe a
+ * bubble sideways to reply instantly. Nothing is painted on the bubble itself.
+ * Friends can also be nudged with one tap and messages arrive live over the
+ * arena socket.
  */
 import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Avatar, Button, Card, EmptyState, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
 import {Holdable} from '../components/Holdable';
+import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
 import {api} from '../lib/api';
 import {bubbleOf} from '../lib/cosmetics';
@@ -24,6 +26,107 @@ import {useSession} from '../store/session';
 import type {ChatMessage, Duel, PlayerSummary, Quiz} from '../lib/types';
 
 const QUICK_PHRASES = ['👋 Hello!', 'GG!', 'Rematch?', 'Ready when you are 🔥'];
+
+/**
+ * Swipe a bubble sideways to reply — the WhatsApp gesture. `touch-action:
+ * pan-y` keeps vertical scrolling native while horizontal drags come here:
+ * the bubble follows the finger, a reply arrow is revealed, and releasing
+ * past the threshold arms the composer. Short presses and slow holds fall
+ * through to Holdable untouched, so hold-for-options and swipe coexist.
+ */
+const SWIPE_TRIGGER = 56;
+const SWIPE_MAX = 84;
+
+function SwipeToReply({onReply, children}: {onReply: () => void; children: React.ReactNode}) {
+  const dragRef = useRef<HTMLDivElement | null>(null);
+  const hintLeftRef = useRef<HTMLSpanElement | null>(null);
+  const hintRightRef = useRef<HTMLSpanElement | null>(null);
+  const gesture = useRef<{x: number; y: number; engaged: boolean; ticking: boolean} | null>(null);
+
+  const paint = (dx: number) => {
+    const node = dragRef.current;
+    if (node) node.style.transform = dx ? `translateX(${dx}px)` : '';
+    const progress = Math.min(1, Math.abs(dx) / SWIPE_TRIGGER);
+    if (hintLeftRef.current) hintLeftRef.current.style.opacity = dx > 0 ? String(progress) : '0';
+    if (hintRightRef.current) hintRightRef.current.style.opacity = dx < 0 ? String(progress) : '0';
+  };
+
+  const settle = () => {
+    const node = dragRef.current;
+    if (node) {
+      node.style.transition = 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)';
+      node.style.transform = '';
+      window.setTimeout(() => {
+        node.style.transition = '';
+      }, 240);
+    }
+    for (const hint of [hintLeftRef.current, hintRightRef.current]) {
+      if (hint) hint.style.opacity = '0';
+    }
+    gesture.current = null;
+  };
+
+  return (
+    <div className="relative min-w-0">
+      {/* Revealed where the bubble used to sit, on the side it was pulled from. */}
+      <span ref={hintLeftRef} aria-hidden className="pointer-events-none absolute inset-y-0 left-1 grid place-items-center opacity-0">
+        <span className="grid size-7 place-items-center rounded-full bg-nova-500/25 text-nova-200">
+          <Reply className="size-3.5" />
+        </span>
+      </span>
+      <span ref={hintRightRef} aria-hidden className="pointer-events-none absolute inset-y-0 right-1 grid place-items-center opacity-0">
+        <span className="grid size-7 place-items-center rounded-full bg-nova-500/25 text-nova-200">
+          <Reply className="size-3.5 -scale-x-100" />
+        </span>
+      </span>
+      <div
+        ref={dragRef}
+        className="min-w-0 touch-pan-y"
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+          gesture.current = {x: event.clientX, y: event.clientY, engaged: false, ticking: false};
+        }}
+        onPointerMove={(event) => {
+          const g = gesture.current;
+          if (!g) return;
+          const dx = event.clientX - g.x;
+          const dy = event.clientY - g.y;
+          if (!g.engaged) {
+            if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+              gesture.current = null; // vertical intent — this is a scroll, not a swipe
+              return;
+            }
+            if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return;
+            g.engaged = true;
+          }
+          const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+          paint(clamped);
+          if (Math.abs(clamped) >= SWIPE_TRIGGER && !g.ticking) {
+            g.ticking = true;
+            HAPTICS.tap();
+          } else if (Math.abs(clamped) < SWIPE_TRIGGER && g.ticking) {
+            g.ticking = false;
+          }
+        }}
+        onPointerUp={(event) => {
+          const g = gesture.current;
+          if (!g) return;
+          const dx = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, event.clientX - g.x));
+          const triggered = g.engaged && Math.abs(dx) >= SWIPE_TRIGGER;
+          settle();
+          if (triggered) {
+            HAPTICS.tap();
+            sfx.play('tap');
+            onReply();
+          }
+        }}
+        onPointerCancel={() => settle()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Hold a message to act on it: **Reply**, **Copy** (text messages) and
@@ -116,16 +219,20 @@ function HoldMessage({
       : []),
   ];
 
+  const holdable = (
+    <Holdable
+      actions={actions}
+      hint="Hold a message for the full menu"
+      menuWidth={214}
+      className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
+    >
+      {children}
+    </Holdable>
+  );
+
   return (
     <div className={`flex min-w-0 ${mine ? 'justify-end' : 'justify-start'}`}>
-      <Holdable
-        actions={actions}
-        hint="Hold a message for the full menu"
-        menuWidth={214}
-        className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
-      >
-        {children}
-      </Holdable>
+      {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
     </div>
   );
 }

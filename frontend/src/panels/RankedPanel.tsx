@@ -23,6 +23,7 @@ import {
   Radio,
   RefreshCw,
   SignalHigh,
+  SkipForward,
   Swords,
   TrendingDown,
   TrendingUp,
@@ -53,7 +54,6 @@ import type {
 type Phase = 'loading' | 'idle' | 'queue' | 'lobby' | 'live' | 'results' | 'review';
 
 const QUEUE_REFRESH_MS = 2000;
-const QUEUE_TARGETS = [3, 8, 12, 15];
 
 function parseTime(iso: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
@@ -73,7 +73,9 @@ function useServerClock() {
     offsetRef.current = offsetRef.current === 0 ? drift : offsetRef.current * 0.7 + drift * 0.3;
   }, []);
   const remaining = useCallback((deadlineIso: string) => Math.max(0, parseTime(deadlineIso) - (Date.now() - offsetRef.current)), []);
-  return {sync, remaining};
+  /** Raw server-synced time — may sit in the past (used to measure queue waits). */
+  const now = useCallback(() => Date.now() - offsetRef.current, []);
+  return {sync, remaining, now};
 }
 
 function ConnectionDot({connected}: {connected: boolean}) {
@@ -164,8 +166,8 @@ function StandingsList({
         )}
       </div>
       <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
-        {standings.map((player) => (
-          <PlayerRow key={player.student_id} player={player} meId={meId} showPlace />
+        {standings.map((player, index) => (
+          <PlayerRow key={player.student_id} player={{...player, position: player.position || index + 1}} meId={meId} showPlace />
         ))}
       </ul>
     </div>
@@ -450,6 +452,24 @@ export default function RankedPanel() {
     }
   };
 
+  const skip = async () => {
+    if (!matchId || !window_ || myPick || busy || reveal) return;
+    uiClick('cancel');
+    setMyPick('SKIP');
+    setBusy(true);
+    try {
+      const result = await api.rankedSkip(matchId);
+      sfx.play('whoosh');
+      if (result.reveal) setReveal(result.reveal);
+      if (result.match) setMatch(result.match);
+    } catch (error) {
+      setMyPick(null);
+      toast('error', 'Could not skip', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const backToIdle = () => {
     uiClick('nav');
     setPhase('idle');
@@ -529,7 +549,8 @@ export default function RankedPanel() {
         </div>
         <p className="max-w-2xl text-[0.82rem] font-medium text-mist-400">
           Same questions, one shared clock, live standings. Your rating moves with every result — accuracy
-          always outweighs a fast click.
+          always outweighs a fast click. Higher tiers play longer sets on a tighter clock, fast answers pay
+          bonus XP, and you can skip a question you would rather not guess.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -653,7 +674,7 @@ export default function RankedPanel() {
           <p className="mt-1 text-[0.8rem] font-medium text-mist-400">
             {courses.find((c) => c.id === status?.queue_course_id)?.title ?? 'The course bank'} · expanding the search as you wait
           </p>
-          <QueueMeter waiting={waiting} meta={meta} />
+          <QueueMeter waiting={waiting} meta={meta} status={status} clock={clock} />
           <Button variant="outline" className="mt-5" onClick={cancelQueue} icon={<X className="size-4" />}>
             Cancel
           </Button>
@@ -778,8 +799,19 @@ export default function RankedPanel() {
                   </div>
                   {iAnswered && !reveal && (
                     <p className="mt-3 flex items-center gap-2 text-[0.72rem] font-bold text-mist-400">
-                      <Loader2 className="size-3.5 animate-spin" /> Answer locked — waiting for the room.
+                      <Loader2 className="size-3.5 animate-spin" />{' '}
+                      {myPick === 'SKIP' ? 'Skipped — waiting for the room.' : 'Answer locked — waiting for the room.'}
                     </p>
+                  )}
+                  {!iAnswered && !reveal && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => void skip()}
+                        className="flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1.5 text-[0.7rem] font-bold text-mist-400 transition-colors touch-manipulation hover:border-white/25 hover:text-mist-200"
+                      >
+                        <SkipForward className="size-3.5" /> Skip this question
+                      </button>
+                    </div>
                   )}
                 </>
               ) : reveal ? (
@@ -863,6 +895,12 @@ export default function RankedPanel() {
               </span>
             </p>
           )}
+          {myRating?.xp != null && (
+            <p className="mt-1.5 text-[0.72rem] font-bold text-mist-400">
+              +{myRating.xp} XP
+              {(myRating.speed_xp ?? 0) > 0 ? ` · includes +${myRating.speed_xp} speed bonus for fast answers` : ''}
+            </p>
+          )}
           {status && <div className="mt-2 flex items-center justify-center"><TierBadge tier={status.tier} tierName={status.tier_name} /></div>}
           <div className="mt-5 grid grid-cols-3 gap-2">
             <StatTile label="Score" value={formatNumber(myRow?.score ?? 0)} />
@@ -886,7 +924,7 @@ export default function RankedPanel() {
           <h3 className="text-[0.9rem] font-extrabold text-mist-50">Final standings</h3>
           <ul className="mt-3 space-y-1.5">
             {standings.map((player, index) => (
-              <PlayerRow key={player.student_id} player={{...player, position: player.position ?? index + 1}} meId={meId} showPlace />
+              <PlayerRow key={player.student_id} player={{...player, position: player.position || index + 1}} meId={meId} showPlace />
             ))}
           </ul>
         </Card>
@@ -911,15 +949,15 @@ export default function RankedPanel() {
               <Card key={item.index} className="p-4">
                 <div className="flex items-center gap-2">
                   <span className="font-display text-[0.7rem] font-black text-mist-500">Q{item.index + 1}</span>
-                  <span className={`text-[0.66rem] font-extrabold ${item.correct ? 'text-mint-300' : 'text-flare-300'}`}>
-                    {item.correct ? 'Correct' : item.selected ? 'Wrong' : 'Skipped'} · +{item.points}
+                  <span className={`text-[0.66rem] font-extrabold ${item.correct ? 'text-mint-300' : item.selected && item.selected !== 'SKIP' ? 'text-flare-300' : 'text-mist-400'}`}>
+                    {item.correct ? 'Correct' : item.selected && item.selected !== 'SKIP' ? 'Wrong' : 'Skipped'} · +{item.points}
                   </span>
                 </div>
                 <p className="mt-1.5 text-[0.86rem] font-bold leading-snug text-mist-100">{q.text}</p>
                 <ReviewOptions options={q.options as Record<string, string>} correct={q.correct_label ?? q.correct} chosen={item.selected} />
                 {q.explanation && <p className="mt-1.5 text-[0.76rem] font-medium leading-relaxed text-mist-400">{q.explanation}</p>}
                 <p className="mt-2 text-[0.7rem] font-bold text-mist-500">
-                  Your answer: {item.selected ?? '—'} · Correct: {q.correct_label ?? q.correct ?? '—'}
+                  Your answer: {item.selected && item.selected !== 'SKIP' ? item.selected : '—'} · Correct: {q.correct_label ?? q.correct ?? '—'}
                 </p>
               </Card>
             );
@@ -970,23 +1008,60 @@ function QuestionClock({window_, clock}: {window_: RankedQuestionWindow | null; 
   );
 }
 
-function QueueMeter({waiting, meta}: {waiting: number; meta: {min_players?: number; match_size?: number} | null}) {
+/**
+ * The wait-timer ladder, straight from the server: the longer the oldest
+ * player has waited, the fewer players a match needs — full at first, then
+ * 12 → 10 → 6 → 4, and eventually whoever showed up. The meter shows the
+ * rung you are on and when the next one drops.
+ */
+function QueueMeter({
+  waiting,
+  meta,
+  status,
+  clock,
+}: {
+  waiting: number;
+  meta: RankedMeta | null;
+  status: RankedStatus | null;
+  clock: {now: () => number};
+}) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const started = Date.now();
-    const tick = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500);
+    const tick = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => window.clearInterval(tick);
   }, []);
-  const queueTarget = QUEUE_TARGETS[Math.min(QUEUE_TARGETS.length - 1, Math.floor(seconds / 8))];
+
+  const ladder = meta?.queue_ladder ?? [];
+  const full = meta?.match_size ?? 15;
+  const joinedAt = status?.queue_joined_at ? parseTime(status.queue_joined_at) : null;
+  const elapsed = joinedAt != null ? Math.max(0, (clock.now() - joinedAt) / 1000) : seconds;
+
+  // The server computes the rung from the oldest waiter in the course — trust
+  // it when present; fall back to deriving it locally from our own join time.
+  let target = status?.players_needed ?? full;
+  if (status?.players_needed == null) {
+    for (const rung of ladder) {
+      if (elapsed >= rung.wait) target = rung.players;
+    }
+  }
+  const nextDrop = ladder.find((rung) => rung.wait > elapsed && rung.players < target) ?? null;
+  const mmss = (value: number) => `${Math.floor(value / 60)}:${String(Math.round(value) % 60).padStart(2, '0')}`;
+
   return (
     <div className="mx-auto mt-5 max-w-xs">
       <div className="flex items-end justify-between text-[0.72rem] font-extrabold text-mist-300">
         <span>{Math.max(waiting, 1)} found</span>
-        <span className="text-mist-500">aiming for {queueTarget}</span>
+        <span className="text-mist-500">starts at {target} players</span>
       </div>
-      <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / queueTarget) * 100)} />
+      <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / Math.max(1, target)) * 100)} />
       <p className="mt-2 text-[0.64rem] font-semibold text-mist-600">
-        A match starts as soon as {meta?.min_players ?? 2} players are ready — you will never wait for a full {meta?.match_size ?? 15}.
+        {nextDrop
+          ? `Waiting ${mmss(elapsed)} — at ${mmss(nextDrop.wait)} only ${nextDrop.players} players are enough.`
+          : 'Past the last rung — the match starts with whoever shows up.'}
+      </p>
+      <p className="mt-1 text-[0.6rem] font-semibold text-mist-700">
+        The longer you wait, the fewer players you need — you will never wait forever.
       </p>
     </div>
   );

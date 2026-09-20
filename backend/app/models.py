@@ -672,6 +672,7 @@ class RankedParticipant(Base):
     answered: Mapped[int] = mapped_column(Integer, default=0)  # questions completed
     streak: Mapped[int] = mapped_column(Integer, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    speed_points: Mapped[int] = mapped_column(Integer, default=0)  # banked speed bonus → XP at the finish
     position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-based final place
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -215,10 +215,12 @@ async def ranked_handshake() -> None:
             return
     check("both players joined the ranked queue", True)
 
+    # Two-player queues launch at the ladder's final rung (150s of waiting),
+    # so the handshake waits it out instead of assuming instant matchmaking.
     match_id = None
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 175
     while time.monotonic() < deadline:
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
         status, mine = call("GET", "/ranked/status", token=token_a)
         if status == 200 and mine.get("match_id"):
             match_id = mine["match_id"]

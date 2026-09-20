@@ -221,6 +221,11 @@ export const api = {
       `/api/ranked/match/${matchId}/answer`,
       {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
     ),
+  rankedSkip: (matchId: number) =>
+    request<{result: {skipped: boolean; points: number}; all_answered: boolean; reveal: RankedReveal | null; match: RankedMatchState}>(
+      `/api/ranked/match/${matchId}/skip`,
+      {method: 'POST'},
+    ),
   rankedReview: (matchId: number) => request<{match_id: number; items: ReviewItem[]}>(`/api/ranked/match/${matchId}/review`),
   rankedHistory: () => request<{history: RankedHistoryRow[]}>('/api/ranked/history'),
   rankedLadder: () => request<RankedLadder>('/api/ranked/leaderboard'),

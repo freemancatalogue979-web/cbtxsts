@@ -9,7 +9,7 @@ It proves the contract ranked play is judged on, in the order players hit it:
 
   1. the ladder     — tiers, defaults, meta (server-owned scoring formula)
   2. the queue      — join per course, cancel, no cross-course mixing
-  3. matchmaking    — min 2 players is enough (never "exactly 15"), cap 15
+  3. matchmaking    — patience ladder (30s→12 … 2min→4 … anyone), cap 15
   4. the lobby      — server countdown, roster with rating/tier/level
   5. the match      — shared question windows, hidden answers before reveal
   6. scoring        — accuracy-dominant points, streaks, wrong = 0
@@ -192,8 +192,8 @@ def main() -> int:
     print("\n3) matchmaking")
     for token in (p2, p3):
         call("POST", "/ranked/queue", {"course_id": course_id}, token=token)
-    print("   waiting for the server to mint a match (min 2 is enough)…")
-    match = wait_for(lambda: (call("GET", "/ranked/status", token=p1)[1] or {}).get("match_id"))
+    print("   waiting for the server to mint a match (patience ladder: 3 players launch at the 150s rung)…")
+    match = wait_for(lambda: (call("GET", "/ranked/status", token=p1)[1] or {}).get("match_id"), timeout=220)
     check("a match is minted with 3 players (never 'exactly 15')", bool(match), "no match after waiting")
     if not match:
         return finish()

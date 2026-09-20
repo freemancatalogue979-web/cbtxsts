@@ -1273,6 +1273,10 @@ export interface RankedMeta {
   base_points: number;
   speed_bonus: number;
   streak_bonus: number;
+  /** Patience ladder: after `wait` seconds queued, `players` are enough to start. */
+  queue_ladder?: {wait: number; players: number}[];
+  /** Match shape per tier: how many questions and seconds each tier plays. */
+  tier_rules?: Record<string, {questions: number; seconds: number}>;
 }
 
 export interface RankedPlayer {
@@ -1344,6 +1348,8 @@ export interface RankedStatus {
   in_queue: boolean;
   queue_course_id: number | null;
   waiting: number;
+  /** How many players would start a match right now (falls as you wait). */
+  players_needed?: number | null;
   queue_joined_at: string | null;
   server_now: string;
   match_id: number | null;
@@ -1357,6 +1363,8 @@ export interface RankedRatingRow {
   before: number;
   after: number;
   delta: number;
+  xp?: number;
+  speed_xp?: number;
 }
 
 export interface RankedFinishPayload {
