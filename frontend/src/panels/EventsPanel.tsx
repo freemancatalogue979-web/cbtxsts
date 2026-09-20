@@ -25,7 +25,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, Segmented, Skeleton, StatTile} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Segmented, Skeleton, StatTile} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
@@ -549,9 +549,10 @@ export default function EventsPanel() {
                         </span>
                       </div>
                       <p className="mt-1.5 text-[0.86rem] font-bold leading-snug text-mist-100">{q.text}</p>
+                      <ReviewOptions options={q.options as Record<string, string>} correct={q.correct_label ?? q.correct} chosen={item.selected} />
                       {q.explanation && <p className="mt-1.5 text-[0.76rem] font-medium leading-relaxed text-mist-400">{q.explanation}</p>}
                       <p className="mt-2 text-[0.7rem] font-bold text-mist-500">
-                        Your answer: {item.selected ?? '—'} · Correct: {q.correct ?? '—'}
+                        Your answer: {item.selected ?? '—'} · Correct: {q.correct_label ?? q.correct ?? '—'}
                       </p>
                     </Card>
                   );

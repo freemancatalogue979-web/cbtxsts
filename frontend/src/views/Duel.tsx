@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Avatar, Button, Card, Chip, ProgressBar} from '../components/ui';
+import {Avatar, Button, Card, Chip, ProgressBar, ReviewOptions} from '../components/ui';
 import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile, ComboMeter} from '../components/GameQuestion';
 import {victoryOf} from '../lib/cosmetics';
@@ -634,6 +634,7 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
                       <span className="min-w-0 flex-1">{question.text}</span>
                       {correct ? <CheckCircle2 className="size-4 shrink-0 text-mint-400" /> : <X className="size-4 shrink-0 text-flare-400" />}
                     </p>
+                    <ReviewOptions options={question.options} correct={question.correct} chosen={question.my_selection} />
                     <p className="mt-1.5 text-[0.76rem] font-semibold text-mist-500">
                       Correct: <span className="text-mint-300">{question.correct}</span>
                       {mine ? (

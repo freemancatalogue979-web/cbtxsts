@@ -135,6 +135,12 @@ async function main() {
   click(byText('button', 'Start practice'));
   check('the timed run opens on question 1', await waitFor(() => text().includes('Question 1 of')), text().slice(0, 240));
   check('the countdown timer is showing', /\d{1,2}:\d{2}/.test(text()) && text().includes('answered'), text().slice(0, 240));
+  const clockText = (text().match(/(\d{1,2}):(\d{2})/) || []).slice(1).map(Number);
+  check(
+    'the run does not expire instantly (timezone-honest ends_at)',
+    clockText.length === 2 && clockText[0] * 60 + clockText[1] >= 9 * 60,
+    `clock shows ${clockText.join(':')} — a naive ends_at parsed as local time would read 0:00`,
+  );
   const letterOf = (node) => (node.querySelector('span')?.textContent || '').trim();
   check(
     'options render as A–D with the shuffled texts',
@@ -183,6 +189,14 @@ async function main() {
   check('the summary reports questions, correct, wrong, score and time', ['Questions', 'Correct', 'Wrong', 'Score', 'Time used'].every((label) => text().includes(label)), text().slice(0, 400));
   check('the review section revisits every question', text().includes('Review your answers') && text().includes('Your answer:'), text().slice(0, 300));
   check('the review shows the correct answer for the miss', text().includes('Correct answer:'), '');
+  const reviewOptionRows = [...window.document.querySelectorAll('main li')].filter((li) =>
+    [...li.querySelectorAll('span')].some((span) => /^[A-D]$/.test((span.textContent || '').trim())),
+  );
+  check(
+    'the review lists the full options, not just letters',
+    reviewOptionRows.length >= 4,
+    `found ${reviewOptionRows.length} option rows`,
+  );
   check('a fresh practice can start again', Boolean(byText('button', 'New practice')), '');
 
   check('no runtime errors during the whole walk', problems.length === 0, problems.slice(0, 3).join(' | '));

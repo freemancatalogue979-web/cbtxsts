@@ -1,5 +1,5 @@
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
-import {Loader2, Phone, X} from 'lucide-react';
+import {CheckCircle2, Loader2, Phone, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import type {ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
 import {createElement, isValidElement, useEffect} from 'react';
@@ -580,6 +580,47 @@ export function SectionHeading({
       </div>
       {action}
     </div>
+  );
+}
+
+/* ------------------------------------------------------- review options */
+export function ReviewOptions({
+  options,
+  correct,
+  chosen,
+}: {
+  options: Record<string, string> | null | undefined;
+  correct?: string | null;
+  chosen?: string | null;
+}) {
+  /** The full A-D list a finished screen owes the player: every option, their
+   *  own pick flagged and the right answer highlighted — never letters alone. */
+  const entries = Object.entries(options ?? {}).filter(([, text]) => (text ?? '').trim());
+  if (!entries.length) return null;
+  return (
+    <ul className="mt-2 grid gap-1.5">
+      {entries.map(([letter, text]) => {
+        const isCorrect = letter === correct;
+        const isChosen = letter === chosen && !isCorrect;
+        return (
+          <li
+            key={letter}
+            className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-[0.8rem] font-semibold ${
+              isCorrect
+                ? 'border-mint-500/45 bg-mint-500/12 text-mint-200'
+                : isChosen
+                  ? 'border-flare-500/45 bg-flare-500/12 text-flare-200'
+                  : 'border-white/8 bg-white/[0.02] text-mist-400'
+            }`}
+          >
+            <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-white/8 text-[0.7rem] font-black">{letter}</span>
+            <span className="min-w-0 flex-1">{text}</span>
+            {isCorrect && <CheckCircle2 className="size-4 shrink-0 text-mint-400" />}
+            {isChosen && <X className="size-4 shrink-0 text-flare-400" />}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

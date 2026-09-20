@@ -222,6 +222,10 @@ async function main() {
   click(byText('button', 'View answers'));
   const review = await waitFor(() => /Q1/.test(text()) && (text().includes('Your answer:') || text().includes('Correct:')));
   check('the answer review lists the questions', review, text().slice(0, 240));
+  const reviewOptionRows = [...window.document.querySelectorAll('main li')].filter((li) =>
+    [...li.querySelectorAll('span')].some((span) => /^[A-D]$/.test((span.textContent || '').trim())),
+  );
+  check('the review shows every option with the pick and the right one', reviewOptionRows.length >= 4, `found ${reviewOptionRows.length} option rows`);
   click(byText('button', 'Back to results'));
   await wait(300);
   click(byText('button', 'Back to ranked'));

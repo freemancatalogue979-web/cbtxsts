@@ -29,7 +29,7 @@ import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile, ComboMeter, Hearts} from '../components/GameQuestion';
-import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Segmented, Select, Skeleton} from '../components/ui';
+import {Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, SectionHeading, Segmented, Select, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
 import {HAPTICS} from '../lib/haptics';
 import {sfx} from '../lib/sfx';
@@ -950,6 +950,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
                   {row.topic && <Chip className="border-white/12 bg-white/6 text-[0.62rem] text-mist-400">{row.topic}</Chip>}
                 </div>
                 <p className="mt-1.5 text-[0.86rem] leading-snug font-bold text-mist-100">{row.text}</p>
+                <ReviewOptions options={row.options} correct={row.correct_label} chosen={row.chosen_label} />
                 <div className="mt-2 grid gap-1 text-[0.78rem] font-semibold">
                   <p className="text-mist-400">
                     Your answer:{' '}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -74,12 +74,16 @@ DEFAULT_CUSTOM_SIZE = 20
 
 
 def _parse_iso(value: Any) -> datetime | None:
+    """Payload timestamps as naive UTC — tolerant of a Z or +00:00 offset so a
+    timestamp written by any client/tooling can never poison a comparison."""
     if not value or not isinstance(value, str):
         return None
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", ""))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed
 
 
@@ -229,8 +233,8 @@ def _run_payload(db: Session, challenge: PracticeChallenge, *, include_answers: 
         "lives": 0,
         "seconds": duration_seconds,
         "duration_seconds": duration_seconds,
-        "ends_at": state.get("ends_at"),
-        "started_at": state.get("started_at"),
+        "ends_at": iso(_parse_iso(state.get("ends_at"))),
+        "started_at": iso(_parse_iso(state.get("started_at"))),
         "server_now": iso(utcnow()),
         "course": (
             {"id": course.id, "code": course.code, "title": course.title, "accent": course.accent}
@@ -518,7 +522,7 @@ def start_practice(
             "powerups": {"fifty": 1, "reveal": 1, "freeze": 1, "shield": 1, "second_chance": 1, "double_xp": 1, "streak_shield": 1},
             "used": {},
             "answers": {},
-            "started_at": utcnow().isoformat(),
+            "started_at": iso(utcnow()),
         },
     )
     db.add(challenge)
@@ -606,8 +610,8 @@ def _start_custom(payload: PracticeStartIn, db: Session, student: Student) -> di
             "lives_enabled": False,
             "seconds": duration_seconds,
             "duration_seconds": duration_seconds,
-            "ends_at": (now + timedelta(seconds=duration_seconds)).isoformat() if duration_seconds else None,
-            "started_at": now.isoformat(),
+            "ends_at": iso(now + timedelta(seconds=duration_seconds)) if duration_seconds else None,
+            "started_at": iso(now),
             "course_id": course.id,
             "course_code": course.code,
             "course_title": course.title,
