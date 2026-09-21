@@ -8,6 +8,7 @@ import {CalendarDays,
   FileText,
   Gauge,
   Gift,
+  GraduationCap,
   LayoutGrid,
   Megaphone,
   PackageCheck,
@@ -30,13 +31,14 @@ import PeopleAdmin from '../admin/PeopleAdmin';
 import BroadcastAdmin from '../admin/BroadcastAdmin';
 import EventsAdmin from '../admin/EventsAdmin';
 import StudioAdmin from '../admin/StudioAdmin';
+import GroupsAdmin from '../admin/GroupsAdmin';
 import {api} from '../lib/api';
 import {formatCompact, formatNumber, formatRelative} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
 import type {AdminOverview, Config} from '../lib/types';
 
-type Section = 'overview' | 'studio' | 'content' | 'events' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'settings';
+type Section = 'overview' | 'studio' | 'content' | 'events' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'settings';
 
 const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[] = [
   {id: 'overview', label: 'Overview', icon: Gauge, group: 'Arena'},
@@ -48,6 +50,7 @@ const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[
   {id: 'people', label: 'Players', icon: Users, group: 'People'},
   {id: 'results', label: 'Results', icon: BarChart3, group: 'People'},
   {id: 'claims', label: 'Prize claims', icon: PackageCheck, group: 'People'},
+  {id: 'groups', label: 'Study groups', icon: GraduationCap, group: 'People'},
   {id: 'settings', label: 'Settings', icon: Settings, group: 'System'},
 ];
 
@@ -415,6 +418,7 @@ export default function Admin({onExit}: {onExit: () => void}) {
                   onChanged={refresh}
                 />
               )}
+              {section === 'groups' && <GroupsAdmin key={`groups-${bump}`} />}
               {section === 'settings' && <SettingsPanel key={`settings-${bump}`} />}
             </motion.div>
           </AnimatePresence>

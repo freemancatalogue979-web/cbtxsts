@@ -1,8 +1,9 @@
 /** App chrome: desktop nav tabs, mobile bottom bar, header stats, notifications. */
 import {Bell, BellRing, CheckCircle2, ChevronDown, CircleHelp, Coins, Flame, Gem, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
+import {useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import type {ReactNode} from 'react';
+import type {InboxNote} from '../lib/types';
 import {Avatar, Button, Chip, IconButton, Modal} from './ui';
 import {Holdable} from './Holdable';
 import {api} from '../lib/api';
@@ -81,6 +82,43 @@ function NoticeBell({className = ''}: {className?: string}) {
   const liveInbox = inbox.filter((note) => !dismissed.inbox.includes(note.id));
   const liveNotices = notices.filter((notice) => !dismissed.notices.includes(notice.id));
 
+  /* Inbox load-more: the session keeps the newest page (≤40) live; older notes
+     are paged in from the server on demand and held here so a websocket push
+     that re-caps the live list never drops what the player has scrolled to. */
+  const INBOX_PAGE = 12;
+  const [visible, setVisible] = useState(INBOX_PAGE);
+  const [older, setOlder] = useState<InboxNote[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [noMore, setNoMore] = useState(false);
+  const inboxIds = useMemo(() => new Set(inbox.map((note) => note.id)), [inbox]);
+  const olderNotes = useMemo(
+    () => older.filter((note) => !inboxIds.has(note.id) && !dismissed.inbox.includes(note.id)),
+    [older, inboxIds, dismissed.inbox],
+  );
+  const allNotes = useMemo(() => [...liveInbox, ...olderNotes], [liveInbox, olderNotes]);
+  const shownNotes = allNotes.slice(0, visible);
+  const loadedCount = inbox.length + older.length;
+  const hasHidden = visible < allNotes.length;
+  const canLoadOlder = !noMore && loadedCount >= 40;
+
+  const showMoreInbox = () => {
+    if (hasHidden) {
+      setVisible((count) => count + INBOX_PAGE);
+      return;
+    }
+    if (!canLoadOlder || loadingMore) return;
+    setLoadingMore(true);
+    api
+      .inbox({limit: 40, offset: loadedCount})
+      .then((data) => {
+        setOlder((current) => [...current, ...data.notes]);
+        if (data.notes.length < 40) setNoMore(true);
+        setVisible((count) => Math.max(count + INBOX_PAGE, allNotes.length + data.notes.length));
+      })
+      .catch(() => setNoMore(true))
+      .finally(() => setLoadingMore(false));
+  };
+
   const seen = Number(localStorage.getItem(SEEN_KEY) || 0);
   const unread =
     liveNotices.filter((notice) => {
@@ -135,8 +173,8 @@ function NoticeBell({className = ''}: {className?: string}) {
             <div className="max-h-[60vh] overflow-y-auto">
               {inbox.length > 0 && (
                 <div className="border-b border-white/8">
- <p className="px-4 pt-3 text-[0.62rem] font-black tracking-[0.18em] text-nova-300">For you</p>
-                  {liveInbox.slice(0, 12).map((note) => {
+                  <p className="px-4 pt-3 text-[0.62rem] font-black tracking-[0.18em] text-nova-300">For you</p>
+                  {shownNotes.map((note) => {
                     const Icon = NOTE_ICONS[note.kind] ?? Sparkles;
                     return (
                       <Holdable
@@ -164,7 +202,17 @@ function NoticeBell({className = ''}: {className?: string}) {
                       </Holdable>
                     );
                   })}
- <p className="px-4 pt-2.5 pb-1 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">Announcements</p>
+                  {(hasHidden || canLoadOlder) && (
+                    <button
+                      type="button"
+                      onClick={showMoreInbox}
+                      disabled={loadingMore}
+                      className="w-full px-4 py-2.5 text-center text-[0.74rem] font-bold text-nova-300 transition-colors hover:text-nova-200 disabled:opacity-50"
+                    >
+                      {loadingMore ? 'Loading…' : hasHidden ? 'Show more' : 'Load older notes'}
+                    </button>
+                  )}
+                  <p className="px-4 pt-2.5 pb-1 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">Announcements</p>
                 </div>
               )}
               {liveNotices.length === 0 && liveInbox.length === 0 && (

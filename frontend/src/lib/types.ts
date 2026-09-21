@@ -1809,3 +1809,17 @@ export interface GroupQuizSummary {
   rewards?: RewardEvent[];
   auto?: boolean;
 }
+
+/** Staff console: one row in the cross-group moderation list (`GET /admin/groups`). */
+export interface AdminGroupRow {
+  id: number;
+  name: string;
+  code: string;
+  goal: string;
+  description: string;
+  owner: {id: number; name: string};
+  course_title: string | null;
+  member_count: number;
+  message_count: number;
+  created_at: string | null;
+}

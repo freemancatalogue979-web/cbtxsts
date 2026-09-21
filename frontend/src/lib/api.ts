@@ -92,6 +92,7 @@ import type {
   GroupActivityRow,
   GroupNotificationRow,
   GroupDuelRow,
+  AdminGroupRow,
 } from './types';
 
 /** Shapes returned by the newer arena engines — documented in ``types.ts``. */
@@ -318,7 +319,8 @@ export const api = {
     request<{items: ShopItem[]; coins: number; streak_freezes: number; flair: string; xp_boosted: boolean}>('/api/study/shop'),
   shopBuy: (sku: string) => request<{ok: boolean; profile: Profile; detail: string}>('/api/study/shop/buy', {method: 'POST', body: {sku}}),
   analytics: () => request<Analytics>('/api/study/analytics'),
-  inbox: () => request<{notes: InboxNote[]; unread: number}>('/api/inbox'),
+  inbox: (params: {limit?: number; offset?: number} = {}) =>
+    request<{notes: InboxNote[]; unread: number; total: number; limit: number; offset: number}>(`/api/inbox${query(params)}`),
   inboxRead: () => request<{marked: number}>('/api/inbox/read', {method: 'POST'}),
   nudge: (friendId: number) => request<{ok: boolean}>(`/api/friends/${friendId}/nudge`, {method: 'POST'}),
   react: (activityId: number) => request<{ok: boolean; mine: boolean; count: number}>(`/api/activity/${activityId}/react`, {method: 'POST'}),
@@ -688,6 +690,9 @@ export const api = {
       request<PrizeClaim>(`/api/admin/claims/${id}`, {method: 'PATCH', body: {status, note}}),
 
     badges: () => request<{badges: BadgeItem[]; awarded: Record<string, number>}>('/api/admin/badges'),
+
+    groups: (params: {q?: string; limit?: number; offset?: number} = {}) =>
+      request<{rows: AdminGroupRow[]; total: number; limit: number; offset: number}>(`/api/admin/groups${query(params)}`),
 
     /* ------------------------------------------------------- content studio */
     studio: {

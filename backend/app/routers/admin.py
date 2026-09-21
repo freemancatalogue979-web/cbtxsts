@@ -24,6 +24,7 @@ from ..models import (
     Config,
     Course,
     Duel,
+    GroupMessage,
     Notification,
     Prize,
     PrizeClaim,
@@ -32,6 +33,8 @@ from ..models import (
     Quiz,
     Student,
     StudentBadge,
+    StudyGroup,
+    StudyGroupMember,
     utcnow,
 )
 from ..schemas import (
@@ -850,6 +853,74 @@ def delete_student(student_id: int, db: Session = Depends(get_db)) -> dict:
     db.delete(student)
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# study groups — a cross-group moderation list for staff
+# ---------------------------------------------------------------------------
+@router.get("/groups")
+def admin_list_groups(
+    db: Session = Depends(get_db),
+    q: str = Query(""),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Every study group in the arena, newest first, with owner + activity counts.
+
+    Server-paginated (``limit``/``offset``) and searchable by name or join code
+    so staff can moderate groups without an endless scroll.
+    """
+    stmt = select(StudyGroup)
+    needle = q.strip()
+    if needle:
+        like = f"%{needle}%"
+        stmt = stmt.where(StudyGroup.name.ilike(like) | StudyGroup.code.ilike(like))
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    groups = db.scalars(stmt.order_by(StudyGroup.id.desc()).limit(limit).offset(offset)).all()
+    group_ids = [group.id for group in groups] or [-1]
+    member_counts = dict(
+        db.execute(
+            select(StudyGroupMember.group_id, func.count(StudyGroupMember.id))
+            .where(StudyGroupMember.group_id.in_(group_ids))
+            .group_by(StudyGroupMember.group_id)
+        ).all()
+    )
+    message_counts = dict(
+        db.execute(
+            select(GroupMessage.group_id, func.count(GroupMessage.id))
+            .where(GroupMessage.group_id.in_(group_ids))
+            .group_by(GroupMessage.group_id)
+        ).all()
+    )
+    owners = {
+        row.id: row
+        for row in db.scalars(select(Student).where(Student.id.in_([g.owner_id for g in groups] or [-1]))).all()
+    }
+    courses = {
+        row.id: row
+        for row in db.scalars(
+            select(Course).where(Course.id.in_([g.course_id for g in groups if g.course_id] or [-1]))
+        ).all()
+    }
+    rows = []
+    for group in groups:
+        owner = owners.get(group.owner_id)
+        course = courses.get(group.course_id) if group.course_id else None
+        rows.append(
+            {
+                "id": group.id,
+                "name": group.name,
+                "code": group.code,
+                "goal": group.goal,
+                "description": group.description,
+                "owner": {"id": group.owner_id, "name": owner.name if owner else "Unknown"},
+                "course_title": course.title if course else None,
+                "member_count": int(member_counts.get(group.id, 0)),
+                "message_count": int(message_counts.get(group.id, 0)),
+                "created_at": iso(group.created_at),
+            }
+        )
+    return {"rows": rows, "total": int(total), "limit": limit, "offset": offset}
 
 
 # ---------------------------------------------------------------------------
