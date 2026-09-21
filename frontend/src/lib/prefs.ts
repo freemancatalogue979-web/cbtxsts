@@ -106,7 +106,7 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-const FONT_KEY = 'arena.font.v2';
+const FONT_KEY = 'arena.font.v3';
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';
@@ -203,8 +203,8 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Quite Magical is the house default; a stored choice always wins. */
-export const DEFAULT_FONT: FontName = 'magic';
+/** Space Grotesk is the house default; a stored choice always wins. */
+export const DEFAULT_FONT: FontName = 'grotesk';
 
 export function currentFont(): FontName {
   const stored = read(FONT_KEY, DEFAULT_FONT);

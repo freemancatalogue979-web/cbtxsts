@@ -450,8 +450,10 @@ export function AppShell({
               </span>
             </div>
 
+            {/* Phones keep just the menu up top — the LV pill only joins at xl
+                where the row has room (level also lives in the account menu). */}
             {profile && (
-              <span className="hud-pill float-chip shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:hidden xl:inline-flex">
+              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular xl:inline-flex">
                 LV{profile.progress.level}
               </span>
             )}
@@ -540,11 +542,14 @@ export function AppShell({
             <LivePill />
             {profile && (
               <>
-                <span className="hud-pill float-chip shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular" title="Data Crystals">
+                {/* Telemetry pills step in with width so the phone row never
+                    jams: crystals from sm, credits from sm, streak from md —
+                    every value stays in the account menu regardless. */}
+                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular sm:inline-flex lg:hidden 2xl:inline-flex" title="Data Crystals">
                   <Gem className="size-3 text-nova-400" />
                   {formatNumber(profile.diamonds ?? 0)}
                 </span>
-                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular xs:inline-flex lg:hidden 2xl:inline-flex" title="Credits">
+                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular sm:inline-flex lg:hidden 2xl:inline-flex" title="Credits">
                   <Coins className="size-3 text-amber-400" />
                   {formatNumber(profile.coins)}
                 </span>

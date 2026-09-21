@@ -40,7 +40,7 @@
      pulse: deep indigo        (info / links / secondary glow)
      mint : success green      (unchanged — keeps the answer-correct meaning)
      gold : reward amber       (unchanged — keeps XP/season meaning)
-   Type: Montserrat (body default) + Audiowide (display); switchable font packs.
+   Type: Space Grotesk (body default, display alike); switchable font packs.
    Themes: arena (default), ember, ocean, venom, candy, mono via [data-theme].
    ========================================================================== */
 
@@ -61,8 +61,8 @@
 }
 
 @theme {
-  --font-sans: "Quite Magical", "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Quite Magical", "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
+  --font-sans: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
 
   /* surfaces — true black base, violet-tinted raised steps */
   --color-ink-950: #050308;
