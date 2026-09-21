@@ -260,7 +260,8 @@ export const api = {
       {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
     ),
   eventReview: (eventId: number) => request<{event_id: number; items: ReviewItem[]}>(`/api/events/${eventId}/review`),
-  adminEvents: () => request<{events: ArenaEventSummary[]}>('/api/admin/events'),
+  adminEvents: (params: {limit?: number; offset?: number} = {}) =>
+    request<{events: ArenaEventSummary[]; total: number; limit: number; offset: number}>(`/api/admin/events${query(params)}`),
   adminCreateEvent: (body: Record<string, unknown>) =>
     request<{event: ArenaEventSummary}>('/api/admin/events', {method: 'POST', body}),
   adminUpdateEvent: (eventId: number, body: Record<string, unknown>) =>
@@ -574,8 +575,10 @@ export const api = {
         {method: 'POST', body},
       ),
     /* ---- staff authoring ---- */
-    adminList: (params: {status?: string; course_id?: number | null} = {}) =>
-      request<{items: MaterialCard[]; stats: Record<string, number>}>(`/api/admin/materials${query(params)}`),
+    adminList: (params: {status?: string; course_id?: number | null; limit?: number; offset?: number} = {}) =>
+      request<{items: MaterialCard[]; stats: Record<string, number>; total: number; limit: number; offset: number}>(
+        `/api/admin/materials${query(params)}`,
+      ),
     adminRead: (id: number) => request<MaterialDetail>(`/api/admin/materials/${id}`),
     create: (body: Record<string, unknown>) => request<MaterialDetail>('/api/admin/materials', {method: 'POST', body}),
     update: (id: number, body: Record<string, unknown>) => request<MaterialDetail>(`/api/admin/materials/${id}`, {method: 'PATCH', body}),
@@ -670,13 +673,16 @@ export const api = {
       request<PlayerSummary>(`/api/admin/students/${id}/adjust${query({xp, coins, reason})}`, {method: 'POST'}),
     deleteStudent: (id: number) => request<{ok: boolean}>(`/api/admin/students/${id}`, {method: 'DELETE'}),
 
-    results: (params: {quiz_id?: number; q?: string}) =>
-      request<{quiz_id: number | null; rows: Record<string, unknown>[]}>(`/api/admin/results${query(params)}`),
+    results: (params: {quiz_id?: number; q?: string; limit?: number; offset?: number} = {}) =>
+      request<{quiz_id: number | null; rows: Record<string, unknown>[]; total: number; limit: number; offset: number}>(
+        `/api/admin/results${query(params)}`,
+      ),
     deleteResult: (id: number) => request<{ok: boolean}>(`/api/admin/results/${id}`, {method: 'DELETE'}),
     clearResults: (quizId: number) => request<{ok: boolean; deleted: number}>(`/api/admin/results${query({quiz_id: quizId})}`, {method: 'DELETE'}),
     exportUrl: (quizId: number) => `/api/admin/results/export${query({quiz_id: quizId})}`,
 
-    notifications: () => request<Notice[]>('/api/admin/notifications'),
+    notifications: (params: {limit?: number; offset?: number} = {}) =>
+      request<{rows: Notice[]; total: number; limit: number; offset: number}>(`/api/admin/notifications${query(params)}`),
     createNotification: (body: Record<string, unknown>) => request<Notice>('/api/admin/notifications', {method: 'POST', body}),
     deleteNotification: (id: number) => request<{ok: boolean}>(`/api/admin/notifications/${id}`, {method: 'DELETE'}),
 
@@ -685,7 +691,10 @@ export const api = {
     updatePrize: (id: number, body: Record<string, unknown>) => request<Prize>(`/api/admin/prizes/${id}`, {method: 'PATCH', body}),
     deletePrize: (id: number) => request<{ok: boolean}>(`/api/admin/prizes/${id}`, {method: 'DELETE'}),
 
-    claims: () => request<PrizeClaim[]>('/api/admin/claims'),
+    claims: (params: {limit?: number; offset?: number} = {}) =>
+      request<{rows: PrizeClaim[]; total: number; pending: number; limit: number; offset: number}>(
+        `/api/admin/claims${query(params)}`,
+      ),
     updateClaim: (id: number, status: string, note = '') =>
       request<PrizeClaim>(`/api/admin/claims/${id}`, {method: 'PATCH', body: {status, note}}),
 

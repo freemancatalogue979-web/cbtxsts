@@ -927,17 +927,30 @@ def admin_list_groups(
 # results
 # ---------------------------------------------------------------------------
 @router.get("/results")
-def results(db: Session = Depends(get_db), quiz_id: int | None = Query(None), q: str = Query("")) -> dict:
+def results(
+    db: Session = Depends(get_db),
+    quiz_id: int | None = Query(None),
+    q: str = Query(""),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
     if quiz_id:
         rows = quiz_leaderboard(db, quiz_id)
         if q.strip():
             needle = q.strip().lower()
             rows = [r for r in rows if needle in r["student"]["name"].lower() or needle in r["student"]["phone"]]
-        return {"quiz_id": quiz_id, "rows": rows}
+        total = len(rows)
+        return {
+            "quiz_id": quiz_id,
+            "rows": rows[offset : offset + limit],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
-    attempts = db.scalars(
-        select(Attempt).where(Attempt.status == "submitted").order_by(Attempt.submitted_at.desc()).limit(200)
-    ).all()
+    base = select(Attempt).where(Attempt.status == "submitted")
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    attempts = db.scalars(base.order_by(Attempt.submitted_at.desc()).limit(limit).offset(offset)).all()
     return {
         "quiz_id": None,
         "rows": [
@@ -952,6 +965,9 @@ def results(db: Session = Depends(get_db), quiz_id: int | None = Query(None), q:
             }
             for a in attempts
         ],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -1003,9 +1019,16 @@ def clear_quiz_results(quiz_id: int, db: Session = Depends(get_db)) -> dict:
 # notifications, prizes, claims, badges
 # ---------------------------------------------------------------------------
 @router.get("/notifications")
-def admin_notifications(db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(select(Notification).order_by(Notification.created_at.desc()).limit(100)).all()
-    return [notification_public(n) for n in rows]
+def admin_notifications(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    total = db.scalar(select(func.count(Notification.id))) or 0
+    rows = db.scalars(
+        select(Notification).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {"rows": [notification_public(n) for n in rows], "total": int(total), "limit": limit, "offset": offset}
 
 
 @router.post("/notifications")
@@ -1069,9 +1092,23 @@ def delete_prize(prize_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/claims")
-def list_claims(db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(select(PrizeClaim).order_by(PrizeClaim.created_at.desc()).limit(200)).all()
-    return [claim_public(row) for row in rows]
+def list_claims(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    total = db.scalar(select(func.count(PrizeClaim.id))) or 0
+    pending = db.scalar(select(func.count(PrizeClaim.id)).where(PrizeClaim.status == "pending")) or 0
+    rows = db.scalars(
+        select(PrizeClaim).order_by(PrizeClaim.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {
+        "rows": [claim_public(row) for row in rows],
+        "total": int(total),
+        "pending": int(pending),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.patch("/claims/{claim_id}")
@@ -1125,11 +1162,23 @@ def _event_or_404(db: Session, event_id: int) -> ArenaEvent:
 
 
 @router.get("/events")
-def admin_list_events(db: Session = Depends(get_db)) -> dict:
+def admin_list_events(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
     from ..services.events import event_public
 
-    rows = db.scalars(select(ArenaEvent).order_by(ArenaEvent.starts_at.desc()).limit(100)).all()
-    return {"events": [event_public(db, row, None) for row in rows]}
+    total = db.scalar(select(func.count(ArenaEvent.id))) or 0
+    rows = db.scalars(
+        select(ArenaEvent).order_by(ArenaEvent.starts_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {
+        "events": [event_public(db, row, None) for row in rows],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/events")

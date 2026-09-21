@@ -89,22 +89,26 @@ function emptyForm(): FormState {
 export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
   const {toast} = useSession();
   const [events, setEvents] = useState<ArenaEventSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const limit = 40;
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [editing, setEditing] = useState<ArenaEventSummary | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([api.adminEvents(), api.admin.courses().catch(() => [])])
+    Promise.all([api.adminEvents({limit, offset}), api.admin.courses().catch(() => [])])
       .then(([eventsPayload, coursesPayload]) => {
         setEvents(eventsPayload.events);
+        setTotal(eventsPayload.total);
         setCourses(coursesPayload);
       })
       .catch((error: Error) => toast('error', 'Could not load events', error.message))
       .finally(() => setLoading(false));
-  }, [toast]);
+  }, [offset, toast]);
 
   useEffect(() => {
     load();
@@ -220,7 +224,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       <div className="flex flex-wrap items-center gap-2">
         <CalendarDays className="size-5 text-nova-300" />
         <h2 className="text-[1.05rem] font-extrabold text-mist-50">Arena events</h2>
-        <span className="text-[0.7rem] font-bold text-mist-500">{events.length} on the calendar</span>
+        <span className="text-[0.7rem] font-bold text-mist-500">{formatNumber(total)} on the calendar</span>
         <Button className="ml-auto" size="sm" onClick={openCreator} icon={<Plus className="size-4" />}>
           New event
         </Button>
@@ -298,6 +302,18 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
             )}
           </Card>
         ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
       </div>
 
       {/* ------------------------------------------------------ creator */}

@@ -613,7 +613,11 @@ async def main() -> None:
     check("admin exports results CSV", status_code == 200, str(status_code))
 
     status_code, claims = call("GET", "/api/admin/claims", token=admin_token)
-    check("admin sees prize claims", status_code == 200 and isinstance(claims, list), str(status_code))
+    check(
+        "admin sees prize claims",
+        status_code == 200 and isinstance(claims.get("rows"), list),
+        str(status_code),
+    )
 
     status_code, _ = call("DELETE", f"/api/admin/quizzes/{new_quiz_id}", token=admin_token)
     check("admin deletes a quiz", status_code == 200, str(status_code))

@@ -320,8 +320,11 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [quizId, setQuizId] = useState<number | ''>('');
   const [rows, setRows] = useState<ResultRow[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const limit = 50;
 
   useEffect(() => {
     api.admin
@@ -330,12 +333,20 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
       .catch(() => setQuizzes([]));
   }, []);
 
+  // Changing the exam or the search jumps back to the first page.
+  useEffect(() => {
+    setOffset(0);
+  }, [quizId, query]);
+
   const load = useCallback(() => {
     api.admin
-      .results({quiz_id: quizId || undefined, q: query})
-      .then((data) => setRows(data.rows as unknown as ResultRow[]))
+      .results({quiz_id: quizId || undefined, q: query, limit, offset})
+      .then((data) => {
+        setRows(data.rows as unknown as ResultRow[]);
+        setTotal(data.total);
+      })
       .catch((error: Error) => toast('error', 'Could not load results', error.message));
-  }, [quizId, query, toast]);
+  }, [quizId, query, offset, toast]);
 
   useEffect(() => {
     const id = window.setTimeout(load, query ? 250 : 0);
@@ -506,6 +517,18 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
           </div>
         </Card>
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
     </div>
   );
 }
@@ -513,17 +536,25 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
 function ClaimsTab({onChanged}: {onChanged: () => void}) {
   const {toast} = useSession();
   const [claims, setClaims] = useState<PrizeClaim[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [target, setTarget] = useState<PrizeClaim | null>(null);
   const [status, setStatus] = useState<'approved' | 'delivered' | 'rejected'>('approved');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const limit = 40;
 
   const load = useCallback(() => {
     api.admin
-      .claims()
-      .then(setClaims)
+      .claims({limit, offset})
+      .then((data) => {
+        setClaims(data.rows);
+        setTotal(data.total);
+        setPending(data.pending);
+      })
       .catch((error: Error) => toast('error', 'Could not load claims', error.message));
-  }, [toast]);
+  }, [offset, toast]);
 
   useEffect(load, [load]);
 
@@ -557,11 +588,7 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
         title="Prize claims"
         subtitle="Approve, deliver or reject — the player is notified instantly."
         icon={<PackageCheck className="size-4" />}
-        action={
-          <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">
-            {claims?.filter((claim) => claim.status === 'pending').length ?? 0} pending
-          </Chip>
-        }
+        action={<Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">{pending} pending</Chip>}
       />
 
       {!claims ? (
@@ -632,6 +659,18 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
           ))}
         </ul>
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
 
       <Modal
         open={Boolean(target)}
