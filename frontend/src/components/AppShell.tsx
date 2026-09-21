@@ -528,7 +528,7 @@ export function AppShell({
                     <VolumeX className="size-[17px] text-mist-500" />
                   )}
                 </IconButton>
-                <NoticeBell className="hidden sm:inline-flex lg:hidden xl:inline-flex" />
+                <NoticeBell className="inline-flex" />
                 {role === 'admin' && (
                   <IconButton label="Admin console" variant="outline" className="hidden lg:inline-flex" onClick={onAdmin}>
                     <Shield className="size-[18px] text-rose-400" />

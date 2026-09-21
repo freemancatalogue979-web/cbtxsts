@@ -30,6 +30,7 @@ from .routers import (
     exams,
     flashcards,
     game,
+    groups,
     insights,
     live,
     materials,
@@ -45,6 +46,7 @@ from .services.events import poll_events
 from .services.exam import expire_overdue
 from .services.ranked import advance_matches, poll_queue
 from .events import dispatch
+from .services.group import GroupError
 from .ws import hub
 
 logger = logging.getLogger("arena")
@@ -64,6 +66,9 @@ async def game_ticker() -> None:
                 events = expire_overdue(db)
                 events += expire_duels(db)
                 events += poll_events(db)
+                from .services.group import poll_groups
+
+                events += poll_groups(db)
             if events:
                 await dispatch(events)
         except asyncio.CancelledError:  # pragma: no cover
@@ -136,6 +141,12 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
+@app.exception_handler(GroupError)
+async def group_exception_handler(request: Request, exc: GroupError) -> JSONResponse:
+    """Study-group domain errors (403/404/409) raised deep in the service layer."""
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     first = exc.errors()[0] if exc.errors() else {}
@@ -165,6 +176,7 @@ app.include_router(studio.router, prefix=API_PREFIX)
 app.include_router(flashcards.router, prefix=API_PREFIX)
 app.include_router(practice.router, prefix=API_PREFIX)
 app.include_router(competitive.router, prefix=API_PREFIX)
+app.include_router(groups.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(game.router, prefix=API_PREFIX)
 app.include_router(game.study_router, prefix=API_PREFIX)

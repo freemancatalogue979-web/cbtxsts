@@ -74,6 +74,24 @@ import type {
   RankedReveal,
   RankedStatus,
   ReviewItem,
+  StudyGroupSummary,
+  GroupOverview,
+  PageMeta,
+  PresenceStatus,
+  GroupChatMessage,
+  GroupAnnouncement,
+  GroupQuiz,
+  GroupQuizLeaderRow,
+  GroupQuizWindow,
+  GroupQuizAnswerResult,
+  GroupQuizSummary,
+  GroupQuestionItem,
+  GroupQuestionReply,
+  GroupMemberRow,
+  GroupMemberProfile,
+  GroupActivityRow,
+  GroupNotificationRow,
+  GroupDuelRow,
 } from './types';
 
 /** Shapes returned by the newer arena engines — documented in ``types.ts``. */
@@ -798,5 +816,98 @@ export const api = {
       leaderboard: (limit = 20) => request<Json>(`/api/admin/students/leaderboard${query({limit})}`),
       recentVersions: (limit = 30) => request<Json>(`/api/admin/versions/recent${query({limit})}`),
     },
+  },
+
+  /* ------------------------------------------------------- study groups
+     The full community workspace: every list is paginated server-side and
+     every privileged call is re-checked against the membership role. */
+  groups: {
+      list: (params: {q?: string; page?: number; size?: number} = {}) =>
+        request<{mine: {items: StudyGroupSummary[]} & PageMeta; discover: {items: StudyGroupSummary[]} & PageMeta}>(
+          `/api/groups${query(params)}`,
+        ),
+      create: (body: {name: string; description?: string; course_id?: number | null; goal?: string}) =>
+        request<StudyGroupSummary>('/api/groups', {method: 'POST', body}),
+      joinByCode: (code: string) =>
+        request<StudyGroupSummary>(`/api/groups/join/${encodeURIComponent(code.trim().toUpperCase())}`, {method: 'POST'}),
+      join: (id: number) => request<StudyGroupSummary>(`/api/groups/${id}/join`, {method: 'POST'}),
+      leave: (id: number) => request<{ok: boolean}>(`/api/groups/${id}/leave`, {method: 'POST'}),
+      detail: (id: number) => request<StudyGroupSummary>(`/api/groups/${id}`),
+      overview: (id: number) => request<GroupOverview>(`/api/groups/${id}/overview`),
+      presence: (id: number) => request<{group_id: number; statuses: Record<string, PresenceStatus>; online: number}>(`/api/groups/${id}/presence`),
+      updateSettings: (id: number, body: {name?: string; description?: string; goal?: string; course_id?: number | null}) =>
+        request<StudyGroupSummary>(`/api/groups/${id}`, {method: 'PATCH', body}),
+      analytics: (id: number) => request<Json>(`/api/groups/${id}/analytics`),
+      search: (id: number, q: string) => request<Json>(`/api/groups/${id}/search${query({q})}`),
+
+      messages: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupChatMessage[]} & PageMeta>(`/api/groups/${id}/messages${query(params)}`),
+      sendMessage: (id: number, body: string, replyTo?: number | null) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages`, {method: 'POST', body: {body, reply_to_id: replyTo ?? null}}),
+      editMessage: (id: number, messageId: number, body: string) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}`, {method: 'PATCH', body: {body}}),
+      deleteMessage: (id: number, messageId: number) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}`, {method: 'DELETE'}),
+      reactMessage: (id: number, messageId: number, emoji: string) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}/react`, {method: 'POST', body: {emoji}}),
+
+      announcements: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupAnnouncement[]} & PageMeta>(`/api/groups/${id}/announcements${query(params)}`),
+      createAnnouncement: (id: number, body: {title: string; body?: string; image?: string; priority?: 'normal' | 'high'; pinned?: boolean; scheduled_at?: string | null}) =>
+        request<GroupAnnouncement>(`/api/groups/${id}/announcements`, {method: 'POST', body}),
+      updateAnnouncement: (id: number, announcementId: number, body: Record<string, unknown>) =>
+        request<GroupAnnouncement>(`/api/groups/${id}/announcements/${announcementId}`, {method: 'PATCH', body}),
+      deleteAnnouncement: (id: number, announcementId: number) =>
+        request<{ok: boolean}>(`/api/groups/${id}/announcements/${announcementId}`, {method: 'DELETE'}),
+
+      quizzes: (id: number, params: {filter?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupQuiz[]} & PageMeta>(`/api/groups/${id}/quizzes${query(params)}`),
+      createQuiz: (id: number, body: Record<string, unknown>) => request<GroupQuiz>(`/api/groups/${id}/quizzes`, {method: 'POST', body}),
+      quiz: (id: number, quizId: number) =>
+        request<{quiz: GroupQuiz; leaderboard: {items: GroupQuizLeaderRow[]} & PageMeta}>(`/api/groups/${id}/quizzes/${quizId}`),
+      deleteQuiz: (id: number, quizId: number) => request<{ok: boolean}>(`/api/groups/${id}/quizzes/${quizId}`, {method: 'DELETE'}),
+      quizLeaderboard: (id: number, quizId: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupQuizLeaderRow[]} & PageMeta>(`/api/groups/${id}/quizzes/${quizId}/leaderboard${query(params)}`),
+      joinQuiz: (id: number, quizId: number) =>
+        request<{participant_id: number; quiz: GroupQuiz} & GroupQuizWindow>(`/api/groups/${id}/quizzes/${quizId}/join`, {method: 'POST'}),
+      quizQuestion: (id: number, quizId: number, index: number) =>
+        request<GroupQuizWindow>(`/api/groups/${id}/quizzes/${quizId}/question/${index}`),
+      answerQuiz: (id: number, quizId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+        request<GroupQuizAnswerResult>(`/api/groups/${id}/quizzes/${quizId}/answer`, {method: 'POST', body}),
+      submitQuiz: (id: number, quizId: number) =>
+        request<GroupQuizSummary>(`/api/groups/${id}/quizzes/${quizId}/submit`, {method: 'POST'}),
+
+      questions: (id: number, params: {filter?: string; q?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupQuestionItem[]} & PageMeta>(`/api/groups/${id}/questions${query(params)}`),
+      askQuestion: (id: number, body: {title: string; body?: string; course_id?: number | null; topic?: string; attachment?: string}) =>
+        request<GroupQuestionItem>(`/api/groups/${id}/questions`, {method: 'POST', body}),
+      question: (id: number, questionId: number) => request<GroupQuestionItem>(`/api/groups/${id}/questions/${questionId}`),
+      answerQuestion: (id: number, questionId: number, body: {body: string; parent_id?: number | null}) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers`, {method: 'POST', body}),
+      usefulAnswer: (id: number, questionId: number, replyId: number) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers/${replyId}/useful`, {method: 'POST'}),
+      bestAnswer: (id: number, questionId: number, replyId: number) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers/${replyId}/best`, {method: 'POST'}),
+
+      members: (id: number, params: {filter?: string; q?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupMemberRow[]} & PageMeta>(`/api/groups/${id}/members${query(params)}`),
+      memberProfile: (id: number, studentId: number) => request<GroupMemberProfile>(`/api/groups/${id}/members/${studentId}/profile`),
+      setRole: (id: number, studentId: number, role: 'moderator' | 'member') =>
+        request<{ok: boolean}>(`/api/groups/${id}/members/${studentId}`, {method: 'PATCH', body: {role}}),
+      removeMember: (id: number, studentId: number) => request<{ok: boolean}>(`/api/groups/${id}/members/${studentId}`, {method: 'DELETE'}),
+      invite: (id: number, studentId: number) => request<{ok: boolean}>(`/api/groups/${id}/invite`, {method: 'POST', body: {student_id: studentId}}),
+
+      duels: (id: number, params: {filter?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupDuelRow[]} & PageMeta>(`/api/groups/${id}/duels${query(params)}`),
+      challenge: (id: number, body: {opponent_id: number; course_id?: number | null; topic?: string; question_count?: number; public?: boolean; message?: string}) =>
+        request<Duel>(`/api/groups/${id}/duels`, {method: 'POST', body}),
+
+      activity: (id: number, params: {kind?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupActivityRow[]} & PageMeta>(`/api/groups/${id}/activity${query(params)}`),
+
+      notifications: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupNotificationRow[]; unread: number} & PageMeta>(`/api/groups/${id}/notifications${query(params)}`),
+      unread: () => request<{total: number; per_group: Record<string, number>}>('/api/groups/notifications/unread'),
+      readNotifications: (id: number) => request<{marked: number}>(`/api/groups/${id}/notifications/read`, {method: 'POST'}),
   },
 };

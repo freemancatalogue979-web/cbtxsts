@@ -21,7 +21,7 @@ import {formatDateTime, formatRelative} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
-import type {ChatMessage, Duel, PlayerSummary, Quiz} from '../lib/types';
+import type {ChatMessage, Duel, GroupSection, PlayerSummary, Quiz} from '../lib/types';
 
 const QUICK_PHRASES = ['👋 Hello!', 'GG!', 'Rematch?', 'Ready when you are 🔥'];
 
@@ -197,9 +197,11 @@ function QuoteBlock({meta, mine}: {meta: Record<string, unknown>; mine: boolean}
 export default function FriendsPanel({
   onOpenDuel,
   onStartExam,
+  onOpenGroup,
 }: {
   onOpenDuel: (duel: Duel) => void;
   onStartExam: (quiz: Quiz) => void;
+  onOpenGroup: (groupId: number, section?: GroupSection) => void;
 }) {
   const {toast, chatUnread, setChatFocus, on, profile} = useSession();
   /* Your own bubbles wear the chat cosmetic you equipped. */
@@ -510,7 +512,7 @@ export default function FriendsPanel({
         ]}
       />
 
-      {pane === 'groups' && <GroupsPanel />}
+      {pane === 'groups' && <GroupsPanel onOpenGroup={onOpenGroup} />}
 
       {pane === 'friends' && (
       <div className="grid min-w-0 gap-3.5 lg:grid-cols-[20rem_1fr] lg:gap-4">

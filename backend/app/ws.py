@@ -17,6 +17,9 @@ class Client:
     admin_id: int | None = None
     name: str = ""
     rooms: set[str] = field(default_factory=lambda: {"live"})
+    # Presence state for group rooms: "online" while the tab is foregrounded,
+    # "away" when the client reports the page is hidden/idle.
+    status: str = "online"
 
 
 class Hub:
@@ -89,6 +92,10 @@ class Hub:
     def student_ids_in_room(self, room: str) -> set[int]:
         """Which players currently hold a socket in a named room (presence)."""
         return {client.student_id for client in self._rooms.get(room, ()) if client.student_id is not None}
+
+    def room_clients(self, room: str) -> list[Client]:
+        """Every live client holding a socket in a named room."""
+        return list(self._rooms.get(room, ()))
 
     # -------------------------------------------------------------- messaging
     async def send(self, client: Client, event: str, payload: dict[str, Any] | None = None) -> None:

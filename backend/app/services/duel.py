@@ -401,6 +401,35 @@ def finalize_duel(db: Session, duel: Duel, *, reason: str = "completed") -> list
         personal["rewards"] = rewards_by_player.get(participant.student_id, [])
         events.append(to_student(participant.student_id, "duel_result", personal))
     events.append(to_everyone("leaderboard", {"scope": "global", "rows": top_leaderboard(db, limit=10)}))
+
+    # Study-group duels report back to their group (public results only —
+    # private challenges stay between the two players per the existing rules).
+    if duel.group_id:
+        from ..models import StudyGroup
+        from . import group as group_service
+
+        group = db.get(StudyGroup, duel.group_id)
+        if group is not None:
+            events.append(
+                group_service.broadcast_group(
+                    db, group, "group_duel_update", {"duel_id": duel.id, "action": "finished", "winner_id": duel.winner_id}
+                )
+            )
+            if duel.group_public:
+                names = [p.student.name.split(" ")[0] if p.student else "?" for p in duel.participants]
+                winner_name = next(
+                    (p.student.name.split(" ")[0] for p in duel.participants if p.student_id == duel.winner_id),
+                    None,
+                )
+                text = (
+                    f"{winner_name} won the duel vs {' and '.join(n for n in names if n != winner_name)}."
+                    if winner_name
+                    else f"The duel between {' and '.join(names)} ended in a draw."
+                )
+                _, activity_events = group_service.log_activity(
+                    db, group, kind="duel_result", text=text, meta={"duel_id": duel.id}
+                )
+                events += activity_events
     return events
 
 

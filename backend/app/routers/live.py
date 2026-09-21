@@ -5,7 +5,7 @@ import asyncio
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..db import session_scope
 from ..game import level_progress, title_for_level
@@ -328,3 +328,159 @@ def open_duels() -> list[dict]:
             select(Duel).where(Duel.status == "invited").order_by(Duel.id.desc()).limit(40)
         ).all()
         return [duel_public(d) for d in duels if len(d.participants) < 2][:10]
+
+
+# ---------------------------------------------------------------------------
+# Study-group room: real-time chat, presence and activity fan-out.
+# The room name is ``study_group:{group_id}`` and only members of that group
+# ever hold a socket in it, so nothing leaks to the global ``live`` channel.
+# ---------------------------------------------------------------------------
+def _group_presence_payload(room: str) -> dict:
+    statuses: dict[str, str] = {}
+    for client in hub.room_clients(room):
+        if client.student_id is not None:
+            current = statuses.get(str(client.student_id), "offline")
+            state = getattr(client, "status", "online")
+            # Any foregrounded connection wins over an away one.
+            if state == "online" or current != "online":
+                statuses[str(client.student_id)] = state
+    return {"statuses": statuses, "online": sum(1 for value in statuses.values() if value == "online")}
+
+
+@router.websocket("/ws/group/{group_id}")
+async def group_socket(websocket: WebSocket, group_id: int) -> None:
+    from ..models import GroupMessage, StudyGroup, StudyGroupMember, StudyGroupNotification
+    from ..services import group as group_service
+
+    principal = decode_token(websocket.query_params.get("token"))
+    if not principal or principal.role != ROLE_STUDENT:
+        await websocket.close(code=4401)
+        return
+    student_id = int(principal.subject)
+
+    with session_scope() as db:
+        group = db.get(StudyGroup, group_id)
+        member = (
+            db.scalar(
+                select(StudyGroupMember).where(
+                    StudyGroupMember.group_id == group_id, StudyGroupMember.student_id == student_id
+                )
+            )
+            if group
+            else None
+        )
+        if group is None or member is None:
+            await websocket.close(code=4403)
+            return
+        student = db.get(Student, student_id)
+        name = student.name if student else principal.name
+        rows = db.scalars(
+            select(GroupMessage)
+            .where(GroupMessage.group_id == group_id)
+            .order_by(GroupMessage.id.desc())
+            .limit(50)
+        ).all()
+        reply_ids = {row.reply_to_id for row in rows if row.reply_to_id}
+        replies = (
+            {row.id: row for row in db.scalars(select(GroupMessage).where(GroupMessage.id.in_(reply_ids))).all()}
+            if reply_ids
+            else {}
+        )
+        messages = [
+            group_service.message_public(row, viewer_id=student_id, reply=replies.get(row.reply_to_id))
+            for row in reversed(rows)
+        ]
+        unread = int(
+            db.scalar(
+                select(func.count(StudyGroupNotification.id)).where(
+                    StudyGroupNotification.group_id == group_id,
+                    StudyGroupNotification.student_id == student_id,
+                    StudyGroupNotification.read_at.is_(None),
+                )
+            )
+            or 0
+        )
+
+    room = group_service.group_room(group_id)
+    client = await hub.connect(websocket, student_id=student_id, admin_id=None, name=name)
+    hub.join_room(client, room)
+    pump = asyncio.create_task(_pump(client))
+    try:
+        await hub.send(
+            client,
+            "group_state",
+            {
+                "group_id": group_id,
+                "messages": messages,
+                "unread_notifications": unread,
+                "presence": _group_presence_payload(room),
+            },
+        )
+        await hub.broadcast(
+            "group_presence",
+            {"group_id": group_id, "student_id": student_id, "status": "online", "connected": True},
+            room=room,
+        )
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                await hub.send(client, "error", {"message": "Malformed JSON."})
+                continue
+            kind = str(message.get("type", "")).lower()
+            if kind in {"ping", "heartbeat"}:
+                await hub.send(client, "pong", {"online": hub.online_count()})
+            elif kind == "away":
+                client.status = "away" if message.get("value") else "online"
+                await hub.broadcast(
+                    "group_presence",
+                    {"group_id": group_id, "student_id": student_id, "status": client.status, "connected": True},
+                    room=room,
+                )
+            elif kind == "typing":
+                await hub.broadcast(
+                    "group_typing",
+                    {"group_id": group_id, "student_id": student_id, "name": name},
+                    room=room,
+                )
+            elif kind == "chat":
+                body = str(message.get("body", "")).strip()[:2000]
+                if not body:
+                    continue
+                try:
+                    with session_scope() as db2:
+                        reply_to = message.get("reply_to_id")
+                        reply = db2.get(GroupMessage, int(reply_to)) if reply_to else None
+                        if reply is not None and reply.group_id != group_id:
+                            reply = None
+                        row = GroupMessage(
+                            group_id=group_id,
+                            student_id=student_id,
+                            body=body,
+                            reply_to_id=reply.id if reply else None,
+                        )
+                        db2.add(row)
+                        db2.flush()
+                        payload = group_service.message_public(row, viewer_id=student_id, reply=reply)
+                        payload["sender_name"] = name
+                except Exception as exc:  # noqa: BLE001 - relay the reason to the sender
+                    await hub.send(client, "error", {"message": str(exc)})
+                    continue
+                await hub.broadcast("group_message", payload, room=room)
+            elif kind == "hello":
+                await hub.send(client, "welcome", await _snapshot(client))
+            else:
+                await hub.send(client, "ack", {"type": kind})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        pump.cancel()
+        await hub.disconnect(client)
+        await hub.broadcast(
+            "group_presence",
+            {"group_id": group_id, "student_id": student_id, "status": "offline", "connected": False},
+            room=room,
+        )

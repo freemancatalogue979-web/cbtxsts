@@ -856,11 +856,17 @@ def _naive_utc(value: datetime) -> datetime:
 
 
 class _NaiveUtc(BaseModel):
-    """Mixin: normalizes any inbound datetime to naive UTC."""
+    """Mixin: normalizes any inbound datetime to naive UTC.
 
-    @field_validator("*", mode="before")
+    Runs *after* parsing so it catches both native ``datetime`` objects and
+    ISO-8601 strings (``...Z`` / ``+00:00``) that pydantic decodes into
+    timezone-aware datetimes — the browser sends the latter, and an aware value
+    stored on a model would later blow up when compared against naive UTC.
+    """
+
+    @field_validator("*", mode="after")
     @classmethod
-    def _to_naive_utc(cls, value, info: ValidationInfo):  # noqa: ANN001
+    def _to_naive_utc(cls, value):  # noqa: ANN001
         if isinstance(value, datetime) and value.tzinfo is not None:
             return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
@@ -872,3 +878,98 @@ class EventCreateInUtc(_NaiveUtc, EventCreateIn):
 
 class EventUpdateInUtc(_NaiveUtc, EventUpdateIn):
     pass
+
+
+# ---------------------------------------------------------------------------
+# Study groups — the community workspace (chat, quizzes, Q&A, announcements)
+# ---------------------------------------------------------------------------
+class GroupSendIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    reply_to_id: int | None = None
+
+
+class GroupEditIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class GroupReactIn(BaseModel):
+    emoji: str = Field(min_length=1, max_length=8)
+
+
+class GroupAnnouncementIn(_NaiveUtc):
+    title: str = Field(min_length=2, max_length=180)
+    body: str = Field(default="", max_length=4000)
+    image: str = ""
+    priority: Literal["normal", "high"] = "normal"
+    pinned: bool = False
+    scheduled_at: datetime | None = None
+
+
+class GroupAnnouncementPatchIn(_NaiveUtc):
+    title: str | None = Field(default=None, min_length=2, max_length=180)
+    body: str | None = Field(default=None, max_length=4000)
+    image: str | None = None
+    priority: Literal["normal", "high"] | None = None
+    pinned: bool | None = None
+    scheduled_at: datetime | None = None
+
+
+class GroupQuizIn(_NaiveUtc):
+    title: str = Field(min_length=3, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    question_count: int = Field(default=10, ge=1, le=100)  # hard cap: 100 questions
+    per_question_seconds: int = Field(default=30, ge=5, le=300)
+    duration_minutes: int = Field(default=0, ge=0, le=240)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    max_attempts: int = Field(default=1, ge=0, le=10)  # 0 = unlimited
+    randomize: bool = True
+    visibility: Literal["group"] = "group"
+    reward_xp: int = Field(default=0, ge=0, le=5000)
+    reward_coins: int = Field(default=0, ge=0, le=5000)
+    pass_score: int = Field(default=50, ge=0, le=100)
+
+
+class GroupQuizAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=600_000)
+
+
+class GroupQuestionIn(BaseModel):
+    title: str = Field(min_length=5, max_length=220)
+    body: str = Field(default="", max_length=4000)
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    attachment: str = Field(default="", max_length=400_000)  # optional image data URL
+
+
+class GroupReplyIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    parent_id: int | None = None
+
+
+class GroupDuelIn(BaseModel):
+    opponent_id: int
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    question_count: int = Field(default=10, ge=3, le=100)  # hard cap: 100 questions
+    public: bool = True
+    message: str = Field(default="", max_length=240)
+
+
+class GroupInviteIn(BaseModel):
+    student_id: int
+
+
+class GroupRoleIn(BaseModel):
+    role: Literal["moderator", "member"]
+
+
+class GroupSettingsIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=140)
+    description: str | None = Field(default=None, max_length=300)
+    goal: str | None = Field(default=None, max_length=200)
+    course_id: int | None = None

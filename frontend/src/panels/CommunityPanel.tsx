@@ -3,12 +3,12 @@
  * Both read shared arena state, so a group quiz, a duel or an exam all move
  * the same leaderboards.
  */
-import {Crown, Flag, Plus, Swords, Trophy, Users, Zap} from 'lucide-react';
-import {useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {Crown, Flag, Plus, Search, Swords, Trophy, Users} from 'lucide-react';
+import {useCallback, useEffect, useState} from 'react';
+import {Button, Card, Chip, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
-import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
+import type {Course, GroupSection, PageMeta, StudyGroupSummary} from '../lib/types';
 
 type Tournament = {
   id: number;
@@ -22,17 +22,6 @@ type Tournament = {
   prize_coins: number;
   cycle_key: string;
   joined: boolean;
-};
-
-type Group = {
-  id: number;
-  code: string;
-  name: string;
-  description: string;
-  members: number;
-  is_member: boolean;
-  is_owner: boolean;
-  goal: string;
 };
 
 /* ---------------------------------------------------------------- tournaments */
@@ -179,216 +168,216 @@ export function TournamentsPanel() {
 }
 
 /* --------------------------------------------------------------------- groups */
-export function GroupsPanel() {
+/**
+ * Study-groups launcher. Opening a group navigates to its full-page workspace
+ * (never a modal). Both lists are server-paginated and searchable; joining by
+ * code or from Discover drops you straight into the group.
+ */
+export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, section?: GroupSection) => void}) {
   const {toast} = useSession();
-  const [data, setData] = useState<{mine: Group[]; discover: Group[]} | null>(null);
+  const [mine, setMine] = useState<({items: StudyGroupSummary[]} & PageMeta) | null>(null);
+  const [discover, setDiscover] = useState<({items: StudyGroupSummary[]} & PageMeta) | null>(null);
+  const [q, setQ] = useState('');
+  const [dPage, setDPage] = useState(1);
   const [code, setCode] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
-  const [openId, setOpenId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
-  const [draft, setDraft] = useState('');
+  const [description, setDescription] = useState('');
+  const [courseId, setCourseId] = useState<number | ''>('');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const load = () => {
-    api.arena
-      .groups()
-      .then((payload) => setData(payload as unknown as {mine: Group[]; discover: Group[]}))
+  const load = useCallback(() => {
+    api.groups
+      .list({q, page: 1, size: 12})
+      .then((payload) => setMine(payload.mine))
       .catch((error: Error) => toast('error', 'Study groups unavailable', error.message));
-  };
+    api.groups
+      .list({q, page: dPage, size: 12})
+      .then((payload) => setDiscover(payload.discover))
+      .catch(() => undefined);
+  }, [q, dPage, toast]);
 
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = window.setTimeout(load, q ? 250 : 0);
+    return () => window.clearTimeout(id);
+  }, [load, q]);
 
-  const open = (id: number) => {
-    setOpenId(id);
-    setDetail(null);
-    api.arena.group(id).then(setDetail).catch((error: Error) => toast('error', 'Group unavailable', error.message));
-  };
+  useEffect(() => {
+    if (createOpen) api.courses().then(setCourses).catch(() => setCourses([]));
+  }, [createOpen]);
 
   const joinByCode = async () => {
     if (code.trim().length < 4) return;
+    setBusy(true);
     try {
-      await api.arena.joinGroup(code);
+      const group = await api.groups.joinByCode(code);
       setCode('');
-      toast('success', 'Joined group', 'Welcome to the study room.');
-      load();
+      toast('success', 'Joined group', group.name);
+      onOpenGroup(group.id);
+    } catch (error) {
+      toast('error', 'Could not join', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const create = async () => {
+    if (name.trim().length < 2) return;
+    setBusy(true);
+    try {
+      const group = await api.groups.create({
+        name: name.trim(),
+        goal: goal.trim(),
+        description: description.trim(),
+        course_id: courseId === '' ? null : Number(courseId),
+      });
+      setCreateOpen(false);
+      setName('');
+      setGoal('');
+      setDescription('');
+      setCourseId('');
+      toast('success', 'Group created', 'Share the code with your classmates.');
+      onOpenGroup(group.id);
+    } catch (error) {
+      toast('error', 'Could not create group', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const joinDiscover = async (group: StudyGroupSummary) => {
+    try {
+      await api.groups.join(group.id);
+      toast('success', 'Joined', group.name);
+      onOpenGroup(group.id);
     } catch (error) {
       toast('error', 'Could not join', (error as Error).message);
     }
   };
 
-  const create = async () => {
-    try {
-      await api.arena.createGroup({name: name.trim(), goal: goal.trim()});
-      setCreateOpen(false);
-      setName('');
-      setGoal('');
-      toast('success', 'Group created', 'Share the code with your classmates.');
-      load();
-    } catch (error) {
-      toast('error', 'Could not create group', (error as Error).message);
-    }
-  };
-
-  const send = async () => {
-    if (!openId || draft.trim().length === 0) return;
-    try {
-      await api.arena.sendGroupMessage(openId, draft.trim());
-      setDraft('');
-      api.arena.group(openId).then(setDetail).catch(() => undefined);
-    } catch (error) {
-      toast('error', 'Message not sent', (error as Error).message);
-    }
-  };
-
-  const startGroupQuiz = async () => {
-    if (!openId) return;
-    try {
-      await api.arena.groupQuiz(openId, 10);
-      toast('success', 'Group quiz started', 'Everyone can see the room question now.');
-      api.arena.group(openId).then(setDetail).catch(() => undefined);
-    } catch (error) {
-      toast('error', 'Could not start quiz', (error as Error).message);
-    }
-  };
+  const roleChip = (group: StudyGroupSummary) =>
+    group.my_role === 'owner' ? (
+      <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200" icon={<Crown className="size-3" />}>Owner</Chip>
+    ) : group.my_role === 'moderator' ? (
+      <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200">Mod</Chip>
+    ) : null;
 
   return (
     <div className="grid gap-4">
-      <SectionHeading title="Study groups" subtitle="Study together: shared quizzes, challenges and a group ladder." icon={<Users className="size-4" />} />
+      <SectionHeading title="Study groups" subtitle="Full study communities: chat, group quizzes, duels, Q&A and announcements." icon={<Users className="size-4" />} />
 
-      <Card className="p-4">
+      <Card className="grid gap-3 p-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-mist-600" />
+          <TextInput value={q} onChange={(event) => { setQ(event.target.value); setDPage(1); }} placeholder="Search groups…" className="pl-9" />
+        </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="grid min-w-40 flex-1 gap-1.5">
             <span className="text-[0.74rem] font-bold text-mist-400">Join with a code</span>
             <TextInput value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="e.g. K7TQ2M" maxLength={8} />
           </label>
-          <Button variant="primary" onClick={() => void joinByCode()} disabled={code.trim().length < 4}>Join</Button>
+          <Button variant="primary" onClick={() => void joinByCode()} disabled={code.trim().length < 4 || busy}>Join</Button>
           <Button variant="ghost" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>New group</Button>
         </div>
       </Card>
 
-      {!data && <Skeleton className="h-32 w-full" />}
+      {!mine && !discover && <Skeleton className="h-32 w-full" />}
 
-      {data && (
-        <>
-          <div className="grid gap-3">
- <h3 className="text-[0.86rem] font-black tracking-wide text-mist-400">Your groups</h3>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {data.mine.map((group) => (
-                <li key={group.id}>
-                  <Card className="flex h-full flex-col p-4">
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0">
-                        <h4 className="text-[0.88rem] font-extrabold text-mist-50">{group.name}</h4>
-                        <p className="mt-0.5 line-clamp-2 text-[0.74rem] font-medium text-mist-500">{group.goal || group.description || 'No goal set'}</p>
-                      </div>
-                      <Chip className="ml-auto border-white/12 bg-white/6 text-mist-300">{group.members} members</Chip>
+      <div className="grid gap-3">
+        <h3 className="text-[0.86rem] font-black tracking-wide text-mist-400">Your groups</h3>
+        {mine && mine.items.length === 0 && !q ? (
+          <EmptyState icon={<Users className="size-5" />} title="No groups yet" detail="Create one for your class, or join with a code a friend shared." />
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {(mine?.items ?? []).map((group) => (
+              <li key={group.id}>
+                <Card className="flex h-full flex-col p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-[0.9rem] font-extrabold text-mist-50">{group.name}</h4>
+                      <p className="mt-0.5 line-clamp-2 text-[0.74rem] font-medium text-mist-500">{group.goal || group.description || 'No goal set'}</p>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button variant="primary" size="sm" onClick={() => open(group.id)}>Open</Button>
-                      <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
+                    {roleChip(group)}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Chip className="border-white/12 bg-white/6 text-mist-300">{group.member_count} members</Chip>
+                    <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
+                    {group.course_title && <Chip className="border-white/12 bg-white/6 text-mist-400">{group.course_title}</Chip>}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="primary" size="sm" onClick={() => onOpenGroup(group.id)}>Open</Button>
+                    <Button variant="ghost" size="sm" onClick={() => onOpenGroup(group.id, 'chat')}>Chat</Button>
+                  </div>
+                </Card>
+              </li>
+            ))}
+            {q && mine && mine.items.length === 0 && <li className="sm:col-span-2 text-[0.8rem] font-medium text-mist-500">No groups match “{q}”.</li>}
+          </ul>
+        )}
+      </div>
+
+      {discover && (
+        <div className="grid gap-3">
+          <h3 className="text-[0.86rem] font-black tracking-wide text-mist-400">Discover</h3>
+          {discover.items.length === 0 ? (
+            <p className="text-[0.8rem] font-medium text-mist-500">{q ? 'No other groups match your search.' : 'No other groups to discover yet.'}</p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {discover.items.map((group) => (
+                <li key={group.id}>
+                  <Card className="flex h-full flex-col p-3.5">
+                    <h4 className="truncate text-[0.84rem] font-extrabold text-mist-100">{group.name}</h4>
+                    <p className="mt-0.5 line-clamp-2 text-[0.72rem] font-medium text-mist-500">{group.description || group.goal || 'Open study group'}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Chip className="border-white/12 bg-white/6 text-mist-400">{group.member_count} members</Chip>
+                      <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void joinDiscover(group)}>Join</Button>
                     </div>
                   </Card>
                 </li>
               ))}
-              {!data.mine.length && (
-                <li className="sm:col-span-2">
-                  <EmptyState icon={<Users className="size-5" />} title="No groups yet" detail="Create one for your class, or join with a code a friend shared." />
-                </li>
-              )}
             </ul>
-          </div>
-
-          {Boolean(data.discover.length) && (
-            <div className="grid gap-3">
- <h3 className="text-[0.86rem] font-black tracking-wide text-mist-400">Discover</h3>
-              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {data.discover.map((group) => (
-                  <li key={group.id}>
-                    <Card className="flex h-full flex-col p-3.5">
-                      <h4 className="text-[0.84rem] font-extrabold text-mist-100">{group.name}</h4>
-                      <p className="mt-0.5 line-clamp-2 text-[0.72rem] font-medium text-mist-500">{group.description || group.goal || 'Open study group'}</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Chip className="border-white/12 bg-white/6 text-mist-400">{group.members} members</Chip>
-                        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void api.arena.joinGroup(group.code).then(load)}>
-                          Join
-                        </Button>
-                      </div>
-                    </Card>
-                  </li>
-                ))}
-              </ul>
-            </div>
           )}
-        </>
+          {discover.pages > 1 && (
+            <Pager page={discover.page} pages={discover.pages} total={discover.total} size={discover.size} onPage={setDPage} label="Discover groups pages" />
+          )}
+        </div>
       )}
-
-      <Modal open={openId !== null} onClose={() => setOpenId(null)} title="Study room" subtitle="Group ladder, live quiz and chat" size="lg">
-        {!detail && <Skeleton className="h-48 w-full" />}
-        {detail && (
-          <div className="grid gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Button variant="primary" size="sm" icon={<Zap className="size-4" />} onClick={() => void startGroupQuiz()}>Start group quiz</Button>
-              <Button variant="ghost" size="sm" onClick={() => void api.arena.groupChallenge(Number(openId)).then(() => toast('success', 'Challenge sent', 'The group has been called out.'))}>
-                Duel night
-              </Button>
-            </div>
-
-            <div>
- <h4 className="text-[0.78rem] font-black tracking-wide text-mist-400">This week</h4>
-              <ul className="mt-2 grid gap-1.5">
-                {((detail.leaderboard as {id: number; name: string; xp: number}[]) ?? []).slice(0, 8).map((row, position) => (
-                  <li key={row.id} className="flex items-center gap-2 rounded-xl border border-white/8 bg-ink-900/50 px-3 py-2">
-                    <span className="w-6 shrink-0 text-[0.76rem] font-black text-mist-500">#{position + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-[0.82rem] font-bold text-mist-200">{row.name}</span>
-                    <span className="shrink-0 text-[0.74rem] font-black tabular text-nova-300">{formatNumber(row.xp)} XP</span>
-                  </li>
-                ))}
-              </ul>
-              <ProgressBar value={Math.min(100, ((detail.leaderboard as unknown[])?.length ?? 0) * 12)} className="mt-3" />
-            </div>
-
-            <div>
- <h4 className="text-[0.78rem] font-black tracking-wide text-mist-400">Room chat</h4>
-              <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto overscroll-contain pr-1">
-                {((detail.messages as {id: number; name: string; body: string; kind: string}[]) ?? []).map((message) => (
-                  <li key={message.id} className="rounded-xl border border-white/8 bg-ink-900/50 px-3 py-2">
-                    <p className="text-[0.7rem] font-bold text-mist-500">{message.name}</p>
-                    <p className="text-[0.8rem] font-medium break-words text-mist-200">{message.body}</p>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-2 flex gap-2">
-                <TextInput value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Message the group…" onKeyDown={(event) => { if (event.key === 'Enter') void send(); }} />
-                <Button variant="primary" onClick={() => void send()}>Send</Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Create a study group"
         subtitle="You will get a code to share."
-        size="sm"
+        size="md"
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={() => void create()} disabled={name.trim().length < 2}>Create</Button>
+            <Button variant="primary" onClick={() => void create()} disabled={name.trim().length < 2 || busy}>{busy ? 'Creating…' : 'Create'}</Button>
           </>
         }
       >
         <div className="grid gap-3">
-          <label className="grid gap-1.5">
-            <span className="text-[0.76rem] font-bold text-mist-400">Group name</span>
-            <TextInput value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. 400L Evidence Study Circle" />
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-[0.76rem] font-bold text-mist-400">Goal</span>
-            <TextInput value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="e.g. 500 questions before mocks" />
-          </label>
+          <Field label="Group name">
+            <TextInput value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. 400L Evidence Study Circle" maxLength={80} />
+          </Field>
+          <Field label="Goal">
+            <TextInput value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="e.g. 500 questions before mocks" maxLength={200} />
+          </Field>
+          <Field label="Description (optional)">
+            <TextInput value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is this group about?" maxLength={300} />
+          </Field>
+          <Field label="Course (optional)">
+            <Select value={courseId} onChange={(event) => setCourseId(event.target.value === '' ? '' : Number(event.target.value))}>
+              <option value="">No specific course</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.code} — {course.title}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </Modal>
     </div>
