@@ -38,6 +38,7 @@ import {
   Radio,
   RefreshCw,
   Scale,
+  Send,
   SignalHigh,
   SkipForward,
   Swords,
@@ -67,6 +68,7 @@ import type {
   RankedReveal,
   RankedStatus,
   RankedTier,
+  RankedChatLine,
   ReviewItem,
 } from '../lib/types';
 
@@ -248,6 +250,11 @@ export default function RankedPanel() {
   const [ladder, setLadder] = useState<RankedLadder | null>(null);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /* Lobby chat: relayed by the ranked socket, never persisted. */
+  const [lobbyChat, setLobbyChat] = useState<RankedChatLine[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const lobbyChatMatchId = useRef<number | null>(null);
   const socketRef = useRef<LiveSocket | null>(null);
   const questionStartRef = useRef<number>(0);
 
@@ -276,6 +283,9 @@ export default function RankedPanel() {
 
   const applyState = useCallback(
     (state: RankedMatchState) => {
+      /* Fresh match = fresh lobby chat. */
+      if (lobbyChatMatchId.current !== null && lobbyChatMatchId.current !== state.id) setLobbyChat([]);
+      lobbyChatMatchId.current = state.id;
       setMatch(state);
       setMatchId(state.id);
       if (state.server_now) clock.sync(state.server_now);
@@ -400,6 +410,14 @@ export default function RankedPanel() {
             setMatch((current) => (current ? {...current, activity: payload.items ?? []} : current));
             break;
           }
+          case 'ranked_chat': {
+            const event = data as {match_id: number; student_id: number; name: string; body: string};
+            setLobbyChat((current) => [
+              ...current.slice(-79),
+              {key: `${event.student_id}-${current.length}-${event.body.length}`, student_id: event.student_id, name: event.name, body: event.body, mine: event.student_id === meId},
+            ]);
+            break;
+          }
           case 'ranked_finish': {
             const payload = data as unknown as RankedFinishPayload;
             setFinish(payload);
@@ -458,9 +476,22 @@ export default function RankedPanel() {
     } catch {
       /* already gone */
     }
+    setLobbyChat([]);
     setPhase('idle');
     void loadIdle();
   };
+
+  /** Lobby chat rides the ranked socket; the server gates it to the lobby. */
+  const sendLobbyChat = () => {
+    const body = chatDraft.trim();
+    if (!body || !socketRef.current) return;
+    socketRef.current.send({type: 'chat', body});
+    setChatDraft('');
+  };
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({block: 'end'});
+  }, [lobbyChat]);
 
   const answer = async (letter: string) => {
     if (!matchId || !window_ || myPick || busy) return;
@@ -848,6 +879,7 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------------ queue */
   if (phase === 'queue') {
+    const queuePlayers = status?.queue_players ?? [];
     return (
       <div className="w-full p-3 sm:p-4">
         <Card className="mx-auto max-w-lg p-5 text-center sm:p-7">
@@ -861,6 +893,32 @@ export default function RankedPanel() {
             {courses.find((c) => c.id === status?.queue_course_id)?.title ?? 'The course bank'} · expanding the search as you wait
           </p>
           <QueueMeter waiting={waiting} meta={meta} status={status} clock={clock} />
+
+          {/* Everyone standing in the queue with you — live, oldest first. */}
+          {queuePlayers.length > 0 && (
+            <div className="mt-5 text-left">
+              <p className="flex items-center justify-between text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">
+                In the queue
+                <span className="tabular">{queuePlayers.length}</span>
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {queuePlayers.map((player) => (
+                  <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2">
+                    <Avatar name={player.name} hue={player.avatar_hue} initials={player.initials} size={32} photo={{id: player.student_id, has: player.has_photo}} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.76rem] font-extrabold text-mist-100">
+                        {player.name}
+                        {player.student_id === meId && <span className="ml-1.5 text-[0.6rem] font-black tracking-wider text-nova-300">You</span>}
+                      </p>
+                      <p className="text-[0.6rem] font-bold text-mist-500">Lv {player.level} · {formatNumber(player.rating)} rating</p>
+                    </div>
+                    <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <Button variant="outline" className="mt-5" onClick={cancelQueue} icon={<X className="size-4" />}>
             Cancel
           </Button>
@@ -871,42 +929,88 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------------ lobby */
   if (phase === 'lobby' && match) {
+    const lobbyTotal = Math.max(1, match.lobby_seconds ?? 12);
     return (
       <div className="w-full space-y-4 p-3 sm:p-4">
-        <Card className="mx-auto max-w-2xl p-5 sm:p-6">
+        <Card className="mx-auto max-w-3xl p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <SignalHigh className="size-4 text-mint-300" />
             <h2 className="text-[1rem] font-extrabold text-mist-50">Match found</h2>
-            <span className="ml-auto font-display text-[1.3rem] font-black text-nova-200">{Math.max(0, lobbySecondsLeft)}s</span>
+            <span className="ml-auto font-display text-[1.3rem] font-black text-nova-200 tabular">{Math.max(0, lobbySecondsLeft)}s</span>
           </div>
           <p className="mt-1 text-[0.78rem] font-medium text-mist-400">
             {match.course_title} · {match.questions_total || match.question_count} questions · {match.per_question_seconds}s each
           </p>
-          <ProgressBar className="mt-3" value={100 - (lobbySecondsLeft / 7) * 100} />
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {match.participants.map((player) => (
-              <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5">
-                <Avatar
-                  name={player.name}
-                  hue={player.avatar_hue}
-                  initials={player.initials}
-                  size={38}
-                  photo={{id: player.student_id, has: player.has_photo}}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate text-[0.78rem] font-extrabold text-mist-100">
-                    <ConnectionDot connected={player.connected} />
-                    <span className="truncate">{player.name}</span>
+          <ProgressBar className="mt-3" value={100 - (Math.min(lobbySecondsLeft, lobbyTotal) / lobbyTotal) * 100} />
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1.15fr_1fr] lg:gap-4">
+            {/* The fighters: who joined, their face and their rank. */}
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">Players · {match.participants.length}</p>
+              <ul className="mt-2 grid gap-2">
+                {match.participants.map((player) => (
+                  <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5">
+                    <Avatar
+                      name={player.name}
+                      hue={player.avatar_hue}
+                      initials={player.initials}
+                      size={38}
+                      photo={{id: player.student_id, has: player.has_photo}}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-1.5 truncate text-[0.78rem] font-extrabold text-mist-100">
+                        <ConnectionDot connected={player.connected} />
+                        <span className="truncate">{player.name}</span>
+                        {player.student_id === meId && <span className="text-[0.6rem] font-black tracking-wider text-nova-300">You</span>}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
+                        <span className="text-[0.6rem] font-bold text-mist-500">Lv {player.level}</span>
+                      </div>
+                    </div>
+                    <span title="Ready"><Check className="size-4 shrink-0 text-mint-300" /></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Lobby chat: open until the first question fires. */}
+            <div className="flex min-w-0 flex-col rounded-2xl border border-white/8 bg-white/[0.03]">
+              <p className="border-b border-white/8 px-3 py-2 text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">
+                Lobby chat
+              </p>
+              <div className="min-h-[9rem] flex-1 space-y-1.5 overflow-y-auto px-3 py-2.5" style={{maxHeight: '16rem'}}>
+                {lobbyChat.length === 0 && (
+                  <p className="text-[0.68rem] font-medium text-mist-600">Say good luck — chat locks the moment questions start.</p>
+                )}
+                {lobbyChat.map((line) => (
+                  <p key={line.key} className="text-[0.72rem] leading-snug font-medium break-words text-mist-300">
+                    <span className={`font-extrabold ${line.mine ? 'text-nova-300' : 'text-gold-300'}`}>{line.mine ? 'You' : line.name}</span>{' '}
+                    {line.body}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
-                    <span className="text-[0.6rem] font-bold text-mist-500">Lv {player.level}</span>
-                  </div>
-                </div>
-                <span title="Ready"><Check className="size-4 shrink-0 text-mint-300" /></span>
-              </li>
-            ))}
-          </ul>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="flex items-center gap-1.5 border-t border-white/8 p-2">
+                <input
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      sendLobbyChat();
+                    }
+                  }}
+                  maxLength={300}
+                  placeholder="Good luck everyone…"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[0.76rem] font-semibold text-mist-100 outline-none placeholder:text-mist-600 focus:border-nova-400/50"
+                />
+                <Button size="sm" onClick={sendLobbyChat} disabled={!chatDraft.trim()} icon={<Send className="size-3.5" />}>
+                  Send
+                </Button>
+              </div>
+            </div>
+          </div>
           <p className="mt-4 text-center text-[0.68rem] font-semibold text-mist-600">Starting on the server clock — hold tight.</p>
         </Card>
       </div>

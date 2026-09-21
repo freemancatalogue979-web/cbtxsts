@@ -1348,12 +1348,28 @@ export interface RankedMatchState {
   round_index: number;
   questions_total: number;
   lobby_at: string;
+  /** Length of the lobby countdown in seconds (server-owned). */
+  lobby_seconds?: number;
   server_now: string;
   participants: RankedPlayer[];
   question: QuestionPublic | null;
   reveal: RankedReveal | null;
   me: {answered: boolean; selected: string | null; correct: boolean | null; points: number | null} | null;
   activity: {text: string; at: string}[];
+}
+
+/** A player standing in a ranked course queue (shown while you wait). */
+export interface RankedQueuePlayer {
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  rating: number;
+  tier: string;
+  tier_name: string;
+  level: number;
+  joined_at: string;
 }
 
 export interface RankedStatus {
@@ -1368,9 +1384,19 @@ export interface RankedStatus {
   /** How many players would start a match right now (falls as you wait). */
   players_needed?: number | null;
   queue_joined_at: string | null;
+  /** Who else is queued on your course right now (oldest first). */
+  queue_players?: RankedQueuePlayer[];
   server_now: string;
   match_id: number | null;
   match: RankedMatchState | null;
+}
+
+export interface RankedChatLine {
+  key: string;
+  student_id: number;
+  name: string;
+  body: string;
+  mine: boolean;
 }
 
 export interface RankedRatingRow {

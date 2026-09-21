@@ -70,6 +70,9 @@ def my_status(db: Session = Depends(get_db), student: Student = Depends(require_
         "waiting": ranked_service.waiting_count(db, course_id) if queue_row is not None else 0,
         "players_needed": ranked_service.players_needed(waited) if queue_row is not None else None,
         "queue_joined_at": _iso(queue_row.joined_at) if queue_row else None,
+        # Everyone standing in this course's queue right now, so you can see
+        # opponents arrive (name, face and rank) instead of just a counter.
+        "queue_players": ranked_service.queue_players_payload(db, course_id) if queue_row is not None else [],
         "server_now": _iso(utcnow()),
         "match_id": active.id if active else None,
         "match": ranked_service.match_state(db, active, student.id, _connected_ids(active.id)) if active else None,

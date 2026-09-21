@@ -376,6 +376,23 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
     return () => window.clearInterval(id);
   }, [duel?.status, finished]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Safety net: transitions normally arrive over the duel socket, but if the
+     socket dropped or an event was lost the countdown would hit zero and the
+     screen would sit there frozen. So whenever our display clock passes a
+     server deadline without the state having moved on, we go fetch the truth —
+     the server clock always knows the real round. Throttled to one try per
+     couple of seconds so it can never hammer the API. */
+  const lastNudge = useRef(0);
+  useEffect(() => {
+    if (!duel || finished) return;
+    if (duel.status !== 'starting' && duel.status !== 'live') return;
+    if (deadlineAt === null) return;
+    if (now <= deadlineAt + 600) return;
+    if (Date.now() - lastNudge.current < 2000) return;
+    lastNudge.current = Date.now();
+    void load();
+  }, [now, duel, finished, deadlineAt, load]);
+
   /* ------------------------------------------------- live duel events */
   useEffect(() => {
     const offs = [

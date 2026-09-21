@@ -21,6 +21,7 @@ from ..live_queries import (
     add_room_message_async,
     duel_chat_async,
     duel_initial_state,
+    ranked_chat_async,
     messages_payload_async,
     room_initial_state,
     snapshot_payload,
@@ -73,7 +74,12 @@ async def _pump(client: Client) -> None:
 
 
 async def _consume(
-    client: Client, websocket: WebSocket, duel_room_name: str | None, duel_id: int | None = None
+    client: Client,
+    websocket: WebSocket,
+    duel_room_name: str | None,
+    duel_id: int | None = None,
+    ranked_room_name: str | None = None,
+    ranked_match_id: int | None = None,
 ) -> None:
     while True:
         raw = await websocket.receive_text()
@@ -99,6 +105,12 @@ async def _consume(
             payload = await duel_chat_async(duel_id, client.student_id, str(message.get("body", "")))
             if payload is not None:
                 await hub.broadcast("duel_chat", payload, room=duel_room_name)
+        elif kind == "chat" and ranked_room_name and ranked_match_id is not None:
+            # Ranked lobby chat: same gate as duels — participants only, and
+            # only while the match is still counting down in the lobby.
+            payload = await ranked_chat_async(ranked_match_id, client.student_id, str(message.get("body", "")))
+            if payload is not None:
+                await hub.broadcast("ranked_chat", payload, room=ranked_room_name)
         elif kind == "hello":
             await hub.send(client, "welcome", await _snapshot(client))
         else:
@@ -290,7 +302,7 @@ async def ranked_socket(websocket: WebSocket, match_id: int) -> None:
             {"student_id": student_id, "connected": True},
             room=room_key,
         )
-        await _consume(client, websocket, None)
+        await _consume(client, websocket, None, ranked_room_name=room_key, ranked_match_id=match_id)
     except WebSocketDisconnect:
         pass
     except Exception:

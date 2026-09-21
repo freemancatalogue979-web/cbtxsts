@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from .db import async_session_scope
 from .game import level_progress
-from .models import Duel, DuelParticipant, DuelQuestion, Room, RoomMember, RoomMessage, RoomQuestion, Student
+from .models import Duel, DuelParticipant, DuelQuestion, RankedMatch, RankedParticipant, Room, RoomMember, RoomMessage, RoomQuestion, Student
 from .serializers import duel_public, leaderboard_row
 from .services.room import ROOM_CAPACITY, RoomError
 
@@ -145,6 +145,39 @@ async def duel_chat_async(duel_id: int, student_id: int, body: str) -> dict | No
         student = await session.get(Student, student_id)
         return {
             "duel_id": duel_id,
+            "student_id": student_id,
+            "name": student.name if student else "",
+            "body": clean,
+            "at": utcnow().isoformat(timespec="seconds") + "Z",
+        }
+
+
+async def ranked_chat_async(match_id: int, student_id: int, body: str) -> dict | None:
+    """Lobby chat gate for ranked rooms.
+
+    Mirrors the duel waiting-room chat: the payload is returned for broadcast,
+    or ``None`` when it must be dropped — sender is not a participant, or the
+    match has already left the lobby. Chat locks the moment questions start.
+    """
+    from .models import utcnow
+
+    clean = (body or "").strip()[:300]
+    if not clean:
+        return None
+    async with async_session_scope() as session:
+        match = await session.get(RankedMatch, match_id)
+        if match is None or match.status != "lobby":
+            return None
+        member = await session.scalar(
+            select(RankedParticipant).where(
+                RankedParticipant.match_id == match_id, RankedParticipant.student_id == student_id
+            )
+        )
+        if member is None:
+            return None
+        student = await session.get(Student, student_id)
+        return {
+            "match_id": match_id,
             "student_id": student_id,
             "name": student.name if student else "",
             "body": clean,

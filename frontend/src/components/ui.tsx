@@ -176,7 +176,7 @@ export function Button({
       {...(rest as object)}
     >
       <span
-        className={`gbtn-face flex w-full items-center justify-center ${FACE_SIZES[size]} ${VARIANTS[variant]}`}
+        className={`gbtn-face flex w-full items-center justify-center gap-2 ${FACE_SIZES[size]} ${VARIANTS[variant]}`}
       >
         {/* The animated gradient ring sits inside the face so it inherits the
             chamfered clip and only its outer rim (the mask punches out the

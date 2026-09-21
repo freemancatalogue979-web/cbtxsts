@@ -40,7 +40,7 @@ from .duel import question_pool
 # --------------------------------------------------------------------- tuning
 MATCH_SIZE = 15          # hard cap per match
 MIN_PLAYERS = 2          # a match may launch with just two players
-LOBBY_SECONDS = 6        # lobby countdown
+LOBBY_SECONDS = 12       # lobby countdown — long enough to see who joined and say hi
 REVEAL_SECONDS = 4       # answer shown before the next question opens
 QUESTION_COUNT = 10      # fallback when no tier rule applies
 QUESTION_SECONDS = 20    # fallback when no tier rule applies
@@ -111,6 +111,51 @@ PLACE_COINS = (15, 10, 5)
 OPEN: dict[int, dict] = {}
 ACTIVITY: dict[int, deque] = {}
 LAST_STANDINGS: dict[int, dict] = {}
+# Lobby chat is transient like the lobby itself: kept in memory, capped, and
+# gone when the server restarts — the match record never carries chatter.
+LOBBY_CHAT: dict[int, deque] = {}
+LOBBY_CHAT_CAP = 80
+
+
+def queue_players_payload(db: Session, course_id: int | None, limit: int = 12) -> list[dict]:
+    """Who is standing in this course's queue right now (oldest first)."""
+    if course_id is None:
+        return []
+    rows = db.execute(
+        select(RankedQueue, Student)
+        .join(Student, Student.id == RankedQueue.student_id)
+        .where(RankedQueue.course_id == course_id)
+        .order_by(RankedQueue.joined_at)
+        .limit(limit)
+    ).all()
+    out = []
+    for queue_row, student in rows:
+        tier = tier_for(student.ranked_rating)
+        out.append(
+            {
+                "student_id": student.id,
+                "name": student.name,
+                "initials": student.name.split(" ")[0][:2].upper() if student.name else "?",
+                "avatar_hue": student.avatar_hue,
+                "has_photo": bool(student.photo),
+                "rating": student.ranked_rating,
+                "tier": tier["key"],
+                "tier_name": tier["name"],
+                "level": _level(student),
+                "joined_at": _iso(queue_row.joined_at),
+            }
+        )
+    return out
+
+
+def lobby_chat_payload(match_id: int) -> list[dict]:
+    return list(LOBBY_CHAT.get(match_id, ()))
+
+
+def lobby_chat_write(match_id: int, student: Student, body: str) -> dict:
+    line = {"match_id": match_id, "student_id": student.id, "name": student.name, "body": body, "at": _iso(utcnow())}
+    LOBBY_CHAT.setdefault(match_id, deque(maxlen=LOBBY_CHAT_CAP)).append(line)
+    return line
 
 
 class RankedError(Exception):
@@ -715,6 +760,7 @@ def match_state(
         "round_index": match.round_index,
         "questions_total": total,
         "lobby_at": _iso(match.lobby_at),
+        "lobby_seconds": LOBBY_SECONDS,
         "server_now": _iso(utcnow()),
         "participants": roster,
         "question": question,
