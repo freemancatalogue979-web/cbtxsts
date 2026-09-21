@@ -210,11 +210,14 @@ function CoursesTab({onChanged}: {onChanged: () => void}) {
                     {course.credit_units} units · {course.semester}
                     {course.lecturer ? ` · ${course.lecturer}` : ''}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Chip className={course.is_active ? 'border-mint-500/30 bg-mint-500/12 text-mint-300' : 'border-white/12 bg-white/6 text-mist-500'}>
                       {course.is_active ? 'Active' : 'Hidden'}
                     </Chip>
                     {!!course.quiz_count && <Chip>{course.quiz_count} exams</Chip>}
+                    {!!course.topic_count && <Chip>{course.topic_count} topics</Chip>}
+                    {!!course.question_count && <Chip>{course.question_count} questions</Chip>}
+                    {!!course.material_count && <Chip>{course.material_count} materials</Chip>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
@@ -549,6 +552,11 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
   const [statusFilter, setStatusFilter] = useState('');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [sortKey, setSortKey] = useState('position');
+  // Page-based bank browsing: 20 at a time, "X–Y of Z" — never one endless
+  // scroll of thousands of questions.
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
   const [historyFor, setHistoryFor] = useState<QuestionPublic | null>(null);
   const [versions, setVersions] = useState<{version: number; created_at: string; note?: string; author?: string}[] | null>(null);
   const [statsFor, setStatsFor] = useState<{question_id: number; stats: {answered: number; correct: number; accuracy: number; avg_ms: number}; most_wrong: string[]} | null>(null);
@@ -564,28 +572,23 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
   const filtering = Boolean(query.trim() || statusFilter || flaggedOnly || sortKey !== 'position');
 
   const load = useCallback(() => {
-    if (filtering) {
-      api.admin.studio
-        .search({
-          quiz_id: quiz.id,
-          q: query.trim() || undefined,
-          status: statusFilter || undefined,
-          flagged: flaggedOnly || undefined,
-          sort: sortKey,
-          limit: 300,
-        })
-        .then((payload) => {
-          const rows = ((payload as {rows?: QuestionPublic[]}).rows ?? []) as QuestionPublic[];
-          setQuestions(rows);
-        })
-        .catch((error: Error) => toast('error', 'Search failed', error.message));
-      return;
-    }
-    api.admin
-      .questions(quiz.id)
-      .then(setQuestions)
+    api.admin.studio
+      .search({
+        quiz_id: quiz.id,
+        q: query.trim() || undefined,
+        status: statusFilter || undefined,
+        flagged: flaggedOnly || undefined,
+        sort: sortKey,
+        limit,
+        offset,
+      })
+      .then((payload) => {
+        const data = payload as {rows?: QuestionPublic[]; total?: number};
+        setQuestions((data.rows ?? []) as QuestionPublic[]);
+        setTotal(data.total ?? 0);
+      })
       .catch((error: Error) => toast('error', 'Could not load questions', error.message));
-  }, [quiz.id, toast, filtering, query, statusFilter, flaggedOnly, sortKey]);
+  }, [quiz.id, toast, query, statusFilter, flaggedOnly, sortKey, offset]);
 
   useEffect(() => {
     const handle = window.setTimeout(load, filtering ? 280 : 0);
@@ -810,7 +813,7 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
     <div className="space-y-4">
       <SectionHeading
         title={quiz.title}
-        subtitle={`${questions?.length ?? quiz.question_count} questions in the bank`}
+        subtitle={`${total > 0 ? `${formatNumber(total)}` : questions?.length ?? quiz.question_count} questions in the bank`}
         icon={<ScrollText className="size-4" />}
         action={
           <div className="flex flex-wrap justify-end gap-2">
@@ -832,10 +835,20 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
           <TextInput
             placeholder="Search text, topic, tags…"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOffset(0);
+            }}
             aria-label="Search the question bank"
           />
-          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by review status">
+          <Select
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setOffset(0);
+            }}
+            aria-label="Filter by review status"
+          >
             <option value="">Any status</option>
             {QUESTION_STATUSES.map((value) => (
               <option key={value} value={value}>
@@ -843,7 +856,14 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
               </option>
             ))}
           </Select>
-          <Select value={sortKey} onChange={(event) => setSortKey(event.target.value)} aria-label="Sort questions">
+          <Select
+            value={sortKey}
+            onChange={(event) => {
+              setSortKey(event.target.value);
+              setOffset(0);
+            }}
+            aria-label="Sort questions"
+          >
             <option value="position">Exam order</option>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -855,7 +875,10 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
           </Select>
           <button
             type="button"
-            onClick={() => setFlaggedOnly((value) => !value)}
+            onClick={() => {
+              setFlaggedOnly((value) => !value);
+              setOffset(0);
+            }}
             aria-pressed={flaggedOnly}
  className={`min-h-10 shrink-0 rounded-2xl border px-3 text-[0.76rem] font-black tracking-wide transition-colors touch-manipulation ${
               flaggedOnly ? 'border-flare-500/50 bg-flare-500/16 text-flare-200' : 'border-white/10 bg-white/4 text-mist-500'
@@ -890,7 +913,7 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
               <Card className="p-4">
                 <div className="flex items-start gap-3">
                   <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/6 text-[0.78rem] font-black tabular text-mist-400">
-                    {position + 1}
+                    {offset + position + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.9rem] font-bold text-mist-100">{question.text}</p>
@@ -1017,6 +1040,20 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
             </li>
           ))}
         </ul>
+      )}
+
+      {questions && questions.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+            Previous
+          </Button>
+          <span className="text-center text-[0.78rem] font-bold text-mist-500">
+            {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+          </span>
+          <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+            Next
+          </Button>
+        </div>
       )}
 
       <Modal

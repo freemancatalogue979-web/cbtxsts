@@ -25,6 +25,7 @@ from ..models import (
     Course,
     Duel,
     GroupMessage,
+    Material,
     Notification,
     Prize,
     PrizeClaim,
@@ -172,7 +173,29 @@ async def update_config(payload: ConfigIn, db: Session = Depends(get_db)) -> dic
 @router.get("/courses")
 def list_courses(db: Session = Depends(get_db)) -> list[dict]:
     counts = dict(db.execute(select(Quiz.course_id, func.count(Quiz.id)).group_by(Quiz.course_id)).all())
-    return [course_public(c, quiz_count=int(counts.get(c.id, 0))) for c in db.scalars(select(Course).order_by(Course.code)).all()]
+    question_counts = dict(
+        db.execute(select(Question.course_id, func.count(Question.id)).group_by(Question.course_id)).all()
+    )
+    topic_counts = dict(
+        db.execute(
+            select(Question.course_id, func.count(func.distinct(Question.topic)))
+            .where(Question.topic.is_not(None), Question.topic != "")
+            .group_by(Question.course_id)
+        ).all()
+    )
+    material_counts = dict(
+        db.execute(select(Material.course_id, func.count(Material.id)).group_by(Material.course_id)).all()
+    )
+    return [
+        course_public(
+            c,
+            quiz_count=int(counts.get(c.id, 0)),
+            question_count=int(question_counts.get(c.id, 0)),
+            topic_count=int(topic_counts.get(c.id, 0)),
+            material_count=int(material_counts.get(c.id, 0)),
+        )
+        for c in db.scalars(select(Course).order_by(Course.code)).all()
+    ]
 
 
 @router.post("/courses")

@@ -1,5 +1,5 @@
 /** Admin: a cross-group moderation list of every study group in the arena. */
-import {MessageSquare, MoveHorizontal, Search, Users} from 'lucide-react';
+import {MessageSquare, Search, Users} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -63,11 +63,47 @@ export default function GroupsAdmin() {
         <EmptyState icon={<Users className="size-6" />} title="No study groups match" detail="Try a different name or join code." />
       ) : (
         <Card className="overflow-hidden">
-          <p className="flex items-center gap-1.5 border-b border-white/8 px-3 py-2 text-[0.68rem] font-bold text-mist-500 sm:hidden">
-            <MoveHorizontal className="size-3.5" /> Swipe sideways for the full table
-          </p>
-          <div className="overflow-x-auto overscroll-x-contain">
-            <table className="w-full min-w-[44rem] text-left sm:min-w-[52rem]">
+          {/* Phones get stacked group cards; sm and up keep the full table. */}
+          <ul className="divide-y divide-white/6 sm:hidden">
+            {rows.map((group) => (
+              <li key={group.id} className="cursor-pointer px-3 py-3" onClick={() => setDetail(group)}>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.86rem] font-extrabold text-mist-100 [overflow-wrap:anywhere]">{group.name}</p>
+                    <p className="mt-0.5 truncate text-[0.7rem] font-semibold tabular text-mist-500">
+                      #{group.id} · code {group.code}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDetail(group);
+                    }}
+                  >
+                    View
+                  </Button>
+                </div>
+                <p className="mt-1 truncate text-[0.76rem] font-semibold text-mist-300">
+                  Owner {group.owner.name} · {group.course_title ?? 'No course'}
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.72rem] font-black tabular text-nova-300">
+                    {formatNumber(group.member_count)} <span className="font-bold text-mist-500">Members</span>
+                  </span>
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.72rem] font-black tabular text-mist-100">
+                    {formatNumber(group.message_count)} <span className="font-bold text-mist-500">Messages</span>
+                  </span>
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.7rem] font-bold tabular text-mist-400">
+                    {formatDate(group.created_at, true)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto overscroll-x-contain sm:block">
+            <table className="w-full min-w-[52rem] text-left">
               <thead className="border-b border-white/8 bg-white/[0.03]">
                 <tr className="text-[0.66rem] font-black tracking-[0.14em] text-mist-500">
                   <th className="px-2.5 py-2 sm:px-4 sm:py-3">Group</th>

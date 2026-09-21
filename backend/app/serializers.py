@@ -198,8 +198,15 @@ def question_public(
     return question_student_public(question, reveal=reveal, order=order, extra=extra)
 
 
-def course_public(course: Course, *, quiz_count: int = 0) -> dict[str, Any]:
-    return {
+def course_public(
+    course: Course,
+    *,
+    quiz_count: int = 0,
+    question_count: int | None = None,
+    topic_count: int | None = None,
+    material_count: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "id": course.id,
         "code": course.code,
         "title": course.title,
@@ -211,6 +218,14 @@ def course_public(course: Course, *, quiz_count: int = 0) -> dict[str, Any]:
         "is_active": course.is_active,
         "quiz_count": quiz_count,
     }
+    # Staff console extras: the mobile course card shows bank depth at a glance.
+    if question_count is not None:
+        payload["question_count"] = question_count
+    if topic_count is not None:
+        payload["topic_count"] = topic_count
+    if material_count is not None:
+        payload["material_count"] = material_count
+    return payload
 
 
 def quiz_public(

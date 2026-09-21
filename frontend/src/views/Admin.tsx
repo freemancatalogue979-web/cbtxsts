@@ -3,6 +3,7 @@ import {CalendarDays,
   Activity,
   Award,
   BarChart3,
+  Bell,
   BookOpen,
   Coins,
   FileText,
@@ -11,6 +12,7 @@ import {CalendarDays,
   GraduationCap,
   LayoutGrid,
   Megaphone,
+  Menu,
   PackageCheck,
   ScrollText,
   Settings,
@@ -19,12 +21,12 @@ import {CalendarDays,
   Swords,
   Trophy,
   Users,
+  X,
   Zap,
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {useCallback, useEffect, useState} from 'react';
-import {useIsDesktop} from '../lib/viewport';
-import {Avatar, Button, Card, Chip, Field, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
 import {Wordmark} from '../components/Brand';
 import ContentAdmin from '../admin/ContentAdmin';
 import PeopleAdmin from '../admin/PeopleAdmin';
@@ -36,7 +38,7 @@ import {api} from '../lib/api';
 import {formatCompact, formatNumber, formatRelative} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
-import type {AdminOverview, Config} from '../lib/types';
+import type {AdminOverview, Config, Notice} from '../lib/types';
 
 type Section = 'overview' | 'studio' | 'content' | 'events' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'settings';
 
@@ -106,8 +108,10 @@ function Overview({onGoto}: {onGoto: (section: Section) => void}) {
         <StatTile label="Coins in circulation" value={formatCompact(data.coins_in_circulation)} icon={<Coins className="size-5" />} tone="gold" />
       </motion.div>
 
-      <div className="grid gap-3 sm:gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <motion.div variants={staggerItem}>
+      {/* Command centre stacking on phones: activity → quick actions →
+          records; the desktop two-column split is untouched. */}
+      <div className="flex flex-col gap-3 sm:gap-4 lg:grid lg:grid-cols-[1fr_1.2fr]">
+        <motion.div variants={staggerItem} className="order-3 lg:order-none">
           <Card className="p-3.5 sm:p-5">
             <SectionHeading
               title="Top players"
@@ -143,7 +147,7 @@ function Overview({onGoto}: {onGoto: (section: Section) => void}) {
           </Card>
         </motion.div>
 
-        <motion.div variants={staggerItem}>
+        <motion.div variants={staggerItem} className="order-1 lg:order-none">
           <Card className="p-3.5 sm:p-5">
             <SectionHeading title="Live activity" subtitle="Latest events across the arena" icon={<Activity className="size-4" />} />
             <ul className="max-h-[18rem] space-y-1.5 overflow-y-auto overscroll-contain pr-1 sm:max-h-[26rem]">
@@ -174,30 +178,30 @@ function Overview({onGoto}: {onGoto: (section: Section) => void}) {
             </ul>
           </Card>
         </motion.div>
-      </div>
 
-      <motion.div variants={staggerItem}>
-        <Card className="p-3.5 sm:p-5">
-          <SectionHeading title="Quick actions" icon={<LayoutGrid className="size-4" />} />
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <Button variant="outline" onClick={() => onGoto('content')} icon={<BookOpen className="size-4" />}>
-              New exam
-            </Button>
-            <Button variant="outline" onClick={() => onGoto('broadcast')} icon={<Megaphone className="size-4" />}>
-              Broadcast announcement
-            </Button>
-            <Button variant="outline" onClick={() => onGoto('prizes')} icon={<Gift className="size-4" />}>
-              Publish a prize
-            </Button>
-            <Button variant="outline" onClick={() => onGoto('claims')} icon={<Award className="size-4" />}>
-              Review claims
-            </Button>
-            <Button variant="outline" onClick={() => onGoto('results')} icon={<BarChart3 className="size-4" />}>
-              Export results CSV
-            </Button>
-          </div>
-        </Card>
-      </motion.div>
+        <motion.div variants={staggerItem} className="order-2 lg:order-none lg:col-span-2">
+          <Card className="p-3.5 sm:p-5">
+            <SectionHeading title="Quick actions" icon={<LayoutGrid className="size-4" />} />
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <Button variant="outline" onClick={() => onGoto('content')} icon={<BookOpen className="size-4" />}>
+                New exam
+              </Button>
+              <Button variant="outline" onClick={() => onGoto('broadcast')} icon={<Megaphone className="size-4" />}>
+                Broadcast announcement
+              </Button>
+              <Button variant="outline" onClick={() => onGoto('prizes')} icon={<Gift className="size-4" />}>
+                Publish a prize
+              </Button>
+              <Button variant="outline" onClick={() => onGoto('claims')} icon={<Award className="size-4" />}>
+                Review claims
+              </Button>
+              <Button variant="outline" onClick={() => onGoto('results')} icon={<BarChart3 className="size-4" />}>
+                Export results CSV
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
@@ -323,76 +327,303 @@ function SettingsPanel() {
   );
 }
 
+const BELL_SEEN_KEY = 'admin.bell.seen';
+
+function noticeTime(notice: Notice): number {
+  const raw = notice.created_at || '';
+  return new Date(raw.endsWith('Z') ? raw : `${raw}Z`).getTime() || 0;
+}
+
+/** Staff notification bell — the broadcasts this console has sent, newest first. */
+function AdminBell() {
+  const [rows, setRows] = useState<Notice[]>([]);
+  const [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState(() => Number(localStorage.getItem(BELL_SEEN_KEY) || 0));
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(() => {
+    api.admin
+      .notifications({limit: 12})
+      .then((data) => setRows(data.rows))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const unread = rows.filter((row) => noticeTime(row) > seen).length;
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      load();
+      const stamp = Date.now();
+      localStorage.setItem(BELL_SEEN_KEY, String(stamp));
+      setSeen(stamp);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        onClick={toggle}
+        aria-label="Notifications"
+        className="relative grid size-10 shrink-0 place-items-center rounded-2xl transition-colors touch-manipulation hover:bg-white/8"
+      >
+        <Bell className="size-[1.15rem] text-mist-300" />
+        {unread > 0 && (
+          <span className="absolute top-1.5 right-1.5 grid min-w-4 place-items-center rounded-full bg-flare-500 px-1 text-[0.6rem] font-black text-white">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{opacity: 0, y: -6, scale: 0.97}}
+            animate={{opacity: 1, y: 0, scale: 1}}
+            exit={{opacity: 0, y: -6, scale: 0.97}}
+            transition={{duration: 0.16}}
+            className="glass-strong absolute top-full right-0 z-60 mt-1.5 w-[19rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-3xl border border-white/10"
+          >
+            <p className="border-b border-white/8 px-3.5 py-2.5 text-[0.74rem] font-extrabold text-mist-300">
+              Latest broadcasts
+            </p>
+            <div className="max-h-[22rem] overflow-y-auto overscroll-contain">
+              {rows.length === 0 ? (
+                <p className="px-3.5 py-6 text-center text-[0.78rem] font-semibold text-mist-500">
+                  Nothing broadcast yet.
+                </p>
+              ) : (
+                rows.map((row) => (
+                  <div key={row.id} className="border-b border-white/6 px-3.5 py-2.5 last:border-0">
+                    <p className="truncate text-[0.8rem] font-extrabold text-mist-100">{row.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[0.72rem] font-medium text-mist-500">{row.message}</p>
+                    <p className="mt-1 text-[0.66rem] font-bold text-mist-600">{formatRelative(row.created_at)}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Compact profile control: settings shortcut + sign-out, phone-friendly. */
+function AdminProfile({onSettings, onExit}: {onSettings: () => void; onExit: () => void}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        onClick={() => setOpen((value) => !value)}
+        aria-label="Staff profile"
+        className="grid size-10 shrink-0 place-items-center rounded-2xl transition-colors touch-manipulation hover:bg-white/8"
+      >
+        <span className="brand-gradient grid size-8 place-items-center rounded-xl text-white">
+          <Shield className="size-4" />
+        </span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{opacity: 0, y: -6, scale: 0.97}}
+            animate={{opacity: 1, y: 0, scale: 1}}
+            exit={{opacity: 0, y: -6, scale: 0.97}}
+            transition={{duration: 0.16}}
+            className="glass-strong absolute top-full right-0 z-60 mt-1.5 w-52 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-3xl border border-white/10 p-1.5"
+          >
+            <p className="px-2.5 pt-1.5 pb-2 text-[0.7rem] font-bold text-mist-500">Signed in as staff</p>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onSettings();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2.5 text-left text-[0.82rem] font-bold text-mist-200 transition-colors touch-manipulation hover:bg-white/8"
+            >
+              <Settings className="size-4 text-mist-400" /> Console settings
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onExit();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2.5 text-left text-[0.82rem] font-bold text-flare-300 transition-colors touch-manipulation hover:bg-white/8"
+            >
+              <Activity className="size-4" /> Sign out
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function Admin({onExit}: {onExit: () => void}) {
   const [section, setSection] = useState<Section>('overview');
   // Bumping the key remounts a section so it re-fetches after a mutation.
   const [bump, setBump] = useState(0);
   const refresh = () => setBump((value) => value + 1);
-  // The staff console needs a real desk: wide tables, side-by-side builders and
-  // bulk editors. Below 1024px we explain instead of shipping a broken screen.
-  const desktop = useIsDesktop();
+  // Phones get the full console too: the rail folds into a hamburger drawer
+  // below lg, every section keeps its permissions and functionality.
+  const [navOpen, setNavOpen] = useState(false);
 
-  if (!desktop) {
-    return (
-      <div className="aurora relative grid min-h-dvh place-items-center overflow-x-clip px-4 py-10">
-        <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
-        <div className="glass-strong relative w-full max-w-md rounded-[1.4rem] p-5 text-center">
-          <div className="brand-gradient absolute inset-x-0 top-0 h-1" />
-          <span className="mx-auto grid size-12 place-items-center rounded-2xl border border-flare-500/30 bg-flare-500/12">
-            <Shield className="size-6 text-flare-300" />
-          </span>
-          <h1 className="mt-3 font-display text-[1.15rem] font-black tracking-tight text-mist-50">Staff console is desktop-only</h1>
-          <p className="mt-2 text-[0.84rem] leading-relaxed font-medium text-mist-400">
-            The bank dashboard, bulk editors and builders need a wide screen. Open this account on a laptop or desktop
-            (1024px and up) to manage the arena.
-          </p>
-          <div className="mt-4 flex justify-center">
-            <Button size="sm" variant="outline" onClick={onExit} icon={<Activity className="size-4" />}>
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const goto = (next: Section) => {
+    setSection(next);
+    setNavOpen(false);
+    window.scrollTo({top: 0});
+  };
+
+  const groups = SECTIONS.reduce<{name: string; items: typeof SECTIONS}[]>((acc, item) => {
+    const last = acc[acc.length - 1];
+    if (last && last.name === item.group) last.items.push(item);
+    else acc.push({name: item.group, items: [item]});
+    return acc;
+  }, []);
 
   return (
     <div className="aurora min-h-dvh">
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
 
       <header className="sticky top-0 z-50 bg-ink-950/85 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl safe-top">
-        <div className="mx-auto flex w-full items-center gap-2 px-2.5 py-1.5 sm:gap-3 sm:px-5 sm:py-2">
-          <Wordmark size="header" />
+        <div className="mx-auto flex w-full items-center gap-1 px-2 py-1.5 sm:gap-3 sm:px-5 sm:py-2">
+          <IconButton label="Open console menu" className="rounded-2xl lg:hidden" onClick={() => setNavOpen(true)}>
+            <Menu className="size-5 text-mist-200" />
+          </IconButton>
+          <Wordmark size="header" className="hidden sm:block" />
+          <p className="min-w-0 flex-1 truncate text-[0.86rem] font-black tracking-tight text-mist-100 sm:flex-none sm:text-[0.92rem]">
+            <span className="sm:hidden">Staff console</span>
+          </p>
           <Chip className="hidden border-flare-500/30 bg-flare-500/12 text-flare-300 sm:inline-flex" icon={<Shield className="size-3.5" />}>
             Staff console
           </Chip>
-          <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={onExit} icon={<Activity className="size-4" />}>
+          <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
+            <AdminBell />
+            <span className="hidden sm:block">
+              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} />
+            </span>
+            <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={onExit} icon={<Activity className="size-4" />}>
               Sign out
             </Button>
+            <span className="sm:hidden">
+              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} />
+            </span>
           </div>
         </div>
       </header>
 
+      {/* Mobile navigation drawer — the desktop rail folds in here below lg. */}
+      <AnimatePresence>
+        {navOpen && (
+          <>
+            <motion.div
+              initial={{opacity: 0}}
+              animate={{opacity: 1}}
+              exit={{opacity: 0}}
+              onClick={() => setNavOpen(false)}
+              className="scrim fixed inset-0 z-60 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{x: '-102%'}}
+              animate={{x: 0}}
+              exit={{x: '-102%'}}
+              transition={{type: 'spring', stiffness: 380, damping: 34}}
+              className="fixed inset-y-0 left-0 z-60 flex w-[17.5rem] max-w-[86vw] flex-col border-r border-white/10 bg-ink-950/97 backdrop-blur-xl lg:hidden"
+            >
+              <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3 safe-top">
+                <span className="brand-gradient grid size-9 shrink-0 place-items-center rounded-2xl text-white">
+                  <Shield className="size-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[0.88rem] font-black tracking-tight text-mist-50">Staff console</p>
+                  <p className="truncate text-[0.68rem] font-bold text-mist-500">Quiz Arena admin</p>
+                </div>
+                <IconButton label="Close menu" onClick={() => setNavOpen(false)}>
+                  <X className="size-4.5 text-mist-300" />
+                </IconButton>
+              </div>
+              <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-3">
+                {groups.map((group) => (
+                  <div key={group.name} className="mb-3 last:mb-0">
+                    <p className="px-2.5 pb-1.5 text-[0.66rem] font-extrabold tracking-wide text-mist-600">{group.name}</p>
+                    <div className="flex flex-col gap-0.5">
+                      {group.items.map((item) => {
+                        const active = section === item.id;
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => goto(item.id)}
+                            className={`relative flex min-h-11 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-[0.84rem] font-bold transition-colors touch-manipulation ${
+                              active ? 'text-white' : 'text-mist-400 hover:bg-white/6 hover:text-mist-200'
+                            }`}
+                          >
+                            {active && <span className="brand-gradient absolute inset-0 -z-1 rounded-2xl" />}
+                            <Icon className="size-4 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </nav>
+              <div className="border-t border-white/8 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+                <Button size="sm" variant="outline" className="w-full justify-center" onClick={onExit} icon={<Activity className="size-4" />}>
+                  Sign out
+                </Button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="relative mx-auto flex max-w-[92rem] flex-col gap-3 px-3 pt-3.5 pb-6 sm:px-5 sm:py-5 lg:flex-row lg:gap-5">
-        <nav className="no-scrollbar -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 lg:mx-0 lg:w-60 lg:shrink-0 lg:flex-col lg:overflow-visible lg:px-0">
-          {SECTIONS.map((item) => {
-            const active = section === item.id;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setSection(item.id)}
-                className={`relative flex min-h-11 shrink-0 items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-left text-[0.82rem] font-bold transition-colors touch-manipulation sm:text-[0.84rem] lg:w-full lg:px-4 lg:py-3 ${
-                  active ? 'text-white' : 'text-mist-500 hover:bg-white/6 hover:text-mist-200'
-                }`}
-              >
-                {active && <motion.span layoutId="admin-rail" className="brand-gradient absolute inset-0 -z-1 rounded-2xl" />}
-                <Icon className="size-4 shrink-0" />
-                {item.label}
-              </button>
-            );
-          })}
+        <nav className="hidden w-60 shrink-0 flex-col lg:flex">
+          {groups.map((group) => (
+            <div key={group.name} className="mb-2.5 last:mb-0">
+              <p className="px-4 pb-1 text-[0.66rem] font-extrabold tracking-wide text-mist-600">{group.name}</p>
+              {group.items.map((item) => {
+                const active = section === item.id;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => goto(item.id)}
+                    className={`relative flex min-h-11 w-full items-center gap-2.5 rounded-2xl px-4 py-3 text-left text-[0.84rem] font-bold transition-colors touch-manipulation ${
+                      active ? 'text-white' : 'text-mist-500 hover:bg-white/6 hover:text-mist-200'
+                    }`}
+                  >
+                    {active && <motion.span layoutId="admin-rail" className="brand-gradient absolute inset-0 -z-1 rounded-2xl" />}
+                    <Icon className="size-4 shrink-0" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="min-w-0 flex-1">
@@ -404,7 +635,7 @@ export default function Admin({onExit}: {onExit: () => void}) {
               exit={{opacity: 0, y: -8}}
               transition={{duration: 0.24}}
             >
-              {section === 'overview' && <Overview key={`overview-${bump}`} onGoto={setSection} />}
+              {section === 'overview' && <Overview key={`overview-${bump}`} onGoto={goto} />}
               {section === 'studio' && <StudioAdmin key={`studio-${bump}`} />}
               {section === 'content' && <ContentAdmin key={`content-${bump}`} onChanged={refresh} />}
               {section === 'events' && <EventsAdmin key={`events-${bump}`} onChanged={refresh} />}

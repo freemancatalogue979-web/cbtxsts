@@ -170,6 +170,9 @@ export interface Course {
   accent: string;
   is_active: boolean;
   quiz_count?: number;
+  question_count?: number;
+  topic_count?: number;
+  material_count?: number;
 }
 
 export interface CosmeticsRef {
