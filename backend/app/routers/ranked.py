@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_student
+from ..events import dispatch
 from ..models import RankedMatch, RankedParticipant, RankedQueue, Student, utcnow
 from ..schemas import RankedAnswerIn, RankedQueueIn
 from ..services import ranked as ranked_service
@@ -114,7 +115,9 @@ async def answer_question(
     _participant_or_403(db, match, student)
     try:
         result, all_answered = ranked_service.submit_answer(db, match, student, payload.selected, payload.elapsed_ms)
-        reveal = ranked_service.close_if_all_answered(db, match) if all_answered else None
+        reveal_events, reveal = (
+            ranked_service.close_if_all_answered(db, match, student) if all_answered else ([], None)
+        )
         state = ranked_service.match_state(db, match, student.id, _connected_ids(match.id))
     except RankedError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -130,8 +133,10 @@ async def answer_question(
         },
         room=room,
     )
-    if reveal:
-        await hub.broadcast("ranked_reveal", reveal, room=room)
+    if reveal_events:
+        # Per-player reveals: everyone gets their OWN question's key, nobody
+        # gets a rival's.
+        await dispatch(reveal_events)
     return {"result": result, "all_answered": all_answered, "reveal": reveal, "match": state}
 
 

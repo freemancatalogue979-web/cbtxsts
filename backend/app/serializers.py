@@ -444,17 +444,30 @@ def duel_public(
 
     if include_questions:
         # Only the viewer's own selections are exposed; the answer key stays
-        # hidden until the duel is finished (reveal=True).
+        # hidden until the duel is finished (reveal=True). With per-player
+        # sets a rival's questions never leave the server — not mid-duel, not
+        # at reveal, not to spectators.
+        viewer_participant = next(
+            (p for p in duel.participants if viewer_id is not None and p.student_id == viewer_id), None
+        )
+        mine_ids = list(getattr(viewer_participant, "question_ids", None) or []) if viewer_participant else []
+        rows_by_id = {row.question_id: row for row in duel.questions}
+        if mine_ids:
+            rows = [rows_by_id[qid] for qid in mine_ids if qid in rows_by_id]
+        elif viewer_participant is not None:
+            rows = list(duel.questions)  # legacy duel: both players shared one set
+        else:
+            rows = []  # non-participants never see question content
         mine = {row.question_id: row for row in duel.answers if viewer_id is not None and row.student_id == viewer_id}
         payload["questions"] = [
             {
                 **question_public(row.question, reveal=reveal),
-                "order": row.position,
+                "order": order,
                 "answered_by_you": row.question_id in mine,
                 "my_selection": mine[row.question_id].selected if row.question_id in mine else None,
                 "my_points": mine[row.question_id].points if row.question_id in mine else 0,
             }
-            for row in duel.questions
+            for order, row in enumerate(rows, start=1)
         ]
         payload["my_answers"] = [
             {

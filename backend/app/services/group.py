@@ -685,17 +685,54 @@ def join_quiz(
     rows = db.scalars(
         select(StudyGroupQuizQuestion).where(StudyGroupQuizQuestion.quiz_id == quiz.id).order_by(StudyGroupQuizQuestion.position)
     ).all()
-    order = [row.position for row in rows]
-    if quiz.randomize:
-        random.shuffle(order)
-    option_orders: dict[str, list[str]] = {}
-    if quiz.randomize:
-        for row in rows:
-            question = db.get(Question, row.question_id)
-            if question is not None:
-                option_orders[str(row.question_id)] = display_order(
-                    question, shuffle=True, seed=f"gq:{quiz.id}:{student.id}:{row.question_id}"
+
+    # Multiplayer rule: every member gets their OWN server-dealt set from the
+    # same pool — never the same questions as the rest of the group. Members
+    # trickle in over hours, so overlap avoidance is best effort (fresh
+    # questions first, least-served as fallback) and a join is never blocked.
+    from .question_sets import create_multiplayer_question_sets
+
+    usage: dict[int, int] = {}
+    for row in rows:
+        usage[row.question_id] = usage.get(row.question_id, 0) + 1
+    sibling_attempts = db.scalars(
+        select(StudyGroupQuizParticipant).where(StudyGroupQuizParticipant.quiz_id == quiz.id)
+    ).all()
+    for attempt in sibling_attempts:
+        for qid in attempt.question_ids or []:
+            usage[int(qid)] = usage.get(int(qid), 0) + 1
+    pool = question_pool(db, course_id=quiz.course_id, topic=quiz.topic)
+    assigned = (
+        create_multiplayer_question_sets(
+            pool, [student.id], quiz.question_count, usage_counts=usage, strict=False
+        )[student.id]
+        if pool
+        else []
+    )
+
+    question_ids: list[int] | None = None
+    if assigned:
+        question_ids = [question.id for question in assigned]
+        order = list(range(1, len(question_ids) + 1))
+        option_orders = {}
+        if quiz.randomize:
+            for question in assigned:
+                option_orders[str(question.id)] = display_order(
+                    question, shuffle=True, seed=f"gq:{quiz.id}:{student.id}:{question.id}"
                 )
+    else:
+        # Fallback (bank emptied after publishing): the legacy shared set.
+        order = [row.position for row in rows]
+        if quiz.randomize:
+            random.shuffle(order)
+        option_orders = {}
+        if quiz.randomize:
+            for row in rows:
+                question = db.get(Question, row.question_id)
+                if question is not None:
+                    option_orders[str(row.question_id)] = display_order(
+                        question, shuffle=True, seed=f"gq:{quiz.id}:{student.id}:{row.question_id}"
+                    )
 
     now = utcnow()
     if quiz.duration_minutes:
@@ -710,6 +747,7 @@ def join_quiz(
         attempt_no=len(attempts) + 1,
         question_order=order,
         option_orders=option_orders,
+        question_ids=question_ids,
         deadline_at=min(now + timedelta(seconds=seconds), quiz.ends_at) if quiz.ends_at else now + timedelta(seconds=seconds),
         started_at=now,
     )
@@ -727,6 +765,16 @@ def join_quiz(
 
 
 def _ordered_questions(db: Session, quiz: StudyGroupQuiz, participant: StudyGroupQuizParticipant) -> list[Question]:
+    mine = list(participant.question_ids or [])
+    if mine:
+        # This attempt's own server-dealt set, in its own order.
+        ordered: list[Question] = []
+        for question_id in mine:
+            question = db.get(Question, int(question_id))
+            if question is not None:
+                ordered.append(question)
+        if ordered:
+            return ordered
     rows = {
         row.position: row
         for row in db.scalars(
@@ -797,7 +845,8 @@ def answer_quiz_question(
         raise GroupError("This attempt is already finished.", 409)
     if participant.deadline_at and participant.deadline_at <= utcnow():
         raise GroupError("Time is up — submit to see your result.", 409)
-    questions = {row.id: row for row in _ordered_questions(db, quiz, participant)}
+    ordered = _ordered_questions(db, quiz, participant)
+    questions = {row.id: row for row in ordered}
     question = questions.get(int(question_id))
     if question is None:
         raise GroupError("That question is not part of this quiz.", 404)
@@ -832,7 +881,8 @@ def answer_quiz_question(
         participant.score += points
     else:
         participant.wrong_count += 1
-    order_index = (participant.question_order or []).index(question.position) if question.position in (participant.question_order or []) else participant.current_index
+    ordered_ids = [row.id for row in ordered]
+    order_index = ordered_ids.index(question.id) if question.id in ordered_ids else participant.current_index
     participant.current_index = max(participant.current_index, order_index + 1)
     register_question_attempt(db, question, correct=correct, elapsed_ms=elapsed_ms)
     if question.topic:

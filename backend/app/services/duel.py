@@ -22,6 +22,7 @@ from ..config import (
 )
 from ..events import Event, to_everyone, to_room, to_student
 from ..models import Duel, DuelAnswer, DuelParticipant, DuelQuestion, Question, Quiz, Student, utcnow
+from .question_sets import NotEnoughQuestionsError, create_multiplayer_question_sets
 from .questions import answer_matches, mastery_scope_update, register_question_attempt
 
 INVITE_TTL_SECONDS = 600  # 10 minutes to accept before an invite expires
@@ -87,6 +88,14 @@ def build_duel_questions(
     topic: str = "",
     difficulty: str = "",
 ) -> list[Question]:
+    """Deal the duel's question union: ``count`` unique questions per player.
+
+    A duel is multiplayer, so the shared-set days are over — the union stored
+    on ``duel_questions`` holds both players' disjoint sets (same difficulty
+    shape, different questions), and ``start_duel`` deals each half to its
+    owner. If the bank cannot cover both players uniquely, the match refuses
+    to exist rather than silently reusing questions.
+    """
     pool = question_pool(db, quiz_id, course_id=course_id, topic=topic, difficulty=difficulty)
     if not pool and topic:
         # A topic that matches nothing must never dead-end a challenge (older
@@ -95,12 +104,48 @@ def build_duel_questions(
         pool = question_pool(db, quiz_id, course_id=course_id, topic="", difficulty=difficulty)
     if not pool:
         raise DuelError("No duel-ready questions are available yet. Ask an admin to activate a quiz.")
-    picks = random.sample(pool, min(count, len(pool)))
+    try:
+        sets = create_multiplayer_question_sets(pool, ["challenger", "opponent"], count, strict=True)
+    except NotEnoughQuestionsError as exc:
+        raise DuelError(
+            "Not enough unique questions are available for this match. Try fewer questions or a "
+            "wider topic — or ask an admin to add more questions to the bank."
+        ) from exc
+    picks = sets["challenger"] + sets["opponent"]
     for position, question in enumerate(picks, start=1):
         db.add(DuelQuestion(duel=duel, question_id=question.id, position=position))
-    duel.question_count = len(picks)
+    duel.question_count = count
     db.flush()
     return picks
+
+
+def assign_duel_sets(db: Session, duel: Duel) -> None:
+    """Split the stored union into per-player sets at start (server-side deal).
+
+    The union was built as two disjoint, equally shaped halves; re-dealing it
+    here keeps the guarantee while giving each player a fresh random order.
+    Legacy duels whose union is a single shared set keep the old behaviour
+    (``question_ids`` stays null and both players share the rows).
+    """
+    parts = list(duel.participants)
+    if len(parts) != 2:
+        return
+    count = int(duel.question_count or 0)
+    rows = list(duel.questions)
+    if count <= 0 or len(rows) < 2 * count:
+        return  # legacy shared set — nothing to split
+    questions = [row.question for row in rows[: 2 * count]]
+    questions = [q for q in questions if q is not None]
+    if len(questions) < 2 * count:
+        return
+    player_ids = [p.student_id for p in parts]
+    try:
+        sets = create_multiplayer_question_sets(questions, player_ids, count, strict=True)
+    except NotEnoughQuestionsError:
+        return  # union drifted (question deleted?): fall back to legacy sharing
+    for participant in parts:
+        participant.question_ids = [q.id for q in sets[participant.student_id]]
+    db.flush()
 
 
 def resolve_opponent(db: Session, *, phone: str | None, student_id: int | None, me: Student) -> Student:
@@ -194,6 +239,8 @@ def start_duel(db: Session, duel: Duel) -> list[Event]:
     duel.status = "live"
     duel.started_at = now
     duel.expires_at = now + timedelta(seconds=duel.time_limit_seconds)
+    # Every player gets their own server-dealt set before anything is sent out.
+    assign_duel_sets(db, duel)
     db.flush()
 
     from ..serializers import duel_public, iso
@@ -278,8 +325,22 @@ def record_answer(
         return finalize_duel(db, duel, reason="time_up")
 
     slot = next((row for row in duel.questions if row.question_id == question_id), None)
-    if slot is None:
-        raise DuelError("That question is not part of this duel.")
+    mine_ids = list(participant.question_ids or [])
+    if mine_ids:
+        # Per-player set: only THIS player's own questions are answerable,
+        # and the reported position is the place in their own run.
+        if question_id not in mine_ids:
+            raise DuelError("That question is not part of this duel.")
+        position = mine_ids.index(question_id) + 1
+        question = db.get(Question, question_id)
+        if question is None:
+            raise DuelError("That question is not part of this duel.")
+    else:
+        # Legacy duel (created before per-player sets): shared rows.
+        if slot is None:
+            raise DuelError("That question is not part of this duel.")
+        position = slot.position
+        question = slot.question
     if db.scalar(
         select(DuelAnswer.id).where(
             DuelAnswer.duel_id == duel.id,
@@ -289,7 +350,6 @@ def record_answer(
     ):
         raise DuelError("You have already answered that question.")
 
-    question: Question = slot.question
     is_correct = answer_matches(question.correct, selected)
     run_before = participant.current_run
     participant.current_run = run_before + 1 if is_correct else 0
@@ -324,7 +384,7 @@ def record_answer(
             {
                 "duel_id": duel.id,
                 "student_id": student.id,
-                "question_order": slot.position,
+                "question_order": position,
                 "correct": is_correct,
                 "points": points,
                 "score": participant.score,
@@ -392,12 +452,15 @@ def finalize_duel(db: Session, duel: Duel, *, reason: str = "completed") -> list
     from ..serializers import duel_public
     from .exam import top_leaderboard
 
-    payload = duel_public(duel, reveal=True, include_questions=True)
-    payload.update({"reason": reason, "draw": draw, "winner_id": duel.winner_id})
+    # The room feed carries the result, never question content: each player's
+    # own set (with answer key) goes to that player alone.
+    room_payload = duel_public(duel)
+    room_payload.update({"reason": reason, "draw": draw, "winner_id": duel.winner_id})
     room = duel_room(duel.id)
-    events: list[Event] = [to_room(room, "duel_finished", dict(payload))]
+    events: list[Event] = [to_room(room, "duel_finished", dict(room_payload))]
     for participant in duel.participants:
-        personal = dict(payload)
+        personal = duel_public(duel, viewer_id=participant.student_id, reveal=True, include_questions=True)
+        personal.update({"reason": reason, "draw": draw, "winner_id": duel.winner_id})
         personal["rewards"] = rewards_by_player.get(participant.student_id, [])
         events.append(to_student(participant.student_id, "duel_result", personal))
     events.append(to_everyone("leaderboard", {"scope": "global", "rows": top_leaderboard(db, limit=10)}))

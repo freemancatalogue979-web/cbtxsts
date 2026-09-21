@@ -507,6 +507,9 @@ class DuelParticipant(Base):
     current_run: Mapped[int] = mapped_column(Integer, default=0)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     forfeited: Mapped[bool] = mapped_column(Boolean, default=False)
+    # This player's own server-dealt question ids, in serving order. Duels are
+    # multiplayer: nobody shares a set (null = legacy duel, shared fallback).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     duel: Mapped[Duel] = relationship(back_populates="participants")
     student: Mapped[Student] = relationship()
@@ -586,6 +589,8 @@ class RoomMember(Base):
     is_host: Mapped[bool] = mapped_column(Boolean, default=False)
     score: Mapped[int] = mapped_column(Integer, default=0)
     correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Per-player question set for the live run (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -682,6 +687,8 @@ class RankedParticipant(Base):
     streak: Mapped[int] = mapped_column(Integer, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
     position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-based final place
+    # This player's own questions for the match, round by round (null = legacy).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -1329,6 +1336,8 @@ class StudyGroupQuizParticipant(Base):
     question_order: Mapped[list] = mapped_column(JSON, default=list)
     # {question_id: [display keys]} — option shuffle mapped back server-side.
     option_orders: Mapped[dict] = mapped_column(JSON, default=dict)
+    # This attempt's own server-dealt questions (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     current_index: Mapped[int] = mapped_column(Integer, default=0)
     correct_count: Mapped[int] = mapped_column(Integer, default=0)
     wrong_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -1778,6 +1787,8 @@ class EventParticipant(Base):
     wrong_count: Mapped[int] = mapped_column(Integer, default=0)
     answered: Mapped[int] = mapped_column(Integer, default=0)  # questions completed
     current_index: Mapped[int] = mapped_column(Integer, default=0)  # next question to serve
+    # This participant's own server-dealt questions (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     streak: Mapped[int] = mapped_column(Integer, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

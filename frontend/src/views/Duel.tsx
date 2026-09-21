@@ -369,6 +369,9 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
         if (payload.id !== duelId) return;
         setFinished(payload);
         setDuel(payload);
+        /* The room feed carries the result only — my own questions and the
+           answer key arrive per-player via duel_result / the REST reload. */
+        void load();
         if (payload.winner_id === profile?.id) {
           celebrate({big: true});
           HAPTICS.win();
@@ -377,6 +380,12 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
           HAPTICS.lose();
           sfx.play('lose');
         }
+      }),
+      on('duel_result', (data) => {
+        /* Server-private finale for me: my set, my answer key, my rewards. */
+        const payload = data as Duel;
+        if (payload.id !== duelId) return;
+        applyDuel(payload);
       }),
       on('duel_cancelled', (data) => {
         const payload = data as {id?: number; duel_id?: number};
