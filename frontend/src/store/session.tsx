@@ -79,6 +79,7 @@ interface SessionValue {
   on: (event: string, handler: (data: unknown) => void) => () => void;
   joinRoom: (room: string) => void;
   leaveRoom: (room: string) => void;
+  duelSend: (room: string, message: Record<string, unknown>) => void;
   chatUnread: Record<number, number>;
   setChatFocus: (friendId: number | null) => void;
   refreshChatUnread: () => void;
@@ -602,6 +603,11 @@ export function SessionProvider({children}: {children: ReactNode}) {
     duelSocketsRef.current.delete(room);
   }, []);
 
+  /** Push a message down an open duel socket (waiting-room chat). */
+  const duelSend = useCallback((room: string, message: Record<string, unknown>) => {
+    duelSocketsRef.current.get(room)?.send(message);
+  }, []);
+
   const closeDuelSockets = useCallback(() => {
     duelSocketsRef.current.forEach((socket) => socket.close());
     duelSocketsRef.current.clear();
@@ -699,6 +705,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
       on,
       joinRoom,
       leaveRoom,
+      duelSend,
       chatUnread,
       setChatFocus,
       refreshChatUnread,
@@ -733,6 +740,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
       on,
       joinRoom,
       leaveRoom,
+      duelSend,
       chatUnread,
       setChatFocus,
       refreshChatUnread,

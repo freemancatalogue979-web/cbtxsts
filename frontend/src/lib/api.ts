@@ -240,6 +240,11 @@ export const api = {
       `/api/ranked/match/${matchId}/answer`,
       {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
     ),
+  rankedSkip: (matchId: number) =>
+    request<{result: {skipped: boolean; points: number}; all_answered: boolean; reveal: RankedReveal | null; match: RankedMatchState}>(
+      `/api/ranked/match/${matchId}/skip`,
+      {method: 'POST'},
+    ),
   rankedReview: (matchId: number) => request<{match_id: number; items: ReviewItem[]}>(`/api/ranked/match/${matchId}/review`),
   rankedHistory: () => request<{history: RankedHistoryRow[]}>('/api/ranked/history'),
   rankedLadder: () => request<RankedLadder>('/api/ranked/leaderboard'),
@@ -398,6 +403,8 @@ export const api = {
   openDuel: (body: {topic?: string; question_count?: number; stake_coins?: number; quiz_id?: number | null; course_id?: number | null; mode?: DuelMode; best_of?: 1 | 3 | 5; difficulty?: string; sudden_death?: boolean} = {}) =>
     request<Duel>('/api/duels/open', {method: 'POST', body}),
   joinDuel: (code: string) => request<Duel>(`/api/duels/join/${encodeURIComponent(code.trim().toUpperCase())}`, {method: 'POST'}),
+  joinDuelById: (id: number) => request<Duel>(`/api/duels/${id}/join`, {method: 'POST'}),
+  openDuelList: () => request<Duel[]>('/api/duels/open'),
   acceptDuel: (id: number) => request<Duel>(`/api/duels/${id}/accept`, {method: 'POST'}),
   declineDuel: (id: number) => request<{ok: boolean}>(`/api/duels/${id}/decline`, {method: 'POST'}),
   cancelDuel: (id: number) => request<{ok: boolean}>(`/api/duels/${id}/cancel`, {method: 'POST'}),

@@ -15,14 +15,32 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {
   ArrowLeft,
+  Award,
+  BookOpen,
+  Brain,
+  Calculator,
+  CalendarDays,
   Check,
   ChevronUp,
+  Cpu,
+  Crown,
   Eye,
+  FileText,
   Flame,
+  FlaskConical,
+  Globe2,
+  GraduationCap,
+  Landmark,
+  ListChecks,
   Loader2,
+  Medal,
+  Microscope,
   Radio,
   RefreshCw,
+  Scale,
+  Send,
   SignalHigh,
+  SkipForward,
   Swords,
   TrendingDown,
   TrendingUp,
@@ -31,12 +49,14 @@ import {
   Zap,
 } from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile} from '../components/ui';
+import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
 import {api, tokenStore} from '../lib/api';
-import {formatNumber} from '../lib/format';
+import {formatNumber, formatRelative} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
 import {LiveSocket} from '../lib/ws';
 import {useSession} from '../store/session';
 import type {
+  Course,
   QuestionPublic,
   RankedFinishPayload,
   RankedHistoryRow,
@@ -47,13 +67,30 @@ import type {
   RankedQuestionWindow,
   RankedReveal,
   RankedStatus,
+  RankedTier,
+  RankedChatLine,
   ReviewItem,
 } from '../lib/types';
 
 type Phase = 'loading' | 'idle' | 'queue' | 'lobby' | 'live' | 'results' | 'review';
 
 const QUEUE_REFRESH_MS = 2000;
-const QUEUE_TARGETS = [3, 8, 12, 15];
+
+/* Course picker dressing: every course gets a stable icon (keyed off its id)
+   and wears its own accent colour so the grid reads at a glance. Accents are
+   hex pairs (deep → bright) so cards can paint real gradients and glows. */
+const COURSE_ICONS = [BookOpen, FlaskConical, Calculator, Globe2, Cpu, Scale, Landmark, Microscope, Brain, GraduationCap];
+const COURSE_ACCENTS: Record<string, {deep: string; bright: string}> = {
+  red: {deep: '#92145a', bright: '#ff7ab3'},
+  violet: {deep: '#6d28d9', bright: '#c9a8fc'},
+  blue: {deep: '#1d4ed8', bright: '#7cc0ff'},
+  amber: {deep: '#a06b00', bright: '#ffd75e'},
+};
+const FALLBACK_ACCENT = COURSE_ACCENTS.violet;
+
+function courseIcon(course: Course) {
+  return COURSE_ICONS[course.id % COURSE_ICONS.length];
+}
 
 function parseTime(iso: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
@@ -73,7 +110,9 @@ function useServerClock() {
     offsetRef.current = offsetRef.current === 0 ? drift : offsetRef.current * 0.7 + drift * 0.3;
   }, []);
   const remaining = useCallback((deadlineIso: string) => Math.max(0, parseTime(deadlineIso) - (Date.now() - offsetRef.current)), []);
-  return {sync, remaining};
+  /** Raw server-synced time — may sit in the past (used to measure queue waits). */
+  const now = useCallback(() => Date.now() - offsetRef.current, []);
+  return {sync, remaining, now};
 }
 
 function ConnectionDot({connected}: {connected: boolean}) {
@@ -85,18 +124,12 @@ function ConnectionDot({connected}: {connected: boolean}) {
   );
 }
 
-function TierBadge({tier, tierName}: {tier: string; tierName: string}) {
-  const tone: Record<string, string> = {
-    bronze: 'border-amber-700/40 bg-amber-700/15 text-amber-300',
-    silver: 'border-slate-400/30 bg-slate-400/10 text-slate-300',
-    gold: 'border-yellow-500/40 bg-yellow-500/12 text-yellow-300',
-    platinum: 'border-teal-300/30 bg-teal-300/10 text-teal-200',
-    diamond: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
-    master: 'border-violet-400/40 bg-violet-400/12 text-violet-300',
-    grandmaster: 'border-pink-400/40 bg-pink-400/12 text-pink-300',
-  };
+function TierBadge({tier, tierName}: {tier: RankedTier | undefined; tierName: string}) {
+  /* Full metal-shield art when the tier list has loaded; a tinted text tag
+     keeps the row readable until then. */
+  if (tier) return <RankedTierPill tier={tier} />;
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide ${tone[tier] ?? tone.bronze}`}>
+    <span className="rounded-full border border-white/14 bg-white/6 px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide text-mist-300">
       {tierName}
     </span>
   );
@@ -164,8 +197,8 @@ function StandingsList({
         )}
       </div>
       <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
-        {standings.map((player) => (
-          <PlayerRow key={player.student_id} player={player} meId={meId} showPlace />
+        {standings.map((player, index) => (
+          <PlayerRow key={player.student_id} player={{...player, position: player.position || index + 1}} meId={meId} showPlace />
         ))}
       </ul>
     </div>
@@ -204,7 +237,7 @@ export default function RankedPanel() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [meta, setMeta] = useState<RankedMeta | null>(null);
   const [status, setStatus] = useState<RankedStatus | null>(null);
-  const [courses, setCourses] = useState<{id: number; title: string; code: string}[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
   const [matchId, setMatchId] = useState<number | null>(null);
   const [match, setMatch] = useState<RankedMatchState | null>(null);
@@ -217,6 +250,11 @@ export default function RankedPanel() {
   const [ladder, setLadder] = useState<RankedLadder | null>(null);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /* Lobby chat: relayed by the ranked socket, never persisted. */
+  const [lobbyChat, setLobbyChat] = useState<RankedChatLine[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const lobbyChatMatchId = useRef<number | null>(null);
   const socketRef = useRef<LiveSocket | null>(null);
   const questionStartRef = useRef<number>(0);
 
@@ -245,6 +283,9 @@ export default function RankedPanel() {
 
   const applyState = useCallback(
     (state: RankedMatchState) => {
+      /* Fresh match = fresh lobby chat. */
+      if (lobbyChatMatchId.current !== null && lobbyChatMatchId.current !== state.id) setLobbyChat([]);
+      lobbyChatMatchId.current = state.id;
       setMatch(state);
       setMatchId(state.id);
       if (state.server_now) clock.sync(state.server_now);
@@ -369,6 +410,14 @@ export default function RankedPanel() {
             setMatch((current) => (current ? {...current, activity: payload.items ?? []} : current));
             break;
           }
+          case 'ranked_chat': {
+            const event = data as {match_id: number; student_id: number; name: string; body: string};
+            setLobbyChat((current) => [
+              ...current.slice(-79),
+              {key: `${event.student_id}-${current.length}-${event.body.length}`, student_id: event.student_id, name: event.name, body: event.body, mine: event.student_id === meId},
+            ]);
+            break;
+          }
           case 'ranked_finish': {
             const payload = data as unknown as RankedFinishPayload;
             setFinish(payload);
@@ -427,9 +476,22 @@ export default function RankedPanel() {
     } catch {
       /* already gone */
     }
+    setLobbyChat([]);
     setPhase('idle');
     void loadIdle();
   };
+
+  /** Lobby chat rides the ranked socket; the server gates it to the lobby. */
+  const sendLobbyChat = () => {
+    const body = chatDraft.trim();
+    if (!body || !socketRef.current) return;
+    socketRef.current.send({type: 'chat', body});
+    setChatDraft('');
+  };
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({block: 'end'});
+  }, [lobbyChat]);
 
   const answer = async (letter: string) => {
     if (!matchId || !window_ || myPick || busy) return;
@@ -445,6 +507,24 @@ export default function RankedPanel() {
     } catch (error) {
       setMyPick(null);
       toast('error', 'Answer rejected', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const skip = async () => {
+    if (!matchId || !window_ || myPick || busy || reveal) return;
+    uiClick('cancel');
+    setMyPick('SKIP');
+    setBusy(true);
+    try {
+      const result = await api.rankedSkip(matchId);
+      sfx.play('whoosh');
+      if (result.reveal) setReveal(result.reveal);
+      if (result.match) setMatch(result.match);
+    } catch (error) {
+      setMyPick(null);
+      toast('error', 'Could not skip', (error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -508,6 +588,19 @@ export default function RankedPanel() {
   const lobbySecondsLeft = match?.lobby_at ? Math.max(0, Math.ceil(clock.remaining(match.lobby_at) / 1000)) : 0;
   const waiting = status?.waiting ?? 0;
 
+  /* Badge art for any tier key, straight from the server's ladder. */
+  const tierByKey = useMemo(() => {
+    const map = new Map<string, RankedTier>();
+    for (const tier of meta?.tiers ?? []) map.set(tier.key, tier);
+    return map;
+  }, [meta]);
+  const tierOf = (key: string | undefined | null) => (key ? tierByKey.get(key) : undefined);
+  const myTier = tierOf(status?.tier);
+  const nextTier = useMemo(() => {
+    if (!meta || status == null) return undefined;
+    return meta.tiers.find((tier) => tier.min > status.rating);
+  }, [meta, status]);
+
   /* --------------------------------------------------------- renders */
   if (phase === 'loading') {
     return (
@@ -520,45 +613,161 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------- course select */
   if (phase === 'idle') {
+    const heroBright = myTier?.bright ?? '#a855f7';
     return (
-      <div className="w-full space-y-4 p-3 sm:p-4">
+      <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Swords className="size-5 text-nova-300" />
           <h1 className="font-display text-[1.15rem] font-black tracking-tight text-mist-50 sm:text-[1.35rem]">Ranked</h1>
-          {status && <TierBadge tier={status.tier} tierName={status.tier_name} />}
+          {status && <TierBadge tier={myTier} tierName={status.tier_name} />}
         </div>
         <p className="max-w-2xl text-[0.82rem] font-medium text-mist-400">
           Same questions, one shared clock, live standings. Your rating moves with every result — accuracy
-          always outweighs a fast click.
+          always outweighs a fast click. Higher tiers play longer sets on a tighter clock, fast answers pay
+          bonus XP, and you can skip a question you would rather not guess.
         </p>
 
+        {/* Your standing: the badge you currently hold and the climb to the next one. */}
+        <Card className="relative overflow-hidden p-4 sm:p-5">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{background: `radial-gradient(560px 190px at 18% -30%, ${heroBright}2e, transparent 70%)`}}
+          />
+          <div className="relative flex items-center gap-3.5 sm:gap-4">
+            {myTier ? (
+              <RankedBadge tier={myTier} size="lg" current />
+            ) : (
+              <span className="grid size-18 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/4">
+                <Trophy className="size-8 text-mist-500" />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Your rank</p>
+              <p className="mt-0.5 truncate font-display text-[1.2rem] leading-tight font-black text-mist-50 sm:text-[1.35rem]">
+                {myTier?.name ?? status?.tier_name ?? 'Unranked'}
+              </p>
+              {nextTier ? (
+                <p className="mt-0.5 text-[0.68rem] font-bold text-mist-400">
+                  <span className="tabular">{Math.max(0, nextTier.min - (status?.rating ?? 1000))}</span> rating to{' '}
+                  <span style={{color: nextTier.bright}}>{nextTier.name}</span>
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[0.68rem] font-bold text-gold-300">Top of the ladder — defend the crown.</p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-display text-[1.6rem] leading-none font-black text-mist-50 tabular sm:text-[1.9rem]">
+                {formatNumber(status?.rating ?? 1000)}
+              </p>
+              <p className="mt-1 text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Rating</p>
+            </div>
+          </div>
+          {nextTier && myTier && (
+            <div className="relative mt-3.5">
+              <ProgressBar
+                value={Math.max(2, Math.min(98, Math.round(((status?.rating ?? 1000) - myTier.min) / Math.max(1, nextTier.min - myTier.min)) * 100))}
+              />
+              <div className="mt-1.5 flex items-center justify-between text-[0.58rem] font-bold text-mist-500">
+                <span className="tabular">{myTier.min}</span>
+                <span className="tabular">{nextTier.min}</span>
+              </div>
+            </div>
+          )}
+        </Card>
+
         <div className="grid gap-3 sm:grid-cols-3">
-          <StatTile label="Rating" value={formatNumber(status?.rating ?? 1000)} hint={status?.tier_name ?? 'Bronze'} />
+          <StatTile label="Rating" value={formatNumber(status?.rating ?? 1000)} hint={status?.tier_name ?? 'Bronze III'} />
           <StatTile label="Matches" value={String(status?.played ?? 0)} hint={`${status?.won ?? 0} won`} />
           <StatTile label="Players per match" value={`${meta?.min_players ?? 2}–${meta?.match_size ?? 15}`} hint="server-matchmade" />
         </div>
 
         <Card className="p-4 sm:p-5">
-          <h2 className="text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
-          <p className="mt-1 text-[0.78rem] font-medium text-mist-500">Pick a course and the server will find opponents.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {courses.map((course) => (
-              <button
-                key={course.id}
-                onClick={() => {
-                  uiClick('select');
-                  setCourseId(course.id);
-                }}
-                className={`rounded-2xl border px-3.5 py-3 text-left transition-all active:translate-y-px ${
-                  courseId === course.id
-                    ? 'border-nova-400/60 bg-nova-400/10 shadow-[0_0_0_1px] shadow-nova-400/30'
-                    : 'border-white/10 bg-white/4 hover:border-white/20 hover:bg-white/8'
-                }`}
-              >
-                <p className="truncate text-[0.82rem] font-extrabold text-mist-100">{course.title}</p>
-                <p className="text-[0.66rem] font-bold text-mist-500">{course.code}</p>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
+            <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-300" icon={<SignalHigh className="size-3" />}>
+              {courses.length} arena{courses.length === 1 ? '' : 's'} open
+            </Chip>
+          </div>
+          <p className="mt-1 text-[0.78rem] font-medium text-mist-500">
+            Pick a course and the server will find opponents. Every card shows the bank you will be quizzed from.
+          </p>
+          <div className="mt-3 grid min-w-0 gap-2.5 sm:grid-cols-2">
+            {courses.map((course) => {
+              const Icon = courseIcon(course);
+              const accent = COURSE_ACCENTS[course.accent] ?? FALLBACK_ACCENT;
+              const selected = courseId === course.id;
+              return (
+                <button
+                  key={course.id}
+                  type="button"
+                  onClick={() => {
+                    uiClick('select');
+                    setCourseId(course.id);
+                  }}
+                  aria-pressed={selected}
+                  className={`group relative w-full min-w-0 overflow-hidden rounded-2xl border text-left transition-all active:translate-y-px ${
+                    selected ? 'bg-white/[0.05]' : 'border-white/10 bg-white/[0.03] hover:border-white/22 hover:bg-white/[0.06]'
+                  }`}
+                  style={
+                    selected
+                      ? {borderColor: `${accent.bright}99`, boxShadow: `0 0 0 1px ${accent.bright}55, 0 18px 40px -22px ${accent.bright}cc`}
+                      : undefined
+                  }
+                >
+                  {/* top light-line: the card reads machined, not flat */}
+                  <span aria-hidden className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/22 to-transparent" />
+                  <div className="flex min-w-0 items-start gap-3 p-3.5">
+                    <span
+                      aria-hidden
+                      className="grid size-12 shrink-0 place-items-center rounded-2xl border border-white/20"
+                      style={{background: `linear-gradient(150deg, ${accent.bright}, ${accent.deep})`, boxShadow: `0 10px 22px -12px ${accent.deep}`}}
+                    >
+                      <Icon className="size-6 text-white drop-shadow" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="min-w-0 truncate font-display text-[0.92rem] font-extrabold text-mist-50">{course.title}</h3>
+                        {selected && (
+                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-white/30 text-white" style={{background: accent.bright, color: '#171030'}}>
+                            <Check className="size-3.5" strokeWidth={3} />
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 truncate text-[0.62rem] font-black tracking-[0.16em] uppercase" style={{color: accent.bright}}>
+                        {course.code} · {course.semester}
+                      </p>
+                      {course.description && (
+                        <p className="mt-1.5 line-clamp-2 min-w-0 text-[0.72rem] leading-relaxed font-medium break-words text-mist-400">
+                          {course.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-white/8 bg-black/15 px-3.5 py-2.5">
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<ListChecks className="size-3" />}>
+                      {course.question_count ?? 0} questions
+                    </Chip>
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<FileText className="size-3" />}>
+                      {course.quiz_count ?? 0} exam{course.quiz_count === 1 ? '' : 's'}
+                    </Chip>
+                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<Award className="size-3" />}>
+                      {course.credit_units} CU
+                    </Chip>
+                    {course.lecturer && (
+                      <Chip className="hidden border-white/12 bg-white/8 text-mist-200 md:inline-flex" icon={<GraduationCap className="size-3" />}>
+                        {course.lecturer}
+                      </Chip>
+                    )}
+                    {course.created_at && (
+                      <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<CalendarDays className="size-3" />}>
+                        added {formatRelative(course.created_at)}
+                      </Chip>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
           <Button className="mt-4 w-full" size="lg" loading={busy} disabled={courseId == null} onClick={findMatch} icon={<TrendingUp className="size-4" />}>
             Find match
@@ -604,7 +813,7 @@ export default function RankedPanel() {
                   <span className="w-6 text-center font-display text-[0.74rem] font-black text-mist-400">{row.position}</span>
                   <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={28} photo={{id: row.student_id, has: row.has_photo}} />
                   <p className="min-w-0 flex-1 truncate text-[0.76rem] font-bold text-mist-100">{row.name}</p>
-                  <TierBadge tier={row.tier} tierName={row.tier_name} />
+                  <TierBadge tier={tierOf(row.tier)} tierName={row.tier_name} />
                   <span className="font-display text-[0.8rem] font-black text-mist-50">{formatNumber(row.rating)}</span>
                 </li>
               ))}
@@ -624,15 +833,44 @@ export default function RankedPanel() {
                 </ul>
               </>
             )}
-            {meta && (
-              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/8 pt-3">
-                {meta.tiers.map((tier) => (
-                  <Chip key={tier.key}>
-                    {tier.name} {tier.min}+
-                  </Chip>
-                ))}
-              </div>
-            )}
+          </Card>
+        )}
+
+        {/* The full fifteen-badge ladder: every division, its gate and its rules. */}
+        {meta && meta.tiers.length > 0 && (
+          <Card className="p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Crown className="size-4 text-gold-300" />
+              <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">The ranked ladder</h2>
+              <Chip className="border-gold-400/30 bg-gold-400/12 text-gold-200" icon={<Medal className="size-3" />}>
+                {meta.tiers.length} badges
+              </Chip>
+            </div>
+            <p className="mt-1 text-[0.72rem] font-medium text-mist-500">
+              Win matches to climb divisions. Each metal plays its own shape — higher badges mean longer sets on a tighter clock.
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {meta.tiers.map((tier) => {
+                const isMe = status?.tier === tier.key;
+                const reached = (status?.rating ?? 1000) >= tier.min;
+                const rules = meta.tier_rules?.[tier.key];
+                return (
+                  <div
+                    key={tier.key}
+                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl border px-1 py-2.5 text-center ${
+                      isMe ? '' : 'border-white/8 bg-white/[0.025]'
+                    }`}
+                    style={isMe ? {borderColor: `${tier.bright}88`, background: `${tier.bright}14`} : undefined}
+                  >
+                    <RankedBadge tier={tier} size="md" current={isMe} locked={!reached} />
+                    <p className="w-full truncate text-[0.62rem] font-black text-mist-100">{tier.name}</p>
+                    <p className="text-[0.54rem] font-bold text-mist-500 tabular">
+                      {tier.min}+{rules ? ` · ${rules.questions}Q/${rules.seconds}s` : ''}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         )}
       </div>
@@ -641,6 +879,7 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------------ queue */
   if (phase === 'queue') {
+    const queuePlayers = status?.queue_players ?? [];
     return (
       <div className="w-full p-3 sm:p-4">
         <Card className="mx-auto max-w-lg p-5 text-center sm:p-7">
@@ -653,7 +892,33 @@ export default function RankedPanel() {
           <p className="mt-1 text-[0.8rem] font-medium text-mist-400">
             {courses.find((c) => c.id === status?.queue_course_id)?.title ?? 'The course bank'} · expanding the search as you wait
           </p>
-          <QueueMeter waiting={waiting} meta={meta} />
+          <QueueMeter waiting={waiting} meta={meta} status={status} clock={clock} />
+
+          {/* Everyone standing in the queue with you — live, oldest first. */}
+          {queuePlayers.length > 0 && (
+            <div className="mt-5 text-left">
+              <p className="flex items-center justify-between text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">
+                In the queue
+                <span className="tabular">{queuePlayers.length}</span>
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {queuePlayers.map((player) => (
+                  <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2">
+                    <Avatar name={player.name} hue={player.avatar_hue} initials={player.initials} size={32} photo={{id: player.student_id, has: player.has_photo}} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.76rem] font-extrabold text-mist-100">
+                        {player.name}
+                        {player.student_id === meId && <span className="ml-1.5 text-[0.6rem] font-black tracking-wider text-nova-300">You</span>}
+                      </p>
+                      <p className="text-[0.6rem] font-bold text-mist-500">Lv {player.level} · {formatNumber(player.rating)} rating</p>
+                    </div>
+                    <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <Button variant="outline" className="mt-5" onClick={cancelQueue} icon={<X className="size-4" />}>
             Cancel
           </Button>
@@ -664,42 +929,88 @@ export default function RankedPanel() {
 
   /* ------------------------------------------------------ lobby */
   if (phase === 'lobby' && match) {
+    const lobbyTotal = Math.max(1, match.lobby_seconds ?? 12);
     return (
       <div className="w-full space-y-4 p-3 sm:p-4">
-        <Card className="mx-auto max-w-2xl p-5 sm:p-6">
+        <Card className="mx-auto max-w-3xl p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <SignalHigh className="size-4 text-mint-300" />
             <h2 className="text-[1rem] font-extrabold text-mist-50">Match found</h2>
-            <span className="ml-auto font-display text-[1.3rem] font-black text-nova-200">{Math.max(0, lobbySecondsLeft)}s</span>
+            <span className="ml-auto font-display text-[1.3rem] font-black text-nova-200 tabular">{Math.max(0, lobbySecondsLeft)}s</span>
           </div>
           <p className="mt-1 text-[0.78rem] font-medium text-mist-400">
             {match.course_title} · {match.questions_total || match.question_count} questions · {match.per_question_seconds}s each
           </p>
-          <ProgressBar className="mt-3" value={100 - (lobbySecondsLeft / 7) * 100} />
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {match.participants.map((player) => (
-              <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5">
-                <Avatar
-                  name={player.name}
-                  hue={player.avatar_hue}
-                  initials={player.initials}
-                  size={38}
-                  photo={{id: player.student_id, has: player.has_photo}}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate text-[0.78rem] font-extrabold text-mist-100">
-                    <ConnectionDot connected={player.connected} />
-                    <span className="truncate">{player.name}</span>
+          <ProgressBar className="mt-3" value={100 - (Math.min(lobbySecondsLeft, lobbyTotal) / lobbyTotal) * 100} />
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1.15fr_1fr] lg:gap-4">
+            {/* The fighters: who joined, their face and their rank. */}
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">Players · {match.participants.length}</p>
+              <ul className="mt-2 grid gap-2">
+                {match.participants.map((player) => (
+                  <li key={player.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5">
+                    <Avatar
+                      name={player.name}
+                      hue={player.avatar_hue}
+                      initials={player.initials}
+                      size={38}
+                      photo={{id: player.student_id, has: player.has_photo}}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-1.5 truncate text-[0.78rem] font-extrabold text-mist-100">
+                        <ConnectionDot connected={player.connected} />
+                        <span className="truncate">{player.name}</span>
+                        {player.student_id === meId && <span className="text-[0.6rem] font-black tracking-wider text-nova-300">You</span>}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <TierBadge tier={tierOf(player.tier)} tierName={player.tier_name} />
+                        <span className="text-[0.6rem] font-bold text-mist-500">Lv {player.level}</span>
+                      </div>
+                    </div>
+                    <span title="Ready"><Check className="size-4 shrink-0 text-mint-300" /></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Lobby chat: open until the first question fires. */}
+            <div className="flex min-w-0 flex-col rounded-2xl border border-white/8 bg-white/[0.03]">
+              <p className="border-b border-white/8 px-3 py-2 text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">
+                Lobby chat
+              </p>
+              <div className="min-h-[9rem] flex-1 space-y-1.5 overflow-y-auto px-3 py-2.5" style={{maxHeight: '16rem'}}>
+                {lobbyChat.length === 0 && (
+                  <p className="text-[0.68rem] font-medium text-mist-600">Say good luck — chat locks the moment questions start.</p>
+                )}
+                {lobbyChat.map((line) => (
+                  <p key={line.key} className="text-[0.72rem] leading-snug font-medium break-words text-mist-300">
+                    <span className={`font-extrabold ${line.mine ? 'text-nova-300' : 'text-gold-300'}`}>{line.mine ? 'You' : line.name}</span>{' '}
+                    {line.body}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <TierBadge tier={player.tier} tierName={player.tier_name} />
-                    <span className="text-[0.6rem] font-bold text-mist-500">Lv {player.level}</span>
-                  </div>
-                </div>
-                <span title="Ready"><Check className="size-4 shrink-0 text-mint-300" /></span>
-              </li>
-            ))}
-          </ul>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="flex items-center gap-1.5 border-t border-white/8 p-2">
+                <input
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      sendLobbyChat();
+                    }
+                  }}
+                  maxLength={300}
+                  placeholder="Good luck everyone…"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[0.76rem] font-semibold text-mist-100 outline-none placeholder:text-mist-600 focus:border-nova-400/50"
+                />
+                <Button size="sm" onClick={sendLobbyChat} disabled={!chatDraft.trim()} icon={<Send className="size-3.5" />}>
+                  Send
+                </Button>
+              </div>
+            </div>
+          </div>
           <p className="mt-4 text-center text-[0.68rem] font-semibold text-mist-600">Starting on the server clock — hold tight.</p>
         </Card>
       </div>
@@ -778,8 +1089,19 @@ export default function RankedPanel() {
                   </div>
                   {iAnswered && !reveal && (
                     <p className="mt-3 flex items-center gap-2 text-[0.72rem] font-bold text-mist-400">
-                      <Loader2 className="size-3.5 animate-spin" /> Answer locked — waiting for the room.
+                      <Loader2 className="size-3.5 animate-spin" />{' '}
+                      {myPick === 'SKIP' ? 'Skipped — waiting for the room.' : 'Answer locked — waiting for the room.'}
                     </p>
+                  )}
+                  {!iAnswered && !reveal && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => void skip()}
+                        className="flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.04] px-3 py-1.5 text-[0.7rem] font-bold text-mist-400 transition-colors touch-manipulation hover:border-white/25 hover:text-mist-200"
+                      >
+                        <SkipForward className="size-3.5" /> Skip this question
+                      </button>
+                    </div>
                   )}
                 </>
               ) : reveal ? (
@@ -845,9 +1167,15 @@ export default function RankedPanel() {
     return (
       <div className="w-full space-y-4 p-3 sm:p-4">
         <Card className="mx-auto max-w-xl p-5 text-center sm:p-7">
-          <div className="mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white shadow-lg shadow-nova-500/20">
-            <Trophy className="size-7" />
-          </div>
+          {myTier ? (
+            <div className="flex justify-center">
+              <RankedBadge tier={myTier} size="lg" current />
+            </div>
+          ) : (
+            <div className="mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white shadow-lg shadow-nova-500/20">
+              <Trophy className="size-7" />
+            </div>
+          )}
           <h2 className="game-title mt-3 font-display text-[1.5rem] font-black tracking-tight">
             {ordinal(position)} of {players}
           </h2>
@@ -863,7 +1191,13 @@ export default function RankedPanel() {
               </span>
             </p>
           )}
-          {status && <div className="mt-2 flex items-center justify-center"><TierBadge tier={status.tier} tierName={status.tier_name} /></div>}
+          {myRating?.xp != null && (
+            <p className="mt-1.5 text-[0.72rem] font-bold text-mist-400">
+              +{myRating.xp} XP
+              {(myRating.speed_xp ?? 0) > 0 ? ` · includes +${myRating.speed_xp} speed bonus for fast answers` : ''}
+            </p>
+          )}
+          {status && <div className="mt-2 flex items-center justify-center"><TierBadge tier={tierOf(status.tier)} tierName={status.tier_name} /></div>}
           <div className="mt-5 grid grid-cols-3 gap-2">
             <StatTile label="Score" value={formatNumber(myRow?.score ?? 0)} />
             <StatTile label="Accuracy" value={`${accuracy}%`} />
@@ -886,7 +1220,7 @@ export default function RankedPanel() {
           <h3 className="text-[0.9rem] font-extrabold text-mist-50">Final standings</h3>
           <ul className="mt-3 space-y-1.5">
             {standings.map((player, index) => (
-              <PlayerRow key={player.student_id} player={{...player, position: player.position ?? index + 1}} meId={meId} showPlace />
+              <PlayerRow key={player.student_id} player={{...player, position: player.position || index + 1}} meId={meId} showPlace />
             ))}
           </ul>
         </Card>
@@ -911,15 +1245,15 @@ export default function RankedPanel() {
               <Card key={item.index} className="p-4">
                 <div className="flex items-center gap-2">
                   <span className="font-display text-[0.7rem] font-black text-mist-500">Q{item.index + 1}</span>
-                  <span className={`text-[0.66rem] font-extrabold ${item.correct ? 'text-mint-300' : 'text-flare-300'}`}>
-                    {item.correct ? 'Correct' : item.selected ? 'Wrong' : 'Skipped'} · +{item.points}
+                  <span className={`text-[0.66rem] font-extrabold ${item.correct ? 'text-mint-300' : item.selected && item.selected !== 'SKIP' ? 'text-flare-300' : 'text-mist-400'}`}>
+                    {item.correct ? 'Correct' : item.selected && item.selected !== 'SKIP' ? 'Wrong' : 'Skipped'} · +{item.points}
                   </span>
                 </div>
                 <p className="mt-1.5 text-[0.86rem] font-bold leading-snug text-mist-100">{q.text}</p>
                 <ReviewOptions options={q.options as Record<string, string>} correct={q.correct_label ?? q.correct} chosen={item.selected} />
                 {q.explanation && <p className="mt-1.5 text-[0.76rem] font-medium leading-relaxed text-mist-400">{q.explanation}</p>}
                 <p className="mt-2 text-[0.7rem] font-bold text-mist-500">
-                  Your answer: {item.selected ?? '—'} · Correct: {q.correct_label ?? q.correct ?? '—'}
+                  Your answer: {item.selected && item.selected !== 'SKIP' ? item.selected : '—'} · Correct: {q.correct_label ?? q.correct ?? '—'}
                 </p>
               </Card>
             );
@@ -970,23 +1304,60 @@ function QuestionClock({window_, clock}: {window_: RankedQuestionWindow | null; 
   );
 }
 
-function QueueMeter({waiting, meta}: {waiting: number; meta: {min_players?: number; match_size?: number} | null}) {
+/**
+ * The wait-timer ladder, straight from the server: the longer the oldest
+ * player has waited, the fewer players a match needs — full at first, then
+ * 12 → 10 → 6 → 4, and eventually whoever showed up. The meter shows the
+ * rung you are on and when the next one drops.
+ */
+function QueueMeter({
+  waiting,
+  meta,
+  status,
+  clock,
+}: {
+  waiting: number;
+  meta: RankedMeta | null;
+  status: RankedStatus | null;
+  clock: {now: () => number};
+}) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const started = Date.now();
-    const tick = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 500);
+    const tick = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => window.clearInterval(tick);
   }, []);
-  const queueTarget = QUEUE_TARGETS[Math.min(QUEUE_TARGETS.length - 1, Math.floor(seconds / 8))];
+
+  const ladder = meta?.queue_ladder ?? [];
+  const full = meta?.match_size ?? 15;
+  const joinedAt = status?.queue_joined_at ? parseTime(status.queue_joined_at) : null;
+  const elapsed = joinedAt != null ? Math.max(0, (clock.now() - joinedAt) / 1000) : seconds;
+
+  // The server computes the rung from the oldest waiter in the course — trust
+  // it when present; fall back to deriving it locally from our own join time.
+  let target = status?.players_needed ?? full;
+  if (status?.players_needed == null) {
+    for (const rung of ladder) {
+      if (elapsed >= rung.wait) target = rung.players;
+    }
+  }
+  const nextDrop = ladder.find((rung) => rung.wait > elapsed && rung.players < target) ?? null;
+  const mmss = (value: number) => `${Math.floor(value / 60)}:${String(Math.round(value) % 60).padStart(2, '0')}`;
+
   return (
     <div className="mx-auto mt-5 max-w-xs">
       <div className="flex items-end justify-between text-[0.72rem] font-extrabold text-mist-300">
         <span>{Math.max(waiting, 1)} found</span>
-        <span className="text-mist-500">aiming for {queueTarget}</span>
+        <span className="text-mist-500">starts at {target} players</span>
       </div>
-      <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / queueTarget) * 100)} />
+      <ProgressBar className="mt-1.5" value={Math.min(100, (Math.max(waiting, 1) / Math.max(1, target)) * 100)} />
       <p className="mt-2 text-[0.64rem] font-semibold text-mist-600">
-        A match starts as soon as {meta?.min_players ?? 2} players are ready — you will never wait for a full {meta?.match_size ?? 15}.
+        {nextDrop
+          ? `Waiting ${mmss(elapsed)} — at ${mmss(nextDrop.wait)} only ${nextDrop.players} players are enough.`
+          : 'Past the last rung — the match starts with whoever shows up.'}
+      </p>
+      <p className="mt-1 text-[0.6rem] font-semibold text-mist-700">
+        The longer you wait, the fewer players you need — you will never wait forever.
       </p>
     </div>
   );

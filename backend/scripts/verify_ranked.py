@@ -9,7 +9,7 @@ It proves the contract ranked play is judged on, in the order players hit it:
 
   1. the ladder     — tiers, defaults, meta (server-owned scoring formula)
   2. the queue      — join per course, cancel, no cross-course mixing
-  3. matchmaking    — min 2 players is enough (never "exactly 15"), cap 15
+  3. matchmaking    — patience ladder (30s→12 … 2min→4 … anyone), cap 15
   4. the lobby      — server countdown, roster with rating/tier/level
   5. the match      — shared question windows, hidden answers before reveal
   6. scoring        — accuracy-dominant points, streaks, wrong = 0
@@ -151,11 +151,29 @@ def main() -> int:
     status, meta = call("GET", "/ranked/meta")
     check("meta responds", status == 200, detail(meta))
     tiers = meta.get("tiers", [])
-    check("seven tiers configured", len(tiers) == 7, str(len(tiers)))
+    check("fifteen badges configured", len(tiers) == 15, str(len(tiers)))
     check(
-        "tier names are Bronze → Grandmaster",
-        [t["name"] for t in tiers] == ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"],
+        "tier names climb Bronze III → Grandmaster",
+        [t["name"] for t in tiers]
+        == [
+            "Bronze III", "Bronze II", "Bronze I",
+            "Silver III", "Silver II", "Silver I",
+            "Gold III", "Gold II", "Gold I",
+            "Platinum II", "Platinum I",
+            "Diamond II", "Diamond I",
+            "Master", "Grandmaster",
+        ],
         str([t.get("name") for t in tiers]),
+    )
+    check(
+        "every badge carries art (glyph + deep/bright)",
+        all(t.get("icon") and t.get("deep") and t.get("bright") and t.get("metal") for t in tiers),
+        str(tiers[:2]),
+    )
+    check(
+        "tier rules cover all fifteen badges",
+        all(key in (meta.get("tier_rules") or {}) for key in (t["key"] for t in tiers)),
+        str(list((meta.get("tier_rules") or {}).keys())[:4]),
     )
     check("scoring formula is server-side (base dominates speed)", meta.get("base_points", 0) > meta.get("speed_bonus", 99), str(meta))
 
@@ -168,7 +186,7 @@ def main() -> int:
     print("\n2) the queue")
     status, status1 = call("GET", "/ranked/status", token=p1)
     check("status responds", status == 200, detail(status1))
-    check("new player starts at 1000 Silver (the ladder's floor band)", status1.get("rating") == 1000 and status1.get("tier") == "silver", str(status1))
+    check("new player starts at 1000 Silver I", status1.get("rating") == 1000 and status1.get("tier") == "silver_1", str(status1))
     check("not queued, no match", status1.get("in_queue") is False and status1.get("match_id") is None, str(status1))
 
     status, joined = call("POST", "/ranked/queue", {"course_id": course_id}, token=p1)
@@ -192,8 +210,8 @@ def main() -> int:
     print("\n3) matchmaking")
     for token in (p2, p3):
         call("POST", "/ranked/queue", {"course_id": course_id}, token=token)
-    print("   waiting for the server to mint a match (min 2 is enough)…")
-    match = wait_for(lambda: (call("GET", "/ranked/status", token=p1)[1] or {}).get("match_id"))
+    print("   waiting for the server to mint a match (patience ladder: 3 players launch at the 150s rung)…")
+    match = wait_for(lambda: (call("GET", "/ranked/status", token=p1)[1] or {}).get("match_id"), timeout=220)
     check("a match is minted with 3 players (never 'exactly 15')", bool(match), "no match after waiting")
     if not match:
         return finish()
@@ -207,7 +225,7 @@ def main() -> int:
     roster = state["participants"]
     check(
         "roster carries rating, tier, level and readiness",
-        all(p.get("rating") == 1000 and p.get("tier") == "silver" and p.get("level", 0) >= 1 and p.get("ready") for p in roster),
+        all(p.get("rating") == 1000 and p.get("tier") == "silver_1" and p.get("level", 0) >= 1 and p.get("ready") for p in roster),
         str(roster[:1]),
     )
     check("lobby countdown is server-stamped", bool(state.get("lobby_at")) and bool(state.get("server_now")), str(state.get("lobby_at")))

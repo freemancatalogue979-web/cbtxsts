@@ -173,6 +173,7 @@ export interface Course {
   question_count?: number;
   topic_count?: number;
   material_count?: number;
+  created_at?: string;
 }
 
 export interface CosmeticsRef {
@@ -472,10 +473,17 @@ export interface Duel {
   topic: string;
   quiz_id: number | null;
   course_id?: number | null;
-  status: 'invited' | 'live' | 'finished' | 'cancelled' | 'expired';
+  status: 'invited' | 'starting' | 'live' | 'finished' | 'cancelled' | 'expired';
+  visibility?: 'public' | 'private';
   question_count: number;
   stake_coins: number;
   time_limit_seconds: number;
+  /* Server-paced round clock — the arena tells us which question is on the
+     wire and when it runs out; the client only ever displays it. */
+  round_index?: number;
+  round_deadline?: string | null;
+  round_opened?: string | null;
+  server_now?: string;
   winner_id: number | null;
   created_at: string;
   started_at: string | null;
@@ -494,10 +502,13 @@ export interface Duel {
 export interface DuelList {
   active: Duel[];
   history: Duel[];
+  /** Public duels anyone can join — the open arena. */
+  open?: Duel[];
   online: number;
   online_ids: number[];
   stake_default: number;
   question_count_default: number;
+  question_count_max?: number;
 }
 
 export interface Prize {
@@ -1263,6 +1274,11 @@ export interface RankedTier {
   name: string;
   min: number;
   max: number | null;
+  /** Metal family the division belongs to (drives match rules). */
+  metal: string;
+  /** Badge art: deep + bright stops of the shield gradient. */
+  deep: string;
+  bright: string;
   color: string;
   icon: string;
 }
@@ -1276,6 +1292,10 @@ export interface RankedMeta {
   base_points: number;
   speed_bonus: number;
   streak_bonus: number;
+  /** Patience ladder: after `wait` seconds queued, `players` are enough to start. */
+  queue_ladder?: {wait: number; players: number}[];
+  /** Match shape per tier: how many questions and seconds each tier plays. */
+  tier_rules?: Record<string, {questions: number; seconds: number}>;
 }
 
 export interface RankedPlayer {
@@ -1330,12 +1350,28 @@ export interface RankedMatchState {
   round_index: number;
   questions_total: number;
   lobby_at: string;
+  /** Length of the lobby countdown in seconds (server-owned). */
+  lobby_seconds?: number;
   server_now: string;
   participants: RankedPlayer[];
   question: QuestionPublic | null;
   reveal: RankedReveal | null;
   me: {answered: boolean; selected: string | null; correct: boolean | null; points: number | null} | null;
   activity: {text: string; at: string}[];
+}
+
+/** A player standing in a ranked course queue (shown while you wait). */
+export interface RankedQueuePlayer {
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  rating: number;
+  tier: string;
+  tier_name: string;
+  level: number;
+  joined_at: string;
 }
 
 export interface RankedStatus {
@@ -1347,10 +1383,22 @@ export interface RankedStatus {
   in_queue: boolean;
   queue_course_id: number | null;
   waiting: number;
+  /** How many players would start a match right now (falls as you wait). */
+  players_needed?: number | null;
   queue_joined_at: string | null;
+  /** Who else is queued on your course right now (oldest first). */
+  queue_players?: RankedQueuePlayer[];
   server_now: string;
   match_id: number | null;
   match: RankedMatchState | null;
+}
+
+export interface RankedChatLine {
+  key: string;
+  student_id: number;
+  name: string;
+  body: string;
+  mine: boolean;
 }
 
 export interface RankedRatingRow {
@@ -1360,6 +1408,8 @@ export interface RankedRatingRow {
   before: number;
   after: number;
   delta: number;
+  xp?: number;
+  speed_xp?: number;
 }
 
 export interface RankedFinishPayload {

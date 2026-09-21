@@ -4,15 +4,18 @@
  * Conversations support plain text plus two playable message kinds: a duel
  * invite (join straight from the bubble) and a quiz plan (pick an exam and a
  * time, and the card carries both). Hold any bubble for the whole action menu:
- * reply, react, copy, edit, delete (yours) or report (theirs). Nothing is
- * painted on the bubble itself. Friends can also be nudged with one tap and
- * messages arrive live over the arena socket.
+ * reply, react, copy, edit, delete (yours) or report (theirs) — or swipe a
+ * bubble sideways to reply instantly. Nothing is painted on the bubble itself.
+ * Friends can also be nudged with one tap and messages arrive live over the
+ * arena socket.
  */
 import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, EmptyState, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, EmptyState, Modal, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
+import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
+import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
 import {api} from '../lib/api';
 import {bubbleOf} from '../lib/cosmetics';
@@ -24,6 +27,107 @@ import {useSession} from '../store/session';
 import type {ChatMessage, Duel, GroupSection, PlayerSummary, Quiz} from '../lib/types';
 
 const QUICK_PHRASES = ['👋 Hello!', 'GG!', 'Rematch?', 'Ready when you are 🔥'];
+
+/**
+ * Swipe a bubble sideways to reply — the WhatsApp gesture. `touch-action:
+ * pan-y` keeps vertical scrolling native while horizontal drags come here:
+ * the bubble follows the finger, a reply arrow is revealed, and releasing
+ * past the threshold arms the composer. Short presses and slow holds fall
+ * through to Holdable untouched, so hold-for-options and swipe coexist.
+ */
+const SWIPE_TRIGGER = 56;
+const SWIPE_MAX = 84;
+
+function SwipeToReply({onReply, children}: {onReply: () => void; children: React.ReactNode}) {
+  const dragRef = useRef<HTMLDivElement | null>(null);
+  const hintLeftRef = useRef<HTMLSpanElement | null>(null);
+  const hintRightRef = useRef<HTMLSpanElement | null>(null);
+  const gesture = useRef<{x: number; y: number; engaged: boolean; ticking: boolean} | null>(null);
+
+  const paint = (dx: number) => {
+    const node = dragRef.current;
+    if (node) node.style.transform = dx ? `translateX(${dx}px)` : '';
+    const progress = Math.min(1, Math.abs(dx) / SWIPE_TRIGGER);
+    if (hintLeftRef.current) hintLeftRef.current.style.opacity = dx > 0 ? String(progress) : '0';
+    if (hintRightRef.current) hintRightRef.current.style.opacity = dx < 0 ? String(progress) : '0';
+  };
+
+  const settle = () => {
+    const node = dragRef.current;
+    if (node) {
+      node.style.transition = 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)';
+      node.style.transform = '';
+      window.setTimeout(() => {
+        node.style.transition = '';
+      }, 240);
+    }
+    for (const hint of [hintLeftRef.current, hintRightRef.current]) {
+      if (hint) hint.style.opacity = '0';
+    }
+    gesture.current = null;
+  };
+
+  return (
+    <div className="relative min-w-0">
+      {/* Revealed where the bubble used to sit, on the side it was pulled from. */}
+      <span ref={hintLeftRef} aria-hidden className="pointer-events-none absolute inset-y-0 left-1 grid place-items-center opacity-0">
+        <span className="grid size-7 place-items-center rounded-full bg-nova-500/25 text-nova-200">
+          <Reply className="size-3.5" />
+        </span>
+      </span>
+      <span ref={hintRightRef} aria-hidden className="pointer-events-none absolute inset-y-0 right-1 grid place-items-center opacity-0">
+        <span className="grid size-7 place-items-center rounded-full bg-nova-500/25 text-nova-200">
+          <Reply className="size-3.5 -scale-x-100" />
+        </span>
+      </span>
+      <div
+        ref={dragRef}
+        className="min-w-0 touch-pan-y"
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+          gesture.current = {x: event.clientX, y: event.clientY, engaged: false, ticking: false};
+        }}
+        onPointerMove={(event) => {
+          const g = gesture.current;
+          if (!g) return;
+          const dx = event.clientX - g.x;
+          const dy = event.clientY - g.y;
+          if (!g.engaged) {
+            if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+              gesture.current = null; // vertical intent — this is a scroll, not a swipe
+              return;
+            }
+            if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return;
+            g.engaged = true;
+          }
+          const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+          paint(clamped);
+          if (Math.abs(clamped) >= SWIPE_TRIGGER && !g.ticking) {
+            g.ticking = true;
+            HAPTICS.tap();
+          } else if (Math.abs(clamped) < SWIPE_TRIGGER && g.ticking) {
+            g.ticking = false;
+          }
+        }}
+        onPointerUp={(event) => {
+          const g = gesture.current;
+          if (!g) return;
+          const dx = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, event.clientX - g.x));
+          const triggered = g.engaged && Math.abs(dx) >= SWIPE_TRIGGER;
+          settle();
+          if (triggered) {
+            HAPTICS.tap();
+            sfx.play('tap');
+            onReply();
+          }
+        }}
+        onPointerCancel={() => settle()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Hold a message to act on it: **Reply**, **Copy** (text messages) and
@@ -116,16 +220,20 @@ function HoldMessage({
       : []),
   ];
 
+  const holdable = (
+    <Holdable
+      actions={actions}
+      hint="Hold a message for the full menu"
+      menuWidth={214}
+      className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
+    >
+      {children}
+    </Holdable>
+  );
+
   return (
     <div className={`flex min-w-0 ${mine ? 'justify-end' : 'justify-start'}`}>
-      <Holdable
-        actions={actions}
-        hint="Hold a message for the full menu"
-        menuWidth={214}
-        className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
-      >
-        {children}
-      </Holdable>
+      {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
     </div>
   );
 }
@@ -303,6 +411,15 @@ export default function FriendsPanel({
     setSelected(null);
     setChatFocus(null);
   }, [setChatFocus]);
+
+  /* While a thread is open on mobile, ask the shell to tuck the bottom tab
+     bar away so the conversation gets the full screen (a floating pill can
+     bring it back temporarily). Closing the thread restores the bar. */
+  const chatNav = useChatNav();
+  useEffect(() => {
+    chatNav.setThreadOpen(Boolean(selected));
+    return () => chatNav.setThreadOpen(false);
+  }, [selected, chatNav.setThreadOpen]);
 
   const atBottom = useRef(true);
 
@@ -655,7 +772,17 @@ export default function FriendsPanel({
               />
             </Card>
           ) : (
-            <Card className="flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0">
+            /* On phones the thread is a self-contained column that fits between
+               the app header and the bottom nav: the message list scrolls
+               INTERNALLY and the composer stays pinned in view, so the page
+               itself never becomes the scroll container and the nav can never
+               cover the latest messages. While the tab bar is tucked away the
+               thread claims the freed space too. Desktop keeps natural height. */
+            <Card
+              className={`flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:min-h-[20rem] ${
+                chatNav.collapsed ? 'max-lg:h-[calc(100dvh-13rem)]' : 'max-lg:h-[calc(100dvh-16.5rem)]'
+              }`}
+            >
               <div className="flex items-center gap-2.5 border-b border-white/8 px-3 py-2.5 sm:px-4">
                 <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 lg:hidden" />
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />
@@ -680,7 +807,7 @@ export default function FriendsPanel({
                   atBottom.current = bottom;
                   if (bottom) setUnseen(0);
                 }}
-                className="relative min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 max-h-[58dvh] sm:px-4 lg:max-h-none"
+                className="relative min-h-0 min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pt-3 pb-4 sm:px-4 lg:max-h-none"
               >
                 {messages.length === 0 ? (
                   <p className="py-8 text-center text-[0.78rem] font-semibold text-mist-500">
@@ -963,37 +1090,23 @@ export default function FriendsPanel({
       </div>
       )}
 
-      {/* -------------------------------------------------- quiz plan modal */}
-      {planFor && selected && (
-        <div className="fixed inset-0 z-80 grid place-items-center scrim p-3 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <Card className="w-full max-w-sm p-4 sm:p-5">
-            <p className="text-[0.95rem] font-black text-mist-50">Plan a quiz with {selected.name.split(' ')[0]}</p>
-            <p className="mt-1 text-[0.76rem] font-medium text-mist-400">They get a card in the chat with the exam and your proposed time.</p>
- <label className="mt-3 block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">Exam</label>
-            <select
-              value={planFor.quizId}
-              onChange={(event) => setPlanFor({...planFor, quizId: Number(event.target.value)})}
-              className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
-            >
-              {quizzes.map((quiz) => (
-                <option key={quiz.id} value={quiz.id}>
-                  {quiz.title}
-                </option>
-              ))}
-            </select>
- <label className="mt-3 block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">When (optional)</label>
-            <input
-              type="datetime-local"
-              value={planFor.when}
-              onChange={(event) => setPlanFor({...planFor, when: event.target.value})}
-              className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
-            />
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" block onClick={() => setPlanFor(null)}>
+      {/* -------------------------------------------------- quiz plan modal
+          Uses the shared Modal so the dialog gets a max-height + internal
+          scroll and the action bar stays pinned in its footer: the Send button
+          can never escape the panel on tall screens, and a mobile keyboard can
+          never push it out of reach. */}
+      <Modal
+        open={Boolean(planFor && selected)}
+        onClose={() => setPlanFor(null)}
+        title={selected ? `Plan a quiz with ${selected.name.split(' ')[0]}` : 'Plan a quiz'}
+        subtitle="They get a card in the chat with the exam and your proposed time."
+        footer={
+          planFor ? (
+            <>
+              <Button variant="outline" onClick={() => setPlanFor(null)}>
                 Cancel
               </Button>
               <Button
-                block
                 disabled={busy || !planFor.quizId}
                 onClick={() => {
                   const quiz = quizzes.find((row) => row.id === planFor.quizId);
@@ -1009,10 +1122,38 @@ export default function FriendsPanel({
               >
                 Send plan
               </Button>
+            </>
+          ) : null
+        }
+      >
+        {planFor && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">Exam</label>
+              <select
+                value={planFor.quizId}
+                onChange={(event) => setPlanFor({...planFor, quizId: Number(event.target.value)})}
+                className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
+              >
+                {quizzes.map((quiz) => (
+                  <option key={quiz.id} value={quiz.id}>
+                    {quiz.title}
+                  </option>
+                ))}
+              </select>
             </div>
-          </Card>
-        </div>
-      )}
+            <div>
+              <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">When (optional)</label>
+              <input
+                type="datetime-local"
+                value={planFor.when}
+                onChange={(event) => setPlanFor({...planFor, when: event.target.value})}
+                className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -32,17 +32,9 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'magic' | 'montserrat' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'montserrat' | 'arena' | 'grotesk' | 'orbit';
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string}[] = [
-  {
-    id: 'magic',
-    name: 'Quite Magical',
-    blurb: 'The house face — a warm hand-lettered script with a serious edge.',
-    short: 'Hand-lettered house face.',
-    sans: "'Quite Magical', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Quite Magical', 'Space Grotesk Variable', 'Audiowide', ui-sans-serif, sans-serif",
-  },
   {
     id: 'montserrat',
     name: 'Montserrat',

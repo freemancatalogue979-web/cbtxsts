@@ -5,10 +5,10 @@
  * joins with the six-character code. Rooms hold up to 15 players and keep a
  * live chat running from the lobby to the final standings.
  */
-import {Copy, Crown, DoorOpen, Gamepad2, Plus, Radio, Users} from 'lucide-react';
+import {Crown, DoorOpen, Gamepad2, Plus, Radio, Users} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {motion} from 'motion/react';
-import {Button, Card, Chip, Field, Modal, SectionHeading, TextInput} from '../components/ui';
+import {Button, Card, CopyCode, Field, Modal, SectionHeading, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
@@ -82,15 +82,6 @@ export default function RoomsSection({onOpenRoom}: {onOpenRoom: (roomId: number)
     }
   };
 
-  const copyCode = async (room: RoomState) => {
-    try {
-      await navigator.clipboard.writeText(room.code);
-      toast('success', 'Code copied', room.code);
-    } catch {
-      toast('info', 'Room code', room.code);
-    }
-  };
-
   return (
     <section>
       <SectionHeading
@@ -159,10 +150,7 @@ export default function RoomsSection({onOpenRoom}: {onOpenRoom: (roomId: number)
                     {room.members.length}/{room.capacity} players · {room.status === 'live' ? `Q${Math.max(1, room.round_index + 1)}/${room.questions_total}` : 'lobby'}
                   </p>
                 </button>
-                <Chip className="border-gold-400/30 bg-gold-400/10 font-display tracking-[0.15em] text-gold-300">{room.code}</Chip>
-                <Button variant="ghost" size="sm" onClick={() => copyCode(room)} aria-label="Copy room code">
-                  <Copy className="size-4" />
-                </Button>
+                <CopyCode code={room.code} size="sm" pillClassName="border-gold-400/30 bg-gold-400/10 text-gold-300" />
                 <Button size="sm" className="shrink-0 px-3" onClick={() => onOpenRoom(room.id)}>
                   Enter
                 </Button>

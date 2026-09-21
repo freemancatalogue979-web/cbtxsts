@@ -210,7 +210,7 @@ def main() -> int:
     check("challenge created", status == 200 and duel.get("status") == "invited", detail(duel))
     duel_id = duel["id"]
     status, accepted = call("POST", f"/duels/{duel_id}/accept", token=tok_b)
-    check("accept starts the duel", status == 200 and accepted.get("status") == "live", detail(accepted))
+    check("accept starts the duel", status == 200 and accepted.get("status") in ("starting", "live"), detail(accepted)[:160])
     set_b = [q["id"] for q in accepted.get("questions", [])]
     status, mine = call("GET", f"/duels/{duel_id}", token=tok_a)
     set_a = [q["id"] for q in (mine or {}).get("questions", [])]
@@ -221,7 +221,23 @@ def main() -> int:
         "POST", f"/duels/{duel_id}/answer", {"question_id": set_b[0], "selected": "A", "elapsed_ms": 900}, token=tok_a
     )
     check("a rival's question is not answerable", status == 400, detail(cross))
+    def await_round(want: int, timeout: float = 30) -> dict:
+        budget = time.time() + timeout
+        state: dict = {}
+        while time.time() < budget:
+            sc, payload = call("GET", f"/duels/{duel_id}", token=tok_a)
+            state = payload if sc == 200 else {}
+            cursor = state.get("round_index")
+            if state.get("status") == "finished":
+                return state
+            # NB: never `cursor or -1` — round 0 is falsy.
+            if state.get("status") == "live" and cursor is not None and cursor >= want:
+                return state
+            time.sleep(0.4)
+        return state
+
     for index, qid in enumerate(set_a):
+        await_round(index)
         key = admin_answer_key(admin, qid)
         status, _ = call(
             "POST",
@@ -231,17 +247,24 @@ def main() -> int:
         )
         if status != 200:
             break
-    check("player A graded against their own set", status == 200, str(status))
-    for index, qid in enumerate(set_b):
-        key = admin_answer_key(admin, qid)
+        # The rival answers the same round so the server pacing moves on.
+        key_b = admin_answer_key(admin, set_b[index])
         call(
             "POST",
             f"/duels/{duel_id}/answer",
-            {"question_id": qid, "selected": key or "B", "elapsed_ms": 1500 + index * 100},
+            {"question_id": set_b[index], "selected": key_b or "B", "elapsed_ms": 1500 + index * 100},
             token=tok_b,
         )
-    status, final = call("GET", f"/duels/{duel_id}", token=tok_a)
-    check("duel finished after both completed", status == 200 and final.get("status") == "finished", detail(final))
+    check("player A graded against their own set", status == 200, str(status))
+
+    final: dict = {}
+    budget = time.time() + 20
+    while time.time() < budget:
+        status, final = call("GET", f"/duels/{duel_id}", token=tok_a)
+        if isinstance(final, dict) and final.get("status") == "finished":
+            break
+        time.sleep(0.5)
+    check("duel finished after both completed", status == 200 and final.get("status") == "finished", str(final.get("status")))
     revealed = [q["id"] for q in (final or {}).get("questions", [])]
     check("the reveal contains ONLY my own set", revealed == set_a, str(set(revealed) ^ set(set_a)))
     check("the reveal carries my answer key", all("correct" in q for q in (final or {}).get("questions", [])), "")
@@ -288,7 +311,13 @@ def main() -> int:
     tok_r2, _ = new_student("mpr")
     call("POST", "/ranked/queue", {"course_id": course_id}, token=tok_r1)
     call("POST", "/ranked/queue", {"course_id": course_id}, token=tok_r2)
-    match_id = wait_for(lambda: (call("GET", "/ranked/status", token=tok_r1)[1] or {}).get("match_id"), timeout=45)
+    # Patience ladder: a two-player queue only launches at the 150s rung, but
+    # a FULL roster (MATCH_SIZE=15) launches on the very next tick — fill the
+    # queue so the per-player deal is exercised without a two-minute wait.
+    for _ in range(13):
+        extra_tok, _ = new_student("mpr")
+        call("POST", "/ranked/queue", {"course_id": course_id}, token=extra_tok)
+    match_id = wait_for(lambda: (call("GET", "/ranked/status", token=tok_r1)[1] or {}).get("match_id"), timeout=30)
     check("the queue minted a match", bool(match_id), "no match_id")
     live = wait_for(
         lambda: (call("GET", f"/ranked/match/{match_id}", token=tok_r1)[1] or {}).get("match", {}).get("question"),
@@ -301,7 +330,7 @@ def main() -> int:
     q2 = ((m2 or {}).get("match") or {}).get("question") or {}
     check("both players see a round-1 question", bool(q1.get("id")) and bool(q2.get("id")), f"{q1.get('id')}/{q2.get('id')}")
     check("ranked round questions differ per player", q1.get("id") != q2.get("id"), str(q1.get("id")))
-    sets = assigned_sets("ranked_participants", "match_id", int(match_id))
+    sets = assigned_sets("ranked_participants", "match_id", int(match_id or 0))
     check("ranked sets were stored per participant", len(sets) >= 2 and all(sets.values()), str({k: len(v) for k, v in sets.items()}))
     flat = [qid for row in sets.values() for qid in row]
     check("ranked sets are pairwise disjoint", len(flat) == len(set(flat)), str(len(flat) - len(set(flat))))

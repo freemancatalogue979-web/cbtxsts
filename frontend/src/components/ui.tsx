@@ -1,8 +1,8 @@
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
-import {CheckCircle2, Loader2, Phone, X} from 'lucide-react';
+import {Check, CheckCircle2, Copy, Loader2, Phone, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import type {ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
-import {createElement, isValidElement, useEffect} from 'react';
+import {createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
 import {avatarStyle, clamp} from '../lib/format';
 import {auraOf, frameOf, portraitOf} from '../lib/cosmetics';
 import type {CosmeticsRef} from '../lib/cosmetics';
@@ -176,7 +176,7 @@ export function Button({
       {...(rest as object)}
     >
       <span
-        className={`gbtn-face flex w-full items-center justify-center ${FACE_SIZES[size]} ${VARIANTS[variant]}`}
+        className={`gbtn-face flex w-full items-center justify-center gap-2 ${FACE_SIZES[size]} ${VARIANTS[variant]}`}
       >
         {/* The animated gradient ring sits inside the face so it inherits the
             chamfered clip and only its outer rim (the mask punches out the
@@ -244,6 +244,102 @@ export function Chip({
       {icon}
       {children}
     </span>
+  );
+}
+
+/* ------------------------------------------------------------ copy code */
+/**
+ * Write text to the clipboard. Uses the async Clipboard API when available and
+ * falls back to a hidden textarea + ``execCommand`` so older mobile browsers
+ * and non-secure contexts still work. Returns whether the copy landed.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    area.style.pointerEvents = 'none';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A shareable code rendered as one big tappable pill: tap/click anywhere on it
+ * (or on the copy icon) and the FULL code is copied, with an inline "Copied"
+ * confirmation. Only the code text itself is ever put on the clipboard.
+ */
+export function CopyCode({
+  code,
+  className = '',
+  pillClassName = '',
+  size = 'md',
+}: {
+  code: string;
+  className?: string;
+  pillClassName?: string;
+  size?: 'sm' | 'md' | 'lg';
+}) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const copy = useCallback(async () => {
+    uiClick();
+    const ok = await copyText(code);
+    if (!ok) return;
+    setCopied(true);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(false), 1600);
+  }, [code]);
+
+  const sizing =
+    size === 'lg'
+      ? 'px-5 py-2.5 text-2xl tracking-[0.3em]'
+      : size === 'sm'
+        ? 'px-2.5 py-1.5 text-[0.8rem] tracking-[0.14em]'
+        : 'px-3.5 py-2 text-lg tracking-[0.2em]';
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={copied ? 'Code copied' : `Copy code ${code}`}
+      title={copied ? 'Copied' : 'Tap to copy'}
+      className={`group inline-flex min-w-0 items-center gap-2.5 rounded-2xl border text-left font-black tabular transition-colors touch-manipulation ${
+        copied ? 'border-mint-400/50 bg-mint-500/12 text-mint-200' : 'border-white/14 bg-white/6 text-mist-50 hover:border-nova-400/45'
+      } ${sizing} ${pillClassName} ${className}`}
+    >
+      <span className="truncate">{code}</span>
+      <span className={`grid shrink-0 place-items-center rounded-lg p-1 ${copied ? 'bg-mint-400/20 text-mint-200' : 'bg-white/8 text-mist-400 group-hover:text-nova-200'}`}>
+        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+      </span>
+      <span className="sr-only" aria-live="polite">
+        {copied ? 'Copied' : ''}
+      </span>
+    </button>
   );
 }
 

@@ -508,9 +508,9 @@ export default function ProfilePanel({
           icon={<Palette className="size-4" />}
         />
         <Card className="p-3.5 sm:p-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:gap-5">
             <div className="min-w-0">
- <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">World</p>
+              <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">World</p>
               <div className="mt-2 grid gap-1.5">
                 {SKINS.map((option) => (
                   <button
@@ -539,7 +539,7 @@ export default function ProfilePanel({
               </div>
             </div>
             <div className="min-w-0">
- <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Accent theme</p>
+              <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Accent theme</p>
               <div className="mt-2 grid gap-1.5">
                 {THEMES.map((option) => (
                   <button
@@ -567,10 +567,14 @@ export default function ProfilePanel({
                 ))}
               </div>
             </div>
+          </div>
+        </Card>
 
-            <div className="min-w-0">
- <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Mascot</p>
-              <div className="mt-2 grid gap-1.5">
+        {/* Mascot gets its own section so the three fighters can spread out
+            instead of being squeezed into a four-up grid on narrow desktops. */}
+        <Card className="mt-3 p-3.5 sm:mt-4 sm:p-5">
+          <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Mascot</p>
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-3 sm:gap-2.5">
                 {MASCOTS.map((option) => (
                   <button
                     key={option.id}
@@ -591,11 +595,15 @@ export default function ProfilePanel({
                     {mascot === option.id && <Check className="size-3.5 shrink-0 text-nova-300" />}
                   </button>
                 ))}
-              </div>
-            </div>
+          </div>
+        </Card>
 
+        {/* Sound is its own section: toggles on the left, tracks and volume on
+            the right at desktop widths — never one endless squashed column. */}
+        <Card className="mt-3 p-3.5 sm:mt-4 sm:p-5">
+          <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Sound</p>
+          <div className="mt-2 grid gap-4 lg:grid-cols-2 lg:gap-6">
             <div className="min-w-0">
- <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Sound</p>
               <button
                 onClick={() => {
                   const next = !sound;
@@ -657,7 +665,9 @@ export default function ProfilePanel({
                   </span>
                 </button>
               ) : null}
-              <div className="mt-2 grid gap-1.5">
+            </div>
+            <div className="min-w-0">
+              <div className="grid gap-1.5">
                 {MUSIC_TRACKS.map((track) => (
                   <button
                     key={track.id}

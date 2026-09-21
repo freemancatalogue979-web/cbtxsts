@@ -810,12 +810,22 @@ export default function Exam({
                 </p>
               )}
 
-              <div className="mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row">
+              {/* Grid tracks pin each button to its own column, so the two
+                  full-width buttons can never overflow the modal — the old
+                  flex-row let them demand 200% width and escape on desktop. */}
+              <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-2">
+                <Button
+                  variant="mint"
+                  block
+                  loading={submitting}
+                  onClick={() => void submit('early')}
+                  icon={<Send className="size-4" />}
+                  className="sm:order-last"
+                >
+                  Submit now
+                </Button>
                 <Button variant="ghost" block onClick={() => setConfirmOpen(false)}>
                   Keep working
-                </Button>
-                <Button variant="mint" block loading={submitting} onClick={() => void submit('early')} icon={<Send className="size-4" />}>
-                  Submit now
                 </Button>
               </div>
             </motion.div>

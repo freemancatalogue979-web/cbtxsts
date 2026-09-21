@@ -5,7 +5,7 @@
  */
 import {Crown, Flag, Plus, Search, Swords, Trophy, Users} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
+import {Button, Card, Chip, CopyCode, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {useSession} from '../store/session';
 import type {Course, GroupSection, PageMeta, StudyGroupSummary} from '../lib/types';
@@ -303,7 +303,7 @@ export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, secti
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Chip className="border-white/12 bg-white/6 text-mist-300">{group.member_count} members</Chip>
-                    <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
+                    <CopyCode code={group.code} size="sm" pillClassName="border-nova-500/25 bg-nova-500/10 text-nova-200" />
                     {group.course_title && <Chip className="border-white/12 bg-white/6 text-mist-400">{group.course_title}</Chip>}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">

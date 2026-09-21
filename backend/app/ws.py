@@ -1,13 +1,27 @@
-"""Live websocket hub: presence, global feed, duel rooms."""
+"""Live websocket hub: presence, global feed, duel rooms.
+
+Realtime design notes
+---------------------
+* Fan-out is parallel: one ``asyncio.gather`` per broadcast, each send wrapped
+  in a timeout. A slow or half-dead socket can never stall the other clients.
+* Clients that miss their send window (or fail outright) are disconnected and
+  dropped from every room, so dead sockets do not accumulate.
+* Connection state (rooms, online ids) stays in memory; the database is only
+  touched — asynchronously — by the routers for persistent data.
+"""
 from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import WebSocket
+
+#: Max seconds a single websocket send may take before the client is dropped.
+SEND_TIMEOUT_SECONDS = 2.0
 
 
 @dataclass(slots=True, eq=False)  # eq=False keeps identity hashing for room sets
@@ -20,6 +34,12 @@ class Client:
     # Presence state for group rooms: "online" while the tab is foregrounded,
     # "away" when the client reports the page is hidden/idle.
     status: str = "online"
+    last_seen: float = field(default_factory=time.monotonic)
+    closed: bool = False
+
+    def touch(self) -> None:
+        """Record inbound traffic so the liveness check knows we're alive."""
+        self.last_seen = time.monotonic()
 
 
 class Hub:
@@ -28,6 +48,7 @@ class Hub:
     Rooms in use:
       * ``live``            – every authenticated connection (feed, leaderboard, invites)
       * ``duel:{duel_id}``  – the two players of a head-to-head match
+      * ``group:{group_id}``– study-group workspace (chat, quizzes, presence)
       * ``admin``           – staff console (live submission counters)
     """
 
@@ -41,6 +62,7 @@ class Hub:
     async def connect(self, websocket: WebSocket, *, student_id: int | None, admin_id: int | None, name: str) -> Client:
         await websocket.accept()
         client = Client(websocket=websocket, student_id=student_id, admin_id=admin_id, name=name)
+        client.touch()
         async with self._lock:
             self._rooms["live"].add(client)
             if student_id is not None:
@@ -53,7 +75,11 @@ class Hub:
         return client
 
     async def disconnect(self, client: Client) -> None:
+        """Idempotent: the endpoint teardown and the stale-client cleanup both call this."""
         async with self._lock:
+            if client.closed:
+                return
+            client.closed = True
             for room in list(client.rooms):
                 self._rooms[room].discard(client)
             if client.student_id is not None:
@@ -97,6 +123,15 @@ class Hub:
         """Every live client holding a socket in a named room."""
         return list(self._rooms.get(room, ()))
 
+    async def online_snapshot(self) -> dict[str, Any]:
+        """Online count + ids, snapshotted under the lock in one quick pass.
+
+        Callers must use the returned copy — it is safe to do slow work
+        (async DB queries, broadcasting) afterwards without holding the lock.
+        """
+        async with self._lock:
+            return {"online": len(self._clients), "student_ids": sorted(self._clients.keys())}
+
     # -------------------------------------------------------------- messaging
     async def send(self, client: Client, event: str, payload: dict[str, Any] | None = None) -> None:
         await self._emit([client], event, payload)
@@ -111,21 +146,34 @@ class Hub:
         await self._emit(list(self._admin_clients), event, payload)
 
     async def broadcast_presence(self) -> None:
+        snapshot = await self.online_snapshot()
         await self.broadcast(
             "presence",
-            {"online": self.online_count(), "student_ids": self.online_student_ids},
+            {"online": snapshot["online"], "student_ids": snapshot["student_ids"]},
         )
 
     async def _emit(self, clients: list[Client], event: str, payload: dict[str, Any] | None) -> None:
+        """Fan one message out to many sockets *in parallel*.
+
+        Each send gets its own bounded timeout: a socket that cannot keep up
+        (dozing phone, frozen tab, dead TCP) is marked stale and disconnected
+        afterwards instead of queueing everyone else behind it.
+        """
         if not clients:
             return
         message = json.dumps({"event": event, "data": payload or {}}, default=str)
-        stale: list[Client] = []
-        for client in clients:
+
+        async def deliver(client: Client) -> Client | None:
             try:
-                await client.websocket.send_text(message)
+                await asyncio.wait_for(client.websocket.send_text(message), timeout=SEND_TIMEOUT_SECONDS)
+            except asyncio.CancelledError:  # pragma: no cover - let shutdown propagate
+                raise
             except Exception:
-                stale.append(client)
+                return client  # failed or timed out → stale
+            return None
+
+        results = await asyncio.gather(*(deliver(client) for client in clients))
+        stale = [client for client in results if client is not None]
         for client in stale:
             asyncio.create_task(self.disconnect(client))
 

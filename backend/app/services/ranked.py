@@ -41,26 +41,66 @@ from .question_sets import NotEnoughQuestionsError, create_multiplayer_question_
 # --------------------------------------------------------------------- tuning
 MATCH_SIZE = 15          # hard cap per match
 MIN_PLAYERS = 2          # a match may launch with just two players
-QUEUE_WAIT_SECONDS = 12  # oldest waiter waits this long before launching short
-LOBBY_SECONDS = 6        # lobby countdown
+LOBBY_SECONDS = 12       # lobby countdown — long enough to see who joined and say hi
 REVEAL_SECONDS = 4       # answer shown before the next question opens
-QUESTION_COUNT = 10
-QUESTION_SECONDS = 20
+QUESTION_COUNT = 10      # fallback when no tier rule applies
+QUESTION_SECONDS = 20    # fallback when no tier rule applies
 BASE_POINTS = 60         # correct answer floor — accuracy dominates
 SPEED_BONUS = 30         # decays linearly over the question window
 STREAK_BONUS = 10        # per consecutive correct above the first, capped
 STREAK_CAP = 5
 K_FACTOR = 32
+SPEED_XP_DIVISOR = 6     # banked speed points / 6 become bonus XP at the finish
 
-# Tier ladder (names/icons/colours configurable in one place).
+# Matchmaking patience ladder: the longer the oldest player has waited, the
+# fewer players are needed to start — (seconds waited, players needed). Before
+# the first rung a match only launches full (MATCH_SIZE); past the last rung
+# it launches with whoever showed up.
+QUEUE_LADDER: list[tuple[int, int]] = [
+    (30, 12),
+    (60, 10),
+    (90, 6),
+    (120, 4),
+    (150, MIN_PLAYERS),
+]
+
+# Match shape by the tier of the queue's average rating: beginners get more
+# time and fewer questions; the top of the ladder answers faster, longer sets.
+# Rules key off the *metal* so every division inside a metal plays the same
+# shape (Silver III and Silver I share the Silver rules).
+TIER_RULES: dict[str, dict[str, int]] = {
+    "bronze": {"questions": 6, "seconds": 30},
+    "silver": {"questions": 7, "seconds": 26},
+    "gold": {"questions": 8, "seconds": 22},
+    "platinum": {"questions": 9, "seconds": 18},
+    "diamond": {"questions": 10, "seconds": 15},
+    "master": {"questions": 11, "seconds": 12},
+    "grandmaster": {"questions": 12, "seconds": 10},
+}
+
+# The ranked ladder: fifteen badges. Each metal climbs through divisions
+# (III → II → I) before the next metal starts; Master and Grandmaster stand
+# alone at the top. `deep`/`bright` feed the badge art, `metal` picks the
+# match rules, `icon` picks the glyph drawn on the badge.
+def _tier(key: str, name: str, minimum: int, metal: str, icon: str, deep: str, bright: str) -> dict:
+    return {"key": key, "name": name, "min": minimum, "metal": metal, "icon": icon, "deep": deep, "bright": bright, "color": bright}
+
 TIERS: list[dict] = [
-    {"key": "bronze", "name": "Bronze", "min": 0, "color": "#b0794a", "icon": "shield"},
-    {"key": "silver", "name": "Silver", "min": 900, "color": "#a8b3c4", "icon": "shield"},
-    {"key": "gold", "name": "Gold", "min": 1100, "color": "#e3b341", "icon": "medal"},
-    {"key": "platinum", "name": "Platinum", "min": 1300, "color": "#7fd4c1", "icon": "medal"},
-    {"key": "diamond", "name": "Diamond", "min": 1500, "color": "#7db8f0", "icon": "gem"},
-    {"key": "master", "name": "Master", "min": 1700, "color": "#b98cf0", "icon": "crown"},
-    {"key": "grandmaster", "name": "Grandmaster", "min": 1900, "color": "#f0729a", "icon": "crown"},
+    _tier("bronze_3", "Bronze III", 0, "bronze", "shield", "#7a4a22", "#d99a5b"),
+    _tier("bronze_2", "Bronze II", 250, "bronze", "shield", "#7a4a22", "#d99a5b"),
+    _tier("bronze_1", "Bronze I", 500, "bronze", "shield", "#7a4a22", "#e2aa70"),
+    _tier("silver_3", "Silver III", 700, "silver", "medal", "#6b7a90", "#c3cedd"),
+    _tier("silver_2", "Silver II", 850, "silver", "medal", "#6b7a90", "#d2dcea"),
+    _tier("silver_1", "Silver I", 1000, "silver", "medal", "#6b7a90", "#e3ecf7"),
+    _tier("gold_3", "Gold III", 1100, "gold", "trophy", "#a06b00", "#f6c945"),
+    _tier("gold_2", "Gold II", 1200, "gold", "trophy", "#a06b00", "#ffd75e"),
+    _tier("gold_1", "Gold I", 1300, "gold", "trophy", "#a06b00", "#ffe27e"),
+    _tier("platinum_2", "Platinum II", 1400, "platinum", "star", "#0f8f7a", "#6fe8cf"),
+    _tier("platinum_1", "Platinum I", 1500, "platinum", "star", "#0f8f7a", "#8ff5de"),
+    _tier("diamond_2", "Diamond II", 1600, "diamond", "gem", "#2563c4", "#7fc4ff"),
+    _tier("diamond_1", "Diamond I", 1700, "diamond", "gem", "#2563c4", "#9fd4ff"),
+    _tier("master", "Master", 1850, "master", "crown", "#7c3aed", "#c9a6ff"),
+    _tier("grandmaster", "Grandmaster", 2000, "grandmaster", "flame", "#e11d5b", "#ff9ab0"),
 ]
 
 PLACE_XP = (30, 20, 10)
@@ -73,6 +113,51 @@ PLACE_COINS = (15, 10, 5)
 OPEN: dict[int, dict] = {}
 ACTIVITY: dict[int, deque] = {}
 LAST_STANDINGS: dict[int, dict] = {}
+# Lobby chat is transient like the lobby itself: kept in memory, capped, and
+# gone when the server restarts — the match record never carries chatter.
+LOBBY_CHAT: dict[int, deque] = {}
+LOBBY_CHAT_CAP = 80
+
+
+def queue_players_payload(db: Session, course_id: int | None, limit: int = 12) -> list[dict]:
+    """Who is standing in this course's queue right now (oldest first)."""
+    if course_id is None:
+        return []
+    rows = db.execute(
+        select(RankedQueue, Student)
+        .join(Student, Student.id == RankedQueue.student_id)
+        .where(RankedQueue.course_id == course_id)
+        .order_by(RankedQueue.joined_at)
+        .limit(limit)
+    ).all()
+    out = []
+    for queue_row, student in rows:
+        tier = tier_for(student.ranked_rating)
+        out.append(
+            {
+                "student_id": student.id,
+                "name": student.name,
+                "initials": student.name.split(" ")[0][:2].upper() if student.name else "?",
+                "avatar_hue": student.avatar_hue,
+                "has_photo": bool(student.photo),
+                "rating": student.ranked_rating,
+                "tier": tier["key"],
+                "tier_name": tier["name"],
+                "level": _level(student),
+                "joined_at": _iso(queue_row.joined_at),
+            }
+        )
+    return out
+
+
+def lobby_chat_payload(match_id: int) -> list[dict]:
+    return list(LOBBY_CHAT.get(match_id, ()))
+
+
+def lobby_chat_write(match_id: int, student: Student, body: str) -> dict:
+    line = {"match_id": match_id, "student_id": student.id, "name": student.name, "body": body, "at": _iso(utcnow())}
+    LOBBY_CHAT.setdefault(match_id, deque(maxlen=LOBBY_CHAT_CAP)).append(line)
+    return line
 
 
 class RankedError(Exception):
@@ -93,6 +178,35 @@ def tiers_payload() -> list[dict]:
         {**tier, "max": (TIERS[i + 1]["min"] - 1) if i + 1 < len(TIERS) else None}
         for i, tier in enumerate(TIERS)
     ]
+
+
+def players_needed(waited_seconds: float) -> int:
+    """How many queued players start a match once the oldest has waited this long."""
+    needed = MATCH_SIZE
+    for wait, players in QUEUE_LADDER:
+        if waited_seconds >= wait:
+            needed = players
+    return needed
+
+
+def queue_ladder_payload() -> list[dict]:
+    return [{"wait": wait, "players": players} for wait, players in QUEUE_LADDER]
+
+
+def tier_rules_payload() -> dict[str, dict[str, int]]:
+    """Match shape for every badge on the ladder (divisions share their metal's rules)."""
+    return {tier["key"]: dict(TIER_RULES[tier["metal"]]) for tier in TIERS}
+
+
+def match_rules_for(ratings: list[int]) -> tuple[int, int]:
+    """(question_count, per_question_seconds) from the queue's average rating."""
+    if not ratings:
+        return QUESTION_COUNT, QUESTION_SECONDS
+    tier = tier_for(round(sum(ratings) / len(ratings)))
+    rules = TIER_RULES.get(tier["metal"])
+    if rules is None:
+        return QUESTION_COUNT, QUESTION_SECONDS
+    return rules["questions"], rules["seconds"]
 
 
 def _level(student: Student) -> int:
@@ -163,7 +277,12 @@ def active_match_for(db: Session, student_id: int) -> RankedMatch | None:
 
 # --------------------------------------------------------------- matchmaking
 def poll_queue(db: Session) -> list[Event]:
-    """Called by the server ticker: mint matches for ready course queues."""
+    """Called by the server ticker: mint matches for ready course queues.
+
+    The longer the oldest waiter has been queued, the fewer players are
+    needed to start (see QUEUE_LADDER) — a full roster never waits, and a
+    patient queue eventually launches with whoever showed up.
+    """
     events: list[Event] = []
     rows = list(db.scalars(select(RankedQueue).order_by(RankedQueue.joined_at)).all())
     by_course: dict[int | None, list[RankedQueue]] = {}
@@ -173,7 +292,8 @@ def poll_queue(db: Session) -> list[Event]:
         if len(waiting) < MIN_PLAYERS:
             continue
         oldest = min(row.joined_at for row in waiting)
-        if len(waiting) < MATCH_SIZE and (utcnow() - oldest).total_seconds() < QUEUE_WAIT_SECONDS:
+        waited = (utcnow() - oldest).total_seconds()
+        if len(waiting) < players_needed(waited):
             continue
         events += _launch_match(db, course_id, waiting[:MATCH_SIZE])
     return events
@@ -190,11 +310,14 @@ def _launch_match(db: Session, course_id: int | None, waiting: list[RankedQueue]
             player_ids.append(student.id)
     if len(player_ids) < MIN_PLAYERS:
         return []
-    # Multiplayer rule: every player gets their own unique set. If the bank
-    # cannot cover the full QUESTION_COUNT for everyone without reuse, shrink
-    # the per-player count (never share, never silently repeat); if even one
-    # unique question each is impossible, the queue simply keeps waiting.
-    per_player = min(QUESTION_COUNT, max(0, len(pool) // len(player_ids)))
+    # Tier rules (wait-ladder) set the target length + pacing for this bracket…
+    question_count, per_question_seconds = match_rules_for([row.rating for row in waiting])
+    # …and the multiplayer rule still applies on top: every player gets their
+    # own unique set. If the bank cannot cover the full count for everyone
+    # without reuse, shrink the per-player count (never share, never silently
+    # repeat); if even one unique question each is impossible, the queue
+    # simply keeps waiting.
+    per_player = min(question_count, max(0, len(pool) // len(player_ids)))
     sets: dict[int, list[Question]] | None = None
     while per_player >= 1:
         try:
@@ -208,7 +331,7 @@ def _launch_match(db: Session, course_id: int | None, waiting: list[RankedQueue]
         course_id=course_id,
         status="lobby",
         question_count=per_player,
-        per_question_seconds=QUESTION_SECONDS,
+        per_question_seconds=per_question_seconds,
         lobby_at=utcnow() + timedelta(seconds=LOBBY_SECONDS),
     )
     db.add(match)
@@ -463,9 +586,14 @@ def _finish_match(db: Session, match: RankedMatch) -> list[Event]:
             student.ranked_won += 1
         bonus_xp = PLACE_XP[place - 1] if place - 1 < len(PLACE_XP) else 0
         bonus_coins = PLACE_COINS[place - 1] if place - 1 < len(PLACE_COINS) else 0
-        xp = 4 * participant.correct_count + bonus_xp
+        # Speed bonus: the faster you locked correct answers, the more XP on top.
+        speed_xp = round((participant.speed_points or 0) / SPEED_XP_DIVISOR)
+        xp = 4 * participant.correct_count + bonus_xp + speed_xp
         coins = 2 * participant.correct_count + bonus_coins
         if xp or coins:
+            detail = f"Place {place} of {n} · {participant.correct_count} correct"
+            if speed_xp:
+                detail += f" · +{speed_xp} speed bonus XP"
             game.grant(
                 db,
                 student,
@@ -473,7 +601,7 @@ def _finish_match(db: Session, match: RankedMatch) -> list[Event]:
                 coins=coins,
                 kind="xp",
                 title=f"Ranked match #{match.id}",
-                detail=f"Place {place} of {n} · {participant.correct_count} correct",
+                detail=detail,
             )
         ratings.append(
             {
@@ -483,6 +611,8 @@ def _finish_match(db: Session, match: RankedMatch) -> list[Event]:
                 "before": participant.rating_before,
                 "after": participant.rating_after,
                 "delta": participant.rating_after - participant.rating_before,
+                "xp": xp,
+                "speed_xp": speed_xp,
             }
         )
     db.flush()
@@ -530,6 +660,7 @@ def submit_answer(
         raise RankedError("You already locked an answer for this question.")
     correct = (selected or "").strip().upper() == (question.correct or "").strip().upper()
     points = 0
+    speed = 0
     if correct:
         remaining = max(0.0, (info["deadline"] - utcnow()).total_seconds())
         window = max(1, match.per_question_seconds)
@@ -540,6 +671,8 @@ def submit_answer(
         participant.correct_count += 1
         participant.streak = streak
         participant.best_streak = max(participant.best_streak, streak)
+        # Bank the speed portion separately — it becomes bonus XP at the finish.
+        participant.speed_points = (participant.speed_points or 0) + speed
     else:
         participant.wrong_count += 1
         participant.streak = 0
@@ -559,6 +692,56 @@ def submit_answer(
     rows = participants(db, match)
     answered = _round_answered(db, match, rows, info["index"])
     return {"correct": correct, "points": points}, answered >= len(rows)
+
+
+def skip_question(db: Session, match: RankedMatch, student: Student) -> tuple[dict, bool]:
+    """Pass on the open question: no points, no wrong mark, streak resets, and
+    the room stops waiting on this player. Returns (result, everyone_answered)."""
+    info = OPEN.get(match.id)
+    if info is None or match.status != "live":
+        raise RankedError("No question is open right now.")
+    if "reveal_until" in info:
+        raise RankedError("That question already closed.")
+    if utcnow() > info["deadline"]:
+        raise RankedError("Too slow — the clock on that question already ran out.")
+    participant = db.scalar(
+        select(RankedParticipant).where(
+            RankedParticipant.match_id == match.id, RankedParticipant.student_id == student.id
+        )
+    )
+    if participant is None:
+        raise RankedError("You are not in this match.")
+    # Server-authoritative: the skip applies to THIS player's own deal for the
+    # open round — a rival's question is never even referenced.
+    question = _question_at(db, match, participant, info["index"])
+    if question is None:
+        raise RankedError("No question is open right now.")
+    existing = db.scalar(
+        select(RankedAnswer).where(
+            RankedAnswer.match_id == match.id,
+            RankedAnswer.question_id == question.id,
+            RankedAnswer.student_id == student.id,
+        )
+    )
+    if existing:
+        raise RankedError("You already locked an answer for this question.")
+    participant.answered += 1
+    participant.streak = 0
+    db.add(
+        RankedAnswer(
+            match_id=match.id,
+            question_id=question.id,
+            student_id=student.id,
+            selected="SKIP",
+            correct=False,
+            elapsed_ms=0,
+            points=0,
+        )
+    )
+    db.flush()
+    rows = participants(db, match)
+    answered = _round_answered(db, match, rows, info["index"])
+    return {"skipped": True, "points": 0}, answered >= len(rows)
 
 
 def close_if_all_answered(db: Session, match: RankedMatch, student: Student) -> tuple[list[Event], dict | None]:
@@ -621,7 +804,25 @@ def participant_payload(
 
 def standings_payload(db: Session, match: RankedMatch, connected_ids: set[int] | None = None) -> list[dict]:
     rows = sorted(participants(db, match), key=lambda p: (-p.score, -p.correct_count, p.joined_at))
-    return [participant_payload(db, match, p, connected_ids) for p in rows]
+    payload = []
+    for index, participant in enumerate(rows, start=1):
+        row = participant_payload(db, match, participant, connected_ids)
+        row["position"] = _position_of(match, participant, index)
+        payload.append(row)
+    return payload
+
+
+def _position_of(match: RankedMatch, participant: RankedParticipant, running_place: int) -> int:
+    """The final place is written at the finish; while a match runs, position
+    is the live running order — never 0, never null."""
+    if match.status == "finished" and participant.position:
+        return participant.position
+    return running_place
+
+
+def positions_map(match: RankedMatch, parts: list[RankedParticipant]) -> dict[int, int]:
+    ordered = sorted(parts, key=lambda p: (-p.score, -p.correct_count, p.joined_at))
+    return {p.student_id: i for i, p in enumerate(ordered, start=1)}
 
 
 def match_state(
@@ -657,6 +858,14 @@ def match_state(
             if mine is not None
             else {"answered": False, "selected": None, "correct": None, "points": None}
         )
+    parts = participants(db, match)
+    pos_map = positions_map(match, parts)
+    roster = []
+    for participant in parts:
+        row = participant_payload(db, match, participant, connected_ids)
+        if not (match.status == "finished" and participant.position):
+            row["position"] = pos_map.get(participant.student_id, 0)
+        roster.append(row)
     return {
         "id": match.id,
         "status": match.status,
@@ -667,8 +876,9 @@ def match_state(
         "round_index": match.round_index,
         "questions_total": total,
         "lobby_at": _iso(match.lobby_at),
+        "lobby_seconds": LOBBY_SECONDS,
         "server_now": _iso(utcnow()),
-        "participants": [participant_payload(db, match, p, connected_ids) for p in participants(db, match)],
+        "participants": roster,
         "question": question,
         "reveal": reveal,
         "me": me,

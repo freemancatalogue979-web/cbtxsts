@@ -14,7 +14,7 @@ import {MoreHorizontal} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import type {ReactNode} from 'react';
-import {HOLD_MS, holdAbandoned, menuPosition, menuSize} from '../lib/hold';
+import {HOLD_MS, HOLD_TOLERANCE, holdAbandoned, menuPosition, menuSize} from '../lib/hold';
 import {HAPTICS} from '../lib/haptics';
 import {sfx} from '../lib/sfx';
 
@@ -64,6 +64,7 @@ export function Holdable({
   const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
   const timer = useRef<number | null>(null);
   const origin = useRef<{x: number; y: number} | null>(null);
+  const pointerKind = useRef<'mouse' | 'touch' | 'pen'>('mouse');
   const suppressClick = useRef(false);
 
   const clearTimer = useCallback(() => {
@@ -118,8 +119,9 @@ export function Holdable({
     // Presses that begin on a real control inside the row keep working.
     if (!allowOnButton && (event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
     const point = {x: event.clientX, y: event.clientY};
-    origin.current = point;
+    pointerKind.current = event.pointerType === 'touch' ? 'touch' : event.pointerType === 'pen' ? 'pen' : 'mouse';
     clearTimer();
+    origin.current = point;
     timer.current = window.setTimeout(() => {
       timer.current = null;
       open(point);
@@ -134,11 +136,19 @@ export function Holdable({
         onPointerDown={start}
         onPointerMove={(event) => {
           if (!origin.current) return;
-          if (holdAbandoned(event.clientX - origin.current.x, event.clientY - origin.current.y)) clearTimer();
+          // A fingertip drifts far more than a mouse while "staying still",
+          // so touch gets a roomier tolerance before we call it a scroll.
+          const tolerance = pointerKind.current === 'mouse' ? HOLD_TOLERANCE : HOLD_TOLERANCE * 2.5;
+          if (holdAbandoned(event.clientX - origin.current.x, event.clientY - origin.current.y, tolerance)) clearTimer();
         }}
         onPointerUp={clearTimer}
         onPointerCancel={clearTimer}
-        onPointerLeave={clearTimer}
+        onPointerLeave={(event) => {
+          // Touch pointers implicitly stay captured to the pressed element; a
+          // "leave" there is just the finger sliding off a small bubble, which
+          // the movement tolerance already covers — don't kill the hold for it.
+          if (event.pointerType !== 'touch') clearTimer();
+        }}
         onContextMenu={(event) => {
           // Right-click / long-press context menu becomes our own menu.
           if (disabled || actions.length === 0) return;

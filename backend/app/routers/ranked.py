@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -43,6 +43,8 @@ def meta() -> dict:
         "base_points": ranked_service.BASE_POINTS,
         "speed_bonus": ranked_service.SPEED_BONUS,
         "streak_bonus": ranked_service.STREAK_BONUS,
+        "queue_ladder": ranked_service.queue_ladder_payload(),
+        "tier_rules": ranked_service.tier_rules_payload(),
     }
 
 
@@ -52,6 +54,12 @@ def my_status(db: Session = Depends(get_db), student: Student = Depends(require_
     active = ranked_service.active_match_for(db, student.id)
     course_id = queue_row.course_id if queue_row else None
     tier = ranked_service.tier_for(student.ranked_rating)
+    if queue_row:
+        # The ladder runs off the OLDEST waiter in the course, not the viewer.
+        oldest = db.scalar(select(func.min(RankedQueue.joined_at)).where(RankedQueue.course_id == course_id))
+        waited = (utcnow() - (oldest or queue_row.joined_at)).total_seconds()
+    else:
+        waited = 0.0
     return {
         "rating": student.ranked_rating,
         "tier": tier["key"],
@@ -61,7 +69,11 @@ def my_status(db: Session = Depends(get_db), student: Student = Depends(require_
         "in_queue": queue_row is not None,
         "queue_course_id": course_id,
         "waiting": ranked_service.waiting_count(db, course_id) if queue_row is not None else 0,
+        "players_needed": ranked_service.players_needed(waited) if queue_row is not None else None,
         "queue_joined_at": _iso(queue_row.joined_at) if queue_row else None,
+        # Everyone standing in this course's queue right now, so you can see
+        # opponents arrive (name, face and rank) instead of just a counter.
+        "queue_players": ranked_service.queue_players_payload(db, course_id) if queue_row is not None else [],
         "server_now": _iso(utcnow()),
         "match_id": active.id if active else None,
         "match": ranked_service.match_state(db, active, student.id, _connected_ids(active.id)) if active else None,
@@ -136,6 +148,44 @@ async def answer_question(
     if reveal_events:
         # Per-player reveals: everyone gets their OWN question's key, nobody
         # gets a rival's.
+        await dispatch(reveal_events)
+    return {"result": result, "all_answered": all_answered, "reveal": reveal, "match": state}
+
+
+@router.post("/match/{match_id}/skip")
+async def skip_question(
+    match_id: int,
+    db: Session = Depends(get_db),
+    student: Student = Depends(require_student),
+) -> dict:
+    match = db.get(RankedMatch, match_id)
+    if match is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Match not found.")
+    _participant_or_403(db, match, student)
+    try:
+        result, all_answered = ranked_service.skip_question(db, match, student)
+        reveal_events, reveal = (
+            ranked_service.close_if_all_answered(db, match, student) if all_answered else ([], None)
+        )
+        state = ranked_service.match_state(db, match, student.id, _connected_ids(match.id))
+    except RankedError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    db.commit()
+    room = f"ranked:{match.id}"
+    await hub.broadcast(
+        "ranked_answered",
+        {
+            "student_id": student.id,
+            "locked": True,
+            "skipped": True,
+            "standings": ranked_service.standings_payload(db, match, _connected_ids(match.id)),
+            "server_now": _iso(utcnow()),
+        },
+        room=room,
+    )
+    if reveal_events:
+        # Per-player reveals: everyone gets their OWN question's key, nobody
+        # gets a rival's — skipping closes the round exactly like answering.
         await dispatch(reveal_events)
     return {"result": result, "all_answered": all_answered, "reveal": reveal, "match": state}
 

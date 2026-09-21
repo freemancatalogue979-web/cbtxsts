@@ -202,7 +202,7 @@ def course_public(
     course: Course,
     *,
     quiz_count: int = 0,
-    question_count: int | None = None,
+    question_count: int = 0,
     topic_count: int | None = None,
     material_count: int | None = None,
 ) -> dict[str, Any]:
@@ -217,10 +217,10 @@ def course_public(
         "accent": course.accent,
         "is_active": course.is_active,
         "quiz_count": quiz_count,
+        "question_count": question_count,
+        "created_at": iso(course.created_at),
     }
     # Staff console extras: the mobile course card shows bank depth at a glance.
-    if question_count is not None:
-        payload["question_count"] = question_count
     if topic_count is not None:
         payload["topic_count"] = topic_count
     if material_count is not None:
@@ -433,6 +433,12 @@ def duel_public(
         "question_count": duel.question_count,
         "stake_coins": duel.stake_coins,
         "time_limit_seconds": duel.time_limit_seconds,
+        "visibility": getattr(duel, "visibility", "private") or "private",
+        # Server-paced round clock — clients display these, never derive them.
+        "round_index": int(getattr(duel, "round_index", -1)) if getattr(duel, "round_index", None) is not None else -1,
+        "round_deadline": iso(getattr(duel, "round_deadline_at", None)) if getattr(duel, "round_deadline_at", None) else None,
+        "round_opened": iso(getattr(duel, "round_opened_at", None)) if getattr(duel, "round_opened_at", None) else None,
+        "server_now": iso(utcnow()),
         "mode": getattr(duel, "mode", "casual") or "casual",
         "best_of": int(getattr(duel, "best_of", 1) or 1),
         "series_id": getattr(duel, "series_id", "") or "",
@@ -469,10 +475,13 @@ def duel_public(
         rows_by_id = {row.question_id: row for row in duel.questions}
         if mine_ids:
             rows = [rows_by_id[qid] for qid in mine_ids if qid in rows_by_id]
-        elif viewer_participant is not None:
+        elif viewer_participant is not None and len(duel.questions) <= duel.question_count:
             rows = list(duel.questions)  # legacy duel: both players shared one set
         else:
-            rows = []  # non-participants never see question content
+            # Non-participants never see question content — and a fresh duel
+            # whose per-player sets are not dealt yet holds the 2x union of
+            # BOTH future sets, so the waiting creator sees nothing either.
+            rows = []
         mine = {row.question_id: row for row in duel.answers if viewer_id is not None and row.student_id == viewer_id}
         payload["questions"] = [
             {
