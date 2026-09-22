@@ -1487,6 +1487,7 @@ export interface ArenaEventSummary {
   allow_join_during: boolean;
   allow_leave: boolean;
   leaderboard_visible: boolean;
+  featured?: boolean;
   status: 'scheduled' | 'live' | 'finished' | 'cancelled';
   participants: number;
   joined: boolean;
@@ -1551,6 +1552,9 @@ export interface EventsListing {
   upcoming: ArenaEventSummary[];
   live: ArenaEventSummary[];
   past: ArenaEventSummary[];
+  ending_soon?: ArenaEventSummary[];
+  featured?: ArenaEventSummary[];
+  mine?: ArenaEventSummary[];
   server_now: string;
 }
 

@@ -12,43 +12,10 @@
  * question.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import RankedTeams from './RankedTeams';
 import {AnimatePresence, motion} from 'motion/react';
-import {
-  ArrowLeft,
-  Award,
-  BookOpen,
-  Brain,
-  Calculator,
-  CalendarDays,
-  Check,
-  ChevronUp,
-  Cpu,
-  Crown,
-  Eye,
-  FileText,
-  Flame,
-  FlaskConical,
-  Globe2,
-  GraduationCap,
-  Landmark,
-  ListChecks,
-  Loader2,
-  Medal,
-  Microscope,
-  Radio,
-  RefreshCw,
-  Scale,
-  Send,
-  SignalHigh,
-  SkipForward,
-  Swords,
-  TrendingDown,
-  TrendingUp,
-  Trophy,
-  X,
-  Zap,
-} from 'lucide-react';
-import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile} from '../components/ui';
+import {ArrowLeft, Award, BookOpen, Brain, Calculator, CalendarDays, Check, ChevronUp, Cpu, Crown, Eye, FileText, Flame, FlaskConical, Globe2, GraduationCap, Landmark, ListChecks, Loader2, Medal, Microscope, Radio, RefreshCw, Scale, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
+import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile, Segmented} from '../components/ui';
 import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
@@ -229,7 +196,7 @@ function ActivityFeed({items}: {items: {text: string; at: string}[]}) {
   );
 }
 
-export default function RankedPanel() {
+function RankedSoloPanel() {
   const {profile, on, toast} = useSession();
   const meId = profile?.id ?? 0;
   const clock = useServerClock();
@@ -1359,6 +1326,42 @@ function QueueMeter({
       <p className="mt-1 text-[0.6rem] font-semibold text-mist-700">
         The longer you wait, the fewer players you need — you will never wait forever.
       </p>
+    </div>
+  );
+}
+
+
+/* ------------------------------------------------------------------ shell
+ * Ranked is a full game mode, not a button: the tab opens on a shell with two
+ * wings — the solo ladder queue (unchanged engine) and the Team Ranked war
+ * room (lobbies, squads, dashboard). Wing choice persists per device. */
+export default function RankedPanel() {
+  const [wing, setWing] = useState<'solo' | 'teams'>(() => {
+    try {
+      return localStorage.getItem('arena.ranked.wing') === 'teams' ? 'teams' : 'solo';
+    } catch {
+      return 'solo';
+    }
+  });
+  const pick = (value: 'solo' | 'teams') => {
+    setWing(value);
+    try {
+      localStorage.setItem('arena.ranked.wing', value);
+    } catch {
+      /* private mode */
+    }
+  };
+  return (
+    <div className="min-w-0 space-y-3.5">
+      <Segmented
+        value={wing}
+        options={[
+          {value: 'solo', label: 'Solo queue', icon: Swords},
+          {value: 'teams', label: 'Teams & board', icon: Users},
+        ]}
+        onChange={(value) => pick(value as 'solo' | 'teams')}
+      />
+      {wing === 'teams' ? <RankedTeams onSoloQueue={() => pick('solo')} /> : <RankedSoloPanel />}
     </div>
   );
 }

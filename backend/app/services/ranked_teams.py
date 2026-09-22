@@ -533,6 +533,7 @@ def match_state(db: Session, match: TeamMatch, viewer_id: int | None) -> dict:
         "teams": team_totals,
         "you": (
             {
+                "team": viewer_row.team,
                 "position": viewer_row.position,
                 "score": viewer_row.score,
                 "correct": viewer_row.correct,

@@ -40,7 +40,9 @@ import type {
   ReviewItem,
 } from '../lib/types';
 
-type ListTab = 'live' | 'upcoming' | 'past';
+type Json = Record<string, unknown>;
+
+type ListTab = 'featured' | 'live' | 'ending' | 'upcoming' | 'mine' | 'past' | 'history';
 
 function parseTime(iso: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime();
@@ -285,6 +287,9 @@ export default function EventsPanel() {
     if (!listing) return [];
     if (tab === 'live') return listing.live;
     if (tab === 'upcoming') return listing.upcoming;
+    if (tab === 'ending') return listing.ending_soon ?? [];
+    if (tab === 'featured') return listing.featured ?? listing.live.filter((row) => row.featured);
+    if (tab === 'mine') return listing.mine ?? [];
     return listing.past;
   }, [listing, tab]);
 
@@ -313,6 +318,9 @@ export default function EventsPanel() {
 
     return (
       <div className="w-full space-y-3 p-3 sm:p-4">
+        {event.banner && (
+          <img src={event.banner} alt="" className="h-28 w-full rounded-3xl border border-white/8 object-cover sm:h-40" />
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" onClick={closeEvent} icon={<ChevronLeft className="size-4" />}>
             Events
@@ -575,9 +583,13 @@ export default function EventsPanel() {
 
       <Segmented
         options={[
+          {value: 'featured', label: 'Featured'},
           {value: 'live', label: `Live${listing?.live.length ? ` (${listing.live.length})` : ''}`},
+          {value: 'ending', label: 'Ending soon'},
           {value: 'upcoming', label: `Upcoming${listing?.upcoming.length ? ` (${listing.upcoming.length})` : ''}`},
-          {value: 'past', label: 'Past'},
+          {value: 'mine', label: 'Mine'},
+          {value: 'history', label: 'History'},
+          {value: 'past', label: 'All past'},
         ]}
         value={tab}
         onChange={(next) => {
@@ -586,10 +598,26 @@ export default function EventsPanel() {
         }}
       />
 
+      {tab === 'history' ? (
+        <EventHistoryList />
+      ) : (
+        <>
       {cards.length === 0 && (
         <EmptyState
           icon={<CalendarDays className="size-6" />}
-          title={tab === 'live' ? 'Nothing live right now' : tab === 'upcoming' ? 'No events scheduled' : 'No past events yet'}
+          title={
+            tab === 'live'
+              ? 'Nothing live right now'
+              : tab === 'upcoming'
+                ? 'No events scheduled'
+                : tab === 'mine'
+                  ? 'You have not joined an event yet'
+                  : tab === 'featured'
+                    ? 'No featured events right now'
+                    : tab === 'ending'
+                      ? 'Nothing closing in the next hour'
+                      : 'No past events yet'
+          }
           detail="Staff create events from the admin console — check back soon."
         />
       )}
@@ -598,10 +626,15 @@ export default function EventsPanel() {
         {cards.map((card) => {
           const startsIn = countdownParts(parseTime(card.starts_at), serverNow());
           const endsIn = countdownParts(parseTime(card.ends_at), serverNow());
+          const when = (iso: string) =>
+            new Date(parseTime(iso)).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
           return (
-            <Card key={card.id} className="flex flex-col p-4 transition-transform active:translate-y-px">
+            <Card key={card.id} className={`flex flex-col p-4 transition-transform active:translate-y-px ${card.featured ? 'ring-1 ring-gold-400/35' : ''}`}>
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
+                  {card.featured && (
+                    <p className="text-[0.6rem] font-black tracking-[0.18em] text-gold-300 uppercase">★ Featured</p>
+                  )}
                   <h2 className="truncate text-[0.95rem] font-extrabold text-mist-50">{card.name}</h2>
                   <p className="truncate text-[0.68rem] font-bold text-mist-500">{card.course_title}</p>
                 </div>
@@ -631,13 +664,90 @@ export default function EventsPanel() {
                   <Users className="size-3.5" /> {formatNumber(card.participants)} players
                   {card.status === 'live' && <span className="text-mist-600"> · ends in {endsIn.text}</span>}
                 </p>
-                <Button size="sm" variant="outline" onClick={() => openEvent(card.id)}>
-                  View event
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <span className="hidden text-[0.62rem] font-black text-mist-600 sm:inline">
+                    {when(card.starts_at)} → {when(card.ends_at)}
+                  </span>
+                  <Button size="sm" variant={card.joined && card.status === 'live' ? 'mint' : 'outline'} onClick={() => openEvent(card.id)}>
+                    {card.joined && card.status === 'live' ? 'Continue' : 'View event'}
+                  </Button>
+                </div>
               </div>
             </Card>
           );
         })}
+      </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ history list */
+function EventHistoryList() {
+  const [rows, setRows] = useState<Json[] | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const limit = 10;
+  useEffect(() => {
+    api
+      .eventsHistory({limit, offset})
+      .then((data) => {
+        const payload = data as unknown as {items: Json[]; total: number};
+        setRows(payload.items);
+        setTotal(payload.total);
+      })
+      .catch(() => setRows([]));
+  }, [offset]);
+  if (!rows) return <Skeleton className="h-40 rounded-3xl" />;
+  if (rows.length === 0)
+    return <EmptyState icon={<Trophy className="size-6" />} title="No completed events yet" detail="Your finished runs — position, score, accuracy and rewards — will be listed here." />;
+  return (
+    <div className="space-y-2">
+      <ul className="grid gap-2">
+        {rows.map((row, index) => {
+          const event = (row.event ?? {}) as ArenaEventSummary;
+          const position = row.position as number | null;
+          const rewards = (row.rewards ?? {}) as Record<string, unknown>;
+          const bits: string[] = [];
+          if (rewards.xp) bits.push(`${rewards.xp} XP`);
+          if (rewards.coins) bits.push(`${rewards.coins} coins`);
+          if (rewards.badge_key) bits.push('badge');
+          return (
+            <li key={index}>
+              <Card className="flex flex-wrap items-center gap-3 p-3.5">
+                <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-[0.78rem] font-black ${position === 1 ? 'bg-gold-500/20 text-gold-300' : 'bg-white/6 text-mist-300'}`}>
+                  {position ? `#${position}` : '—'}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[0.86rem] font-extrabold text-mist-50">{event.name ?? 'Event'}</span>
+                  <span className="block text-[0.68rem] font-bold text-mist-500">
+                    {event.course_title ? `${event.course_title} · ` : ''}
+                    {row.answered as number ?? 0} answered
+                  </span>
+                </span>
+                <span className="text-right">
+                  <span className="block text-[0.86rem] font-black tabular text-mist-100">{formatNumber((row.score as number) ?? 0)} pts</span>
+                  <span className="block text-[0.66rem] font-bold text-mist-500">
+                    {((row.accuracy as number) ?? 0)}% acc · {bits.length ? bits.join(' · ') : 'no rewards'}
+                  </span>
+                </span>
+                {event.id ? (
+                  <span className="text-[0.64rem] font-black text-mist-600">{event.ends_at ? new Date(parseTime(event.ends_at)).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : ''}</span>
+                ) : null}
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex items-center justify-between">
+        <span className="text-[0.72rem] font-black text-mist-500">
+          {total === 0 ? '0–0' : `${offset + 1}–${Math.min(offset + limit, total)}`} of {total}
+        </span>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>Previous</Button>
+          <Button size="sm" variant="ghost" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>Next</Button>
+        </div>
       </div>
     </div>
   );
