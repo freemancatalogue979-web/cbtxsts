@@ -67,6 +67,7 @@ import type {
   EventLeaderboard,
   EventQuestionWindow,
   EventsListing,
+  RankedCourseStat,
   RankedHistoryRow,
   RankedLadder,
   RankedMatchState,
@@ -246,6 +247,7 @@ export const api = {
   /* -------------------------------------------------------------- ranked */
   rankedMeta: () => request<RankedMeta>('/api/ranked/meta'),
   rankedStatus: () => request<RankedStatus>('/api/ranked/status'),
+  rankedCourseStats: () => request<{stats: Record<string, RankedCourseStat>}>('/api/ranked/course-stats'),
   rankedJoinQueue: (courseId: number) =>
     request<{queued: boolean; match_id?: number; state?: RankedMatchState; waiting?: number}>('/api/ranked/queue', {
       method: 'POST',

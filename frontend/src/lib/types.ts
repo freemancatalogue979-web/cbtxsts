@@ -1436,6 +1436,15 @@ export interface RankedHistoryRow {
   rating_after: number | null;
 }
 
+/** Per-course ranked telemetry shown on the arena cards (server-computed). */
+export interface RankedCourseStat {
+  in_queue: number;
+  matches_7d: number;
+  played: number;
+  wins: number;
+  best: number | null;
+}
+
 export interface RankedLadderRow {
   position: number;
   student_id: number;

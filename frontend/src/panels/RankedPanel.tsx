@@ -14,7 +14,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import RankedTeams from './RankedTeams';
 import {AnimatePresence, motion} from 'motion/react';
-import {ArrowLeft, Award, BookOpen, Brain, Calculator, CalendarDays, Check, ChevronUp, Cpu, Crown, Eye, FileText, Flame, FlaskConical, Globe2, GraduationCap, Landmark, ListChecks, Loader2, Medal, Microscope, Radio, RefreshCw, Scale, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
+import {ArrowLeft, ArrowRight, Award, BookOpen, Brain, Calculator, Check, ChevronUp, Cpu, Crown, Eye, FileText, Flame, FlaskConical, Globe2, GraduationCap, Landmark, ListChecks, Loader2, Lock, Medal, Microscope, Radio, RefreshCw, Scale, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile, Segmented} from '../components/ui';
 import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
 import {api, tokenStore} from '../lib/api';
@@ -25,6 +25,7 @@ import {useSession} from '../store/session';
 import type {
   Course,
   QuestionPublic,
+  RankedCourseStat,
   RankedFinishPayload,
   RankedHistoryRow,
   RankedLadder,
@@ -99,6 +100,228 @@ function TierBadge({tier, tierName}: {tier: RankedTier | undefined; tierName: st
     <span className="rounded-full border border-white/14 bg-white/6 px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide text-mist-300">
       {tierName}
     </span>
+  );
+}
+
+/* Ranked-mode dressing for the course picker: every card reads like a collectible
+   arena — rarity comes from how deep the approved question bank is, "heat" comes
+   from the live queue and the last 7 days of matches, and the record line is the
+   player's own head-to-head in that course. All numbers are server-computed
+   (`/ranked/course-stats`); an empty bank means the server can never deal from
+   that course, so those cards lock themselves. */
+const DECK_RARITY = [
+  {min: 40, label: 'LEGENDARY', color: '#ffd75e'},
+  {min: 24, label: 'EPIC', color: '#c9a8fc'},
+  {min: 12, label: 'RARE', color: '#7cc0ff'},
+  {min: 1, label: 'COMMON', color: '#a5b4fc'},
+];
+
+function RankedCourseCard({
+  course,
+  stat,
+  selected,
+  onSelect,
+}: {
+  course: Course;
+  stat: RankedCourseStat | undefined;
+  selected: boolean;
+  onSelect: (id: number) => void;
+}) {
+  const Icon = courseIcon(course);
+  const accent = COURSE_ACCENTS[course.accent] ?? FALLBACK_ACCENT;
+  const bank = course.question_count ?? 0;
+  const locked = bank === 0;
+  const rarity = DECK_RARITY.find((r) => bank >= r.min) ?? null;
+  const inQueue = stat?.in_queue ?? 0;
+  const hot = stat?.matches_7d ?? 0;
+  const played = stat?.played ?? 0;
+  const wins = stat?.wins ?? 0;
+  const deckPct = Math.max(6, Math.min(100, Math.round((bank / 40) * 100)));
+  const flavour = course.description || (course.lecturer ? `Taught by ${course.lecturer}` : '');
+  return (
+    <button
+      type="button"
+      disabled={locked}
+      onClick={() => {
+        uiClick('select');
+        onSelect(course.id);
+      }}
+      aria-pressed={selected}
+      className={`group relative block w-full min-w-0 overflow-hidden rounded-[1.35rem] border text-left transition-all duration-200 active:translate-y-px ${
+        locked
+          ? 'cursor-not-allowed border-white/8 bg-white/[0.02] opacity-60'
+          : selected
+            ? ''
+            : 'border-white/10 bg-white/[0.03] hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] hover:shadow-[0_18px_38px_-20px_rgba(0,0,0,0.8)]'
+      }`}
+      style={
+        selected
+          ? {
+              borderColor: `${accent.bright}99`,
+              background: `linear-gradient(140deg, ${accent.deep}33, rgba(255,255,255,0.04) 52%)`,
+              boxShadow: `0 0 0 1px ${accent.bright}66, 0 20px 44px -20px ${accent.bright}aa`,
+            }
+          : undefined
+      }
+    >
+      {/* Arena plating: scanlines over the header + a light sweep on hover. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-14 opacity-[0.05]"
+        style={{backgroundImage: 'repeating-linear-gradient(180deg, #fff 0 1px, transparent 1px 5px)'}}
+      />
+      {!locked && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0 left-0 h-px w-1/3 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-0 transition-all duration-700 group-hover:translate-x-[300%] group-hover:opacity-100"
+        />
+      )}
+      <div className="relative flex min-w-0 items-start gap-3 p-3.5 pb-2.5">
+        <span
+          aria-hidden
+          className="relative grid size-12 shrink-0 place-items-center rounded-2xl border border-white/20"
+          style={{
+            background: `linear-gradient(150deg, ${accent.bright}, ${accent.deep})`,
+            boxShadow: `0 10px 22px -12px ${accent.deep}, inset 0 1px 0 rgba(255,255,255,0.35)`,
+          }}
+        >
+          <Icon className="size-6 text-white drop-shadow" />
+          {selected && !locked && (
+            <span
+              className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full border border-white/40"
+              style={{background: accent.bright, color: '#171030'}}
+            >
+              <Check className="size-3" strokeWidth={3} />
+            </span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="min-w-0 truncate font-display text-[0.92rem] font-extrabold text-mist-50">{course.title}</h3>
+            <span
+              className="shrink-0 rounded-md border px-1.5 py-0.5 text-[0.5rem] font-black tracking-[0.14em] uppercase"
+              style={
+                rarity
+                  ? {color: rarity.color, borderColor: `${rarity.color}55`, background: `${rarity.color}14`, boxShadow: `0 0 12px -6px ${rarity.color}`}
+                  : {color: '#94a3b8', borderColor: 'rgba(148,163,184,0.3)', background: 'rgba(148,163,184,0.08)'}
+              }
+            >
+              {rarity?.label ?? 'NO BANK'}
+            </span>
+          </div>
+          <p className="mt-0.5 truncate text-[0.6rem] font-black tracking-[0.16em] uppercase" style={{color: accent.bright}}>
+            {course.code} · {course.semester}
+            {course.credit_units > 0 ? ` · ${course.credit_units} CU` : ''}
+          </p>
+          {flavour && <p className="mt-1 line-clamp-1 min-w-0 text-[0.7rem] font-medium break-words text-mist-400">{flavour}</p>}
+        </div>
+      </div>
+      {/* Heat + head-to-head: the row that makes it feel like a ladder, not a syllabus. */}
+      <div className="relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-3.5">
+        {locked ? (
+          <span className="inline-flex items-center gap-1 text-[0.58rem] font-black tracking-[0.1em] text-mist-500 uppercase">
+            <Lock className="size-3" /> bank empty — staff must approve questions
+          </span>
+        ) : inQueue > 0 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-mint-400/35 bg-mint-400/10 px-2 py-0.5 text-[0.56rem] font-black tracking-[0.1em] text-mint-300 uppercase">
+            <span aria-hidden className="relative flex size-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint-400 opacity-70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-mint-400" />
+            </span>
+            {inQueue} in queue now
+          </span>
+        ) : hot > 0 ? (
+          <span className="inline-flex items-center gap-1 text-[0.58rem] font-black tracking-[0.1em] uppercase" style={{color: '#ff7ab3'}}>
+            <Flame className="size-3" /> {hot} match{hot === 1 ? '' : 'es'} this week
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[0.58rem] font-black tracking-[0.1em] text-gold-300 uppercase">
+            <Zap className="size-3" /> fresh arena — be first
+          </span>
+        )}
+        <span className="ml-auto inline-flex min-w-0 items-center gap-1 text-[0.62rem] font-black tabular text-mist-300">
+          {played > 0 ? (
+            <>
+              <Trophy className="size-3 shrink-0 text-gold-300" />
+              <span className="text-mint-300">{wins}W</span>
+              <span className="text-mist-600">–</span>
+              <span className="text-flare-300">{played - wins}L</span>
+              {stat?.best ? <span className="text-[0.56rem] font-bold text-mist-500">· best {ordinal(stat.best)}</span> : null}
+            </>
+          ) : (
+            !locked && <span className="text-[0.56rem] font-bold text-mist-600 normal-case">unranked here — make your mark</span>
+          )}
+        </span>
+      </div>
+      {/* Stat meters: deck depth bar, exam papers, current form in this arena. */}
+      <div className="relative mt-2.5 grid grid-cols-3 border-t border-white/8 bg-black/20 py-2">
+        <div className="min-w-0 px-3.5">
+          <p className="flex items-center gap-1 text-[0.5rem] font-black tracking-[0.16em] text-mist-600 uppercase">
+            <ListChecks className="size-2.5 shrink-0" /> Deck
+          </p>
+          <p className="font-display text-[0.82rem] leading-tight font-black text-mist-50 tabular">
+            {bank}
+            <span className="ml-1 text-[0.54rem] font-bold text-mist-500">Q</span>
+          </p>
+          <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-white/8">
+            <span
+              className="block h-full rounded-full transition-[width] duration-500"
+              style={{width: `${deckPct}%`, background: `linear-gradient(90deg, ${accent.deep}, ${accent.bright})`}}
+            />
+          </span>
+        </div>
+        <div className="min-w-0 border-l border-white/8 px-3 py-2">
+          <p className="flex items-center gap-1 text-[0.5rem] font-black tracking-[0.16em] text-mist-600 uppercase">
+            <FileText className="size-2.5 shrink-0" /> Papers
+          </p>
+          <p className="font-display text-[0.82rem] leading-tight font-black text-mist-50 tabular">
+            {course.quiz_count ?? 0}
+            <span className="ml-1 text-[0.54rem] font-bold text-mist-500">exam{(course.quiz_count ?? 0) === 1 ? '' : 's'}</span>
+          </p>
+          <span aria-hidden className="mt-1 block h-1 rounded-full bg-white/8" />
+        </div>
+        <div className="min-w-0 border-l border-white/8 px-3 py-2">
+          <p className="flex items-center gap-1 text-[0.5rem] font-black tracking-[0.16em] text-mist-600 uppercase">
+            <Award className="size-2.5 shrink-0" /> Form
+          </p>
+          <p className="font-display text-[0.82rem] leading-tight font-black text-mist-50 tabular">
+            {played > 0 ? `${Math.round((wins / played) * 100)}%` : '—'}
+            <span className="ml-1 text-[0.54rem] font-bold text-mist-500">{played > 0 ? `of ${played}` : 'unranked'}</span>
+          </p>
+          <span aria-hidden className="mt-1 block h-1 rounded-full bg-white/8" />
+        </div>
+      </div>
+      <div className="relative flex min-w-0 items-center justify-between gap-2 border-t border-white/8 bg-black/25 px-3.5 py-2">
+        {selected && !locked && (
+          <span
+            aria-hidden
+            className="absolute inset-x-0 -top-px h-[3px]"
+            style={{background: `linear-gradient(90deg, transparent, ${accent.bright}, transparent)`, boxShadow: `0 0 14px ${accent.bright}`}}
+          />
+        )}
+        <p className="min-w-0 truncate text-[0.56rem] font-bold text-mist-600">
+          {locked
+            ? 'not playable yet'
+            : `server-dealt set · rating moves every result${course.created_at ? ` · added ${formatRelative(course.created_at)}` : ''}`}
+        </p>
+        {locked ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 text-[0.58rem] font-black tracking-[0.14em] text-mist-500 uppercase">
+            <Lock className="size-3" /> Locked
+          </span>
+        ) : selected ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[0.58rem] font-black tracking-[0.14em] uppercase"
+            style={{background: `linear-gradient(135deg, ${accent.bright}, ${accent.deep})`, color: '#171030', boxShadow: `0 6px 16px -8px ${accent.bright}`}}
+          >
+            Armed <ArrowRight className="size-3" strokeWidth={3} />
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full border border-white/15 px-2.5 py-1 text-[0.58rem] font-black tracking-[0.14em] text-mist-400 uppercase transition-colors group-hover:border-white/35 group-hover:text-mist-200">
+            Select
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
 
@@ -206,6 +429,7 @@ function RankedSoloPanel() {
   const [status, setStatus] = useState<RankedStatus | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
+  const [courseStats, setCourseStats] = useState<Record<string, RankedCourseStat>>({});
   const [matchId, setMatchId] = useState<number | null>(null);
   const [match, setMatch] = useState<RankedMatchState | null>(null);
   const [window_, setWindow] = useState<RankedQuestionWindow | null>(null);
@@ -238,14 +462,16 @@ function RankedSoloPanel() {
   }, [clock]);
 
   const loadIdle = useCallback(async () => {
-    const [metaPayload, historyPayload, ladderPayload] = await Promise.all([
+    const [metaPayload, historyPayload, ladderPayload, statsPayload] = await Promise.all([
       api.rankedMeta().catch(() => null),
       api.rankedHistory().catch(() => ({history: []})),
       api.rankedLadder().catch(() => null),
+      api.rankedCourseStats().catch(() => ({stats: {}})),
     ]);
     setMeta(metaPayload);
     setHistory(historyPayload.history);
     setLadder(ladderPayload);
+    setCourseStats(statsPayload.stats);
   }, []);
 
   const applyState = useCallback(
@@ -278,7 +504,10 @@ function RankedSoloPanel() {
       ]);
       if (!alive) return;
       setCourses(coursesPayload);
-      if (courseId === null && coursesPayload.length) setCourseId(coursesPayload[0].id);
+      // Open an arena by default — but never a locked one (an empty bank
+      // can't be dealt from; the server would keep the queue waiting forever).
+      const firstOpen = coursesPayload.find((c) => (c.question_count ?? 0) > 0) ?? coursesPayload[0];
+      if (courseId === null && firstOpen) setCourseId(firstOpen.id);
       if (statusPayload?.match) {
         applyState(statusPayload.match);
       } else if (statusPayload?.in_queue) {
@@ -581,6 +810,7 @@ function RankedSoloPanel() {
   /* ------------------------------------------------- course select */
   if (phase === 'idle') {
     const heroBright = myTier?.bright ?? '#a855f7';
+    const queueTotal = Object.values(courseStats).reduce((sum, s) => sum + (s.in_queue || 0), 0);
     return (
       <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -655,88 +885,34 @@ function RankedSoloPanel() {
             <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-300" icon={<SignalHigh className="size-3" />}>
               {courses.length} arena{courses.length === 1 ? '' : 's'} open
             </Chip>
+            {queueTotal > 0 && (
+              <Chip className="border-mint-400/35 bg-mint-400/10 text-mint-300" icon={<Flame className="size-3" />}>
+                {queueTotal} player{queueTotal === 1 ? '' : 's'} queueing now
+              </Chip>
+            )}
           </div>
           <p className="mt-1 text-[0.78rem] font-medium text-mist-500">
             Pick a course and the server will find opponents. Every card shows the bank you will be quizzed from.
           </p>
           <div className="mt-3 grid min-w-0 gap-2.5 sm:grid-cols-2">
-            {courses.map((course) => {
-              const Icon = courseIcon(course);
-              const accent = COURSE_ACCENTS[course.accent] ?? FALLBACK_ACCENT;
-              const selected = courseId === course.id;
-              return (
-                <button
-                  key={course.id}
-                  type="button"
-                  onClick={() => {
-                    uiClick('select');
-                    setCourseId(course.id);
-                  }}
-                  aria-pressed={selected}
-                  className={`group relative w-full min-w-0 overflow-hidden rounded-2xl border text-left transition-all active:translate-y-px ${
-                    selected ? 'bg-white/[0.05]' : 'border-white/10 bg-white/[0.03] hover:border-white/22 hover:bg-white/[0.06]'
-                  }`}
-                  style={
-                    selected
-                      ? {borderColor: `${accent.bright}99`, boxShadow: `0 0 0 1px ${accent.bright}55, 0 18px 40px -22px ${accent.bright}cc`}
-                      : undefined
-                  }
-                >
-                  {/* top light-line: the card reads machined, not flat */}
-                  <span aria-hidden className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/22 to-transparent" />
-                  <div className="flex min-w-0 items-start gap-3 p-3.5">
-                    <span
-                      aria-hidden
-                      className="grid size-12 shrink-0 place-items-center rounded-2xl border border-white/20"
-                      style={{background: `linear-gradient(150deg, ${accent.bright}, ${accent.deep})`, boxShadow: `0 10px 22px -12px ${accent.deep}`}}
-                    >
-                      <Icon className="size-6 text-white drop-shadow" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="min-w-0 truncate font-display text-[0.92rem] font-extrabold text-mist-50">{course.title}</h3>
-                        {selected && (
-                          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-white/30 text-white" style={{background: accent.bright, color: '#171030'}}>
-                            <Check className="size-3.5" strokeWidth={3} />
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 truncate text-[0.62rem] font-black tracking-[0.16em] uppercase" style={{color: accent.bright}}>
-                        {course.code} · {course.semester}
-                      </p>
-                      {course.description && (
-                        <p className="mt-1.5 line-clamp-2 min-w-0 text-[0.72rem] leading-relaxed font-medium break-words text-mist-400">
-                          {course.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-white/8 bg-black/15 px-3.5 py-2.5">
-                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<ListChecks className="size-3" />}>
-                      {course.question_count ?? 0} questions
-                    </Chip>
-                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<FileText className="size-3" />}>
-                      {course.quiz_count ?? 0} exam{course.quiz_count === 1 ? '' : 's'}
-                    </Chip>
-                    <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<Award className="size-3" />}>
-                      {course.credit_units} CU
-                    </Chip>
-                    {course.lecturer && (
-                      <Chip className="hidden border-white/12 bg-white/8 text-mist-200 md:inline-flex" icon={<GraduationCap className="size-3" />}>
-                        {course.lecturer}
-                      </Chip>
-                    )}
-                    {course.created_at && (
-                      <Chip className="border-white/12 bg-white/8 text-mist-200" icon={<CalendarDays className="size-3" />}>
-                        added {formatRelative(course.created_at)}
-                      </Chip>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+            {courses.map((course) => (
+              <RankedCourseCard
+                key={course.id}
+                course={course}
+                stat={courseStats[String(course.id)]}
+                selected={courseId === course.id}
+                onSelect={setCourseId}
+              />
+            ))}
           </div>
-          <Button className="mt-4 w-full" size="lg" loading={busy} disabled={courseId == null} onClick={findMatch} icon={<TrendingUp className="size-4" />}>
+          <Button
+            className="mt-4 w-full"
+            size="lg"
+            loading={busy}
+            disabled={courseId == null || (courses.find((c) => c.id === courseId)?.question_count ?? 0) === 0}
+            onClick={findMatch}
+            icon={<TrendingUp className="size-4" />}
+          >
             Find match
           </Button>
         </Card>
