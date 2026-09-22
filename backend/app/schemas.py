@@ -128,8 +128,79 @@ class PhotoIn(BaseModel):
     image: str  # data URL: data:image/(jpeg|png|webp);base64,...
 
 
+class StudyAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=3_600_000)
+
+
+class StudyRunIn(BaseModel):
+    topic: str = Field(min_length=1, max_length=120)
+    kind: Literal["practice", "check"] = "practice"
+    count: int = Field(default=0, ge=0, le=25)  # 0 = sensible mode default
+
+
+class StudyPathActionIn(BaseModel):
+    action: Literal["understood", "section_done", "review_done", "reset_stage"]
+    section_id: int | None = None
+
+
+class MysteryAnswerIn(BaseModel):
+    selected: str = Field(min_length=1, max_length=8)
+
+
+class MysteryBeginIn(BaseModel):
+    reset: bool = False
+
+
+class SupportTicketIn(BaseModel):
+    category: Literal["bug", "question", "account", "quiz", "duel", "ranked", "study_group", "shop", "other"] = "other"
+    subject: str = Field(min_length=4, max_length=200)
+    message: str = Field(min_length=3, max_length=4000)
+    attachment_url: str = Field(default="", max_length=400)
+    attachment_name: str = Field(default="", max_length=160)
+
+
+class SupportMessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class SupportStaffMessageIn(SupportMessageIn):
+    internal: bool = False
+
+
+class SupportTicketUpdateIn(BaseModel):
+    status: Literal["open", "in_progress", "waiting_user", "resolved", "closed", "reopened"] | None = None
+    assignee: str | None = Field(default=None, max_length=120)
+    category: Literal["bug", "question", "account", "quiz", "duel", "ranked", "study_group", "shop", "other"] | None = None
+
+
+class RankedLobbyCreateIn(BaseModel):
+    team_size: int = Field(default=1, ge=1, le=5)
+    course_id: int | None = None
+
+
+class RankedLobbyCodeIn(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
+
+
+class RankedLobbyStudentIn(BaseModel):
+    student_id: int
+
+
+class RankedLobbyReadyIn(BaseModel):
+    ready: bool = True
+
+
+class TeamMatchAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=3_600_000)
+
+
 class BankDrawIn(BaseModel):
     count: int = Field(default=20, ge=1, le=200)
+    topics: list[str] = []  # optional topic filter — draw respects it end to end
 
 
 class QuestionIn(BaseModel):
@@ -438,6 +509,10 @@ class DuelSeriesIn(BaseModel):
 
 
 class QuizIn(BaseModel):
+    """Exam creation. `question_count` > 0 draws that many questions from the
+    course bank (optionally filtered by `topics`) at creation time — the draw
+    is stored, so players never see a re-roll on refresh."""
+
     title: str = Field(min_length=3, max_length=200)
     course_id: int | None = None
     instructions: str = ""
@@ -459,6 +534,9 @@ class QuizIn(BaseModel):
     review_before_submit: bool = True
     max_attempts: int = Field(default=1, ge=0, le=50)
     practice_mode: bool = False
+    question_count: int = Field(default=0, ge=0, le=200)  # 0 = build the paper by hand
+    topics: list[str] = []  # creation-time draw filter (empty = whole course bank)
+    pass_score: int = Field(default=50, ge=0, le=100)  # percent needed to pass
 
 
 class QuizBuilderIn(BaseModel):
@@ -818,6 +896,7 @@ class EventCreateIn(BaseModel):
     allow_join_during: bool = True
     allow_leave: bool = True
     leaderboard_visible: bool = True
+    featured: bool = False
 
 
 class EventUpdateIn(BaseModel):
@@ -840,6 +919,7 @@ class EventUpdateIn(BaseModel):
     allow_join_during: bool | None = None
     allow_leave: bool | None = None
     leaderboard_visible: bool | None = None
+    featured: bool | None = None
     status: Literal["scheduled", "live", "finished", "cancelled"] | None = None
 
 

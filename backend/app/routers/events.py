@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -120,6 +120,68 @@ async def answer(
             if event.leaderboard_visible
             else None
         ),
+    }
+
+
+@router.get("/history/me")
+def event_history(
+    limit: int = 10,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    student: Student = Depends(require_student),
+) -> dict:
+    """My finished events, paginated — place, score, accuracy, rewards, date."""
+    from datetime import timedelta, timezone
+
+    from ..models import ArenaEvent, EventParticipant
+    from ..services.events import event_public
+
+    limit = max(1, min(int(limit or 10), 50))
+    offset = max(0, int(offset or 0))
+    rows = list(
+        db.scalars(
+            select(EventParticipant)
+            .join(ArenaEvent, ArenaEvent.id == EventParticipant.event_id)
+            .where(
+                EventParticipant.student_id == student.id,
+                ArenaEvent.status.in_(["finished", "cancelled"]),
+            )
+            .order_by(ArenaEvent.starts_at.desc())
+            .limit(limit + 1)
+            .offset(offset)
+        ).all()
+    )
+    items = []
+    for part in rows[:limit]:
+        event = db.get(ArenaEvent, part.event_id)
+        answered = int(part.answered or 0)
+        items.append(
+            {
+                "event": event_public(db, event, student.id),
+                "position": part.position,
+                "score": part.score,
+                "correct": part.correct_count,
+                "wrong": part.wrong_count,
+                "answered": answered,
+                "accuracy": round(part.correct_count / answered * 100, 1) if answered else 0.0,
+                "finished": bool(part.finished),
+                "rewards": part.rewards or {},
+                "finished_at": part.finished_at.isoformat() + "Z" if part.finished_at else None,
+            }
+        )
+    return {
+        "items": items,
+        "total": int(db.scalar(
+            select(func.count(EventParticipant.id))
+            .join(ArenaEvent, ArenaEvent.id == EventParticipant.event_id)
+            .where(
+                EventParticipant.student_id == student.id,
+                ArenaEvent.status.in_(["finished", "cancelled"]),
+            )
+        ) or 0),
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rows) > limit,
     }
 
 

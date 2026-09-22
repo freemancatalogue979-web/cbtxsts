@@ -39,12 +39,18 @@ from .routers import (
     rooms,
     social,
     studio,
-    study, shop,)
+    study, shop,
+    study_lab,
+    mystery,
+    support,
+    ranked_teams,
+)
 from .seed import seed_all
 from .services.duel import expire_duels
 from .services.events import poll_events
 from .services.exam import expire_overdue
 from .services.ranked import advance_matches, poll_queue
+from .services.ranked_teams import advance_team_matches, poll_lobbies
 from .events import dispatch
 from .services.group import GroupError
 from .ws import hub
@@ -92,6 +98,9 @@ def _ranked_tick_sync() -> list:
         # Duels share this 1-second clock: countdowns flip to question 1 and
         # every per-question deadline auto-advances both players in lockstep.
         events += advance_duels(db)
+        # Team ranked: squad matchmaking + the same paced round clock.
+        events += poll_lobbies(db)
+        events += advance_team_matches(db)
     return events
 
 
@@ -207,6 +216,12 @@ app.include_router(game.study_router, prefix=API_PREFIX)
 app.include_router(materials.router, prefix=API_PREFIX)
 app.include_router(materials.admin_router, prefix=API_PREFIX)
 app.include_router(shop.router, prefix=API_PREFIX)
+app.include_router(study_lab.router, prefix=API_PREFIX)
+app.include_router(mystery.router, prefix=API_PREFIX)
+app.include_router(mystery.admin_router, prefix=API_PREFIX)
+app.include_router(support.router, prefix=API_PREFIX)
+app.include_router(support.admin_router, prefix=API_PREFIX)
+app.include_router(ranked_teams.router, prefix=API_PREFIX)
 app.include_router(live.router)  # websocket routes stay unprefixed: /ws/live, /ws/duel/{id}, /ws/room/{id}
 
 

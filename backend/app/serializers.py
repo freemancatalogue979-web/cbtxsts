@@ -256,6 +256,8 @@ def quiz_public(
         "review_before_submit": bool(getattr(quiz, "review_before_submit", True)),
         "max_attempts": int(getattr(quiz, "max_attempts", 1) or 0),
         "practice_mode": bool(getattr(quiz, "practice_mode", False)),
+        "pass_score": int(getattr(quiz, "pass_score", 50) or 0),
+        "draw_topics": list(getattr(quiz, "draw_topics", []) or []),
         "question_count": len([q for q in quiz.questions if getattr(q, "visible", True)]),
         "created_at": iso(quiz.created_at),
         "course": course_public(quiz.course) if quiz.course else None,
@@ -320,6 +322,9 @@ def attempt_summary(attempt: Attempt) -> dict[str, Any]:
         "submission_type": attempt.submission_type,
         "xp_awarded": attempt.xp_awarded,
         "coins_awarded": attempt.coins_awarded,
+        "passed": attempt.status == "submitted"
+        and attempt.percentage >= float(getattr(attempt.quiz, "pass_score", 50) or 0),
+        "pass_score": int(getattr(attempt.quiz, "pass_score", 50) or 0),
     }
 
 

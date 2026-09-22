@@ -229,6 +229,7 @@ def event_public(db: Session, event: ArenaEvent, viewer_id: int | None) -> dict:
     return {
         "id": event.id,
         "name": event.name,
+        "featured": bool(event.featured),
         "description": event.description,
         "course_id": event.course_id,
         "course_title": course.title if course else "The whole arena",
@@ -274,9 +275,25 @@ def events_list(db: Session, student: Student) -> dict:
             .limit(15)
         ).all()
     )
+    # One hour is the "ending soon" bar — long enough to plan, short enough to mean it.
+    soon = now + timedelta(hours=1)
+    live = [row for row in rows if row.status == "live"]
+    ending_soon = [row for row in live if row.ends_at <= soon]
+    mine_rows = list(
+        db.scalars(
+            select(ArenaEvent)
+            .join(EventParticipant, EventParticipant.event_id == ArenaEvent.id)
+            .where(EventParticipant.student_id == student.id)
+            .order_by(ArenaEvent.starts_at.desc())
+            .limit(20)
+        ).all()
+    )
     return {
         "upcoming": [event_public(db, row, student.id) for row in rows if row.starts_at > now and row.status == "scheduled"],
-        "live": [event_public(db, row, student.id) for row in rows if row.status == "live"],
+        "live": [event_public(db, row, student.id) for row in live],
+        "ending_soon": [event_public(db, row, student.id) for row in ending_soon],
+        "featured": [event_public(db, row, student.id) for row in rows if row.featured and row.status in ("scheduled", "live")],
+        "mine": [event_public(db, row, student.id) for row in mine_rows],
         "past": [event_public(db, row, student.id) for row in past],
         "server_now": _iso(now),
     }
@@ -471,6 +488,12 @@ def submit_answer(
     if existing:
         raise EventError("You already answered this question.")
     correct = (selected or "").strip().upper() == (question.correct or "").strip().upper()
+    from .study_lab import record_mistake, resolve_mistake
+
+    if correct:
+        resolve_mistake(db, participant.student_id, question.id)
+    else:
+        record_mistake(db, participant.student_id, question, selected=selected, source="event")
     points = 0
     if correct:
         window = max(1, event.per_question_seconds) if event.time_mode == "per_question" else 30

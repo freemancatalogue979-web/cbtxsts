@@ -248,10 +248,35 @@ def list_quizzes(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.post("/quizzes")
-def create_quiz(payload: QuizIn, db: Session = Depends(get_db)) -> dict:
-    quiz = Quiz(**payload.model_dump())
+def create_quiz(payload: QuizIn, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """Create an exam. When `question_count` > 0 the server draws exactly that
+    many eligible questions from the selected course (optionally filtered by
+    topics) and stores them — the paper is frozen from the first save, so a
+    refresh never re-rolls it. Creating with more questions than the bank holds
+    fails cleanly instead of padding or duplicating."""
+    data = payload.model_dump()
+    count = int(data.pop("question_count", 0) or 0)
+    topics = [str(t) for t in (data.pop("topics", []) or []) if str(t).strip()]
+    if count and not data.get("course_id"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a course first — question draws come from the course bank.")
+    quiz = Quiz(**data, created_by=admin.email) if hasattr(Quiz, "created_by") else Quiz(**data)
     db.add(quiz)
+    db.flush()
+    if count:
+        quiz.draw_topics = topics
+        result = _draw_from_bank(db, quiz, count, topics, admin.email)
+        if result["drawn"] < count:
+            db.rollback()
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Not enough eligible questions to create a {count}-question exam — the selected "
+                f"{'topics' if topics else 'course'} hold {result['available']} unique approved questions. "
+                "Lower the question count or add questions to the bank.",
+            )
+        audit(db, actor=admin.email, action="quiz.create_draw", target_type="quiz", target_id=quiz.id,
+              detail={"drawn": result["drawn"], "count": count, "topics": topics})
     db.commit()
+    db.refresh(quiz)
     return quiz_public(quiz, questions=True, reveal=True)
 
 
@@ -479,6 +504,95 @@ def course_bank(course_id: int, db: Session = Depends(get_db)) -> dict:
     return {"course_id": course_id, "code": course.code, "bank": bank, "drawn_copies": copies}
 
 
+def _draw_from_bank(db: Session, quiz: Quiz, count: int, topics: list[str] | None, actor: str) -> dict:
+    """Randomly pull `count` approved bank questions into `quiz`, no repeats.
+
+    Drawn questions are copies tagged with source_id, so the bank itself never
+    shrinks, a question can never land in the same quiz twice, and every exam/
+    duel/study path keeps working untouched. The copy carries the *same* stored
+    answer — importing or drawing can never change the key. Raises nothing;
+    the caller compares `drawn` with `requested` and decides.
+    """
+    wanted_topics = [str(t).strip().lower() for t in (topics or []) if str(t).strip()]
+    owned = set(db.scalars(select(Question.id).where(Question.quiz_id == quiz.id)).all())
+    already_copied = set(
+        db.scalars(select(Question.source_id).where(Question.quiz_id == quiz.id, Question.source_id.is_not(None))).all()
+    )
+    stmt = select(Question).where(
+        Question.course_id == quiz.course_id,
+        Question.source_id.is_(None),
+        Question.status.in_(["approved"]),
+        Question.visible.is_(True),
+        Question.id.not_in(owned | already_copied),
+    )
+    if wanted_topics:
+        stmt = stmt.where(func.lower(Question.topic).in_(wanted_topics))
+    pool = list(db.scalars(stmt).all())
+    # Never draw the same question text twice into one quiz — two bank originals
+    # can legitimately share wording, and duplicate rows confuse players.
+    seen_texts = {(text or "").strip().lower() for text in db.scalars(select(Question.text).where(Question.quiz_id == quiz.id)).all()}
+    eligible = sum(1 for row in pool if (row.text or "").strip().lower() not in seen_texts)
+    picks: list[Question] = []
+    for candidate in random.sample(pool, len(pool)):
+        key = (candidate.text or "").strip().lower()
+        if key in seen_texts:
+            continue
+        seen_texts.add(key)
+        picks.append(candidate)
+        if len(picks) >= count:
+            break
+    position = _next_position(db, quiz.id)
+    for original in picks:
+        db.add(
+            Question(
+                quiz_id=quiz.id,
+                course_id=quiz.course_id,
+                position=position,
+                text=original.text,
+                option_a=original.option_a,
+                option_b=original.option_b,
+                option_c=original.option_c,
+                option_d=original.option_d,
+                correct=original.correct,
+                explanation=original.explanation,
+                difficulty=original.difficulty,
+                points=original.points,
+                question_type=original.question_type,
+                topic=original.topic,
+                subtopic=original.subtopic,
+                objective=original.objective,
+                tags=list(original.tags or []),
+                source=original.source,
+                reference=original.reference,
+                author=original.author,
+                hint=original.hint,
+                media=dict(original.media or {}),
+                content=dict(original.content or {}),
+                status="approved",
+                flashcard_enabled=original.flashcard_enabled,
+                duel_enabled=original.duel_enabled,
+                practice_enabled=original.practice_enabled,
+                time_limit_seconds=original.time_limit_seconds,
+                source_id=original.id,
+                created_by=actor,
+                updated_by=actor,
+            )
+        )
+        position += 1
+    db.flush()
+    total = db.scalar(select(func.count(Question.id)).where(Question.quiz_id == quiz.id)) or 0
+    return {
+        "drawn": len(picks),
+        "requested": count,
+        "available": eligible,
+        "total": total,
+        "bank": db.scalar(
+            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None))
+        )
+        or 0,
+    }
+
+
 @router.post("/quizzes/{quiz_id}/draw")
 def draw_from_bank(
     quiz_id: int,
@@ -486,13 +600,7 @@ def draw_from_bank(
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
-    """Randomly pull `count` questions from the quiz's course bank into the quiz.
-
-    Drawn questions are copies tagged with source_id, so the bank itself never
-    shrinks, a question can never land in the same quiz twice, and every existing
-    exam/duel/study path keeps working untouched. The copy carries the *same*
-    stored answer — importing or drawing can never change the key.
-    """
+    """Randomly pull `count` questions from the quiz's course bank into the quiz."""
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
@@ -501,88 +609,17 @@ def draw_from_bank(
             status.HTTP_400_BAD_REQUEST,
             "Give the quiz a course first — draws pull from that course's question bank only.",
         )
-    owned = set(db.scalars(select(Question.id).where(Question.quiz_id == quiz_id)).all())
-    already_copied = set(
-        db.scalars(select(Question.source_id).where(Question.quiz_id == quiz_id, Question.source_id.is_not(None))).all()
-    )
-    pool = list(
-        db.scalars(
-            select(Question).where(
-                Question.course_id == quiz.course_id,
-                Question.source_id.is_(None),
-                Question.status.in_(["approved"]),
-                Question.visible.is_(True),
-                Question.id.not_in(owned | already_copied),
-            )
-        ).all()
-    )
-    # Never draw the same question text twice into one exam — two bank originals
-    # can legitimately share wording, and duplicate rows confuse players.
-    existing_texts = {
-        (text or "").strip().lower()
-        for text in db.scalars(select(Question.text).where(Question.quiz_id == quiz_id)).all()
-    }
-    seen_texts = set(existing_texts)
-    picks: list[Question] = []
-    for candidate in random.sample(pool, len(pool)):
-        key = (candidate.text or "").strip().lower()
-        if key in seen_texts:
-            continue
-        seen_texts.add(key)
-        picks.append(candidate)
-        if len(picks) >= payload.count:
-            break
-    position = _next_position(db, quiz_id)
-    for original in picks:
-        clone = Question(
-            quiz_id=quiz_id,
-            course_id=quiz.course_id,
-            position=position,
-            text=original.text,
-            option_a=original.option_a,
-            option_b=original.option_b,
-            option_c=original.option_c,
-            option_d=original.option_d,
-            correct=original.correct,
-            explanation=original.explanation,
-            difficulty=original.difficulty,
-            points=original.points,
-            question_type=original.question_type,
-            topic=original.topic,
-            subtopic=original.subtopic,
-            objective=original.objective,
-            tags=list(original.tags or []),
-            source=original.source,
-            reference=original.reference,
-            author=original.author,
-            hint=original.hint,
-            media=dict(original.media or {}),
-            content=dict(original.content or {}),
-            status="approved",
-            flashcard_enabled=original.flashcard_enabled,
-            duel_enabled=original.duel_enabled,
-            practice_enabled=original.practice_enabled,
-            time_limit_seconds=original.time_limit_seconds,
-            source_id=original.id,
-            created_by=admin.email,
-            updated_by=admin.email,
+    result = _draw_from_bank(db, quiz, payload.count, payload.topics, admin.email)
+    if result["drawn"] < payload.count:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Not enough unique approved questions in the bank — {result['available']} eligible, {payload.count} requested.",
         )
-        db.add(clone)
-        position += 1
-    db.flush()
     audit(db, actor=admin.email, action="question.draw", target_type="quiz", target_id=quiz_id,
-          detail={"drawn": len(picks)})
+          detail={"drawn": result["drawn"], "topics": payload.topics or []})
     db.commit()
-    total = db.scalar(select(func.count(Question.id)).where(Question.quiz_id == quiz_id)) or 0
-    return {
-        "drawn": len(picks),
-        "requested": payload.count,
-        "available": sum(1 for row in pool if (row.text or "").strip().lower() not in seen_texts),
-        "total": total,
-        "bank": db.scalar(
-            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None))
-        ) or 0,
-    }
+    return result
 
 
 # ``:int`` keeps this route from swallowing sibling literal paths such as

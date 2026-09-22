@@ -187,13 +187,18 @@ function NoticeBell({className = ''}: {className?: string}) {
             animate={{opacity: 1, y: 0, scale: 1}}
             exit={{opacity: 0, y: -8, scale: 0.97}}
             transition={{duration: 0.18}}
-            className="glass-strong absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl shadow-2xl"
+            className="glass-strong z-50 overflow-hidden rounded-3xl shadow-2xl max-sm:fixed max-sm:inset-x-2 max-sm:top-[calc(3.6rem+env(safe-area-inset-top,0px))] max-sm:w-auto sm:absolute sm:right-0 sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]"
           >
-            <header className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+            <header className="flex items-center justify-between gap-2 border-b border-white/8 px-4 py-3">
               <p className="text-[0.82rem] font-extrabold text-mist-50">Notifications</p>
-              <Chip>{liveInbox.length + liveNotices.length}</Chip>
+              <div className="flex items-center gap-1.5">
+                <Chip>{liveInbox.length + liveNotices.length}</Chip>
+                <IconButton label="Close notifications" onClick={() => setOpen(false)}>
+                  <X className="size-4 text-mist-400" />
+                </IconButton>
+              </div>
             </header>
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[min(60vh,28rem)] overflow-y-auto overscroll-contain max-sm:max-h-[min(64dvh,30rem)]">
               {inbox.length > 0 && (
                 <div className="border-b border-white/8">
                   <p className="px-4 pt-3 text-[0.62rem] font-black tracking-[0.18em] text-nova-300">For you</p>

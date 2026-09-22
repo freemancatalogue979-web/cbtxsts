@@ -33,6 +33,7 @@ from ..models import (
 from ..schemas import BossAnswerIn, BossStartIn, PracticeAnswerIn, PracticeStartIn
 from ..serializers import iso, question_public, student_profile
 from ..services.questions import answer_matches, display_order, mastery_scope_update, register_question_attempt
+from ..services import study_lab
 
 router = APIRouter(prefix="/arena", tags=["arena"])
 
@@ -522,6 +523,7 @@ def start_practice(
             "powerups": {"fifty": 1, "reveal": 1, "freeze": 1, "shield": 1, "second_chance": 1, "double_xp": 1, "streak_shield": 1},
             "used": {},
             "answers": {},
+            "topic": (payload.topic or "").strip()[:120],
             "started_at": iso(utcnow()),
         },
     )
@@ -730,6 +732,10 @@ def answer_practice(
     mastery_scope_update(db, student.id, scope_type="difficulty", scope_key=question.difficulty, correct=correct)
     if question.topic:
         mastery_scope_update(db, student.id, scope_type="topic", scope_key=question.topic, correct=correct)
+    if correct:
+        study_lab.resolve_mistake(db, student.id, question.id)
+    elif canonical:
+        study_lab.record_mistake(db, student.id, question, selected=canonical, source="practice")
 
     index = ids.index(payload.question_id) + 1
     state["index"] = max(int(state.get("index", 0)), index)
@@ -908,6 +914,18 @@ async def finish_practice(
         coins_awarded=coins,
     )
     db.add(run)
+    # Study Lab keeps its ledger of every topic-run finished, so the learning
+    # path reflects practice done outside the Lab too.
+    topic_done = str(state.get("topic") or "").strip()
+    if topic_done:
+        path = study_lab.path_for(db, student.id, topic_done)
+        path.practice_runs = int(path.practice_runs or 0) + 1
+        path.practice_answered = int(path.practice_answered or 0) + int(total or 0)
+        path.practice_correct = int(path.practice_correct or 0) + int(correct or 0)
+        study_lab.touch_practice_day(path)
+        if total and correct / max(1, total) >= 0.5:
+            study_lab.advance_stage(path, "review")
+        run.topic = topic_done[:120]
     challenge.status = "done"
     challenge.finished_at = utcnow()
     state["finalised"] = True
@@ -1165,6 +1183,12 @@ async def answer_boss(
 
     register_question_attempt(db, question, correct=correct, elapsed_ms=int(payload.elapsed_ms or 0))
     mastery_scope_update(db, student.id, scope_type="difficulty", scope_key=question.difficulty, correct=correct)
+    if question.topic:
+        mastery_scope_update(db, student.id, scope_type="topic", scope_key=question.topic, correct=correct)
+    if correct:
+        study_lab.resolve_mistake(db, student.id, question.id)
+    elif canonical:
+        study_lab.record_mistake(db, student.id, question, selected=canonical, source="boss")
 
     won = run.hp_left <= 0
     # Lives only end a run when the boss actually has a last-stand bar.

@@ -26,6 +26,7 @@ from ..events import Event, to_everyone, to_room, to_student
 from ..models import Duel, DuelAnswer, DuelParticipant, DuelQuestion, Question, Quiz, Student, utcnow
 from .question_sets import NotEnoughQuestionsError, create_multiplayer_question_sets
 from .questions import answer_matches, mastery_scope_update, register_question_attempt
+from .study_lab import record_mistake, resolve_mistake
 
 INVITE_TTL_SECONDS = 600  # 10 minutes to accept before an invite expires
 COMBO_STEP = 4
@@ -499,6 +500,10 @@ def record_answer(
     mastery_scope_update(db, participant.student_id, scope_type="difficulty", scope_key=question.difficulty, correct=is_correct)
     if question.topic:
         mastery_scope_update(db, participant.student_id, scope_type="topic", scope_key=question.topic, correct=is_correct)
+    if is_correct:
+        resolve_mistake(db, participant.student_id, question.id)
+    else:
+        record_mistake(db, participant.student_id, question, selected=selected, source="duel")
     db.flush()
 
     events = [

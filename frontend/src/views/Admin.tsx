@@ -394,12 +394,15 @@ function AdminBell() {
             animate={{opacity: 1, y: 0, scale: 1}}
             exit={{opacity: 0, y: -6, scale: 0.97}}
             transition={{duration: 0.16}}
-            className="glass-strong absolute top-full right-0 z-60 mt-1.5 w-[19rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-3xl border border-white/10"
+            className="glass-strong z-60 overflow-hidden rounded-3xl border border-white/10 max-sm:fixed max-sm:inset-x-2 max-sm:top-[calc(3.6rem+env(safe-area-inset-top,0px))] max-sm:w-auto sm:absolute sm:top-full sm:right-0 sm:mt-1.5 sm:w-[19rem] sm:max-w-[calc(100vw-1.5rem)]"
           >
-            <p className="border-b border-white/8 px-3.5 py-2.5 text-[0.74rem] font-extrabold text-mist-300">
-              Latest broadcasts
-            </p>
-            <div className="max-h-[22rem] overflow-y-auto overscroll-contain">
+            <div className="flex items-center justify-between gap-2 border-b border-white/8 px-3.5 py-2.5">
+              <p className="text-[0.74rem] font-extrabold text-mist-300">Latest broadcasts</p>
+              <IconButton label="Close notifications" className="sm:hidden" onClick={() => setOpen(false)}>
+                <X className="size-3.5 text-mist-400" />
+              </IconButton>
+            </div>
+            <div className="max-h-[22rem] overflow-y-auto overscroll-contain max-sm:max-h-[min(60dvh,26rem)]">
               {rows.length === 0 ? (
                 <p className="px-3.5 py-6 text-center text-[0.78rem] font-semibold text-mist-500">
                   Nothing broadcast yet.
