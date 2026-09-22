@@ -883,15 +883,22 @@ function MistakeScreen({onBack, onPractice}: {onBack: () => void; onPractice: (t
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-3">
-      <Card className="flex flex-wrap items-center gap-3 !p-3.5">
-        <Button size="sm" variant="ghost" onClick={onBack} icon={<ArrowLeft className="size-4" />}>
-          Lab
-        </Button>
-        <p className="min-w-0 flex-1 text-[0.95rem] font-black text-mist-50">Mistake review</p>
-        <Button size="sm" variant={onlyOpen ? 'outline' : 'mint'} onClick={() => { setOnlyOpen((value) => !value); setOffset(0); }}>
-          {onlyOpen ? 'Show retired too' : 'Only open'}
-        </Button>
-        <Chip>{page?.total ?? '—'} items</Chip>
+      <Card className="!p-3.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onBack} icon={<ArrowLeft className="size-4" />}>
+            Lab
+          </Button>
+          <p className="min-w-0 flex-1 truncate text-[0.95rem] font-black text-mist-50">Mistake review</p>
+          <Chip className="shrink-0">{page?.total ?? '—'} items</Chip>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[0.68rem] font-bold text-mist-500">
+            {onlyOpen ? 'Open misses — not yet answered correctly.' : 'Everything on record, retired included.'}
+          </p>
+          <Button size="sm" variant={onlyOpen ? 'outline' : 'mint'} onClick={() => { setOnlyOpen((value) => !value); setOffset(0); }}>
+            {onlyOpen ? 'Show retired too' : 'Only open'}
+          </Button>
+        </div>
       </Card>
       {!page ? (
         <Skeleton className="h-40 rounded-3xl" />
@@ -902,10 +909,17 @@ function MistakeScreen({onBack, onPractice}: {onBack: () => void; onPractice: (t
           {page.items.map((row) => (
             <li key={row.id}>
               <Card className={`!p-3.5 ${row.resolved ? 'opacity-75' : ''}`}>
-                <p className="text-[0.88rem] leading-snug font-bold text-mist-100">{row.question}</p>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <p className="min-w-0 break-words text-[0.88rem] leading-snug font-bold text-mist-100">{row.question}</p>
+                  {row.resolved && (
+                    <Chip className="mt-0.5 shrink-0 border-emerald-400/25 bg-emerald-500/10 text-[0.58rem] text-emerald-300">
+                      <CheckCircle2 className="size-3" /> retired
+                    </Chip>
+                  )}
+                </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.74rem] font-black">
-                  <span className="rounded-lg bg-flare-500/12 px-2 py-1 text-flare-300">Your answer: {row.your_answer || '—'}</span>
-                  <span className="rounded-lg bg-emerald-500/12 px-2 py-1 text-emerald-300">Correct: {row.correct_answer}</span>
+                  <span className="max-w-full min-w-0 break-words rounded-lg bg-flare-500/12 px-2 py-1 text-flare-300">Your answer: {row.your_answer || '—'}</span>
+                  <span className="max-w-full min-w-0 break-words rounded-lg bg-emerald-500/12 px-2 py-1 text-emerald-300">Correct: {row.correct_answer}</span>
                   <Chip className="border-white/12 bg-white/6 text-mist-400">{row.topic}</Chip>
                   <Chip className="border-white/12 bg-white/6 text-mist-400">×{row.hits} · {row.source}</Chip>
                 </div>

@@ -1091,7 +1091,7 @@ function BackHeader({title, onExit}: {title: string; onExit: () => void}) {
 /* ----------------------------------------------------------------- panel */
 
 export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => void}) {
-  const [mode, setMode] = useState<Mode>('lab');
+  const [mode, setMode] = useState<Mode>('hub');
   const [rushMode, setRushMode] = useState<'blitz' | 'sudden'>('blitz');
   const [pendingHelp, setPendingHelp] = useState(0);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -1140,6 +1140,11 @@ export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => v
   if (mode === 'lab')
     return (
       <div className="w-full">
+        <div className="mb-3">
+          <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={() => setMode('hub')}>
+            Study Lab
+          </Button>
+        </div>
         <StudyLabPanel />
       </div>
     );
