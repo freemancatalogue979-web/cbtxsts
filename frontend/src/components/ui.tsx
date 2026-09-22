@@ -113,7 +113,7 @@ const VARIANTS: Record<Variant, string> = {
   danger:
     'bg-gradient-to-b from-flare-500 to-flare-700 text-white hover:from-flare-400 hover:to-flare-600',
   outline:
-    'bg-[#0c0518] text-mist-100 hover:bg-[#150828] hover:text-white',
+    'bg-ink-800 text-mist-100 hover:bg-ink-700 hover:text-mist-50',
   ghost:
     'bg-white/[0.04] text-mist-300 hover:bg-nova-500/12 hover:text-mist-50',
   soft:

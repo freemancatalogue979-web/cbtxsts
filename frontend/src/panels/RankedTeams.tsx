@@ -623,7 +623,7 @@ function LobbyScreen({
             <li key={member.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2">
               <span className="relative">
                 <Avatar name={member.name} size={30} />
-                <span className={`absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-[#0b1016] ${member.connection === 'online' ? 'bg-emerald-400' : 'bg-mist-600'}`} />
+                <span className={`absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-ink-900 ${member.connection === 'online' ? 'bg-emerald-400' : 'bg-mist-600'}`} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[0.84rem] font-extrabold text-mist-50">

@@ -1266,6 +1266,7 @@ def admin_create_event(payload: EventCreateInUtc, db: Session = Depends(get_db),
         allow_join_during=payload.allow_join_during,
         allow_leave=payload.allow_leave,
         leaderboard_visible=payload.leaderboard_visible,
+        featured=payload.featured,
         status="scheduled",
         created_by=admin.email,
     )

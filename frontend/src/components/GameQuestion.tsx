@@ -41,11 +41,11 @@ export function AnswerTile({
   onPick?: () => void;
 }) {
   const faces: Record<AnswerState, string> = {
-    idle: 'border-white/12 bg-[#0c1219] hover:border-nova-400/50 hover:bg-[#111923]',
+    idle: 'border-white/12 bg-ink-850 hover:border-nova-400/50 hover:bg-ink-800',
     picked: 'border-nova-400/80 bg-nova-950/40 shadow-[0_0_15px_-3px_rgba(6,182,212,0.3)]',
     correct: 'border-emerald-500/80 bg-emerald-950/35 text-emerald-100 shadow-[0_0_15px_-3px_rgba(16,185,129,0.3)]',
     wrong: 'border-red-500/80 bg-red-950/35 text-red-100 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]',
-    muted: 'border-white/8 bg-[#080d12] opacity-50',
+    muted: 'border-white/8 bg-ink-900 opacity-50',
   };
   const badges: Record<AnswerState, string> = {
     idle: 'bg-white/8 text-mist-300 border border-white/12',

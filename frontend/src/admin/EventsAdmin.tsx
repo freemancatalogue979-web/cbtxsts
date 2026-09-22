@@ -40,6 +40,7 @@ interface FormState {
   allow_join_during: boolean;
   allow_leave: boolean;
   leaderboard_visible: boolean;
+  featured: boolean;
 }
 
 /** Local datetime input → ISO for the API (the backend stores naive UTC). */
@@ -83,6 +84,7 @@ function emptyForm(): FormState {
     allow_join_during: true,
     allow_leave: true,
     leaderboard_visible: true,
+    featured: false,
   };
 }
 
@@ -149,6 +151,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       allow_join_during: event.allow_join_during,
       allow_leave: event.allow_leave,
       leaderboard_visible: event.leaderboard_visible,
+      featured: (event as {featured?: boolean}).featured ?? false,
     });
     setCreating(true);
   };
@@ -187,6 +190,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       allow_join_during: form.allow_join_during,
       allow_leave: form.allow_leave,
       leaderboard_visible: form.leaderboard_visible,
+      featured: form.featured,
     };
     try {
       if (editing) {
@@ -418,6 +422,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
               ['allow_join_during', 'Allow joining after the start'],
               ['allow_leave', 'Allow leaving mid-event'],
               ['leaderboard_visible', 'Leaderboard visible to players'],
+              ['featured', '★ Featured on the events hub'],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 text-[0.76rem] font-bold text-mist-300">

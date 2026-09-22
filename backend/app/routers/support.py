@@ -284,6 +284,7 @@ async def staff_reply(ticket_id: int, payload: SupportStaffMessageIn, db: Sessio
         if ticket.status == "open":
             ticket.status = "in_progress"
         ticket.status = ticket.status if ticket.status != "closed" else "open"
+        ticket.student_unread = int(ticket.student_unread or 0) + 1
         note = InboxNote(
             student_id=ticket.student_id,
             kind="general",

@@ -318,9 +318,14 @@ export default function EventsPanel() {
 
     return (
       <div className="w-full space-y-3 p-3 sm:p-4">
-        {event.banner && (
-          <img src={event.banner} alt="" className="h-28 w-full rounded-3xl border border-white/8 object-cover sm:h-40" />
-        )}
+        {event.banner &&
+          (/^https?:\/\//i.test(event.banner) ? (
+            <img src={event.banner} alt="" className="h-28 w-full rounded-3xl border border-white/8 object-cover sm:h-40" />
+          ) : (
+            <div className="rounded-2xl border border-gold-400/25 bg-gold-500/10 px-3.5 py-2 text-[0.8rem] font-black tracking-wide text-gold-200 uppercase">
+              {event.banner}
+            </div>
+          ))}
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" onClick={closeEvent} icon={<ChevronLeft className="size-4" />}>
             Events

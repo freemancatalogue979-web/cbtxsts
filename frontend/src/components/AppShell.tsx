@@ -807,7 +807,7 @@ export function AppShell({
             onClick={() => setDrawerOpen(false)}
           >
             <motion.div
-              className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-nova-500/30 bg-[#090d14] p-4 shadow-2xl"
+              className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-white/10 bg-ink-950 p-4 shadow-2xl"
               initial={{x: -320}}
               animate={{x: 0}}
               exit={{x: -320}}

@@ -35,9 +35,9 @@ export function QuestionCard({
 }) {
   return (
     <div
-      className={`relative rounded-xl border border-nova-500/30 bg-[#0a0518] p-[1.5px] shadow-2xl ${className}`}
+      className={`relative rounded-xl border border-nova-500/30 bg-ink-900 p-[1.5px] shadow-2xl ${className}`}
     >
-      <div className="relative overflow-hidden rounded-[calc(0.75rem-1.5px)] bg-[#0c061a] p-4 sm:p-6">
+      <div className="relative overflow-hidden rounded-[calc(0.75rem-1.5px)] bg-ink-850 p-4 sm:p-6">
         <span aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-nova-400/40 to-transparent" />
         <span aria-hidden className="pointer-events-none absolute -top-24 -right-14 size-52 rounded-full bg-nova-600/15 blur-3xl" />
         {number !== undefined && (
