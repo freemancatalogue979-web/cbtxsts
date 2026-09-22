@@ -162,7 +162,7 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
 }
 
 export default function App() {
-  const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile} = useSession();
+  const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile, switchTo, beginSwitch, cancelSwitch, switchTarget} = useSession();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
   const [started, setStarted] = useState(false);
 
@@ -294,11 +294,27 @@ export default function App() {
 
   if (!started || !ready) return <Splash />;
 
+  /* Admin ⇄ Player: the stored slot for the other role switches instantly;
+     without one, the sign-in sheet opens for exactly that role (beginSwitch)
+     — both flows land in the app without a browser refresh. */
+  const gotoRole = (target: 'student' | 'admin') => {
+    void switchTo(target).then((outcome) => {
+      if (outcome === 'missing') {
+        beginSwitch(target);
+        toast(
+          'info',
+          target === 'admin' ? 'Staff session needed' : 'Player session needed',
+          'Sign in once and the switch button will flip between both, no re-login, ever.',
+        );
+      }
+    });
+  };
+
   /* ------------------------------------------------------------- admin */
   if (role === 'admin') {
     return (
       <>
-        <Admin onExit={signOut} />
+        <Admin onExit={signOut} onSwitchToPlayer={() => gotoRole('student')} />
         <Toasts />
         <CelebrationLayer />
       </>
@@ -308,7 +324,11 @@ export default function App() {
   if (role !== 'student' || !profile) {
     return (
       <>
-        <Welcome onAdminMode={() => navigate({view: 'admin'}, 'replace')} />
+        <Welcome
+          onAdminMode={() => navigate({view: 'admin'}, 'replace')}
+          switchTarget={switchTarget}
+          onSwitchCancel={cancelSwitch}
+        />
         <Toasts />
         <CelebrationLayer />
       </>
@@ -348,7 +368,7 @@ export default function App() {
             <AppShell
               tab={route.tab}
               onTab={(tab) => navigate({view: 'dashboard', tab})}
-              onAdmin={() => toast('info', 'Staff only', 'Sign out and use the Staff tab to manage the arena.')}
+              onAdmin={() => gotoRole('admin')}
               onProfile={() => navigate({view: 'dashboard', tab: 'profile'})}
               onSignOut={signOut}
             >

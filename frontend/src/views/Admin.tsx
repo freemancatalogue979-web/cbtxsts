@@ -1,6 +1,7 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
 import {CalendarDays,
   Activity,
+  Gamepad2,
   Award,
   BarChart3,
   Bell,
@@ -425,7 +426,7 @@ function AdminBell() {
 }
 
 /** Compact profile control: settings shortcut + sign-out, phone-friendly. */
-function AdminProfile({onSettings, onExit}: {onSettings: () => void; onExit: () => void}) {
+function AdminProfile({onSettings, onExit, onSwitch}: {onSettings: () => void; onExit: () => void; onSwitch?: () => void}) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -459,6 +460,18 @@ function AdminProfile({onSettings, onExit}: {onSettings: () => void; onExit: () 
             className="glass-strong absolute top-full right-0 z-60 mt-1.5 w-52 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-3xl border border-white/10 p-1.5"
           >
             <p className="px-2.5 pt-1.5 pb-2 text-[0.7rem] font-bold text-mist-500">Signed in as staff</p>
+            {onSwitch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onSwitch();
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[0.82rem] font-bold text-mist-200 transition hover:bg-white/6"
+              >
+                <Gamepad2 className="size-4 text-emerald-300" /> Switch to player
+              </button>
+            )}
             <button
               onClick={() => {
                 setOpen(false);
@@ -484,7 +497,7 @@ function AdminProfile({onSettings, onExit}: {onSettings: () => void; onExit: () 
   );
 }
 
-export default function Admin({onExit}: {onExit: () => void}) {
+export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; onSwitchToPlayer?: () => void}) {
   const [section, setSection] = useState<Section>('overview');
   // Bumping the key remounts a section so it re-fetches after a mutation.
   const [bump, setBump] = useState(0);
@@ -523,15 +536,31 @@ export default function Admin({onExit}: {onExit: () => void}) {
             Staff console
           </Chip>
           <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
+            {onSwitchToPlayer && (
+              <IconButton label="Switch to player" className="rounded-2xl sm:hidden" onClick={onSwitchToPlayer}>
+                <Gamepad2 className="size-[18px] text-emerald-300" />
+              </IconButton>
+            )}
             <AdminBell />
             <span className="hidden sm:block">
-              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} />
+              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
+            {onSwitchToPlayer && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden items-center gap-1.5 border-emerald-400/35 text-[0.78rem] font-black text-emerald-300 hover:border-emerald-400/60 lg:inline-flex"
+                onClick={onSwitchToPlayer}
+                icon={<Gamepad2 className="size-4" />}
+              >
+                Player view
+              </Button>
+            )}
             <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={onExit} icon={<Activity className="size-4" />}>
               Sign out
             </Button>
             <span className="sm:hidden">
-              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} />
+              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
           </div>
         </div>

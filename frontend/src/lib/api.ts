@@ -100,6 +100,7 @@ export type Json = Record<string, unknown>;
 
 const TOKEN_KEY = 'arena.token';
 const ROLE_KEY = 'arena.role';
+const SLOT_PREFIX = 'arena.slot.';
 
 export const tokenStore = {
   get(): string | null {
@@ -120,8 +121,25 @@ export const tokenStore = {
     try {
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(ROLE_KEY, role);
+      localStorage.setItem(SLOT_PREFIX + role, token);
     } catch {
       /* private mode — session lives in memory only */
+    }
+  },
+  /** Per-role stored tokens: the Admin⇄Player switch reads the other slot
+   *  instead of asking anyone to log in (or refresh) twice. */
+  getSlot(role: 'student' | 'admin'): string | null {
+    try {
+      return localStorage.getItem(SLOT_PREFIX + role);
+    } catch {
+      return null;
+    }
+  },
+  clearSlot(role: 'student' | 'admin'): void {
+    try {
+      localStorage.removeItem(SLOT_PREFIX + role);
+    } catch {
+      /* ignore */
     }
   },
   clear(): void {
@@ -248,6 +266,63 @@ export const api = {
   rankedReview: (matchId: number) => request<{match_id: number; items: ReviewItem[]}>(`/api/ranked/match/${matchId}/review`),
   rankedHistory: () => request<{history: RankedHistoryRow[]}>('/api/ranked/history'),
   rankedLadder: () => request<RankedLadder>('/api/ranked/leaderboard'),
+
+  /* ------------------------------------------------ Study Lab + mistakes */
+  studyLabOverview: () => request<Record<string, unknown>>('/api/study-lab/overview'),
+  studyLabTopic: (topic: string, offset = 0) =>
+    request<Record<string, unknown>>(`/api/study-lab/topic/${encodeURIComponent(topic)}?mistakes_limit=10&mistakes_offset=${offset}`),
+  studyLabAction: (topic: string, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/api/study-lab/topic/${encodeURIComponent(topic)}/action`, {method: 'POST', body}),
+  studyRunStart: (body: {topic: string; kind?: 'practice' | 'check'; count?: number}) =>
+    request<Record<string, unknown>>('/api/study-lab/run/start', {method: 'POST', body}),
+  studyRunActive: () => request<Record<string, unknown>>('/api/study-lab/run/active'),
+  studyRunAnswer: (runId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+    request<Record<string, unknown>>(`/api/study-lab/run/${runId}/answer`, {method: 'POST', body}),
+  studyRunAbandon: (runId: number) => request<{ok: boolean}>(`/api/study-lab/run/${runId}/abandon`, {method: 'POST'}),
+  studyMistakes: (params: {limit?: number; offset?: number; topic?: string; only_open?: boolean} = {}) =>
+    request<Record<string, unknown>>(`/api/study-lab/mistakes${query(params)}`),
+
+  /* ---------------------------------------------------------- Mystery */
+  mysteryList: () => request<Record<string, unknown>>('/api/mystery'),
+  mysteryCase: (id: number) => request<Record<string, unknown>>(`/api/mystery/${id}`),
+  mysteryBegin: (id: number, reset = false) =>
+    request<Record<string, unknown>>(`/api/mystery/${id}/begin`, {method: 'POST', body: {reset}}),
+  mysteryClue: (id: number) => request<Record<string, unknown>>(`/api/mystery/${id}/clue`, {method: 'POST'}),
+  mysteryAnswer: (id: number, body: {selected: string}) =>
+    request<Record<string, unknown>>(`/api/mystery/${id}/answer`, {method: 'POST', body}),
+
+  /* ------------------------------------------------ Customer Support */
+  supportTickets: (params: {limit?: number; offset?: number; only_open?: boolean} = {}) =>
+    request<Record<string, unknown>>(`/api/support/tickets${query(params)}`),
+  supportOpen: (body: Record<string, unknown>) => request<Record<string, unknown>>('/api/support/tickets', {method: 'POST', body}),
+  supportTicket: (id: number) => request<Record<string, unknown>>(`/api/support/tickets/${id}`),
+  supportReply: (id: number, body: {body: string}) =>
+    request<Record<string, unknown>>(`/api/support/tickets/${id}/messages`, {method: 'POST', body}),
+
+  /* ------------------------------------------------ Team ranked */
+  rankedDashboard: () => request<Record<string, unknown>>('/api/ranked/dashboard'),
+  teamLobby: () => request<{lobby: Record<string, unknown> | null}>('/api/ranked/lobby'),
+  teamLobbyCreate: (body: {team_size: number; course_id?: number | null}) =>
+    request<{lobby: Record<string, unknown>}>('/api/ranked/lobby', {method: 'POST', body}),
+  teamLobbyJoin: (code: string) => request<{lobby: Record<string, unknown>}>('/api/ranked/lobby/join', {method: 'POST', body: {code}}),
+  teamLobbyLeave: () => request<{left: boolean}>('/api/ranked/lobby/leave', {method: 'POST'}),
+  teamLobbyKick: (studentId: number) =>
+    request<{kicked: number; lobby: Record<string, unknown>}>(`/api/ranked/lobby/kick`, {method: 'POST', body: {student_id: studentId}}),
+  teamLobbyReady: (ready: boolean) =>
+    request<{ready: boolean; lobby: Record<string, unknown>}>(`/api/ranked/lobby/ready`, {method: 'POST', body: {ready}}),
+  teamLobbyInvite: (studentId: number) => request<{invited: string}>(`/api/ranked/lobby/invite`, {method: 'POST', body: {student_id: studentId}}),
+  teamLobbyFind: () =>
+    request<{lobby: Record<string, unknown>; match_id?: number | null}>('/api/ranked/lobby/find', {method: 'POST'}),
+  teamLobbyCancelSearch: () => request<{lobby: Record<string, unknown>}>('/api/ranked/lobby/cancel-search', {method: 'POST'}),
+  teamLobbyList: () => request<{lobbies: Record<string, unknown>[]}>('/api/ranked/lobby/open-list'),
+  teamMatch: (matchId: number) => request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}`),
+  teamMatchAnswer: (matchId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+    request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}/answer`, {method: 'POST', body}),
+  teamMatchReview: (matchId: number) => request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}/review`),
+
+  /* ------------------------------------------------ Event history */
+  eventsHistory: (params: {limit?: number; offset?: number} = {}) =>
+    request<Record<string, unknown>>(`/api/events/history/me${query(params)}`),
 
   /* -------------------------------------------------------------- events */
   eventsList: () => request<EventsListing>('/api/events'),
@@ -688,6 +763,21 @@ export const api = {
     clearResults: (quizId: number) => request<{ok: boolean; deleted: number}>(`/api/admin/results${query({quiz_id: quizId})}`, {method: 'DELETE'}),
     exportUrl: (quizId: number) => `/api/admin/results/export${query({quiz_id: quizId})}`,
 
+    /* Support desk */
+    supportList: (params: Record<string, unknown> = {}) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets${query(params)}`),
+    supportTicket: (id: number) => request<Record<string, unknown>>(`/api/admin/support/tickets/${id}`),
+    supportReply: (id: number, body: {body: string; internal?: boolean}) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets/${id}/messages`, {method: 'POST', body}),
+    supportUpdate: (id: number, body: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets/${id}`, {method: 'PATCH', body}),
+    /* Mystery desk */
+    mysteryList: (params: {limit?: number; offset?: number} = {}) =>
+      request<Record<string, unknown>>(`/api/admin/mystery/cases${query(params)}`),
+    mysteryCreate: (body: Record<string, unknown>) => request<Record<string, unknown>>('/api/admin/mystery/cases', {method: 'POST', body}),
+    mysteryUpdate: (id: number, body: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/api/admin/mystery/cases/${id}`, {method: 'PATCH', body}),
+    mysteryDelete: (id: number) => request<{ok: boolean}>(`/api/admin/mystery/cases/${id}`, {method: 'DELETE'}),
     notifications: (params: {limit?: number; offset?: number} = {}) =>
       request<{rows: Notice[]; total: number; limit: number; offset: number}>(`/api/admin/notifications${query(params)}`),
     createNotification: (body: Record<string, unknown>) => request<Notice>('/api/admin/notifications', {method: 'POST', body}),

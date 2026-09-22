@@ -15,9 +15,19 @@ import SignIn from './SignIn';
 
 type FrontView = 'landing' | 'signin';
 
-export default function Welcome({onAdminMode}: {onAdminMode: () => void}) {
-  const [view, setView] = useState<FrontView>('landing');
-  const [mode, setMode] = useState<'student' | 'admin'>('student');
+export default function Welcome({
+  onAdminMode,
+  switchTarget,
+  onSwitchCancel,
+}: {
+  onAdminMode: () => void;
+  /** Set while the shell is being swapped between Player and Staff: the sign-in
+   *  sheet opens straight on the missing role and Back returns to the app. */
+  switchTarget?: 'student' | 'admin' | null;
+  onSwitchCancel?: () => void;
+}) {
+  const [view, setView] = useState<FrontView>(switchTarget ? 'signin' : 'landing');
+  const [mode, setMode] = useState<'student' | 'admin'>(switchTarget ?? 'student');
 
   const show = (next: FrontView, nextMode: 'student' | 'admin' = 'student') => {
     window.scrollTo({top: 0, behavior: 'instant' as ScrollBehavior});
@@ -45,7 +55,17 @@ export default function Welcome({onAdminMode}: {onAdminMode: () => void}) {
           exit={{opacity: 0, x: -26}}
           transition={{duration: 0.26, ease: [0.22, 1, 0.36, 1]}}
         >
-          <SignIn onBack={() => show('landing')} onAdminMode={onAdminMode} initialMode={mode} />
+          <SignIn
+            onBack={() => {
+              if (switchTarget) {
+                onSwitchCancel?.();
+                return;
+              }
+              show('landing');
+            }}
+            onAdminMode={onAdminMode}
+            initialMode={mode}
+          />
         </motion.div>
       )}
     </AnimatePresence>
