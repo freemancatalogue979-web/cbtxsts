@@ -764,7 +764,7 @@ export const api = {
     exportUrl: (quizId: number) => `/api/admin/results/export${query({quiz_id: quizId})}`,
 
     /* Support desk */
-    supportList: (params: Record<string, unknown> = {}) =>
+    supportList: (params: Record<string, string | number | boolean | null | undefined> = {}) =>
       request<Record<string, unknown>>(`/api/admin/support/tickets${query(params)}`),
     supportTicket: (id: number) => request<Record<string, unknown>>(`/api/admin/support/tickets/${id}`),
     supportReply: (id: number, body: {body: string; internal?: boolean}) =>

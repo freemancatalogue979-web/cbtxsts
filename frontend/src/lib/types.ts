@@ -350,7 +350,10 @@ export interface AttemptSummary {
   submission_type: string;
   xp_awarded: number;
   coins_awarded: number;
+  passed?: boolean;
+  pass_score?: number;
 }
+
 
 export interface Quiz {
   id: number;
@@ -379,6 +382,8 @@ export interface Quiz {
   review_before_submit?: boolean;
   max_attempts?: number;
   practice_mode?: boolean;
+  pass_score?: number;
+  draw_topics?: string[];
 }
 
 export interface ReviewRow {

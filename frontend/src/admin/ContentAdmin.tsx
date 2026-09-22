@@ -67,8 +67,14 @@ const emptyQuiz = {
   duration_minutes: 25,
   status: 'scheduled' as Quiz['status'],
   scheduled_at: '',
+  end_at: '',
   shuffle_questions: true,
   allow_duel: true,
+  // Creation-time draw: the server picks exactly this many eligible
+  // questions from the course bank (optionally topic-filtered) and stores
+  // them, so the paper never re-rolls. 0 = assemble questions by hand.
+  question_count: 0,
+  pass_score: 50,
 };
 
 /**
@@ -304,6 +310,21 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
   const [courses, setCourses] = useState<Course[]>([]);
   const [editing, setEditing] = useState<(typeof emptyQuiz & {id?: number}) | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quizTopics, setQuizTopics] = useState<{topic: string; count: number}[]>([]);
+  const [pickedTopics, setPickedTopics] = useState<string[]>([]);
+
+  // Topics follow the course so the picker is never stale.
+  useEffect(() => {
+    const courseId = editing?.course_id ?? null;
+    if (!courseId) {
+      setQuizTopics([]);
+      return;
+    }
+    api.admin.studio
+      .topics(courseId)
+      .then((data) => setQuizTopics(((data.topics as {topic: string; count: number}[]) ?? []).slice(0, 40)))
+      .catch(() => setQuizTopics([]));
+  }, [editing?.course_id]);
 
   const load = useCallback(() => {
     api.admin
@@ -321,14 +342,17 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
   const save = async () => {
     if (!editing) return;
     setBusy(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...editing,
       scheduled_at: editing.scheduled_at ? new Date(editing.scheduled_at).toISOString().slice(0, 19) : null,
+      end_at: editing.end_at ? new Date(editing.end_at).toISOString().slice(0, 19) : null,
     };
+    if (!editing.id && pickedTopics.length) payload.topics = pickedTopics;
     try {
       if (editing.id) await api.admin.updateQuiz(editing.id, payload);
       else await api.admin.createQuiz(payload);
       toast('success', editing.id ? 'Exam updated' : 'Exam created', editing.title);
+      setPickedTopics([]);
       setEditing(null);
       load();
       onChanged();
@@ -434,8 +458,11 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
                         duration_minutes: quiz.duration_minutes,
                         status: quiz.status,
                         scheduled_at: quiz.scheduled_at ? quiz.scheduled_at.slice(0, 16) : '',
+                        end_at: (quiz as {end_at?: string | null}).end_at ? String((quiz as {end_at?: string}).end_at).slice(0, 16) : '',
                         shuffle_questions: quiz.shuffle_questions,
                         allow_duel: quiz.allow_duel,
+                        question_count: 0,
+                        pass_score: (quiz as {pass_score?: number}).pass_score ?? 50,
                       })
                     }
                     icon={<Pencil className="size-3.5" />}
@@ -509,6 +536,69 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
                 onChange={(event) => setEditing({...editing, scheduled_at: event.target.value})}
               />
             </Field>
+            <Field label="Closes at" hint="Optional — hard deadline the auto-submitter enforces.">
+              <TextInput type="datetime-local" value={editing.end_at} onChange={(event) => setEditing({...editing, end_at: event.target.value})} />
+            </Field>
+            <Field
+              label="Number of questions"
+              hint={
+                editing.id
+                  ? 'Edit papers use the Questions tab — creation-time draws only run on new exams.'
+                  : '0 = build the paper by hand. The server draws exactly this many eligible questions from the course bank and stores them.'
+              }
+            >
+              <TextInput
+                type="number"
+                min={0}
+                max={200}
+                value={editing.question_count}
+                onChange={(event) => setEditing({...editing, question_count: Math.max(0, Math.min(200, Number(event.target.value) || 0))})}
+              />
+            </Field>
+            <Field label="Passing score (%)" hint="Used on result screens and for pass/fail reporting.">
+              <TextInput
+                type="number"
+                min={0}
+                max={100}
+                value={editing.pass_score}
+                onChange={(event) => setEditing({...editing, pass_score: Math.max(0, Math.min(100, Number(event.target.value) || 0))})}
+              />
+            </Field>
+            {!editing.id && editing.course_id && quizTopics.length > 0 && (
+              <div className="sm:col-span-2">
+                <p className="mb-1.5 text-[0.72rem] font-black tracking-wide text-mist-400 uppercase">
+                  Draw from topics {pickedTopics.length ? `· ${pickedTopics.length} picked` : '· whole course'}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {quizTopics.map((row) => {
+                    const on = pickedTopics.includes(row.topic);
+                    return (
+                      <button
+                        key={row.topic}
+                        type="button"
+                        onClick={() => setPickedTopics((current) => (on ? current.filter((t) => t !== row.topic) : [...current, row.topic]))}
+                        className={
+                          on
+                            ? 'rounded-full border border-nova-400/50 bg-nova-500/18 px-2.5 py-1 text-[0.72rem] font-black text-nova-200'
+                            : 'rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[0.72rem] font-bold text-mist-400 hover:border-white/25'
+                        }
+                      >
+                        {row.topic} <span className="opacity-70">{row.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {editing.question_count > 0 && (
+                  <p className="mt-1.5 text-[0.72rem] font-bold text-mist-500">
+                    Eligible now:{' '}
+                    {pickedTopics.length
+                      ? quizTopics.filter((t) => pickedTopics.includes(t.topic)).reduce((sum, t) => sum + t.count, 0)
+                      : (courses.find((c) => c.id === editing.course_id)?.question_count ?? '?')}{' '}
+                    · the server re-validates against the bank when you save.
+                  </p>
+                )}
+              </div>
+            )}
             <Field label="Instructions" className="sm:col-span-2">
               <TextArea rows={3} value={editing.instructions} onChange={(event) => setEditing({...editing, instructions: event.target.value})} />
             </Field>
