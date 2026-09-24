@@ -99,6 +99,8 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
+  // Raw typing for the question-count field so it never snaps back mid-edit.
+  const [countDraft, setCountDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState<ArenaEventSummary | null>(null);
 
   const load = useCallback(() => {
@@ -153,6 +155,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       leaderboard_visible: event.leaderboard_visible,
       featured: (event as {featured?: boolean}).featured ?? false,
     });
+    setCountDraft(null);
     setCreating(true);
   };
 
@@ -160,6 +163,10 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
     uiClick('confirm');
     if (!form.name.trim()) {
       toast('error', 'Name required', 'Give the event a name players will recognize.');
+      return;
+    }
+    if (form.question_count < 3 || form.question_count > 100) {
+      toast('error', 'Questions: 3 to 100', `You typed ${form.question_count} — clear the box and enter a fresh count.`);
       return;
     }
     setBusy(true);
@@ -201,6 +208,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
         toast('success', 'Event created', `${body.name} is on the calendar.`);
       }
       setCreating(false);
+      setCountDraft(null);
       load();
       onChanged?.();
     } catch (error) {
@@ -367,8 +375,14 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
           <Field label="Questions" hint="Fixed order, same for every player.">
             <TextInput
               type="number"
-              value={form.question_count}
-              onChange={(e) => set('question_count', Math.max(3, Math.min(100, Number(e.target.value) || 3)))}
+              value={countDraft ?? String(form.question_count)}
+              onChange={(e) => {
+                setCountDraft(e.target.value);
+                const raw = e.target.value.trim();
+                const n = raw === '' ? 0 : Math.floor(Number(raw));
+                set('question_count', Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0);
+              }}
+              onBlur={() => setCountDraft(null)}
             />
           </Field>
           <Field label="Timing mode">

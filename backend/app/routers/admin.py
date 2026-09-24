@@ -172,7 +172,9 @@ async def update_config(payload: ConfigIn, db: Session = Depends(get_db)) -> dic
 # ---------------------------------------------------------------------------
 @router.get("/courses")
 def list_courses(db: Session = Depends(get_db)) -> list[dict]:
-    counts = dict(db.execute(select(Quiz.course_id, func.count(Quiz.id)).group_by(Quiz.course_id)).all())
+    counts = dict(
+        db.execute(select(Quiz.course_id, func.count(Quiz.id)).where(Quiz.is_bank.is_(False)).group_by(Quiz.course_id)).all()
+    )
     question_counts = dict(
         db.execute(select(Question.course_id, func.count(Question.id)).group_by(Question.course_id)).all()
     )
@@ -235,9 +237,27 @@ def delete_course(course_id: int, db: Session = Depends(get_db)) -> dict:
 # ---------------------------------------------------------------------------
 # quizzes
 # ---------------------------------------------------------------------------
+@router.post("/courses/{course_id}/bank-quiz")
+def open_course_bank(
+    course_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    """Open (creating on first use) a course's question bank and hand the admin
+    its holding quiz — the Questions tab works on it like any other."""
+    from ..services.questions import ensure_course_bank_quiz
+
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
+    quiz = ensure_course_bank_quiz(db, course, admin.email)
+    db.commit()
+    return quiz_public(quiz, submission_count=0)
+
+
 @router.get("/quizzes")
 def list_quizzes(db: Session = Depends(get_db)) -> list[dict]:
-    quizzes = db.scalars(select(Quiz).order_by(Quiz.id.desc())).all()
+    quizzes = db.scalars(select(Quiz).where(Quiz.is_bank.is_(False)).order_by(Quiz.id.desc())).all()
     payload = []
     for quiz in quizzes:
         submissions = db.scalar(

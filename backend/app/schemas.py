@@ -536,6 +536,13 @@ class QuizIn(BaseModel):
     practice_mode: bool = False
     question_count: int = Field(default=0, ge=0, le=200)  # 0 = build the paper by hand
     topics: list[str] = []  # creation-time draw filter (empty = whole course bank)
+
+    @field_validator("question_count")
+    @classmethod
+    def _count_or_by_hand(cls, value: int) -> int:
+        if 0 < value < 3:
+            raise ValueError("A drawn paper needs at least 3 questions — use 0 to build the paper by hand.")
+        return value
     pass_score: int = Field(default=50, ge=0, le=100)  # percent needed to pass
 
 

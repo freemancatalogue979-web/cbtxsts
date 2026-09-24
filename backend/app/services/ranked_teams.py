@@ -43,7 +43,7 @@ ROUND_SECONDS = 20
 BASE_QUESTIONS = 8
 MAX_TEAM = 5
 MIN_TEAM = 1
-RATING_WINDOW = 250  # how far apart two squads' average ratings may be
+RATING_WINDOW = 250  # legacy: rating used to gate squad pairing; now it only ranks candidates
 MATCHING_TIMEOUT = 150  # seconds before a search politely gives up
 K_FACTOR = 32
 
@@ -329,19 +329,22 @@ def _avg_rating(db: Session, lobby_id: int) -> int:
     return int(sum(ratings) / len(ratings)) if ratings else 1000
 
 
-def _compatible(a: RankedLobby, b: RankedLobby, avg_a: int, avg_b: int) -> bool:
+def _compatible(a: RankedLobby, b: RankedLobby) -> bool:
+    """Two squads may meet when both are searching, equally sized and after the
+    same course. Rank is deliberately NOT a gate — waiting teams get each
+    other, whoever they are; the matcher only prefers the closest averages."""
     if a.id == b.id or a.status != "matching" or b.status != "matching":
         return False
     if a.team_size != b.team_size:
         return False
-    if (a.course_id or None) != (b.course_id or None):
-        return False
-    return abs(avg_a - avg_b) <= RATING_WINDOW
+    return (a.course_id or None) == (b.course_id or None)
 
 
 def poll_lobbies(db: Session) -> list[Event]:
-    """Pair waiting squads. Deterministic + conservative: same size, same
-    course, ratings within window, everyone ready, nobody already in a match."""
+    """Pair waiting squads. Deterministic: same size, same course, everyone
+    ready, nobody already in a match. Rank is not a filter — two ready squads
+    hunting on the same course always meet; rating only decides which pair
+    forms first when several are waiting."""
     events: list[Event] = []
     matching = list(
         db.scalars(select(RankedLobby).where(RankedLobby.status == "matching").order_by(RankedLobby.id)).all()
@@ -368,11 +371,9 @@ def poll_lobbies(db: Session) -> list[Event]:
                 continue
             if any(active_match_for(db, m.student_id) for m in members_o):
                 continue
-            avg_a = _avg_rating(db, lobby.id)
-            avg_b = _avg_rating(db, other.id)
-            if not _compatible(lobby, other, avg_a, avg_b):
+            if not _compatible(lobby, other):
                 continue
-            gap = abs(avg_a - avg_b)
+            gap = abs(_avg_rating(db, lobby.id) - _avg_rating(db, other.id))
             if best is None or gap < best[0]:
                 best = (gap, other)
         if best is None:

@@ -722,6 +722,8 @@ export const api = {
     quizzes: () => request<Quiz[]>('/api/admin/quizzes'),
     quiz: (id: number) => request<Quiz>(`/api/admin/quizzes/${id}`),
     createQuiz: (body: Record<string, unknown>) => request<Quiz>('/api/admin/quizzes', {method: 'POST', body}),
+    ensureCourseBank: (courseId: number) =>
+      request<Quiz>(`/api/admin/courses/${courseId}/bank-quiz`, {method: 'POST', body: {}}),
     updateQuiz: (id: number, body: Record<string, unknown>) => request<Quiz>(`/api/admin/quizzes/${id}`, {method: 'PATCH', body}),
     setQuizStatus: (id: number, status: string) =>
       request<Quiz>(`/api/admin/quizzes/${id}/status`, {method: 'PATCH', body: {status}}),

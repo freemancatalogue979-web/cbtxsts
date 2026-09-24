@@ -121,9 +121,10 @@ type QuestionDraft = typeof emptyQuestion & {id?: number};
  */
 void 0;
 
-function CoursesTab({onChanged}: {onChanged: () => void}) {
+function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank: (quiz: Quiz) => void}) {
   const {toast} = useSession();
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [bankBusy, setBankBusy] = useState<number | null>(null);
   const [editing, setEditing] = useState<(typeof emptyCourse & {id?: number}) | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -135,6 +136,21 @@ function CoursesTab({onChanged}: {onChanged: () => void}) {
   }, [toast]);
 
   useEffect(load, [load]);
+
+  /* Every course has a hidden question-bank quiz; this opens (creating it on
+     first use) straight into the Questions tab — course questions are managed
+     here, independent of any exam. */
+  const openBank = async (course: Course) => {
+    setBankBusy(course.id);
+    try {
+      const bank = await api.admin.ensureCourseBank(course.id);
+      onOpenBank(bank);
+    } catch (error) {
+      toast('error', 'Could not open the question bank', (error as Error).message);
+    } finally {
+      setBankBusy(null);
+    }
+  };
 
   const save = async () => {
     if (!editing) return;
@@ -227,6 +243,9 @@ function CoursesTab({onChanged}: {onChanged: () => void}) {
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="ghost" loading={bankBusy === course.id} onClick={() => void openBank(course)} icon={<ScrollText className="size-3.5" />}>
+                    Question bank
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditing({...course})} icon={<Pencil className="size-3.5" />}>
                     Edit
                   </Button>
@@ -341,6 +360,14 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
 
   const save = async () => {
     if (!editing) return;
+    if (editing.question_count < 0 || editing.question_count > 200) {
+      toast('error', 'Too many questions', 'A paper can hold up to 200 drawn questions.');
+      return;
+    }
+    if (!editing.id && editing.question_count > 0 && editing.question_count < 3) {
+      toast('error', 'Pick a real question count', 'Type 0 to build the paper by hand, or 3 or more for the server to draw.');
+      return;
+    }
     setBusy(true);
     const payload: Record<string, unknown> = {
       ...editing,
@@ -549,10 +576,13 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
             >
               <TextInput
                 type="number"
-                min={0}
-                max={200}
-                value={editing.question_count}
-                onChange={(event) => setEditing({...editing, question_count: Math.max(0, Math.min(200, Number(event.target.value) || 0))})}
+                value={String(editing.question_count)}
+                onChange={(event) => {
+                  // Free typing — the field never snaps mid-edit; `save` validates.
+                  const raw = event.target.value.trim();
+                  const n = raw === '' ? 0 : Math.floor(Number(raw));
+                  setEditing({...editing, question_count: Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0});
+                }}
               />
             </Field>
             <Field label="Passing score (%)" hint="Used on result screens and for pass/fail reporting.">
@@ -903,13 +933,19 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
     <div className="space-y-4">
       <SectionHeading
         title={quiz.title}
-        subtitle={`${total > 0 ? `${formatNumber(total)}` : questions?.length ?? quiz.question_count} questions in the bank`}
+        subtitle={
+          quiz.is_bank
+            ? 'Course question bank — approved originals here are what every exam draws from. Not an exam itself.'
+            : `${total > 0 ? `${formatNumber(total)}` : questions?.length ?? quiz.question_count} questions in the bank`
+        }
         icon={<ScrollText className="size-4" />}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDrawOpen(true)} icon={<Shuffle className="size-3.5" />}>
-              Draw from bank
-            </Button>
+            {!quiz.is_bank && (
+              <Button size="sm" variant="outline" onClick={() => setDrawOpen(true)} icon={<Shuffle className="size-3.5" />}>
+                Draw from bank
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} icon={<Upload className="size-3.5" />}>
               Import questions
             </Button>
@@ -962,6 +998,7 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
             <option value="most_used">Most used</option>
             <option value="least_used">Least used</option>
             <option value="az">A → Z</option>
+            <option value="topic">Group by topic</option>
           </Select>
           <button
             type="button"
@@ -1000,6 +1037,12 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
         <ul className="space-y-2">
           {questions.map((question, position) => (
             <li key={question.id}>
+              {sortKey === 'topic' && (position === 0 || questions[position - 1]?.topic !== question.topic) && (
+                <div className="flex items-center gap-2 px-1 pt-1 pb-2">
+                  <p className="text-[0.72rem] font-black tracking-[0.1em] text-nova-300 uppercase">{question.topic?.trim() || 'No topic yet'}</p>
+                  <span aria-hidden className="h-px min-w-4 flex-1 bg-gradient-to-r from-nova-400/40 to-transparent" />
+                </div>
+              )}
               <Card className="p-4">
                 <div className="flex items-start gap-3">
                   <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/6 text-[0.78rem] font-black tabular text-mist-400">
@@ -1711,7 +1754,15 @@ export default function ContentAdmin({onChanged}: {onChanged: () => void}) {
         onChange={setTab}
       />
 
-      {tab === 'courses' && <CoursesTab onChanged={onChanged} />}
+      {tab === 'courses' && (
+        <CoursesTab
+          onChanged={onChanged}
+          onOpenBank={(bankQuiz) => {
+            setQuiz(bankQuiz);
+            setTab('questions');
+          }}
+        />
+      )}
       {tab === 'exams' && (
         <QuizzesTab
           onChanged={onChanged}

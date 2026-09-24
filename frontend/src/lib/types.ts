@@ -358,6 +358,8 @@ export interface AttemptSummary {
 export interface Quiz {
   id: number;
   title: string;
+  /** True for the hidden holding quiz of a course's question bank — never an exam. */
+  is_bank?: boolean;
   instructions: string;
   duration_minutes: number;
   status: QuizStatus;

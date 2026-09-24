@@ -256,6 +256,7 @@ def quiz_public(
         "review_before_submit": bool(getattr(quiz, "review_before_submit", True)),
         "max_attempts": int(getattr(quiz, "max_attempts", 1) or 0),
         "practice_mode": bool(getattr(quiz, "practice_mode", False)),
+        "is_bank": bool(getattr(quiz, "is_bank", False)),
         "pass_score": int(getattr(quiz, "pass_score", 50) or 0),
         "draw_topics": list(getattr(quiz, "draw_topics", []) or []),
         "question_count": len([q for q in quiz.questions if getattr(q, "visible", True)]),

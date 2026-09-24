@@ -200,6 +200,10 @@ class Quiz(Base):
     grace_seconds: Mapped[int] = mapped_column(Integer, default=0)
     auto_submit: Mapped[bool] = mapped_column(Boolean, default=True)
     calculator: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Hidden holding quiz for a course's question bank — never an exam, never
+    # listed to students or in the exams tab; exam draws pull approved originals
+    # from here. Course questions and exam papers are separate by construction.
+    is_bank: Mapped[bool] = mapped_column(Boolean, default=False)
     review_before_submit: Mapped[bool] = mapped_column(Boolean, default=True)
     max_attempts: Mapped[int] = mapped_column(Integer, default=1)  # 0 = unlimited retakes
     practice_mode: Mapped[bool] = mapped_column(Boolean, default=False)

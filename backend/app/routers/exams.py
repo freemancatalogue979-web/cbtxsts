@@ -37,7 +37,7 @@ async def _expire_if_needed(db: Session, attempt: Attempt) -> list:
 @router.post("/{quiz_id}/start")
 async def start_exam(quiz_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     quiz = db.get(Quiz, quiz_id)
-    if quiz is None:
+    if quiz is None or bool(getattr(quiz, "is_bank", False)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
     try:
         attempt, events = exam_service.open_attempt(db, student, quiz)

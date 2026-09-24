@@ -215,6 +215,12 @@ def main() -> None:
             break
         status, qrow = call("GET", f"/admin/preview/question/{q['id']}", token=T)
         correct_key = str(((qrow or {}).get("with_answer") or {}).get("correct") or (qrow or {}).get("correct") or "A").strip().upper()[:1]
+        # Mystery serves a seeded shuffle — the grader reads `selected` as the DISPLAY letter.
+        # Translate the canonical key back into the letter this player actually sees (a no-op
+        # when the order happens to be A,B,C,D).
+        served_order = list((q or {}).get("display_order") or [])
+        if correct_key in served_order:
+            correct_key = "ABCDE"[served_order.index(correct_key)]
         status, res = call("POST", f"/mystery/{case_id}/answer", {"selected": correct_key}, token=t2)
         if status != 200:
             break

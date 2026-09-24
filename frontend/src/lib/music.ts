@@ -24,6 +24,7 @@
  *    clock jumped forward, so a hidden tab resumes with the next bar instead of
  *    machine-gunning every bar it slept through.
  */
+import {audioBlobDeleteAll, audioBlobGet, audioBlobPut} from './audioStore';
 import {cacheRead, cacheWrite} from './cache';
 import {musicOn, musicTrack, musicVolume, setMusicOn, setMusicTrack, setMusicVolume, type MusicTrackId} from './prefs';
 
@@ -173,6 +174,83 @@ let busGeneration = 0;
 const elements = new Map<string, HTMLAudioElement>();
 /** Files this device refused to decode — the synth covers for them instead. */
 const failedSources = new Set<string>();
+
+/* ---------------------------------------------------------------- storage */
+/**
+ * Every track is downloaded ONCE into IndexedDB and played from there — a
+ * blob URL fed straight off the disk never crackles because the network
+ * hiccuped mid-buffer. `localUrls` maps the shipped path to its live object
+ * URL; priming runs on the first warm() and keeps going quietly in the
+ * background. If storage is unavailable everything falls back to streaming,
+ * which is exactly the old behaviour.
+ */
+const localUrls = new Map<string, string>();
+let primeStarted = false;
+let primePhase: 'idle' | 'busy' | 'ready' | 'unavailable' = 'idle';
+let primedCount = 0;
+const primeListeners = new Set<() => void>();
+
+function notifyPrime(): void {
+  primeListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      /* a status listener must never break the transport */
+    }
+  });
+}
+
+/** Swap a living element onto its local copy without losing its place. */
+function adoptLocalUrl(src: string, url: string): void {
+  localUrls.set(src, url);
+  const el = elements.get(src);
+  if (!el || el.src === url) return;
+  const at = el.currentTime;
+  const wasPlaying = !el.paused;
+  el.src = url;
+  try {
+    el.currentTime = at;
+  } catch {
+    /* metadata not loaded yet — it will start from the top, once */
+  }
+  if (wasPlaying) void el.play().catch(() => undefined);
+}
+
+async function primeStorage(): Promise<void> {
+  for (const track of MUSIC_TRACKS) {
+    if (!track.src || localUrls.has(track.src)) continue;
+    try {
+      const hit = await audioBlobGet(track.src);
+      if (hit) {
+        adoptLocalUrl(track.src, URL.createObjectURL(hit));
+        primedCount += 1;
+        notifyPrime();
+        continue;
+      }
+      // One quiet network trip, then this device owns the file forever.
+      const response = await fetch(track.src);
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      if (!blob.size || !(await audioBlobPut(track.src, blob))) continue;
+      adoptLocalUrl(track.src, URL.createObjectURL(blob));
+      primedCount += 1;
+      notifyPrime();
+    } catch {
+      /* offline or storage full — streaming remains the fallback */
+    }
+  }
+  primePhase = primedCount > 0 ? 'ready' : 'unavailable';
+  notifyPrime();
+}
+
+/** Kick the download once; safe to call from every warm-up path. */
+function primeTracksLocally(): void {
+  if (primeStarted || typeof window === 'undefined') return;
+  primeStarted = true;
+  primePhase = 'busy';
+  notifyPrime();
+  void primeStorage();
+}
 
 let state: MusicState = 'off';
 let unlocked = false;
@@ -466,7 +544,8 @@ function elementFor(src: string): HTMLAudioElement | null {
   const existing = elements.get(src);
   if (existing) return existing;
   const el = new window.Audio();
-  el.src = src;
+  // Prefer the copy stored on this device; stream only until it exists.
+  el.src = localUrls.get(src) ?? src;
   el.loop = true;
   el.preload = 'auto';
   el.crossOrigin = 'anonymous';
@@ -553,8 +632,10 @@ function beginFile(el: HTMLAudioElement, restart: boolean): void {
         return;
       }
       // The file itself will not play here — cover it with the arrangement
-      // rather than leaving the arena silent.
-      failedSources.add(el.src.replace(/^https?:\/\/[^/]+/, ''));
+      // rather than leaving the arena silent. A blob URL maps back to the
+      // track path it was stored under, so the synth still covers it.
+      const srcKey = [...elements.entries()].find(([, candidate]) => candidate === el)?.[0] ?? el.src.replace(/^https?:\/\/[^/]+/, '');
+      failedSources.add(srcKey);
       beginSynth();
     });
   }
@@ -651,6 +732,7 @@ function onVisibility(): void {
  * until a track starts.
  */
 function prefetch(): void {
+  primeTracksLocally();
   if (!ensure() || !ctx) return;
   if (ctx.state === 'suspended' && state === 'playing') void ctx.resume();
 }
@@ -658,6 +740,28 @@ function prefetch(): void {
 /* ------------------------------------------------------------------ public */
 
 export const music = {
+  /** Local-storage status for the UI: what is saved on this device. */
+  storage(): {phase: 'idle' | 'busy' | 'ready' | 'unavailable'; stored: number; total: number} {
+    return {phase: primePhase, stored: primedCount, total: MUSIC_TRACKS.filter((t) => t.src).length};
+  },
+  subscribeStorage(listener: () => void): () => void {
+    primeListeners.add(listener);
+    return () => primeListeners.delete(listener);
+  },
+  /** Drop the local copies and fetch them again (e.g. after re-uploading a file). */
+  refreshStorage(): void {
+    void (async () => {
+      await audioBlobDeleteAll();
+      // Do NOT revoke live URLs — a playing element still owns its blob; the
+      // primed replacement swaps the source and the old one is collected then.
+      localUrls.clear();
+      primedCount = 0;
+      primePhase = 'busy';
+      notifyPrime();
+      primeStarted = false;
+      primeTracksLocally();
+    })();
+  },
   /** 'off' | 'blocked' (autoplay refused — show the start button) | 'playing' | 'paused' */
   state(): MusicState {
     return state;

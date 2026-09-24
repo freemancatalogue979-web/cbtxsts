@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from ..models import (
     Answer,
     AuditLog,
+    Course,
     Question,
     QuestionFlag,
     QuestionVersion,
@@ -825,6 +826,7 @@ SORT_KEYS = {
     "weakest": (Question.wrong_count.desc(), Question.usage_count.desc()),
     "text": (Question.text.asc(), Question.id.asc()),
     "version": (Question.version.desc(), Question.id.desc()),
+    "topic": (Question.topic.asc(), Question.position.asc(), Question.id.asc()),
 }
 
 
@@ -1165,6 +1167,27 @@ def export_questions(questions: Iterable[Question], *, fmt: str = "json") -> tup
         ],
     }
     return json.dumps(payload, indent=2), "application/json", "question-bank.json"
+
+
+def ensure_course_bank_quiz(db: Session, course: Course, actor: str) -> Quiz:
+    """The hidden holding quiz that keeps a course's *question bank*.
+
+    Course questions live here and nowhere else: a paper only holds the copies
+    it drew, and these quizzes are never listed as exams. An approved original
+    in the bank is automatically eligible for exam draws and for the practice /
+    ranked / event pools that read the same course bank."""
+    quiz = db.scalar(select(Quiz).where(Quiz.course_id == course.id, Quiz.is_bank.is_(True)))
+    if quiz is None:
+        quiz = Quiz(
+            title=f"{course.code or course.title} — question bank",
+            course_id=course.id,
+            instructions="Not an exam. Questions that belong to the course live here so papers can draw from them.",
+            status="draft",
+            is_bank=True,
+        )
+        db.add(quiz)
+        db.flush()
+    return quiz
 
 
 def import_payload(data: Any, *, default_quiz_id: int, default_course_id: int | None) -> dict[str, Any]:

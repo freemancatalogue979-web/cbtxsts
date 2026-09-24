@@ -211,10 +211,16 @@ function CaseEditor({
   const [clues, setClues] = useState<ClueDraft[]>(initial.clues?.length ? initial.clues : [{text: '', material_id: '', cost_coins: 0}]);
   const [busy, setBusy] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(Boolean(initial.id));
+  // Raw typing for the question-count field so it never snaps back mid-edit.
+  const [countDraft, setCountDraft] = useState<string | null>(null);
 
   const submit = async () => {
     if (form.title.trim().length < 4) {
       toast('info', 'Needs a real title', 'Four characters at least.');
+      return;
+    }
+    if (form.question_count < 3 || form.question_count > 20) {
+      toast('info', 'Questions: 3 to 20', `You typed ${form.question_count} — clear the box and enter a fresh count.`);
       return;
     }
     setBusy(true);
@@ -287,7 +293,18 @@ function CaseEditor({
           </Select>
         </Field>
         <Field label="Questions per attempt">
-          <TextInput type="number" min={3} max={20} value={form.question_count} onChange={(event) => setForm({...form, question_count: Math.max(3, Math.min(20, num(event.target.value) || 3))})} />
+          <TextInput
+            type="number"
+            value={countDraft ?? String(form.question_count)}
+            onChange={(event) => {
+              // Free typing — validated on save, never snapped while the admin edits.
+              const raw = event.target.value.trim();
+              setCountDraft(event.target.value);
+              const n = raw === '' ? 0 : Math.floor(Number(raw));
+              setForm({...form, question_count: Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0});
+            }}
+            onBlur={() => setCountDraft(null)}
+          />
         </Field>
         <Field label="Needed to solve">
           <TextInput type="number" min={1} max={20} value={form.pass_count} onChange={(event) => setForm({...form, pass_count: Math.max(1, num(event.target.value) || 1)})} />
