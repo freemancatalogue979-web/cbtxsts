@@ -48,6 +48,7 @@ from ..services.questions import (
     bank_health,
     clear_flag,
     duplicate_question,
+    ensure_course_bank_quiz,
     export_questions,
     flag_question,
     import_payload,
@@ -103,7 +104,7 @@ def bank_dashboard(
     result = question_query(db, course_id=course_id, quiz_id=quiz_id, limit=1)
     health = bank_health(db, course_id)
     courses = db.scalars(select(Course).order_by(Course.code)).all()
-    quizzes = db.scalars(select(Quiz).order_by(Quiz.id.desc()).limit(60)).all()
+    quizzes = db.scalars(select(Quiz).where(Quiz.is_bank.is_(False)).order_by(Quiz.id.desc()).limit(60)).all()
     return {
         "total": result["total"],
         "facets": result["facets"],
@@ -467,9 +468,14 @@ def run_import(
 
     target = quiz
     if target is None:
-        target = db.scalars(select(Quiz).order_by(Quiz.id)).first()
-        if target is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Create an exam before importing a bank.")
+        # Course-level imports land in the hidden course question bank — the
+        # admin never has to fake an exam to stock a course with questions.
+        if course_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick a course (or an exam) to import into.")
+        course = db.get(Course, int(course_id))
+        if course is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
+        target = ensure_course_bank_quiz(db, course, admin.email)
 
     position = int(db.scalar(select(func.max(Question.position)).where(Question.quiz_id == target.id)) or 0) + 1
     existing_texts = {

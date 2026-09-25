@@ -113,7 +113,7 @@ const VARIANTS: Record<Variant, string> = {
   danger:
     'bg-gradient-to-b from-flare-500 to-flare-700 text-white hover:from-flare-400 hover:to-flare-600',
   outline:
-    'bg-[#0c0518] text-mist-100 hover:bg-[#150828] hover:text-white',
+    'bg-ink-800 text-mist-100 hover:bg-ink-700 hover:text-mist-50',
   ghost:
     'bg-white/[0.04] text-mist-300 hover:bg-nova-500/12 hover:text-mist-50',
   soft:
@@ -917,6 +917,104 @@ export function Segmented<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+/* ----------------------------------------------------------------- pager */
+/**
+ * Shared pagination control — "Previous | 1–20 of 137 | Next" plus numbered
+ * pages on wide screens. Every long list in the arena (group members,
+ * questions, activity, admin tables) pages through this instead of forcing
+ * the player to scroll one endless document.
+ */
+export function Pager({
+  page,
+  pages,
+  total,
+  size,
+  onPage,
+  className = '',
+  label,
+}: {
+  page: number;
+  pages: number;
+  total: number;
+  size: number;
+  onPage: (page: number) => void;
+  className?: string;
+  label?: string;
+}) {
+  if (total <= 0) return null;
+  const from = (page - 1) * size + 1;
+  const to = Math.min(page * size, total);
+
+  /* Compact window of page buttons: 1 … 4 5 [6] 7 8 … 20 */
+  const window: (number | 'gap')[] = [];
+  if (pages <= 7) {
+    for (let index = 1; index <= pages; index += 1) window.push(index);
+  } else {
+    window.push(1);
+    const start = Math.max(2, page - 1);
+    const end = Math.min(pages - 1, page + 1);
+    if (start > 2) window.push('gap');
+    for (let index = start; index <= end; index += 1) window.push(index);
+    if (end < pages - 1) window.push('gap');
+    window.push(pages);
+  }
+
+  const buttonBase =
+    'grid min-w-8 place-items-center rounded-lg border px-2 py-1.5 text-[0.74rem] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
+
+  return (
+    <nav className={`flex flex-wrap items-center justify-between gap-2 ${className}`} aria-label={label ?? 'Pagination'}>
+      <span className="text-[0.72rem] font-semibold text-mist-500 tabular">
+        {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          className={`${buttonBase} border-white/12 bg-white/5 text-mist-300 hover:border-nova-400/40 hover:text-mist-50`}
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+        >
+          Prev
+        </button>
+        <div className="hidden items-center gap-1 sm:flex">
+          {window.map((entry, index) =>
+            entry === 'gap' ? (
+              <span key={`gap-${index}`} className="px-1 text-[0.72rem] text-mist-600">
+                …
+              </span>
+            ) : (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => onPage(entry)}
+                aria-current={entry === page ? 'page' : undefined}
+                className={`${buttonBase} tabular ${
+                  entry === page
+                    ? 'border-nova-400/50 bg-nova-500/20 text-nova-200'
+                    : 'border-white/10 bg-white/4 text-mist-400 hover:border-nova-400/30 hover:text-mist-100'
+                }`}
+              >
+                {entry}
+              </button>
+            ),
+          )}
+        </div>
+        <span className="text-[0.72rem] font-bold text-mist-400 tabular sm:hidden">
+          {page}/{pages}
+        </span>
+        <button
+          type="button"
+          className={`${buttonBase} border-white/12 bg-white/5 text-mist-300 hover:border-nova-400/40 hover:text-mist-50`}
+          disabled={page >= pages}
+          onClick={() => onPage(page + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </nav>
   );
 }
 

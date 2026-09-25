@@ -31,6 +31,7 @@ import Character from '../components/Character';
 import {AnswerTile} from '../components/GameQuestion';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Segmented, Skeleton} from '../components/ui';
 import FlashcardsPanel from './FlashcardsPanel';
+import StudyLabPanel from './StudyLabPanel';
 import InsightsPanel from './InsightsPanel';
 import {DifficultyChip, QuestionCard} from '../components/QuestionCard';
 import {api} from '../lib/api';
@@ -54,7 +55,7 @@ import type {
 
 const LETTERS: OptionKey[] = ['A', 'B', 'C', 'D'];
 
-type Mode = 'hub' | 'flash' | 'rush' | 'daily' | 'match' | 'help' | 'missions' | 'shop' | 'decks' | 'insights';
+type Mode = 'lab' | 'hub' | 'flash' | 'rush' | 'daily' | 'match' | 'help' | 'missions' | 'shop' | 'decks' | 'insights';
 
 /* ------------------------------------------------------------------ hub */
 
@@ -1136,6 +1137,17 @@ export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => v
         <Rush key={rushMode} mode={rushMode} onExit={() => setMode('hub')} />
       </div>
     );
+  if (mode === 'lab')
+    return (
+      <div className="w-full">
+        <div className="mb-3">
+          <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={() => setMode('hub')}>
+            Study Lab
+          </Button>
+        </div>
+        <StudyLabPanel />
+      </div>
+    );
   if (mode === 'daily') return <div className="w-full"><DailyRunner onExit={() => setMode('hub')} /></div>;
   if (mode === 'match') return <div className="w-full"><MatchGame onExit={() => setMode('hub')} /></div>;
   if (mode === 'help') return <div className="w-full"><HelpHub onExit={() => setMode('hub')} /></div>;
@@ -1157,6 +1169,13 @@ export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => v
         }
       />
 
+      <ModeCard
+        icon={<Target className="size-4.5 text-nova-300" />}
+        accent="border-nova-500/28 bg-nova-500/12"
+        title="Learning path — weak topics"
+        detail="The Lab reads your real record, flags what's shaky and walks you from Understand to Mastered."
+        onClick={() => setMode('lab')}
+      />
       <DailyCard onOpen={() => setMode('daily')} />
       <SpinCard />
 

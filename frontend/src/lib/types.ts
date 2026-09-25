@@ -171,6 +171,8 @@ export interface Course {
   is_active: boolean;
   quiz_count?: number;
   question_count?: number;
+  topic_count?: number;
+  material_count?: number;
   created_at?: string;
 }
 
@@ -348,11 +350,16 @@ export interface AttemptSummary {
   submission_type: string;
   xp_awarded: number;
   coins_awarded: number;
+  passed?: boolean;
+  pass_score?: number;
 }
+
 
 export interface Quiz {
   id: number;
   title: string;
+  /** True for the hidden holding quiz of a course's question bank — never an exam. */
+  is_bank?: boolean;
   instructions: string;
   duration_minutes: number;
   status: QuizStatus;
@@ -377,6 +384,8 @@ export interface Quiz {
   review_before_submit?: boolean;
   max_attempts?: number;
   practice_mode?: boolean;
+  pass_score?: number;
+  draw_topics?: string[];
 }
 
 export interface ReviewRow {
@@ -1429,6 +1438,15 @@ export interface RankedHistoryRow {
   rating_after: number | null;
 }
 
+/** Per-course ranked telemetry shown on the arena cards (server-computed). */
+export interface RankedCourseStat {
+  in_queue: number;
+  matches_7d: number;
+  played: number;
+  wins: number;
+  best: number | null;
+}
+
 export interface RankedLadderRow {
   position: number;
   student_id: number;
@@ -1480,6 +1498,7 @@ export interface ArenaEventSummary {
   allow_join_during: boolean;
   allow_leave: boolean;
   leaderboard_visible: boolean;
+  featured?: boolean;
   status: 'scheduled' | 'live' | 'finished' | 'cancelled';
   participants: number;
   joined: boolean;
@@ -1544,5 +1563,336 @@ export interface EventsListing {
   upcoming: ArenaEventSummary[];
   live: ArenaEventSummary[];
   past: ArenaEventSummary[];
+  ending_soon?: ArenaEventSummary[];
+  featured?: ArenaEventSummary[];
+  mine?: ArenaEventSummary[];
   server_now: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Study groups — the community workspace                                      */
+/* -------------------------------------------------------------------------- */
+export type GroupRole = 'owner' | 'moderator' | 'member';
+export type GroupSection =
+  | 'overview'
+  | 'chat'
+  | 'quizzes'
+  | 'duels'
+  | 'questions'
+  | 'members'
+  | 'announcements'
+  | 'activity';
+export type PresenceStatus = 'online' | 'away' | 'offline';
+
+export interface GroupPermissions {
+  [action: string]: boolean;
+}
+
+export interface StudyGroupSummary {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  goal: string;
+  owner_id: number;
+  owner_name: string;
+  course_id: number | null;
+  course_title: string;
+  member_count: number;
+  is_member: boolean;
+  is_owner: boolean;
+  my_role: GroupRole | null;
+  permissions: GroupPermissions;
+  created_at: string | null;
+  online?: number;
+  unread_notifications?: number;
+}
+
+export interface StudentChip {
+  id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  level?: number;
+  title?: string;
+  xp?: number;
+  duels_won?: number;
+  duels_played?: number;
+}
+
+export interface PageMeta {
+  page: number;
+  size: number;
+  total: number;
+  pages: number;
+}
+
+export interface GroupMessageReplyRef {
+  id: number;
+  student_id: number;
+  name: string;
+  body: string;
+  deleted: boolean;
+}
+
+export interface GroupChatMessage {
+  id: number;
+  group_id: number;
+  student_id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  kind: string;
+  body: string;
+  deleted: boolean;
+  created_at: string | null;
+  edited_at: string | null;
+  reactions: Record<string, number>;
+  my_reactions: string[];
+  reply_to: GroupMessageReplyRef | null;
+  /** Client-only delivery state. */
+  pending?: boolean;
+  failed?: boolean;
+}
+
+export interface GroupAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  image: string;
+  priority: 'normal' | 'high';
+  pinned: boolean;
+  scheduled_at: string | null;
+  created_at: string | null;
+  author: StudentChip;
+}
+
+export interface GroupQuizParticipation {
+  id: number;
+  attempt_no: number;
+  status: 'in_progress' | 'submitted' | 'expired';
+  answered: number;
+  correct_count: number;
+  score: number;
+  percentage: number;
+  passed: boolean;
+  position: number | null;
+  current_index: number;
+  deadline_at: string | null;
+  started_at: string | null;
+  submitted_at: string | null;
+}
+
+export interface GroupQuiz {
+  id: number;
+  title: string;
+  description: string;
+  course_id: number | null;
+  course_title: string;
+  topic: string;
+  question_count: number;
+  per_question_seconds: number;
+  duration_minutes: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  max_attempts: number;
+  randomize: boolean;
+  visibility: string;
+  reward_xp: number;
+  reward_coins: number;
+  pass_score: number;
+  status: 'scheduled' | 'live' | 'closed';
+  participants: number;
+  submitted: number;
+  created_at: string | null;
+  created_by: StudentChip;
+  my_participation: GroupQuizParticipation | null;
+}
+
+export interface GroupQuizLeaderRow {
+  rank: number;
+  student: StudentChip;
+  score: number;
+  correct: number;
+  total: number;
+  percentage: number;
+  passed: boolean;
+  submitted_at: string | null;
+}
+
+export interface GroupQuestionItem {
+  id: number;
+  title: string;
+  body: string;
+  attachment: string;
+  topic: string;
+  course_id: number | null;
+  course_title: string;
+  status: 'open' | 'answered' | 'closed';
+  answers_count: number;
+  best_answer_id: number | null;
+  resolved: boolean;
+  created_at: string | null;
+  asker: StudentChip;
+  is_mine: boolean;
+  replies?: GroupQuestionReply[];
+}
+
+export interface GroupQuestionReply {
+  id: number;
+  question_id: number;
+  parent_id: number | null;
+  body: string;
+  is_best: boolean;
+  useful_count: number;
+  marked_useful: boolean;
+  created_at: string | null;
+  author: StudentChip;
+}
+
+export interface GroupMemberRow {
+  student_id: number;
+  role: GroupRole;
+  joined_at: string | null;
+  week_xp: number;
+  id: number;
+  name: string;
+  initials: string;
+  avatar_hue: number;
+  has_photo: boolean;
+  level?: number;
+  title?: string;
+  xp?: number;
+  status?: PresenceStatus;
+}
+
+export interface GroupActivityRow {
+  id: number;
+  kind: string;
+  text: string;
+  meta: Record<string, unknown>;
+  created_at: string | null;
+  actor: StudentChip | null;
+}
+
+export interface GroupNotificationRow {
+  id: number;
+  group_id: number;
+  kind: string;
+  title: string;
+  message: string;
+  meta: Record<string, unknown>;
+  read: boolean;
+  created_at: string | null;
+}
+
+export interface GroupDuelRow {
+  id: number;
+  code: string;
+  status: string;
+  topic: string;
+  public: boolean;
+  question_count: number;
+  stake_coins: number;
+  message: string;
+  players: {id: number; name: string}[];
+  winner: {id: number; name: string} | null;
+  i_am_in: boolean;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface GroupOverview {
+  group: StudyGroupSummary;
+  owner: StudentChip | null;
+  course_title: string;
+  member_count: number;
+  online: number;
+  online_ids: number[];
+  studying_now: (StudentChip & {status: PresenceStatus})[];
+  upcoming_quizzes: GroupQuiz[];
+  active_duels: {id: number; code: string; status: string; topic: string; public: boolean; names: string[]; i_am_in: boolean}[];
+  pinned_announcements: GroupAnnouncement[];
+  recent_announcements: GroupAnnouncement[];
+  recent_questions: GroupQuestionItem[];
+  recent_activity: GroupActivityRow[];
+  stats: {
+    quizzes: number;
+    average_score: number;
+    messages_week: number;
+    questions: number;
+    open_questions: number;
+    duels: number;
+  };
+  unread_notifications: number;
+}
+
+export interface GroupMemberProfile {
+  student: PlayerSummary;
+  role: GroupRole;
+  joined_at: string | null;
+  week_xp: number;
+  status: PresenceStatus;
+  contribution: {messages: number; answers: number; week_xp: number};
+  quizzes: {taken: number; submitted: number; best_percentage: number; average_percentage: number};
+  duels: {played: number; wins: number; losses: number};
+  recent_activity: GroupActivityRow[];
+  friendship: {status: string; i_initiated: boolean} | null;
+  is_self: boolean;
+}
+
+export interface GroupQuizWindow {
+  index: number;
+  total: number;
+  per_question_seconds: number;
+  deadline_at: string | null;
+  answered_count: number;
+  answered_ids: number[];
+  already_answered?: boolean;
+  question: QuestionPublic | null;
+}
+
+export interface GroupQuizAnswerResult {
+  correct: boolean;
+  points: number;
+  answer: string | null;
+  explanation: string;
+  question: QuestionPublic;
+  score: number;
+  answered: number;
+  total: number;
+}
+
+export interface GroupQuizSummary {
+  participant_id: number;
+  status: string;
+  score: number;
+  correct: number;
+  wrong: number;
+  total: number;
+  percentage: number;
+  passed: boolean;
+  pass_score: number;
+  position: number | null;
+  xp_awarded: number;
+  coins_awarded: number;
+  submitted_at: string | null;
+  rewards?: RewardEvent[];
+  auto?: boolean;
+}
+
+/** Staff console: one row in the cross-group moderation list (`GET /admin/groups`). */
+export interface AdminGroupRow {
+  id: number;
+  name: string;
+  code: string;
+  goal: string;
+  description: string;
+  owner: {id: number; name: string};
+  course_title: string | null;
+  member_count: number;
+  message_count: number;
+  created_at: string | null;
 }

@@ -1,10 +1,10 @@
 /**
  * Viewport helpers.
  *
- * Staff tooling (the admin console) is desktop-only: it needs wide tables,
- * side-by-side editors and drag-style builders that simply do not fit a phone.
- * `useIsDesktop` tracks the same 1024px breakpoint the arena uses for its
- * desktop navigation, so the console locks and unlocks with the layout.
+ * `useIsDesktop` tracks the 1024px breakpoint the arena uses for its desktop
+ * navigation. The staff console is fully responsive — it folds its rail into
+ * a drawer and stacks its tables on phones — so this hook only drives layout
+ * choices (wordmarks, rails), never access.
  */
 import {useEffect, useState} from 'react';
 

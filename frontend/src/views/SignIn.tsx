@@ -7,8 +7,7 @@
  * page), never a column squeezed next to marketing copy.
  */
 import {ArrowRight, AtSign, ChevronLeft, Coins, Eye, EyeOff, Gamepad2, Lock, Mail, Phone, Shield, Sparkles, UserPlus} from 'lucide-react';
-import {useEffect, useState} from 'react';
-import {useIsDesktop} from '../lib/viewport';
+import {useState} from 'react';
 import {motion} from 'motion/react';
 import {Button, Field, PhoneInput, TextInput} from '../components/ui';
 import {LogoMark} from '../components/Brand';
@@ -27,12 +26,9 @@ export default function SignIn({
   initialMode?: 'student' | 'admin';
 }) {
   const {signIn, register, signInAdmin, toast, config} = useSession();
-  // Staff sign-in is desktop-only: the console it unlocks does not fit a phone.
-  const desktop = useIsDesktop();
+  // Staff sign-in works on every screen size: the console itself is fully
+  // responsive (drawer navigation, stacked cards), so phones are first-class.
   const [mode, setMode] = useState<'student' | 'admin'>(initialMode);
-  useEffect(() => {
-    if (!desktop && mode === 'admin') setMode('student');
-  }, [desktop, mode]);
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
 
   /* ------------------------------------------------------- sign-in state */
@@ -168,8 +164,7 @@ export default function SignIn({
         >
           <div className="brand-gradient absolute inset-x-0 top-0 h-1" />
 
-          {desktop && (
-            <div className="mb-4 flex gap-1 rounded-2xl border border-white/10 bg-ink-900/70 p-1">
+          <div className="mb-4 flex gap-1 rounded-2xl border border-white/10 bg-ink-900/70 p-1">
               {(
                 [
                   {id: 'student', label: 'Player', icon: Gamepad2},
@@ -195,8 +190,7 @@ export default function SignIn({
                   </button>
                 );
               })}
-            </div>
-          )}
+          </div>
 
           {mode === 'student' ? (
             <>

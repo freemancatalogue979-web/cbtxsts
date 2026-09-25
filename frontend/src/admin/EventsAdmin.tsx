@@ -40,6 +40,7 @@ interface FormState {
   allow_join_during: boolean;
   allow_leave: boolean;
   leaderboard_visible: boolean;
+  featured: boolean;
 }
 
 /** Local datetime input → ISO for the API (the backend stores naive UTC). */
@@ -83,28 +84,35 @@ function emptyForm(): FormState {
     allow_join_during: true,
     allow_leave: true,
     leaderboard_visible: true,
+    featured: false,
   };
 }
 
 export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
   const {toast} = useSession();
   const [events, setEvents] = useState<ArenaEventSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const limit = 40;
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
+  // Raw typing for the question-count field so it never snaps back mid-edit.
+  const [countDraft, setCountDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState<ArenaEventSummary | null>(null);
 
   const load = useCallback(() => {
-    Promise.all([api.adminEvents(), api.admin.courses().catch(() => [])])
+    Promise.all([api.adminEvents({limit, offset}), api.admin.courses().catch(() => [])])
       .then(([eventsPayload, coursesPayload]) => {
         setEvents(eventsPayload.events);
+        setTotal(eventsPayload.total);
         setCourses(coursesPayload);
       })
       .catch((error: Error) => toast('error', 'Could not load events', error.message))
       .finally(() => setLoading(false));
-  }, [toast]);
+  }, [offset, toast]);
 
   useEffect(() => {
     load();
@@ -145,7 +153,9 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       allow_join_during: event.allow_join_during,
       allow_leave: event.allow_leave,
       leaderboard_visible: event.leaderboard_visible,
+      featured: (event as {featured?: boolean}).featured ?? false,
     });
+    setCountDraft(null);
     setCreating(true);
   };
 
@@ -153,6 +163,10 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
     uiClick('confirm');
     if (!form.name.trim()) {
       toast('error', 'Name required', 'Give the event a name players will recognize.');
+      return;
+    }
+    if (form.question_count < 3 || form.question_count > 100) {
+      toast('error', 'Questions: 3 to 100', `You typed ${form.question_count} — clear the box and enter a fresh count.`);
       return;
     }
     setBusy(true);
@@ -183,6 +197,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       allow_join_during: form.allow_join_during,
       allow_leave: form.allow_leave,
       leaderboard_visible: form.leaderboard_visible,
+      featured: form.featured,
     };
     try {
       if (editing) {
@@ -193,6 +208,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
         toast('success', 'Event created', `${body.name} is on the calendar.`);
       }
       setCreating(false);
+      setCountDraft(null);
       load();
       onChanged?.();
     } catch (error) {
@@ -220,7 +236,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       <div className="flex flex-wrap items-center gap-2">
         <CalendarDays className="size-5 text-nova-300" />
         <h2 className="text-[1.05rem] font-extrabold text-mist-50">Arena events</h2>
-        <span className="text-[0.7rem] font-bold text-mist-500">{events.length} on the calendar</span>
+        <span className="text-[0.7rem] font-bold text-mist-500">{formatNumber(total)} on the calendar</span>
         <Button className="ml-auto" size="sm" onClick={openCreator} icon={<Plus className="size-4" />}>
           New event
         </Button>
@@ -300,6 +316,18 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
         ))}
       </div>
 
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
+
       {/* ------------------------------------------------------ creator */}
       <Modal
         open={creating}
@@ -347,8 +375,14 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
           <Field label="Questions" hint="Fixed order, same for every player.">
             <TextInput
               type="number"
-              value={form.question_count}
-              onChange={(e) => set('question_count', Math.max(3, Math.min(100, Number(e.target.value) || 3)))}
+              value={countDraft ?? String(form.question_count)}
+              onChange={(e) => {
+                setCountDraft(e.target.value);
+                const raw = e.target.value.trim();
+                const n = raw === '' ? 0 : Math.floor(Number(raw));
+                set('question_count', Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0);
+              }}
+              onBlur={() => setCountDraft(null)}
             />
           </Field>
           <Field label="Timing mode">
@@ -402,6 +436,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
               ['allow_join_during', 'Allow joining after the start'],
               ['allow_leave', 'Allow leaving mid-event'],
               ['leaderboard_visible', 'Leaderboard visible to players'],
+              ['featured', '★ Featured on the events hub'],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 text-[0.76rem] font-bold text-mist-300">

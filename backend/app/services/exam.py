@@ -32,6 +32,7 @@ from .questions import (
     mastery_scope_update,
     register_question_attempt,
 )
+from .study_lab import record_mistake, resolve_mistake
 
 
 class ExamError(Exception):
@@ -253,6 +254,8 @@ def finalize(db: Session, attempt: Attempt, submission_type: str) -> tuple[Attem
                 "total": total,
                 "percentage": percentage,
                 "grade": attempt.grade,
+                "passed": percentage >= float(getattr(attempt.quiz, "pass_score", 50) or 0),
+                "pass_score": int(getattr(attempt.quiz, "pass_score", 50) or 0),
                 "rank": rank,
                 "rank_label": game.rank_suffix(rank),
                 "xp": xp,
@@ -404,6 +407,10 @@ def record_answer(
                 scope_key=question.topic,
                 correct=bool(row.is_correct),
             )
+        if row.is_correct:
+            resolve_mistake(db, attempt.student_id, question_id)
+        else:
+            record_mistake(db, attempt.student_id, question, selected=canonical, source="exam")
     elif previous != canonical:
         # Changing an answer only re-tallies this question's success/wrong split.
         if row.is_correct:
@@ -412,6 +419,11 @@ def record_answer(
         elif canonical:
             question.wrong_count = (question.wrong_count or 0) + 1
             question.correct_count = max(0, (question.correct_count or 0) - 1)
+        if canonical:
+            if row.is_correct:
+                resolve_mistake(db, attempt.student_id, question_id)
+            else:
+                record_mistake(db, attempt.student_id, question, selected=canonical, source="exam")
 
     db.flush()
     attempt.flagged = sorted(a.question_id for a in attempt.answers if a.flagged)

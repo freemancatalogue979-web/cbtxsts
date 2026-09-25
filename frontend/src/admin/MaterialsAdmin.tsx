@@ -678,22 +678,35 @@ function MaterialsTab({onChanged}: {onChanged: () => void}) {
   const {toast} = useSession();
   const [items, setItems] = useState<MaterialCard[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [loading, setLoading] = useState(true);
+  const limit = 40;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await api.materials.adminList(filter === 'all' ? {} : {status: filter});
+      const payload = await api.materials.adminList({
+        ...(filter === 'all' ? {} : {status: filter}),
+        limit,
+        offset,
+      });
       setItems(payload.items ?? []);
       setStats(payload.stats ?? {});
+      setTotal(payload.total ?? 0);
     } catch (error) {
       toast('error', 'Could not load materials', (error as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [filter, toast]);
+  }, [filter, offset, toast]);
+
+  // Changing the status filter jumps back to the first page.
+  useEffect(() => {
+    setOffset(0);
+  }, [filter]);
 
   useEffect(() => {
     void load();
@@ -795,6 +808,18 @@ function MaterialsTab({onChanged}: {onChanged: () => void}) {
           }
         />
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
     </div>
   );
 }

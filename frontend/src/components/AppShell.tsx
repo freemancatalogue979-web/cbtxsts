@@ -3,6 +3,7 @@ import {Bell, BellRing, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Coins,
 import {AnimatePresence, motion} from 'motion/react';
 import {createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import type {ReactNode} from 'react';
+import type {InboxNote} from '../lib/types';
 import {Avatar, Button, Chip, IconButton, Modal} from './ui';
 import {Holdable} from './Holdable';
 import {api} from '../lib/api';
@@ -104,6 +105,43 @@ function NoticeBell({className = ''}: {className?: string}) {
   const liveInbox = inbox.filter((note) => !dismissed.inbox.includes(note.id));
   const liveNotices = notices.filter((notice) => !dismissed.notices.includes(notice.id));
 
+  /* Inbox load-more: the session keeps the newest page (≤40) live; older notes
+     are paged in from the server on demand and held here so a websocket push
+     that re-caps the live list never drops what the player has scrolled to. */
+  const INBOX_PAGE = 12;
+  const [visible, setVisible] = useState(INBOX_PAGE);
+  const [older, setOlder] = useState<InboxNote[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [noMore, setNoMore] = useState(false);
+  const inboxIds = useMemo(() => new Set(inbox.map((note) => note.id)), [inbox]);
+  const olderNotes = useMemo(
+    () => older.filter((note) => !inboxIds.has(note.id) && !dismissed.inbox.includes(note.id)),
+    [older, inboxIds, dismissed.inbox],
+  );
+  const allNotes = useMemo(() => [...liveInbox, ...olderNotes], [liveInbox, olderNotes]);
+  const shownNotes = allNotes.slice(0, visible);
+  const loadedCount = inbox.length + older.length;
+  const hasHidden = visible < allNotes.length;
+  const canLoadOlder = !noMore && loadedCount >= 40;
+
+  const showMoreInbox = () => {
+    if (hasHidden) {
+      setVisible((count) => count + INBOX_PAGE);
+      return;
+    }
+    if (!canLoadOlder || loadingMore) return;
+    setLoadingMore(true);
+    api
+      .inbox({limit: 40, offset: loadedCount})
+      .then((data) => {
+        setOlder((current) => [...current, ...data.notes]);
+        if (data.notes.length < 40) setNoMore(true);
+        setVisible((count) => Math.max(count + INBOX_PAGE, allNotes.length + data.notes.length));
+      })
+      .catch(() => setNoMore(true))
+      .finally(() => setLoadingMore(false));
+  };
+
   const seen = Number(localStorage.getItem(SEEN_KEY) || 0);
   const unread =
     liveNotices.filter((notice) => {
@@ -149,17 +187,22 @@ function NoticeBell({className = ''}: {className?: string}) {
             animate={{opacity: 1, y: 0, scale: 1}}
             exit={{opacity: 0, y: -8, scale: 0.97}}
             transition={{duration: 0.18}}
-            className="glass-strong absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl shadow-2xl"
+            className="glass-strong z-50 overflow-hidden rounded-3xl shadow-2xl max-sm:fixed max-sm:inset-x-2 max-sm:top-[calc(3.6rem+env(safe-area-inset-top,0px))] max-sm:w-auto sm:absolute sm:right-0 sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]"
           >
-            <header className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+            <header className="flex items-center justify-between gap-2 border-b border-white/8 px-4 py-3">
               <p className="text-[0.82rem] font-extrabold text-mist-50">Notifications</p>
-              <Chip>{liveInbox.length + liveNotices.length}</Chip>
+              <div className="flex items-center gap-1.5">
+                <Chip>{liveInbox.length + liveNotices.length}</Chip>
+                <IconButton label="Close notifications" onClick={() => setOpen(false)}>
+                  <X className="size-4 text-mist-400" />
+                </IconButton>
+              </div>
             </header>
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[min(60vh,28rem)] overflow-y-auto overscroll-contain max-sm:max-h-[min(64dvh,30rem)]">
               {inbox.length > 0 && (
                 <div className="border-b border-white/8">
- <p className="px-4 pt-3 text-[0.62rem] font-black tracking-[0.18em] text-nova-300">For you</p>
-                  {liveInbox.slice(0, 12).map((note) => {
+                  <p className="px-4 pt-3 text-[0.62rem] font-black tracking-[0.18em] text-nova-300">For you</p>
+                  {shownNotes.map((note) => {
                     const Icon = NOTE_ICONS[note.kind] ?? Sparkles;
                     return (
                       <Holdable
@@ -187,7 +230,17 @@ function NoticeBell({className = ''}: {className?: string}) {
                       </Holdable>
                     );
                   })}
- <p className="px-4 pt-2.5 pb-1 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">Announcements</p>
+                  {(hasHidden || canLoadOlder) && (
+                    <button
+                      type="button"
+                      onClick={showMoreInbox}
+                      disabled={loadingMore}
+                      className="w-full px-4 py-2.5 text-center text-[0.74rem] font-bold text-nova-300 transition-colors hover:text-nova-200 disabled:opacity-50"
+                    >
+                      {loadingMore ? 'Loading…' : hasHidden ? 'Show more' : 'Load older notes'}
+                    </button>
+                  )}
+                  <p className="px-4 pt-2.5 pb-1 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">Announcements</p>
                 </div>
               )}
               {liveNotices.length === 0 && liveInbox.length === 0 && (
@@ -440,6 +493,8 @@ export function AppShell({
             <LogoMark size={null} className="hidden size-10 shrink-0 lg:block" />
             <span className="sr-only">Quiz Arena</span>
 
+            {/* Phones keep just the menu up top — the LV pill only joins from
+                lg where the row has room (level also lives in the account menu). */}
             {profile && (
               <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:inline-flex">
                 LV{profile.progress.level}
@@ -530,7 +585,11 @@ export function AppShell({
             <LivePill />
             {profile && (
               <>
-                <span className="hud-pill float-chip shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular" title="Data Crystals">
+                {/* Telemetry pills step in with width so the phone row never
+                    jams: credits ride along (the mobile coins chip), crystals
+                    from sm, streak from md — every value stays in the account
+                    menu regardless. */}
+                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular sm:inline-flex lg:hidden 2xl:inline-flex" title="Data Crystals">
                   <Gem className="size-3 text-nova-400" />
                   {formatNumber(profile.diamonds ?? 0)}
                 </span>
@@ -566,7 +625,7 @@ export function AppShell({
                     <VolumeX className="size-[17px] text-mist-500" />
                   )}
                 </IconButton>
-                <NoticeBell className="hidden sm:inline-flex lg:hidden xl:inline-flex" />
+                <NoticeBell className="inline-flex" />
                 {role === 'admin' && (
                   <IconButton label="Admin console" variant="outline" className="hidden lg:inline-flex" onClick={onAdmin}>
                     <Shield className="size-[18px] text-rose-400" />
@@ -748,7 +807,7 @@ export function AppShell({
             onClick={() => setDrawerOpen(false)}
           >
             <motion.div
-              className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-nova-500/30 bg-[#090d14] p-4 shadow-2xl"
+              className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-white/10 bg-ink-950 p-4 shadow-2xl"
               initial={{x: -320}}
               animate={{x: 0}}
               exit={{x: -320}}

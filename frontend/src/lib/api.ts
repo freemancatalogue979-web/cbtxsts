@@ -67,6 +67,7 @@ import type {
   EventLeaderboard,
   EventQuestionWindow,
   EventsListing,
+  RankedCourseStat,
   RankedHistoryRow,
   RankedLadder,
   RankedMatchState,
@@ -74,6 +75,25 @@ import type {
   RankedReveal,
   RankedStatus,
   ReviewItem,
+  StudyGroupSummary,
+  GroupOverview,
+  PageMeta,
+  PresenceStatus,
+  GroupChatMessage,
+  GroupAnnouncement,
+  GroupQuiz,
+  GroupQuizLeaderRow,
+  GroupQuizWindow,
+  GroupQuizAnswerResult,
+  GroupQuizSummary,
+  GroupQuestionItem,
+  GroupQuestionReply,
+  GroupMemberRow,
+  GroupMemberProfile,
+  GroupActivityRow,
+  GroupNotificationRow,
+  GroupDuelRow,
+  AdminGroupRow,
 } from './types';
 
 /** Shapes returned by the newer arena engines — documented in ``types.ts``. */
@@ -81,6 +101,7 @@ export type Json = Record<string, unknown>;
 
 const TOKEN_KEY = 'arena.token';
 const ROLE_KEY = 'arena.role';
+const SLOT_PREFIX = 'arena.slot.';
 
 export const tokenStore = {
   get(): string | null {
@@ -101,8 +122,25 @@ export const tokenStore = {
     try {
       localStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem(ROLE_KEY, role);
+      localStorage.setItem(SLOT_PREFIX + role, token);
     } catch {
       /* private mode — session lives in memory only */
+    }
+  },
+  /** Per-role stored tokens: the Admin⇄Player switch reads the other slot
+   *  instead of asking anyone to log in (or refresh) twice. */
+  getSlot(role: 'student' | 'admin'): string | null {
+    try {
+      return localStorage.getItem(SLOT_PREFIX + role);
+    } catch {
+      return null;
+    }
+  },
+  clearSlot(role: 'student' | 'admin'): void {
+    try {
+      localStorage.removeItem(SLOT_PREFIX + role);
+    } catch {
+      /* ignore */
     }
   },
   clear(): void {
@@ -209,6 +247,7 @@ export const api = {
   /* -------------------------------------------------------------- ranked */
   rankedMeta: () => request<RankedMeta>('/api/ranked/meta'),
   rankedStatus: () => request<RankedStatus>('/api/ranked/status'),
+  rankedCourseStats: () => request<{stats: Record<string, RankedCourseStat>}>('/api/ranked/course-stats'),
   rankedJoinQueue: (courseId: number) =>
     request<{queued: boolean; match_id?: number; state?: RankedMatchState; waiting?: number}>('/api/ranked/queue', {
       method: 'POST',
@@ -230,6 +269,63 @@ export const api = {
   rankedHistory: () => request<{history: RankedHistoryRow[]}>('/api/ranked/history'),
   rankedLadder: () => request<RankedLadder>('/api/ranked/leaderboard'),
 
+  /* ------------------------------------------------ Study Lab + mistakes */
+  studyLabOverview: () => request<Record<string, unknown>>('/api/study-lab/overview'),
+  studyLabTopic: (topic: string, offset = 0) =>
+    request<Record<string, unknown>>(`/api/study-lab/topic/${encodeURIComponent(topic)}?mistakes_limit=10&mistakes_offset=${offset}`),
+  studyLabAction: (topic: string, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/api/study-lab/topic/${encodeURIComponent(topic)}/action`, {method: 'POST', body}),
+  studyRunStart: (body: {topic: string; kind?: 'practice' | 'check'; count?: number}) =>
+    request<Record<string, unknown>>('/api/study-lab/run/start', {method: 'POST', body}),
+  studyRunActive: () => request<Record<string, unknown>>('/api/study-lab/run/active'),
+  studyRunAnswer: (runId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+    request<Record<string, unknown>>(`/api/study-lab/run/${runId}/answer`, {method: 'POST', body}),
+  studyRunAbandon: (runId: number) => request<{ok: boolean}>(`/api/study-lab/run/${runId}/abandon`, {method: 'POST'}),
+  studyMistakes: (params: {limit?: number; offset?: number; topic?: string; only_open?: boolean} = {}) =>
+    request<Record<string, unknown>>(`/api/study-lab/mistakes${query(params)}`),
+
+  /* ---------------------------------------------------------- Mystery */
+  mysteryList: () => request<Record<string, unknown>>('/api/mystery'),
+  mysteryCase: (id: number) => request<Record<string, unknown>>(`/api/mystery/${id}`),
+  mysteryBegin: (id: number, reset = false) =>
+    request<Record<string, unknown>>(`/api/mystery/${id}/begin`, {method: 'POST', body: {reset}}),
+  mysteryClue: (id: number) => request<Record<string, unknown>>(`/api/mystery/${id}/clue`, {method: 'POST'}),
+  mysteryAnswer: (id: number, body: {selected: string}) =>
+    request<Record<string, unknown>>(`/api/mystery/${id}/answer`, {method: 'POST', body}),
+
+  /* ------------------------------------------------ Customer Support */
+  supportTickets: (params: {limit?: number; offset?: number; only_open?: boolean} = {}) =>
+    request<Record<string, unknown>>(`/api/support/tickets${query(params)}`),
+  supportOpen: (body: Record<string, unknown>) => request<Record<string, unknown>>('/api/support/tickets', {method: 'POST', body}),
+  supportTicket: (id: number) => request<Record<string, unknown>>(`/api/support/tickets/${id}`),
+  supportReply: (id: number, body: {body: string}) =>
+    request<Record<string, unknown>>(`/api/support/tickets/${id}/messages`, {method: 'POST', body}),
+
+  /* ------------------------------------------------ Team ranked */
+  rankedDashboard: () => request<Record<string, unknown>>('/api/ranked/dashboard'),
+  teamLobby: () => request<{lobby: Record<string, unknown> | null}>('/api/ranked/lobby'),
+  teamLobbyCreate: (body: {team_size: number; course_id?: number | null}) =>
+    request<{lobby: Record<string, unknown>}>('/api/ranked/lobby', {method: 'POST', body}),
+  teamLobbyJoin: (code: string) => request<{lobby: Record<string, unknown>}>('/api/ranked/lobby/join', {method: 'POST', body: {code}}),
+  teamLobbyLeave: () => request<{left: boolean}>('/api/ranked/lobby/leave', {method: 'POST'}),
+  teamLobbyKick: (studentId: number) =>
+    request<{kicked: number; lobby: Record<string, unknown>}>(`/api/ranked/lobby/kick`, {method: 'POST', body: {student_id: studentId}}),
+  teamLobbyReady: (ready: boolean) =>
+    request<{ready: boolean; lobby: Record<string, unknown>}>(`/api/ranked/lobby/ready`, {method: 'POST', body: {ready}}),
+  teamLobbyInvite: (studentId: number) => request<{invited: string}>(`/api/ranked/lobby/invite`, {method: 'POST', body: {student_id: studentId}}),
+  teamLobbyFind: () =>
+    request<{lobby: Record<string, unknown>; match_id?: number | null}>('/api/ranked/lobby/find', {method: 'POST'}),
+  teamLobbyCancelSearch: () => request<{lobby: Record<string, unknown>}>('/api/ranked/lobby/cancel-search', {method: 'POST'}),
+  teamLobbyList: () => request<{lobbies: Record<string, unknown>[]}>('/api/ranked/lobby/open-list'),
+  teamMatch: (matchId: number) => request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}`),
+  teamMatchAnswer: (matchId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+    request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}/answer`, {method: 'POST', body}),
+  teamMatchReview: (matchId: number) => request<Record<string, unknown>>(`/api/ranked/team-match/${matchId}/review`),
+
+  /* ------------------------------------------------ Event history */
+  eventsHistory: (params: {limit?: number; offset?: number} = {}) =>
+    request<Record<string, unknown>>(`/api/events/history/me${query(params)}`),
+
   /* -------------------------------------------------------------- events */
   eventsList: () => request<EventsListing>('/api/events'),
   eventDetail: (eventId: number) =>
@@ -246,7 +342,8 @@ export const api = {
       {method: 'POST', body: {selected, elapsed_ms: elapsedMs}},
     ),
   eventReview: (eventId: number) => request<{event_id: number; items: ReviewItem[]}>(`/api/events/${eventId}/review`),
-  adminEvents: () => request<{events: ArenaEventSummary[]}>('/api/admin/events'),
+  adminEvents: (params: {limit?: number; offset?: number} = {}) =>
+    request<{events: ArenaEventSummary[]; total: number; limit: number; offset: number}>(`/api/admin/events${query(params)}`),
   adminCreateEvent: (body: Record<string, unknown>) =>
     request<{event: ArenaEventSummary}>('/api/admin/events', {method: 'POST', body}),
   adminUpdateEvent: (eventId: number, body: Record<string, unknown>) =>
@@ -305,7 +402,8 @@ export const api = {
     request<{items: ShopItem[]; coins: number; streak_freezes: number; flair: string; xp_boosted: boolean}>('/api/study/shop'),
   shopBuy: (sku: string) => request<{ok: boolean; profile: Profile; detail: string}>('/api/study/shop/buy', {method: 'POST', body: {sku}}),
   analytics: () => request<Analytics>('/api/study/analytics'),
-  inbox: () => request<{notes: InboxNote[]; unread: number}>('/api/inbox'),
+  inbox: (params: {limit?: number; offset?: number} = {}) =>
+    request<{notes: InboxNote[]; unread: number; total: number; limit: number; offset: number}>(`/api/inbox${query(params)}`),
   inboxRead: () => request<{marked: number}>('/api/inbox/read', {method: 'POST'}),
   nudge: (friendId: number) => request<{ok: boolean}>(`/api/friends/${friendId}/nudge`, {method: 'POST'}),
   react: (activityId: number) => request<{ok: boolean; mine: boolean; count: number}>(`/api/activity/${activityId}/react`, {method: 'POST'}),
@@ -561,8 +659,10 @@ export const api = {
         {method: 'POST', body},
       ),
     /* ---- staff authoring ---- */
-    adminList: (params: {status?: string; course_id?: number | null} = {}) =>
-      request<{items: MaterialCard[]; stats: Record<string, number>}>(`/api/admin/materials${query(params)}`),
+    adminList: (params: {status?: string; course_id?: number | null; limit?: number; offset?: number} = {}) =>
+      request<{items: MaterialCard[]; stats: Record<string, number>; total: number; limit: number; offset: number}>(
+        `/api/admin/materials${query(params)}`,
+      ),
     adminRead: (id: number) => request<MaterialDetail>(`/api/admin/materials/${id}`),
     create: (body: Record<string, unknown>) => request<MaterialDetail>('/api/admin/materials', {method: 'POST', body}),
     update: (id: number, body: Record<string, unknown>) => request<MaterialDetail>(`/api/admin/materials/${id}`, {method: 'PATCH', body}),
@@ -622,6 +722,8 @@ export const api = {
     quizzes: () => request<Quiz[]>('/api/admin/quizzes'),
     quiz: (id: number) => request<Quiz>(`/api/admin/quizzes/${id}`),
     createQuiz: (body: Record<string, unknown>) => request<Quiz>('/api/admin/quizzes', {method: 'POST', body}),
+    ensureCourseBank: (courseId: number) =>
+      request<Quiz>(`/api/admin/courses/${courseId}/bank-quiz`, {method: 'POST', body: {}}),
     updateQuiz: (id: number, body: Record<string, unknown>) => request<Quiz>(`/api/admin/quizzes/${id}`, {method: 'PATCH', body}),
     setQuizStatus: (id: number, status: string) =>
       request<Quiz>(`/api/admin/quizzes/${id}/status`, {method: 'PATCH', body: {status}}),
@@ -657,13 +759,31 @@ export const api = {
       request<PlayerSummary>(`/api/admin/students/${id}/adjust${query({xp, coins, reason})}`, {method: 'POST'}),
     deleteStudent: (id: number) => request<{ok: boolean}>(`/api/admin/students/${id}`, {method: 'DELETE'}),
 
-    results: (params: {quiz_id?: number; q?: string}) =>
-      request<{quiz_id: number | null; rows: Record<string, unknown>[]}>(`/api/admin/results${query(params)}`),
+    results: (params: {quiz_id?: number; q?: string; limit?: number; offset?: number} = {}) =>
+      request<{quiz_id: number | null; rows: Record<string, unknown>[]; total: number; limit: number; offset: number}>(
+        `/api/admin/results${query(params)}`,
+      ),
     deleteResult: (id: number) => request<{ok: boolean}>(`/api/admin/results/${id}`, {method: 'DELETE'}),
     clearResults: (quizId: number) => request<{ok: boolean; deleted: number}>(`/api/admin/results${query({quiz_id: quizId})}`, {method: 'DELETE'}),
     exportUrl: (quizId: number) => `/api/admin/results/export${query({quiz_id: quizId})}`,
 
-    notifications: () => request<Notice[]>('/api/admin/notifications'),
+    /* Support desk */
+    supportList: (params: Record<string, string | number | boolean | null | undefined> = {}) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets${query(params)}`),
+    supportTicket: (id: number) => request<Record<string, unknown>>(`/api/admin/support/tickets/${id}`),
+    supportReply: (id: number, body: {body: string; internal?: boolean}) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets/${id}/messages`, {method: 'POST', body}),
+    supportUpdate: (id: number, body: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/api/admin/support/tickets/${id}`, {method: 'PATCH', body}),
+    /* Mystery desk */
+    mysteryList: (params: {limit?: number; offset?: number} = {}) =>
+      request<Record<string, unknown>>(`/api/admin/mystery/cases${query(params)}`),
+    mysteryCreate: (body: Record<string, unknown>) => request<Record<string, unknown>>('/api/admin/mystery/cases', {method: 'POST', body}),
+    mysteryUpdate: (id: number, body: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/api/admin/mystery/cases/${id}`, {method: 'PATCH', body}),
+    mysteryDelete: (id: number) => request<{ok: boolean}>(`/api/admin/mystery/cases/${id}`, {method: 'DELETE'}),
+    notifications: (params: {limit?: number; offset?: number} = {}) =>
+      request<{rows: Notice[]; total: number; limit: number; offset: number}>(`/api/admin/notifications${query(params)}`),
     createNotification: (body: Record<string, unknown>) => request<Notice>('/api/admin/notifications', {method: 'POST', body}),
     deleteNotification: (id: number) => request<{ok: boolean}>(`/api/admin/notifications/${id}`, {method: 'DELETE'}),
 
@@ -672,11 +792,17 @@ export const api = {
     updatePrize: (id: number, body: Record<string, unknown>) => request<Prize>(`/api/admin/prizes/${id}`, {method: 'PATCH', body}),
     deletePrize: (id: number) => request<{ok: boolean}>(`/api/admin/prizes/${id}`, {method: 'DELETE'}),
 
-    claims: () => request<PrizeClaim[]>('/api/admin/claims'),
+    claims: (params: {limit?: number; offset?: number} = {}) =>
+      request<{rows: PrizeClaim[]; total: number; pending: number; limit: number; offset: number}>(
+        `/api/admin/claims${query(params)}`,
+      ),
     updateClaim: (id: number, status: string, note = '') =>
       request<PrizeClaim>(`/api/admin/claims/${id}`, {method: 'PATCH', body: {status, note}}),
 
     badges: () => request<{badges: BadgeItem[]; awarded: Record<string, number>}>('/api/admin/badges'),
+
+    groups: (params: {q?: string; limit?: number; offset?: number} = {}) =>
+      request<{rows: AdminGroupRow[]; total: number; limit: number; offset: number}>(`/api/admin/groups${query(params)}`),
 
     /* ------------------------------------------------------- content studio */
     studio: {
@@ -805,5 +931,98 @@ export const api = {
       leaderboard: (limit = 20) => request<Json>(`/api/admin/students/leaderboard${query({limit})}`),
       recentVersions: (limit = 30) => request<Json>(`/api/admin/versions/recent${query({limit})}`),
     },
+  },
+
+  /* ------------------------------------------------------- study groups
+     The full community workspace: every list is paginated server-side and
+     every privileged call is re-checked against the membership role. */
+  groups: {
+      list: (params: {q?: string; page?: number; size?: number} = {}) =>
+        request<{mine: {items: StudyGroupSummary[]} & PageMeta; discover: {items: StudyGroupSummary[]} & PageMeta}>(
+          `/api/groups${query(params)}`,
+        ),
+      create: (body: {name: string; description?: string; course_id?: number | null; goal?: string}) =>
+        request<StudyGroupSummary>('/api/groups', {method: 'POST', body}),
+      joinByCode: (code: string) =>
+        request<StudyGroupSummary>(`/api/groups/join/${encodeURIComponent(code.trim().toUpperCase())}`, {method: 'POST'}),
+      join: (id: number) => request<StudyGroupSummary>(`/api/groups/${id}/join`, {method: 'POST'}),
+      leave: (id: number) => request<{ok: boolean}>(`/api/groups/${id}/leave`, {method: 'POST'}),
+      detail: (id: number) => request<StudyGroupSummary>(`/api/groups/${id}`),
+      overview: (id: number) => request<GroupOverview>(`/api/groups/${id}/overview`),
+      presence: (id: number) => request<{group_id: number; statuses: Record<string, PresenceStatus>; online: number}>(`/api/groups/${id}/presence`),
+      updateSettings: (id: number, body: {name?: string; description?: string; goal?: string; course_id?: number | null}) =>
+        request<StudyGroupSummary>(`/api/groups/${id}`, {method: 'PATCH', body}),
+      analytics: (id: number) => request<Json>(`/api/groups/${id}/analytics`),
+      search: (id: number, q: string) => request<Json>(`/api/groups/${id}/search${query({q})}`),
+
+      messages: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupChatMessage[]} & PageMeta>(`/api/groups/${id}/messages${query(params)}`),
+      sendMessage: (id: number, body: string, replyTo?: number | null) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages`, {method: 'POST', body: {body, reply_to_id: replyTo ?? null}}),
+      editMessage: (id: number, messageId: number, body: string) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}`, {method: 'PATCH', body: {body}}),
+      deleteMessage: (id: number, messageId: number) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}`, {method: 'DELETE'}),
+      reactMessage: (id: number, messageId: number, emoji: string) =>
+        request<GroupChatMessage>(`/api/groups/${id}/messages/${messageId}/react`, {method: 'POST', body: {emoji}}),
+
+      announcements: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupAnnouncement[]} & PageMeta>(`/api/groups/${id}/announcements${query(params)}`),
+      createAnnouncement: (id: number, body: {title: string; body?: string; image?: string; priority?: 'normal' | 'high'; pinned?: boolean; scheduled_at?: string | null}) =>
+        request<GroupAnnouncement>(`/api/groups/${id}/announcements`, {method: 'POST', body}),
+      updateAnnouncement: (id: number, announcementId: number, body: Record<string, unknown>) =>
+        request<GroupAnnouncement>(`/api/groups/${id}/announcements/${announcementId}`, {method: 'PATCH', body}),
+      deleteAnnouncement: (id: number, announcementId: number) =>
+        request<{ok: boolean}>(`/api/groups/${id}/announcements/${announcementId}`, {method: 'DELETE'}),
+
+      quizzes: (id: number, params: {filter?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupQuiz[]} & PageMeta>(`/api/groups/${id}/quizzes${query(params)}`),
+      createQuiz: (id: number, body: Record<string, unknown>) => request<GroupQuiz>(`/api/groups/${id}/quizzes`, {method: 'POST', body}),
+      quiz: (id: number, quizId: number) =>
+        request<{quiz: GroupQuiz; leaderboard: {items: GroupQuizLeaderRow[]} & PageMeta}>(`/api/groups/${id}/quizzes/${quizId}`),
+      deleteQuiz: (id: number, quizId: number) => request<{ok: boolean}>(`/api/groups/${id}/quizzes/${quizId}`, {method: 'DELETE'}),
+      quizLeaderboard: (id: number, quizId: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupQuizLeaderRow[]} & PageMeta>(`/api/groups/${id}/quizzes/${quizId}/leaderboard${query(params)}`),
+      joinQuiz: (id: number, quizId: number) =>
+        request<{participant_id: number; quiz: GroupQuiz} & GroupQuizWindow>(`/api/groups/${id}/quizzes/${quizId}/join`, {method: 'POST'}),
+      quizQuestion: (id: number, quizId: number, index: number) =>
+        request<GroupQuizWindow>(`/api/groups/${id}/quizzes/${quizId}/question/${index}`),
+      answerQuiz: (id: number, quizId: number, body: {question_id: number; selected: string; elapsed_ms?: number}) =>
+        request<GroupQuizAnswerResult>(`/api/groups/${id}/quizzes/${quizId}/answer`, {method: 'POST', body}),
+      submitQuiz: (id: number, quizId: number) =>
+        request<GroupQuizSummary>(`/api/groups/${id}/quizzes/${quizId}/submit`, {method: 'POST'}),
+
+      questions: (id: number, params: {filter?: string; q?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupQuestionItem[]} & PageMeta>(`/api/groups/${id}/questions${query(params)}`),
+      askQuestion: (id: number, body: {title: string; body?: string; course_id?: number | null; topic?: string; attachment?: string}) =>
+        request<GroupQuestionItem>(`/api/groups/${id}/questions`, {method: 'POST', body}),
+      question: (id: number, questionId: number) => request<GroupQuestionItem>(`/api/groups/${id}/questions/${questionId}`),
+      answerQuestion: (id: number, questionId: number, body: {body: string; parent_id?: number | null}) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers`, {method: 'POST', body}),
+      usefulAnswer: (id: number, questionId: number, replyId: number) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers/${replyId}/useful`, {method: 'POST'}),
+      bestAnswer: (id: number, questionId: number, replyId: number) =>
+        request<GroupQuestionReply>(`/api/groups/${id}/questions/${questionId}/answers/${replyId}/best`, {method: 'POST'}),
+
+      members: (id: number, params: {filter?: string; q?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupMemberRow[]} & PageMeta>(`/api/groups/${id}/members${query(params)}`),
+      memberProfile: (id: number, studentId: number) => request<GroupMemberProfile>(`/api/groups/${id}/members/${studentId}/profile`),
+      setRole: (id: number, studentId: number, role: 'moderator' | 'member') =>
+        request<{ok: boolean}>(`/api/groups/${id}/members/${studentId}`, {method: 'PATCH', body: {role}}),
+      removeMember: (id: number, studentId: number) => request<{ok: boolean}>(`/api/groups/${id}/members/${studentId}`, {method: 'DELETE'}),
+      invite: (id: number, studentId: number) => request<{ok: boolean}>(`/api/groups/${id}/invite`, {method: 'POST', body: {student_id: studentId}}),
+
+      duels: (id: number, params: {filter?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupDuelRow[]} & PageMeta>(`/api/groups/${id}/duels${query(params)}`),
+      challenge: (id: number, body: {opponent_id: number; course_id?: number | null; topic?: string; question_count?: number; public?: boolean; message?: string}) =>
+        request<Duel>(`/api/groups/${id}/duels`, {method: 'POST', body}),
+
+      activity: (id: number, params: {kind?: string; page?: number; size?: number} = {}) =>
+        request<{items: GroupActivityRow[]} & PageMeta>(`/api/groups/${id}/activity${query(params)}`),
+
+      notifications: (id: number, params: {page?: number; size?: number} = {}) =>
+        request<{items: GroupNotificationRow[]; unread: number} & PageMeta>(`/api/groups/${id}/notifications${query(params)}`),
+      unread: () => request<{total: number; per_group: Record<string, number>}>('/api/groups/notifications/unread'),
+      readNotifications: (id: number) => request<{marked: number}>(`/api/groups/${id}/notifications/read`, {method: 'POST'}),
   },
 };

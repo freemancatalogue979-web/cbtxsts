@@ -12,15 +12,19 @@ import {jumpToMaterial} from './lib/palette';
 import {TABS} from './lib/nav';
 import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
-import type {AttemptSummary, Duel, Quiz, RewardEvent} from './lib/types';
+import type {AttemptSummary, Duel, GroupSection, Quiz, RewardEvent} from './lib/types';
 import Admin from './views/Admin';
 import Dashboard from './views/Dashboard';
 import DuelArena from './views/Duel';
 import Room from './views/Room';
+import Group from './views/Group';
+import GroupQuiz from './views/GroupQuiz';
 import Exam from './views/Exam';
 import Welcome from './views/Welcome';
 import Result from './views/Result';
 import {useSession} from './store/session';
+
+const GROUP_SECTIONS: GroupSection[] = ['overview', 'chat', 'quizzes', 'duels', 'questions', 'members', 'announcements', 'activity'];
 
 type Route =
   | {view: 'dashboard'; tab: Tab}
@@ -28,6 +32,8 @@ type Route =
   | {view: 'result'; attemptId: number}
   | {view: 'duel'; duelId: number}
   | {view: 'room'; roomId: number}
+  | {view: 'group'; groupId: number; section: GroupSection}
+  | {view: 'groupquiz'; groupId: number; quizId: number}
   | {view: 'admin'};
 
 const TAB_IDS = TABS.map((row) => row.id) as string[];
@@ -45,6 +51,10 @@ function routePath(route: Route): string {
       return `#/duel/${route.duelId}`;
     case 'room':
       return `#/room/${route.roomId}`;
+    case 'group':
+      return `#/group/${route.groupId}/${route.section}`;
+    case 'groupquiz':
+      return `#/group/${route.groupId}/quiz/${route.quizId}`;
     default:
       return '#/admin';
   }
@@ -57,14 +67,24 @@ function routePath(route: Route): string {
  */
 function routeFromHash(): Route {
   if (typeof window === 'undefined') return {view: 'dashboard', tab: 'play'};
-  const [head, rawId] = (window.location.hash || '').replace(/^#\/?/, '').split('/');
-  const id = Number(rawId);
+  const parts = (window.location.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
+  const head = parts[0];
+  const id = Number(parts[1]);
   const hasId = Number.isFinite(id) && id > 0;
   if (head && TAB_IDS.includes(head)) return {view: 'dashboard', tab: head as Tab};
   if (head === 'exam' && hasId) return {view: 'exam', attemptId: id};
   if (head === 'result' && hasId) return {view: 'result', attemptId: id};
   if (head === 'duel' && hasId) return {view: 'duel', duelId: id};
   if (head === 'room' && hasId) return {view: 'room', roomId: id};
+  if (head === 'group' && hasId) {
+    /* #/group/{id}/quiz/{quizId} — the dedicated runner. */
+    if (parts[2] === 'quiz') {
+      const quizId = Number(parts[3]);
+      if (Number.isFinite(quizId) && quizId > 0) return {view: 'groupquiz', groupId: id, quizId};
+    }
+    const section = (GROUP_SECTIONS.includes(parts[2] as GroupSection) ? parts[2] : 'overview') as GroupSection;
+    return {view: 'group', groupId: id, section};
+  }
   return {view: 'dashboard', tab: 'play'};
 }
 
@@ -142,7 +162,7 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
 }
 
 export default function App() {
-  const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile} = useSession();
+  const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile, switchTo, beginSwitch, cancelSwitch, switchTarget} = useSession();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
   const [started, setStarted] = useState(false);
 
@@ -274,11 +294,27 @@ export default function App() {
 
   if (!started || !ready) return <Splash />;
 
+  /* Admin ⇄ Player: the stored slot for the other role switches instantly;
+     without one, the sign-in sheet opens for exactly that role (beginSwitch)
+     — both flows land in the app without a browser refresh. */
+  const gotoRole = (target: 'student' | 'admin') => {
+    void switchTo(target).then((outcome) => {
+      if (outcome === 'missing') {
+        beginSwitch(target);
+        toast(
+          'info',
+          target === 'admin' ? 'Staff session needed' : 'Player session needed',
+          'Sign in once and the switch button will flip between both, no re-login, ever.',
+        );
+      }
+    });
+  };
+
   /* ------------------------------------------------------------- admin */
   if (role === 'admin') {
     return (
       <>
-        <Admin onExit={signOut} />
+        <Admin onExit={signOut} onSwitchToPlayer={() => gotoRole('student')} />
         <Toasts />
         <CelebrationLayer />
       </>
@@ -288,7 +324,11 @@ export default function App() {
   if (role !== 'student' || !profile) {
     return (
       <>
-        <Welcome onAdminMode={() => navigate({view: 'admin'}, 'replace')} />
+        <Welcome
+          onAdminMode={() => navigate({view: 'admin'}, 'replace')}
+          switchTarget={switchTarget}
+          onSwitchCancel={cancelSwitch}
+        />
         <Toasts />
         <CelebrationLayer />
       </>
@@ -310,6 +350,7 @@ export default function App() {
 
   const openDuel = (duel: Duel) => navigate({view: 'duel', duelId: duel.id});
   const openRoom = (roomId: number) => navigate({view: 'room', roomId});
+  const openGroup = (groupId: number, section: GroupSection = 'overview') => navigate({view: 'group', groupId, section});
   const backToDashboard = (tab: Tab = 'play') => navigate({view: 'dashboard', tab});
 
   return (
@@ -327,7 +368,7 @@ export default function App() {
             <AppShell
               tab={route.tab}
               onTab={(tab) => navigate({view: 'dashboard', tab})}
-              onAdmin={() => toast('info', 'Staff only', 'Sign out and use the Staff tab to manage the arena.')}
+              onAdmin={() => gotoRole('admin')}
               onProfile={() => navigate({view: 'dashboard', tab: 'profile'})}
               onSignOut={signOut}
             >
@@ -342,6 +383,7 @@ export default function App() {
                   navigate({view: 'dashboard', tab: 'materials'});
                   jumpToMaterial(materialId);
                 }}
+                onOpenGroup={openGroup}
                 onSignOut={signOut}
               />
             </AppShell>
@@ -385,6 +427,31 @@ export default function App() {
             <FocusShell onBack={() => goBack('duels')} backLabel={backLabel()}>
               <Room roomId={route.roomId} onExit={() => goBack('duels')} />
             </FocusShell>
+          )}
+
+          {route.view === 'group' && (
+            <Group
+              groupId={route.groupId}
+              section={route.section}
+              onExit={() => goBack('friends')}
+              onSection={(section) => {
+                if (route.view === 'group') navigate({view: 'group', groupId: route.groupId, section}, 'replace');
+              }}
+              onOpenQuiz={(quizId) => {
+                if (route.view === 'group') navigate({view: 'groupquiz', groupId: route.groupId, quizId});
+              }}
+              onOpenDuel={(duelId) => navigate({view: 'duel', duelId})}
+            />
+          )}
+
+          {route.view === 'groupquiz' && (
+            <GroupQuiz
+              groupId={route.groupId}
+              quizId={route.quizId}
+              onExit={() => {
+                if (route.view === 'groupquiz') navigate({view: 'group', groupId: route.groupId, section: 'quizzes'}, 'replace');
+              }}
+            />
           )}
         </motion.div>
       </AnimatePresence>

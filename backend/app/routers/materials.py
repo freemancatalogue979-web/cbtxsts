@@ -961,15 +961,35 @@ def self_test_answer(
 def admin_list(
     status_filter: str = Query("", alias="status"),
     course_id: int | None = Query(None),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
-    stmt = select(Material)
+    conds = []
     if status_filter:
-        stmt = stmt.where(Material.status == status_filter)
+        conds.append(Material.status == status_filter)
     if course_id:
-        stmt = stmt.where(Material.course_id == course_id)
-    rows = list(db.scalars(stmt.order_by(Material.updated_at.desc()).limit(200)).all())
+        conds.append(Material.course_id == course_id)
+
+    def _filtered(stmt):
+        for cond in conds:
+            stmt = stmt.where(cond)
+        return stmt
+
+    # Stats span the whole filtered set (not just this page) via aggregates, so
+    # the header counts stay honest while the list itself is server-paginated.
+    total = int(db.scalar(_filtered(select(func.count(Material.id)))) or 0)
+
+    def _count_status(value: str) -> int:
+        return int(db.scalar(_filtered(select(func.count(Material.id))).where(Material.status == value)) or 0)
+
+    def _sum(column) -> int:
+        return int(db.scalar(_filtered(select(func.coalesce(func.sum(column), 0)))) or 0)
+
+    rows = list(
+        db.scalars(_filtered(select(Material)).order_by(Material.updated_at.desc()).limit(limit).offset(offset)).all()
+    )
     reports = int(
         db.scalar(select(func.count(ContentReport.id)).where(ContentReport.kind == "material", ContentReport.status == "open")) or 0
     )
@@ -989,15 +1009,18 @@ def admin_list(
             for row in rows
         ],
         "stats": {
-            "total": len(rows),
-            "published": sum(1 for row in rows if row.status == "published"),
-            "drafts": sum(1 for row in rows if row.status == "draft"),
-            "archived": sum(1 for row in rows if row.status == "archived"),
-            "views": sum(row.views or 0 for row in rows),
-            "completions": sum(row.completions or 0 for row in rows),
+            "total": total,
+            "published": _count_status("published"),
+            "drafts": _count_status("draft"),
+            "archived": _count_status("archived"),
+            "views": _sum(Material.views),
+            "completions": _sum(Material.completions),
             "confusion_reports": confusions,
             "open_reports": reports,
         },
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 

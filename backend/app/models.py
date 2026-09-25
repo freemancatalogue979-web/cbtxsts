@@ -200,9 +200,15 @@ class Quiz(Base):
     grace_seconds: Mapped[int] = mapped_column(Integer, default=0)
     auto_submit: Mapped[bool] = mapped_column(Boolean, default=True)
     calculator: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Hidden holding quiz for a course's question bank — never an exam, never
+    # listed to students or in the exams tab; exam draws pull approved originals
+    # from here. Course questions and exam papers are separate by construction.
+    is_bank: Mapped[bool] = mapped_column(Boolean, default=False)
     review_before_submit: Mapped[bool] = mapped_column(Boolean, default=True)
     max_attempts: Mapped[int] = mapped_column(Integer, default=1)  # 0 = unlimited retakes
     practice_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    pass_score: Mapped[int] = mapped_column(Integer, default=50)  # percent needed to pass
+    draw_topics: Mapped[list] = mapped_column(JSON, default=list)  # topics the creation-time draw filtered on
 
     course: Mapped[Course | None] = relationship(back_populates="quizzes")
     questions: Mapped[list["Question"]] = relationship(
@@ -481,6 +487,15 @@ class Duel(Base):
     draw_on_tie: Mapped[bool] = mapped_column(Boolean, default=False)
     sudden_death: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # --- study-group duels ---------------------------------------------------
+    # A duel started from inside a study group records which group it belongs
+    # to; ``group_public`` keeps private challenges private per existing rules.
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("study_groups.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    group_public: Mapped[bool] = mapped_column(Boolean, default=True)
+    invite_message: Mapped[str] = mapped_column(String(240), default="")
+
     participants: Mapped[list["DuelParticipant"]] = relationship(
         back_populates="duel", cascade="all, delete-orphan", order_by="DuelParticipant.id"
     )
@@ -505,6 +520,9 @@ class DuelParticipant(Base):
     current_run: Mapped[int] = mapped_column(Integer, default=0)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     forfeited: Mapped[bool] = mapped_column(Boolean, default=False)
+    # This player's own server-dealt question ids, in serving order. Duels are
+    # multiplayer: nobody shares a set (null = legacy duel, shared fallback).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     duel: Mapped[Duel] = relationship(back_populates="participants")
     student: Mapped[Student] = relationship()
@@ -584,6 +602,8 @@ class RoomMember(Base):
     is_host: Mapped[bool] = mapped_column(Boolean, default=False)
     score: Mapped[int] = mapped_column(Integer, default=0)
     correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Per-player question set for the live run (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -681,6 +701,8 @@ class RankedParticipant(Base):
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
     speed_points: Mapped[int] = mapped_column(Integer, default=0)  # banked speed bonus → XP at the finish
     position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-based final place
+    # This player's own questions for the match, round by round (null = legacy).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -1196,7 +1218,7 @@ class StudyGroupMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(String(12), default="member")  # owner|member
+    role: Mapped[str] = mapped_column(String(12), default="member")  # owner|moderator|member
     week_xp: Mapped[int] = mapped_column(Integer, default=0)
     week_key: Mapped[str] = mapped_column(String(10), default="")
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -1206,7 +1228,12 @@ class StudyGroupMember(Base):
 
 
 class GroupMessage(Base):
-    """Study-room chat (distinct from 1:1 chat and quiz-night rooms)."""
+    """Study-room chat (distinct from 1:1 chat and quiz-night rooms).
+
+    Mirrors the 1:1 chat contract: edits keep the original text so "edited" is
+    honest, deletes are soft tombstones, replies carry a ``reply_to_id`` and
+    reactions live as a small JSON map on the row.
+    """
 
     __tablename__ = "group_messages"
 
@@ -1214,11 +1241,233 @@ class GroupMessage(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text, default="")
-    kind: Mapped[str] = mapped_column(String(12), default="text")  # text|live_question|system
+    kind: Mapped[str] = mapped_column(String(12), default="text")  # text|live_question|system|duel|quiz
     meta: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    # Quoted reply: the referenced message id plus a denormalised preview so
+    # the chat list never needs a second round trip per message.
+    reply_to_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    original_body: Mapped[str] = mapped_column(Text, default="")
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # {"👍": [student_id, …]} — small enough to keep on the row.
+    reactions: Mapped[str] = mapped_column(Text, default="{}")
 
     student: Mapped[Student] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# Study group community layer — announcements, quizzes, Q&A, activity, alerts
+# ---------------------------------------------------------------------------
+class StudyGroupAnnouncement(Base):
+    """A group broadcast: pinned banners, mock-exam notices, schedules."""
+
+    __tablename__ = "study_group_announcements"
+    __table_args__ = (Index("ix_group_ann_group_created", "group_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(180))
+    body: Mapped[str] = mapped_column(Text, default="")
+    image: Mapped[str] = mapped_column(Text, default="")  # optional banner (data URL)
+    priority: Mapped[str] = mapped_column(String(12), default="normal")  # normal|high
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # NULL = published now
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    author: Mapped[Student | None] = relationship()
+
+
+class StudyGroupQuiz(Base):
+    """A scheduled group quiz.
+
+    Deliberately separate from the admin ``Quiz`` model: it references bank
+    questions by id (``StudyGroupQuizQuestion``) instead of duplicating rows,
+    and the whole lifecycle (schedule → live → closed) is group-scoped.
+    """
+
+    __tablename__ = "study_group_quizzes"
+    __table_args__ = (Index("ix_group_quiz_group_status", "group_id", "status"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    question_count: Mapped[int] = mapped_column(Integer, default=10)  # capped at 100
+    per_question_seconds: Mapped[int] = mapped_column(Integer, default=30)  # 0 = one shared clock
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=0)  # total cap, 0 = per-question only
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=1)  # 0 = unlimited
+    randomize: Mapped[bool] = mapped_column(Boolean, default=True)
+    visibility: Mapped[str] = mapped_column(String(12), default="group")  # group (members only)
+    reward_xp: Mapped[int] = mapped_column(Integer, default=0)
+    reward_coins: Mapped[int] = mapped_column(Integer, default=0)
+    pass_score: Mapped[int] = mapped_column(Integer, default=50)  # percent
+    status: Mapped[str] = mapped_column(String(16), default="scheduled", index=True)  # scheduled|live|closed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    course: Mapped[Course | None] = relationship()
+    questions: Mapped[list["StudyGroupQuizQuestion"]] = relationship(
+        back_populates="quiz", cascade="all, delete-orphan", order_by="StudyGroupQuizQuestion.position"
+    )
+
+
+class StudyGroupQuizQuestion(Base):
+    """A reference to a bank question — never a copy of it."""
+
+    __tablename__ = "study_group_quiz_questions"
+    __table_args__ = (UniqueConstraint("quiz_id", "position", name="uq_group_quiz_position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("study_group_quizzes.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    quiz: Mapped[StudyGroupQuiz] = relationship(back_populates="questions")
+    question: Mapped[Question] = relationship()
+
+
+class StudyGroupQuizParticipant(Base):
+    """One member's attempt at a group quiz — the server owns every score."""
+
+    __tablename__ = "study_group_quiz_participants"
+    __table_args__ = (
+        UniqueConstraint("quiz_id", "student_id", "attempt_no", name="uq_group_quiz_attempt"),
+        Index("ix_group_quiz_part_quiz", "quiz_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("study_group_quizzes.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(16), default="in_progress")  # in_progress|submitted|expired
+    # Deterministic per-attempt order of quiz question positions (shuffle on).
+    question_order: Mapped[list] = mapped_column(JSON, default=list)
+    # {question_id: [display keys]} — option shuffle mapped back server-side.
+    option_orders: Mapped[dict] = mapped_column(JSON, default=dict)
+    # This attempt's own server-dealt questions (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    current_index: Mapped[int] = mapped_column(Integer, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    answered: Mapped[int] = mapped_column(Integer, default=0)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    percentage: Mapped[float] = mapped_column(Float, default=0.0)
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # leaderboard place once submitted
+    xp_awarded: Mapped[int] = mapped_column(Integer, default=0)
+    coins_awarded: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    student: Mapped[Student] = relationship()
+    answers: Mapped[list["StudyGroupQuizAnswer"]] = relationship(
+        back_populates="participant", cascade="all, delete-orphan"
+    )
+
+
+class StudyGroupQuizAnswer(Base):
+    __tablename__ = "study_group_quiz_answers"
+    __table_args__ = (
+        Index("ix_group_quiz_answer_unique", "participant_id", "question_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    participant_id: Mapped[int] = mapped_column(
+        ForeignKey("study_group_quiz_participants.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    selected: Mapped[str] = mapped_column(String(8), default="")
+    correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    points: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    participant: Mapped[StudyGroupQuizParticipant] = relationship(back_populates="answers")
+
+
+class StudyGroupQuestion(Base):
+    """A question posted to the group's Q&A board."""
+
+    __tablename__ = "study_group_questions"
+    __table_args__ = (Index("ix_group_question_group_created", "group_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    asker_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(220))
+    body: Mapped[str] = mapped_column(Text, default="")
+    attachment: Mapped[str] = mapped_column(Text, default="")  # optional image/data URL
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)  # open|answered|closed
+    best_answer_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    answers_count: Mapped[int] = mapped_column(Integer, default=0)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    asker: Mapped[Student | None] = relationship()
+    course: Mapped[Course | None] = relationship()
+
+
+class StudyGroupQuestionReply(Base):
+    """An answer (or a reply to an answer) on a group question."""
+
+    __tablename__ = "study_group_question_replies"
+    __table_args__ = (Index("ix_group_reply_question", "question_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("study_group_questions.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
+    parent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # reply-to-an-answer threading
+    body: Mapped[str] = mapped_column(Text, default="")
+    useful: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of student ids who found it useful
+    is_best: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    student: Mapped[Student | None] = relationship()
+
+
+class StudyGroupActivity(Base):
+    """The group activity feed: joins, quizzes, duels, questions, announcements."""
+
+    __tablename__ = "study_group_activities"
+    __table_args__ = (Index("ix_group_activity_group_created", "group_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(24), default="system")
+    # join|message|quiz|quiz_result|duel|duel_result|question|answer|announcement|member|system
+    text: Mapped[str] = mapped_column(String(280), default="")
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    actor: Mapped[Student | None] = relationship()
+
+
+class StudyGroupNotification(Base):
+    """Per-member group alert: the bell inside the study group workspace."""
+
+    __tablename__ = "study_group_notifications"
+    __table_args__ = (Index("ix_group_notif_student", "student_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="general")
+    # announcement|quiz|duel|question|reply|member|activity|result
+    title: Mapped[str] = mapped_column(String(180))
+    message: Mapped[str] = mapped_column(Text, default="")
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class ExamBlueprint(Base):
@@ -1520,6 +1769,7 @@ class ArenaEvent(Base):
     rewards: Mapped[dict] = mapped_column(JSON, default=dict)  # {xp, coins, diamonds, badge_key, title, frame, avatar}
     banner: Mapped[str] = mapped_column(String(240), default="")
     scoring_note: Mapped[str] = mapped_column(String(400), default="")  # scoring rules shown to players
+    featured: Mapped[bool] = mapped_column(Boolean, default=False, index=True)  # pinned on the events hub
     allow_join_during: Mapped[bool] = mapped_column(Boolean, default=True)
     allow_leave: Mapped[bool] = mapped_column(Boolean, default=True)
     leaderboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -1552,6 +1802,8 @@ class EventParticipant(Base):
     wrong_count: Mapped[int] = mapped_column(Integer, default=0)
     answered: Mapped[int] = mapped_column(Integer, default=0)  # questions completed
     current_index: Mapped[int] = mapped_column(Integer, default=0)  # next question to serve
+    # This participant's own server-dealt questions (null = legacy shared set).
+    question_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     streak: Mapped[int] = mapped_column(Integer, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -1653,3 +1905,247 @@ class StudyStreak(Base):
     seconds_today: Mapped[int] = mapped_column(Integer, default=0)
     day: Mapped[date | None] = mapped_column(Date, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Study Lab — learning paths, mistake book
+# ---------------------------------------------------------------------------
+class StudyPath(Base):
+    """One player's position in a topic's learning path.
+
+    The path walks Understand → Learn → Practice → Review mistakes → Practice
+    again → Mastery check. Stage advances only through server-graded activity,
+    so the state is honest, not cosmetic.
+    """
+
+    __tablename__ = "study_paths"
+    __table_args__ = (UniqueConstraint("student_id", "topic", name="uq_study_path"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120))
+    stage: Mapped[str] = mapped_column(String(24), default="understand")  # understand|learn|practice|review|again|check|mastered
+    understood: Mapped[bool] = mapped_column(Boolean, default=False)  # Understand mode completed
+    sections_done: Mapped[list] = mapped_column(JSON, default=list)  # material section ids marked understood
+    practice_runs: Mapped[int] = mapped_column(Integer, default=0)
+    practice_answered: Mapped[int] = mapped_column(Integer, default=0)
+    practice_correct: Mapped[int] = mapped_column(Integer, default=0)
+    review_seen: Mapped[int] = mapped_column(Integer, default=0)  # mistakes acknowledged in review
+    check_passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    check_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    practice_days: Mapped[list] = mapped_column(JSON, default=list)  # ISO dates, capped — powers the streak
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class StudyRun(Base):
+    """One Study Lab run — topic practice or a mastery check.
+
+    The dealt set lives here, so the run survives a refresh and the server
+    stays the only thing that grades anything.
+    """
+
+    __tablename__ = "study_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    topic: Mapped[str] = mapped_column(String(120), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(12), default="practice")  # practice|check
+    question_ids: Mapped[list] = mapped_column(JSON, default=list)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)  # {qid: {selected, correct, elapsed_ms}}
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    correct: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(12), default="active")  # active|finished|abandoned
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class StudyMistake(Base):
+    """Every wrong answer worth reviewing, from every graded surface.
+
+    One row per (student, question): `hits` counts repeated mistakes, which is
+    what makes a topic feel genuinely shaky instead of unlucky once.
+    """
+
+    __tablename__ = "study_mistakes"
+    __table_args__ = (UniqueConstraint("student_id", "question_id", name="uq_study_mistake"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    topic: Mapped[str] = mapped_column(String(120), default="", index=True)
+    selected: Mapped[str] = mapped_column(String(8), default="")
+    correct_key: Mapped[str] = mapped_column(String(8), default="")
+    explanation: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(24), default="exam")  # exam|practice|duel|event|group|boss
+    hits: Mapped[int] = mapped_column(Integer, default=1)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)  # answered right since
+    first_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Mystery — a learning game: clues, questions, unlock the solution
+# ---------------------------------------------------------------------------
+class MysteryCase(Base):
+    __tablename__ = "mystery_cases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(160))
+    blurb: Mapped[str] = mapped_column(Text, default="")  # the hook shown on the case card
+    brief: Mapped[str] = mapped_column(Text, default="")  # full case file, shown on open
+    story: Mapped[list] = mapped_column(JSON, default=list)  # solution paragraphs unlocked by correct answers
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    difficulty: Mapped[str] = mapped_column(String(12), default="medium")
+    question_count: Mapped[int] = mapped_column(Integer, default=5)
+    pass_count: Mapped[int] = mapped_column(Integer, default=3)  # correct answers needed to solve
+    reward_xp: Mapped[int] = mapped_column(Integer, default=40)
+    reward_coins: Mapped[int] = mapped_column(Integer, default=15)
+    status: Mapped[str] = mapped_column(String(12), default="draft", index=True)  # draft|published|archived
+    cover: Mapped[str] = mapped_column(String(16), default="magnifier")
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MysteryClue(Base):
+    __tablename__ = "mystery_clues"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("mystery_cases.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=1)
+    text: Mapped[str] = mapped_column(Text, default="")
+    material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id", ondelete="SET NULL"), nullable=True)
+    cost_coins: Mapped[int] = mapped_column(Integer, default=0)  # free clues keep it welcoming
+
+
+class MysterySolve(Base):
+    """A player's run at a case — the dealt set is stored, so a refresh never re-rolls."""
+
+    __tablename__ = "mystery_solves"
+    __table_args__ = (UniqueConstraint("case_id", "student_id", name="uq_mystery_solve"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("mystery_cases.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="active")  # active|solved|failed
+    question_ids: Mapped[list] = mapped_column(JSON, default=list)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)  # {qid: {selected, correct}}
+    opened_clues: Mapped[list] = mapped_column(JSON, default=list)  # clue ids unlocked so far
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Customer Support — tickets with a real conversation thread
+# ---------------------------------------------------------------------------
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # doubles as the public ticket number
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    category: Mapped[str] = mapped_column(String(24), default="other", index=True)
+    subject: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)  # open|in_progress|waiting_user|resolved|closed
+    assignee: Mapped[str] = mapped_column(String(120), default="")
+    attachment_url: Mapped[str] = mapped_column(String(400), default="")
+    attachment_name: Mapped[str] = mapped_column(String(160), default="")
+    student_unread: Mapped[int] = mapped_column(Integer, default=0)
+    staff_unread: Mapped[int] = mapped_column(Integer, default=0)
+    last_message_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True)
+    author_kind: Mapped[str] = mapped_column(String(10), default="student")  # student|staff|system
+    author_name: Mapped[str] = mapped_column(String(120), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    internal: Mapped[bool] = mapped_column(Boolean, default=False)  # staff-only note
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Team Ranked — friend lobbies vs another team, server-run
+# ---------------------------------------------------------------------------
+class RankedLobby(Base):
+    __tablename__ = "ranked_lobbies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    host_student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    team_size: Mapped[int] = mapped_column(Integer, default=1)  # 1..5 — 1v1 up to 5v5, never forced
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)  # open|matching|launched|dissolved
+    match_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RankedLobbyMember(Base):
+    __tablename__ = "ranked_lobby_members"
+    __table_args__ = (UniqueConstraint("lobby_id", "student_id", name="uq_lobby_member"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    lobby_id: Mapped[int] = mapped_column(ForeignKey("ranked_lobbies.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    is_host: Mapped[bool] = mapped_column(Boolean, default=False)
+    ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeamMatch(Base):
+    """A paced team-vs-team ranked match — the duel clock scaled to two squads."""
+
+    __tablename__ = "team_matches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(10), default="", index=True)
+    status: Mapped[str] = mapped_column(String(16), default="starting", index=True)  # starting|live|finished|cancelled
+    team_size: Mapped[int] = mapped_column(Integer, default=1)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    teams: Mapped[list] = mapped_column(JSON, default=list)  # [[student ids], [student ids]]
+    team_names: Mapped[list] = mapped_column(JSON, default=list)
+    question_count: Mapped[int] = mapped_column(Integer, default=8)  # per player
+    round_index: Mapped[int] = mapped_column(Integer, default=-1)  # -1 until the first question opens
+    per_question_seconds: Mapped[int] = mapped_column(Integer, default=20)
+    countdown_ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    round_opened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    round_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    winner_team: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0|1, None = tie
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TeamMatchPlayer(Base):
+    __tablename__ = "team_match_players"
+    __table_args__ = (UniqueConstraint("match_id", "student_id", name="uq_team_match_player"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("team_matches.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    team: Mapped[int] = mapped_column(Integer, default=0)
+    set_ids: Mapped[list] = mapped_column(JSON, default=list)  # server-dealt private set
+    position: Mapped[int] = mapped_column(Integer, default=0)  # own cursor into set
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    correct: Mapped[int] = mapped_column(Integer, default=0)
+    wrong: Mapped[int] = mapped_column(Integer, default=0)
+    answered: Mapped[int] = mapped_column(Integer, default=0)
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    streak: Mapped[int] = mapped_column(Integer, default=0)
+    best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    rating_before: Mapped[int] = mapped_column(Integer, default=1000)
+    rating_delta: Mapped[int] = mapped_column(Integer, default=0)
+    xp_awarded: Mapped[int] = mapped_column(Integer, default=0)
+    coins_awarded: Mapped[int] = mapped_column(Integer, default=0)
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)  # {qid: {selected, correct, points}} — per-round reveals survive refreshes

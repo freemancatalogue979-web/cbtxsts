@@ -52,11 +52,29 @@ async def _schedule_auto_reveal(room_id: int, seconds: int) -> None:
             room = db.get(Room, room_id)
             if room is None or room.status != "live":
                 return
-            payload = room_service.close_question(db, room)
-        if payload:
-            await hub.broadcast("room_reveal", payload, room=_room_key(room_id))
+            closed = room_service.close_question(db, room)
+        if closed:
+            await _send_reveal(closed)
 
     asyncio.create_task(_timer())
+
+
+async def _send_reveal(closed: tuple[dict, list[tuple[int, dict]]]) -> None:
+    """Per-player reveals: your own answer key comes to you alone."""
+    _meta, per_student = closed
+    for student_id, payload in per_student:
+        await hub.send_to_student(student_id, "room_reveal", payload)
+
+
+async def _send_question(opened: tuple[dict, list[tuple[int, dict]]]) -> None:
+    """Per-player questions: a rival's set never crosses the wire."""
+    _meta, per_student = opened
+    for student_id, payload in per_student:
+        await hub.send_to_student(student_id, "room_question", payload)
+
+
+def _my_payload(per_student: list[tuple[int, dict]], student_id: int) -> dict | None:
+    return next((payload for sid, payload in per_student if sid == student_id), None)
 
 
 @router.post("")
@@ -137,15 +155,18 @@ async def start_room(
     _host_or_403(room, student)
     try:
         total = room_service.start_run(db, room)
-        question = room_service.open_next(db, room)
+        opened = room_service.open_next(db, room)
     except RoomError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     db.commit()
     await hub.broadcast("room_start", {"total": total}, room=_room_key(room.id))
-    if question:
-        await hub.broadcast("room_question", question, room=_room_key(room.id))
-        await _schedule_auto_reveal(room.id, question["seconds"])
-    return {"room": room_service.room_state(db, room, student.id), "question": question}
+    mine = None
+    if opened:
+        meta, per_student = opened
+        await _send_question(opened)
+        await _schedule_auto_reveal(room.id, meta["seconds"])
+        mine = _my_payload(per_student, student.id)
+    return {"room": room_service.room_state(db, room, student.id), "question": mine}
 
 
 @router.post("/{room_id}/answer")
@@ -159,7 +180,7 @@ async def answer_question(
     _member_or_403(db, room, student)
     try:
         result, all_answered = room_service.submit_answer(db, room, student, payload.selected, payload.elapsed_ms)
-        reveal = room_service.close_question(db, room) if all_answered else None
+        closed = room_service.close_question(db, room) if all_answered else None
         state = room_service.room_state(db, room, student.id)
     except RoomError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -169,9 +190,11 @@ async def answer_question(
         {"student_id": student.id, "locked": True},
         room=_room_key(room.id),
     )
-    if reveal:
-        await hub.broadcast("room_reveal", reveal, room=_room_key(room.id))
-    return {"result": result, "all_answered": all_answered, "reveal": reveal, "room": state}
+    mine_reveal = None
+    if closed:
+        await _send_reveal(closed)
+        mine_reveal = _my_payload(closed[1], student.id)
+    return {"result": result, "all_answered": all_answered, "reveal": mine_reveal, "room": state}
 
 
 @router.post("/{room_id}/reveal")
@@ -183,12 +206,12 @@ async def reveal_question(
     room = _room_or_404(db, room_id)
     _member_or_403(db, room, student)
     _host_or_403(room, student)
-    reveal = room_service.close_question(db, room)
-    if reveal is None:
+    closed = room_service.close_question(db, room)
+    if closed is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No question is open right now.")
     db.commit()
-    await hub.broadcast("room_reveal", reveal, room=_room_key(room.id))
-    return {"reveal": reveal}
+    await _send_reveal(closed)
+    return {"reveal": _my_payload(closed[1], student.id)}
 
 
 @router.post("/{room_id}/next")
@@ -203,13 +226,14 @@ async def next_question(
     pending_reveal = room_service.close_question(db, room)  # host skipped the clock
     db.commit()
     if pending_reveal:
-        await hub.broadcast("room_reveal", pending_reveal, room=_room_key(room.id))
-    question = room_service.open_next(db, room)
-    if question:
+        await _send_reveal(pending_reveal)
+    opened = room_service.open_next(db, room)
+    if opened:
         db.commit()
-        await hub.broadcast("room_question", question, room=_room_key(room.id))
-        await _schedule_auto_reveal(room.id, question["seconds"])
-        return {"room": room_service.room_state(db, room, student.id), "question": question}
+        meta, per_student = opened
+        await _send_question(opened)
+        await _schedule_auto_reveal(room.id, meta["seconds"])
+        return {"room": room_service.room_state(db, room, student.id), "question": _my_payload(per_student, student.id)}
     finish = room_service.finish_run(db, room)
     db.commit()
     await hub.broadcast("room_finish", finish, room=_room_key(room.id))

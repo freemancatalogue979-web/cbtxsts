@@ -30,6 +30,7 @@ from .routers import (
     exams,
     flashcards,
     game,
+    groups,
     insights,
     live,
     materials,
@@ -38,13 +39,20 @@ from .routers import (
     rooms,
     social,
     studio,
-    study, shop,)
+    study, shop,
+    study_lab,
+    mystery,
+    support,
+    ranked_teams,
+)
 from .seed import seed_all
 from .services.duel import expire_duels
 from .services.events import poll_events
 from .services.exam import expire_overdue
 from .services.ranked import advance_matches, poll_queue
+from .services.ranked_teams import advance_team_matches, poll_lobbies
 from .events import dispatch
+from .services.group import GroupError
 from .ws import hub
 
 logger = logging.getLogger("arena")
@@ -59,6 +67,9 @@ def _game_tick_sync() -> list:
         events = expire_overdue(db)
         events += expire_duels(db)
         events += poll_events(db)
+        from .services.group import poll_groups
+
+        events += poll_groups(db)
     return events
 
 
@@ -87,6 +98,9 @@ def _ranked_tick_sync() -> list:
         # Duels share this 1-second clock: countdowns flip to question 1 and
         # every per-question deadline auto-advances both players in lockstep.
         events += advance_duels(db)
+        # Team ranked: squad matchmaking + the same paced round clock.
+        events += poll_lobbies(db)
+        events += advance_team_matches(db)
     return events
 
 
@@ -160,6 +174,12 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
+@app.exception_handler(GroupError)
+async def group_exception_handler(request: Request, exc: GroupError) -> JSONResponse:
+    """Study-group domain errors (403/404/409) raised deep in the service layer."""
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     first = exc.errors()[0] if exc.errors() else {}
@@ -189,12 +209,19 @@ app.include_router(studio.router, prefix=API_PREFIX)
 app.include_router(flashcards.router, prefix=API_PREFIX)
 app.include_router(practice.router, prefix=API_PREFIX)
 app.include_router(competitive.router, prefix=API_PREFIX)
+app.include_router(groups.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
 app.include_router(game.router, prefix=API_PREFIX)
 app.include_router(game.study_router, prefix=API_PREFIX)
 app.include_router(materials.router, prefix=API_PREFIX)
 app.include_router(materials.admin_router, prefix=API_PREFIX)
 app.include_router(shop.router, prefix=API_PREFIX)
+app.include_router(study_lab.router, prefix=API_PREFIX)
+app.include_router(mystery.router, prefix=API_PREFIX)
+app.include_router(mystery.admin_router, prefix=API_PREFIX)
+app.include_router(support.router, prefix=API_PREFIX)
+app.include_router(support.admin_router, prefix=API_PREFIX)
+app.include_router(ranked_teams.router, prefix=API_PREFIX)
 app.include_router(live.router)  # websocket routes stay unprefixed: /ws/live, /ws/duel/{id}, /ws/room/{id}
 
 

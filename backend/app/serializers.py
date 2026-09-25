@@ -198,8 +198,15 @@ def question_public(
     return question_student_public(question, reveal=reveal, order=order, extra=extra)
 
 
-def course_public(course: Course, *, quiz_count: int = 0, question_count: int = 0) -> dict[str, Any]:
-    return {
+def course_public(
+    course: Course,
+    *,
+    quiz_count: int = 0,
+    question_count: int = 0,
+    topic_count: int | None = None,
+    material_count: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "id": course.id,
         "code": course.code,
         "title": course.title,
@@ -213,6 +220,12 @@ def course_public(course: Course, *, quiz_count: int = 0, question_count: int = 
         "question_count": question_count,
         "created_at": iso(course.created_at),
     }
+    # Staff console extras: the mobile course card shows bank depth at a glance.
+    if topic_count is not None:
+        payload["topic_count"] = topic_count
+    if material_count is not None:
+        payload["material_count"] = material_count
+    return payload
 
 
 def quiz_public(
@@ -243,6 +256,9 @@ def quiz_public(
         "review_before_submit": bool(getattr(quiz, "review_before_submit", True)),
         "max_attempts": int(getattr(quiz, "max_attempts", 1) or 0),
         "practice_mode": bool(getattr(quiz, "practice_mode", False)),
+        "is_bank": bool(getattr(quiz, "is_bank", False)),
+        "pass_score": int(getattr(quiz, "pass_score", 50) or 0),
+        "draw_topics": list(getattr(quiz, "draw_topics", []) or []),
         "question_count": len([q for q in quiz.questions if getattr(q, "visible", True)]),
         "created_at": iso(quiz.created_at),
         "course": course_public(quiz.course) if quiz.course else None,
@@ -307,6 +323,9 @@ def attempt_summary(attempt: Attempt) -> dict[str, Any]:
         "submission_type": attempt.submission_type,
         "xp_awarded": attempt.xp_awarded,
         "coins_awarded": attempt.coins_awarded,
+        "passed": attempt.status == "submitted"
+        and attempt.percentage >= float(getattr(attempt.quiz, "pass_score", 50) or 0),
+        "pass_score": int(getattr(attempt.quiz, "pass_score", 50) or 0),
     }
 
 
@@ -435,6 +454,9 @@ def duel_public(
         "topic_filter": getattr(duel, "topic_filter", "") or "",
         "sudden_death": bool(getattr(duel, "sudden_death", False)),
         "tournament_id": getattr(duel, "tournament_id", None),
+        "group_id": getattr(duel, "group_id", None),
+        "group_public": bool(getattr(duel, "group_public", True)),
+        "invite_message": getattr(duel, "invite_message", "") or "",
         "winner_id": duel.winner_id,
         "created_at": iso(duel.created_at),
         "started_at": iso(duel.started_at),
@@ -449,17 +471,33 @@ def duel_public(
 
     if include_questions:
         # Only the viewer's own selections are exposed; the answer key stays
-        # hidden until the duel is finished (reveal=True).
+        # hidden until the duel is finished (reveal=True). With per-player
+        # sets a rival's questions never leave the server — not mid-duel, not
+        # at reveal, not to spectators.
+        viewer_participant = next(
+            (p for p in duel.participants if viewer_id is not None and p.student_id == viewer_id), None
+        )
+        mine_ids = list(getattr(viewer_participant, "question_ids", None) or []) if viewer_participant else []
+        rows_by_id = {row.question_id: row for row in duel.questions}
+        if mine_ids:
+            rows = [rows_by_id[qid] for qid in mine_ids if qid in rows_by_id]
+        elif viewer_participant is not None and len(duel.questions) <= duel.question_count:
+            rows = list(duel.questions)  # legacy duel: both players shared one set
+        else:
+            # Non-participants never see question content — and a fresh duel
+            # whose per-player sets are not dealt yet holds the 2x union of
+            # BOTH future sets, so the waiting creator sees nothing either.
+            rows = []
         mine = {row.question_id: row for row in duel.answers if viewer_id is not None and row.student_id == viewer_id}
         payload["questions"] = [
             {
                 **question_public(row.question, reveal=reveal),
-                "order": row.position,
+                "order": order,
                 "answered_by_you": row.question_id in mine,
                 "my_selection": mine[row.question_id].selected if row.question_id in mine else None,
                 "my_points": mine[row.question_id].points if row.question_id in mine else 0,
             }
-            for row in duel.questions
+            for order, row in enumerate(rows, start=1)
         ]
         payload["my_answers"] = [
             {

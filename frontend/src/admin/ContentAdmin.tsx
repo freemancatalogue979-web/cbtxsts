@@ -67,8 +67,14 @@ const emptyQuiz = {
   duration_minutes: 25,
   status: 'scheduled' as Quiz['status'],
   scheduled_at: '',
+  end_at: '',
   shuffle_questions: true,
   allow_duel: true,
+  // Creation-time draw: the server picks exactly this many eligible
+  // questions from the course bank (optionally topic-filtered) and stores
+  // them, so the paper never re-rolls. 0 = assemble questions by hand.
+  question_count: 0,
+  pass_score: 50,
 };
 
 /**
@@ -115,9 +121,10 @@ type QuestionDraft = typeof emptyQuestion & {id?: number};
  */
 void 0;
 
-function CoursesTab({onChanged}: {onChanged: () => void}) {
+function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank: (quiz: Quiz) => void}) {
   const {toast} = useSession();
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [bankBusy, setBankBusy] = useState<number | null>(null);
   const [editing, setEditing] = useState<(typeof emptyCourse & {id?: number}) | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -129,6 +136,21 @@ function CoursesTab({onChanged}: {onChanged: () => void}) {
   }, [toast]);
 
   useEffect(load, [load]);
+
+  /* Every course has a hidden question-bank quiz; this opens (creating it on
+     first use) straight into the Questions tab — course questions are managed
+     here, independent of any exam. */
+  const openBank = async (course: Course) => {
+    setBankBusy(course.id);
+    try {
+      const bank = await api.admin.ensureCourseBank(course.id);
+      onOpenBank(bank);
+    } catch (error) {
+      toast('error', 'Could not open the question bank', (error as Error).message);
+    } finally {
+      setBankBusy(null);
+    }
+  };
 
   const save = async () => {
     if (!editing) return;
@@ -210,14 +232,20 @@ function CoursesTab({onChanged}: {onChanged: () => void}) {
                     {course.credit_units} units · {course.semester}
                     {course.lecturer ? ` · ${course.lecturer}` : ''}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Chip className={course.is_active ? 'border-mint-500/30 bg-mint-500/12 text-mint-300' : 'border-white/12 bg-white/6 text-mist-500'}>
                       {course.is_active ? 'Active' : 'Hidden'}
                     </Chip>
                     {!!course.quiz_count && <Chip>{course.quiz_count} exams</Chip>}
+                    {!!course.topic_count && <Chip>{course.topic_count} topics</Chip>}
+                    {!!course.question_count && <Chip>{course.question_count} questions</Chip>}
+                    {!!course.material_count && <Chip>{course.material_count} materials</Chip>}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="ghost" loading={bankBusy === course.id} onClick={() => void openBank(course)} icon={<ScrollText className="size-3.5" />}>
+                    Question bank
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditing({...course})} icon={<Pencil className="size-3.5" />}>
                     Edit
                   </Button>
@@ -301,6 +329,21 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
   const [courses, setCourses] = useState<Course[]>([]);
   const [editing, setEditing] = useState<(typeof emptyQuiz & {id?: number}) | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quizTopics, setQuizTopics] = useState<{topic: string; count: number}[]>([]);
+  const [pickedTopics, setPickedTopics] = useState<string[]>([]);
+
+  // Topics follow the course so the picker is never stale.
+  useEffect(() => {
+    const courseId = editing?.course_id ?? null;
+    if (!courseId) {
+      setQuizTopics([]);
+      return;
+    }
+    api.admin.studio
+      .topics(courseId)
+      .then((data) => setQuizTopics(((data.topics as {topic: string; count: number}[]) ?? []).slice(0, 40)))
+      .catch(() => setQuizTopics([]));
+  }, [editing?.course_id]);
 
   const load = useCallback(() => {
     api.admin
@@ -317,15 +360,26 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
 
   const save = async () => {
     if (!editing) return;
+    if (editing.question_count < 0 || editing.question_count > 200) {
+      toast('error', 'Too many questions', 'A paper can hold up to 200 drawn questions.');
+      return;
+    }
+    if (!editing.id && editing.question_count > 0 && editing.question_count < 3) {
+      toast('error', 'Pick a real question count', 'Type 0 to build the paper by hand, or 3 or more for the server to draw.');
+      return;
+    }
     setBusy(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...editing,
       scheduled_at: editing.scheduled_at ? new Date(editing.scheduled_at).toISOString().slice(0, 19) : null,
+      end_at: editing.end_at ? new Date(editing.end_at).toISOString().slice(0, 19) : null,
     };
+    if (!editing.id && pickedTopics.length) payload.topics = pickedTopics;
     try {
       if (editing.id) await api.admin.updateQuiz(editing.id, payload);
       else await api.admin.createQuiz(payload);
       toast('success', editing.id ? 'Exam updated' : 'Exam created', editing.title);
+      setPickedTopics([]);
       setEditing(null);
       load();
       onChanged();
@@ -431,8 +485,11 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
                         duration_minutes: quiz.duration_minutes,
                         status: quiz.status,
                         scheduled_at: quiz.scheduled_at ? quiz.scheduled_at.slice(0, 16) : '',
+                        end_at: (quiz as {end_at?: string | null}).end_at ? String((quiz as {end_at?: string}).end_at).slice(0, 16) : '',
                         shuffle_questions: quiz.shuffle_questions,
                         allow_duel: quiz.allow_duel,
+                        question_count: 0,
+                        pass_score: (quiz as {pass_score?: number}).pass_score ?? 50,
                       })
                     }
                     icon={<Pencil className="size-3.5" />}
@@ -506,6 +563,72 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
                 onChange={(event) => setEditing({...editing, scheduled_at: event.target.value})}
               />
             </Field>
+            <Field label="Closes at" hint="Optional — hard deadline the auto-submitter enforces.">
+              <TextInput type="datetime-local" value={editing.end_at} onChange={(event) => setEditing({...editing, end_at: event.target.value})} />
+            </Field>
+            <Field
+              label="Number of questions"
+              hint={
+                editing.id
+                  ? 'Edit papers use the Questions tab — creation-time draws only run on new exams.'
+                  : '0 = build the paper by hand. The server draws exactly this many eligible questions from the course bank and stores them.'
+              }
+            >
+              <TextInput
+                type="number"
+                value={String(editing.question_count)}
+                onChange={(event) => {
+                  // Free typing — the field never snaps mid-edit; `save` validates.
+                  const raw = event.target.value.trim();
+                  const n = raw === '' ? 0 : Math.floor(Number(raw));
+                  setEditing({...editing, question_count: Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0});
+                }}
+              />
+            </Field>
+            <Field label="Passing score (%)" hint="Used on result screens and for pass/fail reporting.">
+              <TextInput
+                type="number"
+                min={0}
+                max={100}
+                value={editing.pass_score}
+                onChange={(event) => setEditing({...editing, pass_score: Math.max(0, Math.min(100, Number(event.target.value) || 0))})}
+              />
+            </Field>
+            {!editing.id && editing.course_id && quizTopics.length > 0 && (
+              <div className="sm:col-span-2">
+                <p className="mb-1.5 text-[0.72rem] font-black tracking-wide text-mist-400 uppercase">
+                  Draw from topics {pickedTopics.length ? `· ${pickedTopics.length} picked` : '· whole course'}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {quizTopics.map((row) => {
+                    const on = pickedTopics.includes(row.topic);
+                    return (
+                      <button
+                        key={row.topic}
+                        type="button"
+                        onClick={() => setPickedTopics((current) => (on ? current.filter((t) => t !== row.topic) : [...current, row.topic]))}
+                        className={
+                          on
+                            ? 'rounded-full border border-nova-400/50 bg-nova-500/18 px-2.5 py-1 text-[0.72rem] font-black text-nova-200'
+                            : 'rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[0.72rem] font-bold text-mist-400 hover:border-white/25'
+                        }
+                      >
+                        {row.topic} <span className="opacity-70">{row.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {editing.question_count > 0 && (
+                  <p className="mt-1.5 text-[0.72rem] font-bold text-mist-500">
+                    Eligible now:{' '}
+                    {pickedTopics.length
+                      ? quizTopics.filter((t) => pickedTopics.includes(t.topic)).reduce((sum, t) => sum + t.count, 0)
+                      : (courses.find((c) => c.id === editing.course_id)?.question_count ?? '?')}{' '}
+                    · the server re-validates against the bank when you save.
+                  </p>
+                )}
+              </div>
+            )}
             <Field label="Instructions" className="sm:col-span-2">
               <TextArea rows={3} value={editing.instructions} onChange={(event) => setEditing({...editing, instructions: event.target.value})} />
             </Field>
@@ -549,6 +672,11 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
   const [statusFilter, setStatusFilter] = useState('');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [sortKey, setSortKey] = useState('position');
+  // Page-based bank browsing: 20 at a time, "X–Y of Z" — never one endless
+  // scroll of thousands of questions.
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
   const [historyFor, setHistoryFor] = useState<QuestionPublic | null>(null);
   const [versions, setVersions] = useState<{version: number; created_at: string; note?: string; author?: string}[] | null>(null);
   const [statsFor, setStatsFor] = useState<{question_id: number; stats: {answered: number; correct: number; accuracy: number; avg_ms: number}; most_wrong: string[]} | null>(null);
@@ -564,28 +692,23 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
   const filtering = Boolean(query.trim() || statusFilter || flaggedOnly || sortKey !== 'position');
 
   const load = useCallback(() => {
-    if (filtering) {
-      api.admin.studio
-        .search({
-          quiz_id: quiz.id,
-          q: query.trim() || undefined,
-          status: statusFilter || undefined,
-          flagged: flaggedOnly || undefined,
-          sort: sortKey,
-          limit: 300,
-        })
-        .then((payload) => {
-          const rows = ((payload as {rows?: QuestionPublic[]}).rows ?? []) as QuestionPublic[];
-          setQuestions(rows);
-        })
-        .catch((error: Error) => toast('error', 'Search failed', error.message));
-      return;
-    }
-    api.admin
-      .questions(quiz.id)
-      .then(setQuestions)
+    api.admin.studio
+      .search({
+        quiz_id: quiz.id,
+        q: query.trim() || undefined,
+        status: statusFilter || undefined,
+        flagged: flaggedOnly || undefined,
+        sort: sortKey,
+        limit,
+        offset,
+      })
+      .then((payload) => {
+        const data = payload as {rows?: QuestionPublic[]; total?: number};
+        setQuestions((data.rows ?? []) as QuestionPublic[]);
+        setTotal(data.total ?? 0);
+      })
       .catch((error: Error) => toast('error', 'Could not load questions', error.message));
-  }, [quiz.id, toast, filtering, query, statusFilter, flaggedOnly, sortKey]);
+  }, [quiz.id, toast, query, statusFilter, flaggedOnly, sortKey, offset]);
 
   useEffect(() => {
     const handle = window.setTimeout(load, filtering ? 280 : 0);
@@ -810,13 +933,19 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
     <div className="space-y-4">
       <SectionHeading
         title={quiz.title}
-        subtitle={`${questions?.length ?? quiz.question_count} questions in the bank`}
+        subtitle={
+          quiz.is_bank
+            ? 'Course question bank — approved originals here are what every exam draws from. Not an exam itself.'
+            : `${total > 0 ? `${formatNumber(total)}` : questions?.length ?? quiz.question_count} questions in the bank`
+        }
         icon={<ScrollText className="size-4" />}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDrawOpen(true)} icon={<Shuffle className="size-3.5" />}>
-              Draw from bank
-            </Button>
+            {!quiz.is_bank && (
+              <Button size="sm" variant="outline" onClick={() => setDrawOpen(true)} icon={<Shuffle className="size-3.5" />}>
+                Draw from bank
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} icon={<Upload className="size-3.5" />}>
               Import questions
             </Button>
@@ -832,10 +961,20 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
           <TextInput
             placeholder="Search text, topic, tags…"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOffset(0);
+            }}
             aria-label="Search the question bank"
           />
-          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by review status">
+          <Select
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setOffset(0);
+            }}
+            aria-label="Filter by review status"
+          >
             <option value="">Any status</option>
             {QUESTION_STATUSES.map((value) => (
               <option key={value} value={value}>
@@ -843,7 +982,14 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
               </option>
             ))}
           </Select>
-          <Select value={sortKey} onChange={(event) => setSortKey(event.target.value)} aria-label="Sort questions">
+          <Select
+            value={sortKey}
+            onChange={(event) => {
+              setSortKey(event.target.value);
+              setOffset(0);
+            }}
+            aria-label="Sort questions"
+          >
             <option value="position">Exam order</option>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -852,10 +998,14 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
             <option value="most_used">Most used</option>
             <option value="least_used">Least used</option>
             <option value="az">A → Z</option>
+            <option value="topic">Group by topic</option>
           </Select>
           <button
             type="button"
-            onClick={() => setFlaggedOnly((value) => !value)}
+            onClick={() => {
+              setFlaggedOnly((value) => !value);
+              setOffset(0);
+            }}
             aria-pressed={flaggedOnly}
  className={`min-h-10 shrink-0 rounded-2xl border px-3 text-[0.76rem] font-black tracking-wide transition-colors touch-manipulation ${
               flaggedOnly ? 'border-flare-500/50 bg-flare-500/16 text-flare-200' : 'border-white/10 bg-white/4 text-mist-500'
@@ -887,10 +1037,16 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
         <ul className="space-y-2">
           {questions.map((question, position) => (
             <li key={question.id}>
+              {sortKey === 'topic' && (position === 0 || questions[position - 1]?.topic !== question.topic) && (
+                <div className="flex items-center gap-2 px-1 pt-1 pb-2">
+                  <p className="text-[0.72rem] font-black tracking-[0.1em] text-nova-300 uppercase">{question.topic?.trim() || 'No topic yet'}</p>
+                  <span aria-hidden className="h-px min-w-4 flex-1 bg-gradient-to-r from-nova-400/40 to-transparent" />
+                </div>
+              )}
               <Card className="p-4">
                 <div className="flex items-start gap-3">
                   <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/6 text-[0.78rem] font-black tabular text-mist-400">
-                    {position + 1}
+                    {offset + position + 1}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.9rem] font-bold text-mist-100">{question.text}</p>
@@ -1017,6 +1173,20 @@ function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
             </li>
           ))}
         </ul>
+      )}
+
+      {questions && questions.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+            Previous
+          </Button>
+          <span className="text-center text-[0.78rem] font-bold text-mist-500">
+            {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+          </span>
+          <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+            Next
+          </Button>
+        </div>
       )}
 
       <Modal
@@ -1584,7 +1754,15 @@ export default function ContentAdmin({onChanged}: {onChanged: () => void}) {
         onChange={setTab}
       />
 
-      {tab === 'courses' && <CoursesTab onChanged={onChanged} />}
+      {tab === 'courses' && (
+        <CoursesTab
+          onChanged={onChanged}
+          onOpenBank={(bankQuiz) => {
+            setQuiz(bankQuiz);
+            setTab('questions');
+          }}
+        />
+      )}
       {tab === 'exams' && (
         <QuizzesTab
           onChanged={onChanged}

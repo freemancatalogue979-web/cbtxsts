@@ -1,8 +1,10 @@
 """Arena events: admin-created, no-cap competitive runs.
 
-An event is a fixed question order served from the server; every participant
-works through it at their own pace (``untimed``/``fixed``) or on a per-question
-window (``per_question``). The server owns all timing — a closed browser never
+Events are multiplayer: the server deals every participant their OWN random
+question set from the event's pool (fresh questions first, least-served as a
+fallback — joining is never blocked), and each participant works through their
+own set at their own pace (``untimed``/``fixed``) or on a per-question window
+(``per_question``). The server owns all timing — a closed browser never
 pauses a timed event — plus every score, the leaderboard and the rewards.
 Players can join, leave and resume with progress intact until the event ends,
 at which point the ticker finalizes positions, grants rewards and notifies
@@ -34,6 +36,7 @@ from ..models import (
 )
 from ..serializers import question_public
 from .duel import question_pool
+from .question_sets import create_multiplayer_question_sets
 from .questions import normalize_answer
 
 LEADERBOARD_TOP = 20
@@ -226,6 +229,7 @@ def event_public(db: Session, event: ArenaEvent, viewer_id: int | None) -> dict:
     return {
         "id": event.id,
         "name": event.name,
+        "featured": bool(event.featured),
         "description": event.description,
         "course_id": event.course_id,
         "course_title": course.title if course else "The whole arena",
@@ -271,9 +275,25 @@ def events_list(db: Session, student: Student) -> dict:
             .limit(15)
         ).all()
     )
+    # One hour is the "ending soon" bar — long enough to plan, short enough to mean it.
+    soon = now + timedelta(hours=1)
+    live = [row for row in rows if row.status == "live"]
+    ending_soon = [row for row in live if row.ends_at <= soon]
+    mine_rows = list(
+        db.scalars(
+            select(ArenaEvent)
+            .join(EventParticipant, EventParticipant.event_id == ArenaEvent.id)
+            .where(EventParticipant.student_id == student.id)
+            .order_by(ArenaEvent.starts_at.desc())
+            .limit(20)
+        ).all()
+    )
     return {
         "upcoming": [event_public(db, row, student.id) for row in rows if row.starts_at > now and row.status == "scheduled"],
-        "live": [event_public(db, row, student.id) for row in rows if row.status == "live"],
+        "live": [event_public(db, row, student.id) for row in live],
+        "ending_soon": [event_public(db, row, student.id) for row in ending_soon],
+        "featured": [event_public(db, row, student.id) for row in rows if row.featured and row.status in ("scheduled", "live")],
+        "mine": [event_public(db, row, student.id) for row in mine_rows],
         "past": [event_public(db, row, student.id) for row in past],
         "server_now": _iso(now),
     }
@@ -313,6 +333,9 @@ def join_event(db: Session, event: ArenaEvent, student: Student) -> EventPartici
     participant = EventParticipant(event_id=event.id, student_id=student.id)
     db.add(participant)
     db.flush()
+    # Multiplayer rule: this participant's OWN set is dealt the moment they
+    # join (a committed write), so resume, scoring and review all agree.
+    _assign_participant_set(db, event, participant)
     return participant
 
 
@@ -344,13 +367,14 @@ def _event_questions(db: Session, event: ArenaEvent) -> list[EventQuestion]:
 
 
 def build_questions(db: Session, event: ArenaEvent) -> int:
-    """Materialize the event's fixed question order (idempotent)."""
+    """Materialize the event's seed question order (idempotent).
+
+    The seed rows are the event-level fallback; live participants are dealt
+    their own sets in :func:`_participant_questions`.
+    """
     if _event_questions(db, event):
         return len(_event_questions(db, event))
-    pool = question_pool(db, None, course_id=event.course_id)
-    topics = {t.lower() for t in (event.topics or [])}
-    if topics:
-        pool = [q for q in pool if (q.topic or "").lower() in topics] or pool
+    pool = _event_pool(db, event)
     if not pool:
         raise EventError("No questions available for this event yet.")
     picks = random.sample(pool, min(event.question_count, len(pool)))
@@ -360,13 +384,64 @@ def build_questions(db: Session, event: ArenaEvent) -> int:
     return len(picks)
 
 
+def _event_pool(db: Session, event: ArenaEvent) -> list[Question]:
+    pool = question_pool(db, None, course_id=event.course_id)
+    topics = {t.lower() for t in (event.topics or [])}
+    if topics:
+        pool = [q for q in pool if (q.topic or "").lower() in topics] or pool
+    return pool
+
+
+def _assign_participant_set(db: Session, event: ArenaEvent, participant: EventParticipant) -> None:
+    """Deal one participant their own set (fresh questions first).
+
+    Joiners trickle in over the event's life, so overlap avoidance is best
+    effort: usage counts (seed rows + every other participant's set) steer the
+    picker, and a join is never blocked — a tiny bank degrades to reuse of the
+    least-served questions, never to a refusal.
+    """
+    pool = _event_pool(db, event)
+    if not pool:
+        return  # the start-time seeder surfaces the real "no questions" error
+    usage: dict[int, int] = {}
+    for row in _event_questions(db, event):
+        usage[row.question_id] = usage.get(row.question_id, 0) + 1
+    for other in participants(db, event):
+        if other.id == participant.id:
+            continue
+        for qid in other.question_ids or []:
+            usage[int(qid)] = usage.get(int(qid), 0) + 1
+    assigned = create_multiplayer_question_sets(
+        pool, [participant.student_id], event.question_count, usage_counts=usage, strict=False
+    )[participant.student_id]
+    if assigned:
+        participant.question_ids = [q.id for q in assigned]
+        db.flush()
+
+
+def _participant_questions(db: Session, event: ArenaEvent, participant: EventParticipant) -> list[Question]:
+    """The participant's OWN question set, dealt once when they joined."""
+    mine = list(participant.question_ids or [])
+    if mine:
+        rows = [db.get(Question, int(qid)) for qid in mine]
+        rows = [q for q in rows if q is not None]
+        if rows:
+            return rows
+    # Legacy participant (joined before per-player sets): the shared seed rows.
+    out: list[Question] = []
+    for row in _event_questions(db, event):
+        question = db.get(Question, row.question_id)
+        if question is not None:
+            out.append(question)
+    return out
+
+
 def current_question(db: Session, event: ArenaEvent, participant: EventParticipant) -> dict:
     """Serve the participant's next unanswered question, resume-safe."""
-    questions = _event_questions(db, event)
+    questions = _participant_questions(db, event, participant)
     if participant.current_index >= len(questions):
         return {"done": True, "answered": participant.answered, "total": len(questions)}
-    row = questions[participant.current_index]
-    question = db.get(Question, row.question_id)
+    question = questions[participant.current_index]
     if question is None:
         participant.current_index += 1
         db.flush()
@@ -399,11 +474,10 @@ def submit_answer(
 ) -> dict:
     if event.status != "live":
         raise EventError("This event is not running.")
-    questions = _event_questions(db, event)
+    questions = _participant_questions(db, event, participant)
     if participant.current_index >= len(questions):
         raise EventError("You have finished the event.")
-    row = questions[participant.current_index]
-    question = db.get(Question, row.question_id)
+    question = questions[participant.current_index]
     existing = db.scalar(
         select(EventAnswer).where(
             EventAnswer.event_id == event.id,
@@ -414,6 +488,12 @@ def submit_answer(
     if existing:
         raise EventError("You already answered this question.")
     correct = (selected or "").strip().upper() == (question.correct or "").strip().upper()
+    from .study_lab import record_mistake, resolve_mistake
+
+    if correct:
+        resolve_mistake(db, participant.student_id, question.id)
+    else:
+        record_mistake(db, participant.student_id, question, selected=selected, source="event")
     points = 0
     if correct:
         window = max(1, event.per_question_seconds) if event.time_mode == "per_question" else 30
@@ -458,7 +538,8 @@ def participant_payload(db: Session, event: ArenaEvent, participant: EventPartic
     student = db.get(Student, participant.student_id)
     if student is None:
         return {"student_id": participant.student_id, "name": "?", "score": participant.score}
-    total = (
+    # Each participant runs their own set: report THEIR total, not the seed's.
+    total = len(participant.question_ids or []) or (
         db.scalar(select(func.count(EventQuestion.id)).where(EventQuestion.event_id == event.id)) or 0
     )
     return {
@@ -522,12 +603,18 @@ def activity_payload(db: Session, event: ArenaEvent, limit: int = 8) -> list[dic
 
 # --------------------------------------------------------------------- review
 def review_payload(db: Session, event: ArenaEvent, student_id: int) -> dict:
-    questions = _event_questions(db, event)
+    """Post-event review of MY OWN set — other players' questions stay private."""
+    participant = participant_for(db, event.id, student_id)
+    if participant is not None and (participant.question_ids or []):
+        questions = _participant_questions(db, event, participant)
+    else:
+        questions = [
+            q
+            for q in (db.get(Question, row.question_id) for row in _event_questions(db, event))
+            if q is not None
+        ]
     items = []
-    for row in questions:
-        question = db.get(Question, row.question_id)
-        if question is None:
-            continue
+    for index, question in enumerate(questions):
         mine = db.scalar(
             select(EventAnswer).where(
                 EventAnswer.event_id == event.id,
@@ -537,7 +624,7 @@ def review_payload(db: Session, event: ArenaEvent, student_id: int) -> dict:
         )
         items.append(
             {
-                "index": row.position,
+                "index": index,
                 "question": question_public(question, reveal=True),
                 "selected": mine.selected if mine else None,
                 "correct": mine.correct if mine else False,

@@ -1,12 +1,15 @@
 """Ranked multiplayer endpoints: queue, live matches, ratings, ladder."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_student
+from ..events import dispatch
 from ..models import RankedMatch, RankedParticipant, RankedQueue, Student, utcnow
 from ..schemas import RankedAnswerIn, RankedQueueIn
 from ..services import ranked as ranked_service
@@ -79,6 +82,49 @@ def my_status(db: Session = Depends(get_db), student: Student = Depends(require_
     }
 
 
+@router.get("/course-stats")
+def course_stats(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
+    """Ranked telemetry per course — what the arena cards show: queue heat,
+    action in the last 7 days and this player's own head-to-head record.
+
+    Read-only aggregates computed on the server; the client never decides
+    what a course's stats are."""
+    week_ago = utcnow() - timedelta(days=7)
+    in_queue = dict(
+        db.execute(select(RankedQueue.course_id, func.count(RankedQueue.id)).group_by(RankedQueue.course_id)).all()
+    )
+    recent = dict(
+        db.execute(
+            select(RankedMatch.course_id, func.count(RankedMatch.id))
+            .where(RankedMatch.status == "finished", RankedMatch.course_id.is_not(None), RankedMatch.finished_at >= week_ago)
+            .group_by(RankedMatch.course_id)
+        ).all()
+    )
+    mine: dict[int, dict] = {}
+    for course_id, position in db.execute(
+        select(RankedMatch.course_id, RankedParticipant.position)
+        .join(RankedParticipant, RankedParticipant.match_id == RankedMatch.id)
+        .where(RankedParticipant.student_id == student.id, RankedMatch.status == "finished", RankedMatch.course_id.is_not(None))
+    ).all():
+        rec = mine.setdefault(int(course_id), {"played": 0, "wins": 0, "best": None})
+        rec["played"] += 1
+        if position == 1:
+            rec["wins"] += 1
+        if position is not None and (rec["best"] is None or position < rec["best"]):
+            rec["best"] = int(position)
+    stats: dict[int, dict] = {}
+    for cid in set(in_queue) | set(recent) | set(mine):
+        rec = mine.get(int(cid), {"played": 0, "wins": 0, "best": None})
+        stats[int(cid)] = {
+            "in_queue": int(in_queue.get(cid, 0)),
+            "matches_7d": int(recent.get(cid, 0)),
+            "played": rec["played"],
+            "wins": rec["wins"],
+            "best": rec["best"],
+        }
+    return {"stats": stats}
+
+
 @router.post("/queue")
 async def join_queue(
     payload: RankedQueueIn,
@@ -126,7 +172,9 @@ async def answer_question(
     _participant_or_403(db, match, student)
     try:
         result, all_answered = ranked_service.submit_answer(db, match, student, payload.selected, payload.elapsed_ms)
-        reveal = ranked_service.close_if_all_answered(db, match) if all_answered else None
+        reveal_events, reveal = (
+            ranked_service.close_if_all_answered(db, match, student) if all_answered else ([], None)
+        )
         state = ranked_service.match_state(db, match, student.id, _connected_ids(match.id))
     except RankedError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -142,8 +190,10 @@ async def answer_question(
         },
         room=room,
     )
-    if reveal:
-        await hub.broadcast("ranked_reveal", reveal, room=room)
+    if reveal_events:
+        # Per-player reveals: everyone gets their OWN question's key, nobody
+        # gets a rival's.
+        await dispatch(reveal_events)
     return {"result": result, "all_answered": all_answered, "reveal": reveal, "match": state}
 
 
@@ -159,7 +209,9 @@ async def skip_question(
     _participant_or_403(db, match, student)
     try:
         result, all_answered = ranked_service.skip_question(db, match, student)
-        reveal = ranked_service.close_if_all_answered(db, match) if all_answered else None
+        reveal_events, reveal = (
+            ranked_service.close_if_all_answered(db, match, student) if all_answered else ([], None)
+        )
         state = ranked_service.match_state(db, match, student.id, _connected_ids(match.id))
     except RankedError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -176,8 +228,10 @@ async def skip_question(
         },
         room=room,
     )
-    if reveal:
-        await hub.broadcast("ranked_reveal", reveal, room=room)
+    if reveal_events:
+        # Per-player reveals: everyone gets their OWN question's key, nobody
+        # gets a rival's — skipping closes the round exactly like answering.
+        await dispatch(reveal_events)
     return {"result": result, "all_answered": all_answered, "reveal": reveal, "match": state}
 
 

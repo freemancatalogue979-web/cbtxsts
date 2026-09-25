@@ -7,7 +7,6 @@ import {
   Coins,
   Download,
   Medal,
-  MoveHorizontal,
   PackageCheck,
   Search,
   Swords,
@@ -145,11 +144,53 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
         <EmptyState icon={<Users className="size-6" />} title="No players match" detail="Try a different name or phone number." />
       ) : (
         <Card className="overflow-hidden">
-          <p className="flex items-center gap-1.5 border-b border-white/8 px-3 py-2 text-[0.68rem] font-bold text-mist-500 sm:hidden">
-            <MoveHorizontal className="size-3.5" /> Swipe sideways for the full table
-          </p>
-          <div className="overflow-x-auto overscroll-x-contain">
-            <table className="w-full min-w-[44rem] text-left sm:min-w-[52rem]">
+          {/* Phones get stacked player cards; sm and up keep the full table. */}
+          <ul className="divide-y divide-white/6 sm:hidden">
+            {rows.map((player) => (
+              <li key={player.id} className="cursor-pointer px-3 py-3" onClick={() => openDetail(player)}>
+                <div className="flex items-center gap-2.5">
+                  <Avatar name={player.name} hue={player.avatar_hue} initials={player.initials} size={38} online={player.online} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.86rem] font-extrabold text-mist-100">{player.name}</p>
+                    <p className="truncate text-[0.7rem] font-semibold text-mist-500">
+                      {formatPhone(player.phone)} · {player.title}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-xl bg-white/6 px-2 py-1 text-[0.72rem] font-black tabular text-nova-300">
+                    Lv {player.level}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.72rem] font-black tabular text-mist-100">
+                    {formatNumber(player.xp)} <span className="font-bold text-mist-500">XP</span>
+                  </span>
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.72rem] font-black tabular text-gold-300">
+                    {formatNumber(player.coins)} <span className="font-bold text-mist-500">Coins</span>
+                  </span>
+                  <span className="rounded-xl border border-white/8 bg-white/[0.03] px-2 py-1.5 text-center text-[0.72rem] font-black tabular text-mist-100">
+                    {player.duels_won}/{player.duels_played} <span className="font-bold text-mist-500">Duels</span>
+                  </span>
+                </div>
+                <div className="mt-2 flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAdjusting(player);
+                      setAdjust({xp: 0, coins: 0, reason: 'Staff adjustment'});
+                    }}
+                    icon={<Zap className="size-3.5 text-nova-300" />}
+                  >
+                    Adjust
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => ban(player)} icon={<Ban className="size-3.5 text-flare-400" />} />
+                  <Button size="sm" variant="ghost" onClick={() => remove(player)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto overscroll-x-contain sm:block">
+            <table className="w-full min-w-[52rem] text-left">
               <thead className="border-b border-white/8 bg-white/[0.03]">
  <tr className="text-[0.66rem] font-black tracking-[0.14em] text-mist-500">
                   <th className="px-2.5 py-2 sm:px-4 sm:py-3">Player</th>
@@ -320,8 +361,11 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [quizId, setQuizId] = useState<number | ''>('');
   const [rows, setRows] = useState<ResultRow[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const limit = 50;
 
   useEffect(() => {
     api.admin
@@ -330,12 +374,20 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
       .catch(() => setQuizzes([]));
   }, []);
 
+  // Changing the exam or the search jumps back to the first page.
+  useEffect(() => {
+    setOffset(0);
+  }, [quizId, query]);
+
   const load = useCallback(() => {
     api.admin
-      .results({quiz_id: quizId || undefined, q: query})
-      .then((data) => setRows(data.rows as unknown as ResultRow[]))
+      .results({quiz_id: quizId || undefined, q: query, limit, offset})
+      .then((data) => {
+        setRows(data.rows as unknown as ResultRow[]);
+        setTotal(data.total);
+      })
       .catch((error: Error) => toast('error', 'Could not load results', error.message));
-  }, [quizId, query, toast]);
+  }, [quizId, query, offset, toast]);
 
   useEffect(() => {
     const id = window.setTimeout(load, query ? 250 : 0);
@@ -450,11 +502,43 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
         <EmptyState icon={<BarChart3 className="size-6" />} title="No submissions yet" detail="Results appear the moment players submit." />
       ) : (
         <Card className="overflow-hidden">
-          <p className="flex items-center gap-1.5 border-b border-white/8 px-3 py-2 text-[0.68rem] font-bold text-mist-500 sm:hidden">
-            <MoveHorizontal className="size-3.5" /> Swipe sideways for the full table
-          </p>
-          <div className="overflow-x-auto overscroll-x-contain">
-            <table className="w-full min-w-[40rem] text-left sm:min-w-[46rem]">
+          {/* Phones get stacked result cards; sm and up keep the full table. */}
+          <ul className="divide-y divide-white/6 sm:hidden">
+            {rows.map((row) => {
+              const data = normalize(row);
+              return (
+                <li key={`${data.id}-${data.name}`} className="px-3 py-3">
+                  <div className="flex items-center gap-2.5">
+                    {quizId && (
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/6 text-[0.76rem] font-black tabular text-mist-300">
+                        {data.rank ?? '—'}
+                      </span>
+                    )}
+                    <Avatar name={data.name} hue={data.student.avatar_hue} initials={data.student.initials} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.84rem] font-extrabold text-mist-100">{data.name}</p>
+                      <p className="truncate text-[0.68rem] font-semibold text-mist-500">
+                        {quizId ? formatPhone(data.phone) : data.quizTitle}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[0.86rem] font-black tabular text-mist-100">{data.score}</p>
+                      <p className="text-[0.7rem] font-bold tabular text-mist-400">{data.percentage.toFixed(0)}%</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Chip className={GRADE_STYLES[data.grade] ?? 'border-white/12 bg-white/6 text-mist-400'}>{data.grade}</Chip>
+                    <span className="min-w-0 flex-1 truncate text-[0.7rem] font-semibold text-mist-500">
+                      {formatDate(data.submittedAt, true)}
+                    </span>
+                    <Button size="sm" variant="ghost" onClick={() => removeRow(row)} icon={<X className="size-3.5 text-flare-400" />} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto overscroll-x-contain sm:block">
+            <table className="w-full min-w-[46rem] text-left">
               <thead className="border-b border-white/8 bg-white/[0.03]">
  <tr className="text-[0.66rem] font-black tracking-[0.14em] text-mist-500">
                   {quizId && <th className="px-2.5 py-2 sm:px-4 sm:py-3">Rank</th>}
@@ -506,6 +590,18 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
           </div>
         </Card>
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
     </div>
   );
 }
@@ -513,17 +609,25 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
 function ClaimsTab({onChanged}: {onChanged: () => void}) {
   const {toast} = useSession();
   const [claims, setClaims] = useState<PrizeClaim[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [target, setTarget] = useState<PrizeClaim | null>(null);
   const [status, setStatus] = useState<'approved' | 'delivered' | 'rejected'>('approved');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const limit = 40;
 
   const load = useCallback(() => {
     api.admin
-      .claims()
-      .then(setClaims)
+      .claims({limit, offset})
+      .then((data) => {
+        setClaims(data.rows);
+        setTotal(data.total);
+        setPending(data.pending);
+      })
       .catch((error: Error) => toast('error', 'Could not load claims', error.message));
-  }, [toast]);
+  }, [offset, toast]);
 
   useEffect(load, [load]);
 
@@ -557,11 +661,7 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
         title="Prize claims"
         subtitle="Approve, deliver or reject — the player is notified instantly."
         icon={<PackageCheck className="size-4" />}
-        action={
-          <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">
-            {claims?.filter((claim) => claim.status === 'pending').length ?? 0} pending
-          </Chip>
-        }
+        action={<Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">{pending} pending</Chip>}
       />
 
       {!claims ? (
@@ -632,6 +732,18 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
           ))}
         </ul>
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
 
       <Modal
         open={Boolean(target)}

@@ -320,14 +320,21 @@ def inbox(
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
     limit: int = Query(40, ge=5, le=100),
+    offset: int = Query(0, ge=0),
 ) -> dict:
+    owned = InboxNote.student_id == student.id
     rows = db.scalars(
-        select(InboxNote).where(InboxNote.student_id == student.id).order_by(InboxNote.created_at.desc()).limit(limit)
+        select(InboxNote).where(owned).order_by(InboxNote.created_at.desc()).limit(limit).offset(offset)
     ).all()
-    unread = db.scalar(
-        select(func.count(InboxNote.id)).where(InboxNote.student_id == student.id, InboxNote.read_at.is_(None))
-    )
-    return {"notes": [_note_public(row) for row in rows], "unread": int(unread or 0)}
+    unread = db.scalar(select(func.count(InboxNote.id)).where(owned, InboxNote.read_at.is_(None)))
+    total = db.scalar(select(func.count(InboxNote.id)).where(owned))
+    return {
+        "notes": [_note_public(row) for row in rows],
+        "unread": int(unread or 0),
+        "total": int(total or 0),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/inbox/read")

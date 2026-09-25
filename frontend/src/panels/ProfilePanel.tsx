@@ -113,9 +113,11 @@ export default function ProfilePanel({
   const [mascot, setMascotName] = useState<MascotName>(() => currentMascot());
   const [sound, setSound] = useState(() => sfx.isEnabled());
   const [musicEnabled, setMusicEnabled] = useState(() => music.isEnabled());
+  const [audioLibrary, setAudioLibrary] = useState(() => music.storage());
   const [trackId, setTrackId] = useState(() => music.track());
   const [volume, setVolume] = useState(() => music.volume());
   const musicState = useSyncExternalStore(music.subscribe, music.state);
+  useEffect(() => music.subscribeStorage(() => setAudioLibrary(music.storage())), []);
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoInput = useRef<HTMLInputElement | null>(null);
 
@@ -644,6 +646,23 @@ export default function ProfilePanel({
                   <span className={`absolute top-0.5 size-5 rounded-full bg-white transition-all ${musicEnabled ? 'left-[1.15rem]' : 'left-0.5'}`} />
                 </span>
               </button>
+              {/* The soundtrack lives on the device once primed — the network never sits in the playback path. */}
+              <div className="mt-1.5 flex items-center justify-between gap-2 px-1">
+                <p className="min-w-0 text-[0.64rem] font-semibold text-mist-500">
+                  {audioLibrary.phase === 'busy' && audioLibrary.stored < audioLibrary.total
+                    ? `Saving the soundtrack to this device… ${audioLibrary.stored}/${audioLibrary.total}`
+                    : audioLibrary.stored >= audioLibrary.total && audioLibrary.total > 0
+                      ? `All ${audioLibrary.total} tracks saved on this device — playback never hits the network.`
+                      : audioLibrary.phase === 'unavailable'
+                        ? 'This browser will not let us store audio — tracks stream instead.'
+                        : 'The soundtrack downloads itself after your first play.'}
+                </p>
+                {audioLibrary.stored > 0 && (
+                  <button type="button" onClick={() => music.refreshStorage()} className="shrink-0 text-[0.64rem] font-black text-nova-300 underline-offset-2 hover:underline">
+                    Re-download
+                  </button>
+                )}
+              </div>
               {/* Pause keeps the place, resume continues from it. */}
               {musicEnabled && (musicState === 'playing' || musicState === 'paused') ? (
                 <button

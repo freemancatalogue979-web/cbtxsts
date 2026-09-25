@@ -2,17 +2,19 @@
 
 A room holds up to 15 players: one host, everyone else a guest. The host picks
 the question source (a course bank or the whole arena), starts the run and
-paces it — every question opens for the whole room at once with its own clock,
-answers are graded server-side, the standings update live, and the room chat
-runs the entire time so players can talk or ask about the question in front of
-them. Rewards pay out when the run finishes.
+paces it — every round opens for the whole room at once with its own clock,
+but each player answers THEIR OWN server-dealt question (same count, same
+difficulty shape, different questions, no overlap while the bank allows it).
+Answers are graded server-side, the standings update live, and the room chat
+runs the entire time so players can talk about the round in front of them.
+Rewards pay out when the run finishes.
 """
 from __future__ import annotations
 
 import random
 from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import game
@@ -28,13 +30,15 @@ from ..models import (
 )
 from ..serializers import question_public
 from .duel import question_pool
+from .question_sets import NotEnoughQuestionsError, create_multiplayer_question_sets
 
 ROOM_CAPACITY = 15
 PLACE_XP = (30, 20, 10)
 PLACE_COINS = (15, 10, 5)
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-# room_id -> {question_id, index, deadline} for the question currently on screen
+# room_id -> {index, deadline} for the round currently on screen — pacing only;
+# each member's question comes from their own dealt set, never from the cache.
 OPEN: dict[int, dict] = {}
 
 
@@ -158,10 +162,8 @@ def room_state(db: Session, room: Room, viewer_id: int) -> dict:
         "question_count": room.question_count,
         "per_question_seconds": room.per_question_seconds,
         "round_index": room.round_index,
-        "questions_total": db.scalar(
-            select(func.count(RoomQuestion.id)).where(RoomQuestion.room_id == room.id)
-        )
-        or 0,
+        # Everyone plays the same number of rounds — their own questions, though.
+        "questions_total": room.question_count,
         "capacity": ROOM_CAPACITY,
         "is_host": room.host_id == viewer_id,
         "created_at": room.created_at.isoformat() + "Z",
@@ -174,40 +176,99 @@ def start_run(db: Session, room: Room) -> int:
         raise RoomError("Room has no host.")
     if room.status != "lobby":
         raise RoomError("This room has already started.")
-    if len(room_members(db, room)) < 2:
+    members = room_members(db, room)
+    if len(members) < 2:
         raise RoomError("Wait for at least one guest before starting.")
     pool = question_pool(db, None, course_id=room.course_id)
     if not pool:
         raise RoomError("No questions available for this room's source yet.")
-    picks = random.sample(pool, min(room.question_count, len(pool)))
-    for position, question in enumerate(picks):
+    # Multiplayer rule: every member gets their own unique set. Shrink the
+    # per-player count if the bank cannot cover the room, but never share or
+    # silently repeat questions.
+    per_player = min(room.question_count, max(0, len(pool) // len(members)))
+    member_ids = [m.student_id for m in members]
+    sets: dict[int, list[Question]] | None = None
+    while per_player >= 1:
+        try:
+            sets = create_multiplayer_question_sets(pool, member_ids, per_player, strict=True)
+            break
+        except NotEnoughQuestionsError:
+            per_player -= 1
+    if sets is None:
+        raise RoomError(
+            "Not enough unique questions are available for this match. Try fewer questions or fewer "
+            "players — or ask an admin to add more questions to the bank."
+        )
+    union = [question for member_id in member_ids for question in sets[member_id]]
+    for position, question in enumerate(union):
         db.add(RoomQuestion(room_id=room.id, question_id=question.id, position=position))
+    for member in members:
+        member.question_ids = [q.id for q in sets[member.student_id]]
+    room.question_count = per_player
     room.status = "live"
     room.round_index = -1
     db.flush()
-    return len(picks)
+    return per_player
 
 
-def open_next(db: Session, room: Room) -> dict | None:
-    """Open the next question for the whole room. None when the run is over."""
-    questions = list(
+def _shared_rows(db: Session, room: Room) -> list[RoomQuestion]:
+    return list(
         db.scalars(select(RoomQuestion).where(RoomQuestion.room_id == room.id).order_by(RoomQuestion.position)).all()
     )
+
+
+def _room_total(db: Session, room: Room, members: list[RoomMember] | None = None) -> int:
+    """How many rounds this run plays: every member runs the same count."""
+    members = members if members is not None else room_members(db, room)
+    if members and all(m.question_ids for m in members):
+        return min(len(m.question_ids or []) for m in members)
+    return len(_shared_rows(db, room))  # legacy run: one shared set
+
+
+def _question_at(db: Session, room: Room, member: RoomMember, index: int) -> Question | None:
+    """The question THIS member answers in round ``index``."""
+    mine = list(member.question_ids or [])
+    if mine:
+        if index < 0 or index >= len(mine):
+            return None
+        return db.get(Question, int(mine[index]))
+    rows = _shared_rows(db, room)  # legacy shared set
+    if index < 0 or index >= len(rows):
+        return None
+    return db.get(Question, rows[index].question_id)
+
+
+def open_next(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]]] | None:
+    """Open the next round. Returns (room-safe pacing meta, per-player payloads).
+
+    The meta carries no question content; each player's own question is sent
+    to that player alone. None when the run is over.
+    """
+    members = room_members(db, room)
+    total = _room_total(db, room, members)
     nxt = room.round_index + 1
-    if nxt >= len(questions):
+    if nxt >= total:
         return None
     room.round_index = nxt
     db.flush()
-    question = db.get(Question, questions[nxt].question_id)
     deadline = utcnow() + timedelta(seconds=room.per_question_seconds)
-    OPEN[room.id] = {"question_id": question.id, "index": nxt, "deadline": deadline}
-    return {
+    OPEN[room.id] = {"index": nxt, "deadline": deadline}
+    meta = {
         "index": nxt,
-        "total": len(questions),
+        "total": total,
         "seconds": room.per_question_seconds,
         "deadline": deadline.isoformat() + "Z",
-        "question": question_public(question, reveal=False),
+        "server_now": utcnow().isoformat() + "Z",
     }
+    per_student: list[tuple[int, dict]] = []
+    for member in members:
+        question = _question_at(db, room, member, nxt)
+        if question is None:
+            continue
+        per_student.append(
+            (member.student_id, {**meta, "question": question_public(question, reveal=False)})
+        )
+    return meta, per_student
 
 
 def open_info(room: Room) -> dict | None:
@@ -223,7 +284,11 @@ def submit_answer(db: Session, room: Room, student: Student, selected: str, elap
     member = _member(db, room.id, student.id)
     if member is None:
         raise RoomError("You are not in this room.")
-    question = db.get(Question, info["question_id"])
+    # Server-authoritative: the only gradeable question is this member's own
+    # deal for the open round.
+    question = _question_at(db, room, member, info["index"])
+    if question is None:
+        raise RoomError("No question is open right now.")
     existing = db.scalar(
         select(RoomAnswer).where(
             RoomAnswer.room_id == room.id,
@@ -252,34 +317,76 @@ def submit_answer(db: Session, room: Room, student: Student, selected: str, elap
     )
     db.add(answer)
     db.flush()
-    answered = db.scalar(
-        select(func.count(RoomAnswer.id)).where(
-            RoomAnswer.room_id == room.id, RoomAnswer.question_id == question.id
-        )
-    ) or 0
-    return {"correct": correct, "points": points}, answered >= len(room_members(db, room))
+    members = room_members(db, room)
+    answered = _round_answered(db, room, members, info["index"])
+    return {"correct": correct, "points": points}, answered >= len(members)
 
 
-def close_question(db: Session, room: Room) -> dict | None:
-    """Grade the open question, reveal the answer and publish standings."""
+def _round_answered(db: Session, room: Room, members: list[RoomMember], index: int) -> int:
+    answered = 0
+    for member in members:
+        question = _question_at(db, room, member, index)
+        if question is None:
+            continue
+        if db.scalar(
+            select(RoomAnswer.id).where(
+                RoomAnswer.room_id == room.id,
+                RoomAnswer.question_id == question.id,
+                RoomAnswer.student_id == member.student_id,
+            )
+        ):
+            answered += 1
+    return answered
+
+
+def close_question(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]]] | None:
+    """Close the open round. Returns (room-safe meta, per-player reveals).
+
+    Each member sees THEIR OWN question's answer key and their own grade;
+    only scores/standings (meta) are room-wide.
+    """
     info = OPEN.pop(room.id, None)
     if info is None:
         return None
-    question = db.get(Question, info["question_id"])
-    answers = list(
-        db.scalars(select(RoomAnswer).where(RoomAnswer.room_id == room.id, RoomAnswer.question_id == question.id)).all()
-    )
-    correct_ids = {row.student_id for row in answers if row.correct}
+    members = room_members(db, room)
     standings = sorted(members_payload(db, room), key=lambda row: (-row["score"], row["name"]))
-    return {
-        "index": info["index"],
-        "question_id": question.id,
-        "correct": question.correct,
-        "explanation": question.explanation or "",
-        "correct_ids": sorted(correct_ids),
-        "answered": len(answers),
-        "standings": standings,
-    }
+    grades: dict[int, RoomAnswer | None] = {}
+    for member in members:
+        question = _question_at(db, room, member, info["index"])
+        grades[member.student_id] = (
+            db.scalar(
+                select(RoomAnswer).where(
+                    RoomAnswer.room_id == room.id,
+                    RoomAnswer.question_id == question.id,
+                    RoomAnswer.student_id == member.student_id,
+                )
+            )
+            if question is not None
+            else None
+        )
+    answered = sum(1 for row in grades.values() if row is not None)
+    meta = {"index": info["index"], "answered": answered, "standings": standings}
+    per_student: list[tuple[int, dict]] = []
+    for member in members:
+        question = _question_at(db, room, member, info["index"])
+        if question is None:
+            continue
+        row = grades.get(member.student_id)
+        per_student.append(
+            (
+                member.student_id,
+                {
+                    "index": info["index"],
+                    "question_id": question.id,
+                    "correct": question.correct,
+                    "explanation": question.explanation or "",
+                    "correct_ids": [member.student_id] if row is not None and row.correct else [],
+                    "answered": answered,
+                    "standings": standings,
+                },
+            )
+        )
+    return meta, per_student
 
 
 def finish_run(db: Session, room: Room) -> dict:

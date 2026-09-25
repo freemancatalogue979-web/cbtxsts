@@ -2048,12 +2048,6 @@
   animation: none;
 }
 
-/* House caps lean into the wind: any all-caps label gets a slight bend.
-   Space Grotesk ships no true italic, so the browser synthesises a soft
-   oblique — exactly the subtle tilt we want, never a fake serif slant. */
-.uppercase {
-  font-style: italic;
-}
 @media (prefers-reduced-motion: reduce) {
   .season-badge-current,
   .season-level-now {

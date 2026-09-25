@@ -3,9 +3,10 @@
 Matchmaking runs in the server ticker: players queue per course, and once at
 least two are waiting (and the oldest has waited out the grace window) a match
 is minted for up to 15 of them. The lobby counts down on the server clock,
-then every participant answers the same questions on a shared window —
-answers are graded server-side, standings broadcast live, and Elo ratings
-move when the match finishes.
+then every participant answers THEIR OWN server-dealt question set on a shared
+window — same count, same difficulty shape, different questions, no overlap
+while the bank allows it. Answers are graded server-side, standings broadcast
+live, and Elo ratings move when the match finishes.
 
 Scoring is accuracy-dominant by design: a correct answer is always worth far
 more than the speed or streak bonuses stacked on top of it, so a slightly
@@ -14,7 +15,6 @@ and only here — clients never compute or submit points.
 """
 from __future__ import annotations
 
-import random
 from collections import deque
 from datetime import timedelta
 
@@ -36,6 +36,7 @@ from ..models import (
 )
 from ..serializers import question_public
 from .duel import question_pool
+from .question_sets import NotEnoughQuestionsError, create_multiplayer_question_sets
 
 # --------------------------------------------------------------------- tuning
 MATCH_SIZE = 15          # hard cap per match
@@ -106,7 +107,8 @@ PLACE_XP = (30, 20, 10)
 PLACE_COINS = (15, 10, 5)
 
 # In-memory live state (rebuilt harmlessly on restart):
-#   OPEN[match_id] = {question_id, index, deadline, reveal_until?}
+#   OPEN[match_id] = {index, deadline, reveal_until?}  — pacing only; each
+#   player's question comes from their own dealt set, never from the cache.
 #   LAST_STANDINGS[match_id] = {student_id: position} for activity lines
 OPEN: dict[int, dict] = {}
 ACTIVITY: dict[int, deque] = {}
@@ -301,24 +303,54 @@ def _launch_match(db: Session, course_id: int | None, waiting: list[RankedQueue]
     pool = question_pool(db, None, course_id=course_id)
     if not pool:
         return []  # nothing to quiz on; leave them waiting
+    player_ids: list[int] = []
+    for row in waiting:
+        student = db.get(Student, row.student_id)
+        if student is not None and student.id not in player_ids:
+            player_ids.append(student.id)
+    if len(player_ids) < MIN_PLAYERS:
+        return []
+    # Tier rules (wait-ladder) set the target length + pacing for this bracket…
     question_count, per_question_seconds = match_rules_for([row.rating for row in waiting])
+    # …and the multiplayer rule still applies on top: every player gets their
+    # own unique set. If the bank cannot cover the full count for everyone
+    # without reuse, shrink the per-player count (never share, never silently
+    # repeat); if even one unique question each is impossible, the queue
+    # simply keeps waiting.
+    per_player = min(question_count, max(0, len(pool) // len(player_ids)))
+    sets: dict[int, list[Question]] | None = None
+    while per_player >= 1:
+        try:
+            sets = create_multiplayer_question_sets(pool, player_ids, per_player, strict=True)
+            break
+        except NotEnoughQuestionsError:
+            per_player -= 1
+    if sets is None:
+        return []
     match = RankedMatch(
         course_id=course_id,
         status="lobby",
-        question_count=question_count,
+        question_count=per_player,
         per_question_seconds=per_question_seconds,
         lobby_at=utcnow() + timedelta(seconds=LOBBY_SECONDS),
     )
     db.add(match)
     db.flush()
-    picks = random.sample(pool, min(question_count, len(pool)))
-    for position, question in enumerate(picks):
+    union = [question for player_id in player_ids for question in sets[player_id]]
+    for position, question in enumerate(union):
         db.add(RankedQuestion(match_id=match.id, question_id=question.id, position=position))
     for row in waiting:
         student = db.get(Student, row.student_id)
         if student is None:
             continue
-        db.add(RankedParticipant(match_id=match.id, student_id=student.id, rating_before=student.ranked_rating))
+        db.add(
+            RankedParticipant(
+                match_id=match.id,
+                student_id=student.id,
+                rating_before=student.ranked_rating,
+                question_ids=[q.id for q in sets[student.id]],
+            )
+        )
         db.delete(row)
     db.flush()
     ACTIVITY[match.id] = deque(maxlen=8)
@@ -340,6 +372,35 @@ def participants(db: Session, match: RankedMatch) -> list[RankedParticipant]:
     )
 
 
+def _shared_rows(db: Session, match: RankedMatch) -> list[RankedQuestion]:
+    return list(
+        db.scalars(
+            select(RankedQuestion).where(RankedQuestion.match_id == match.id).order_by(RankedQuestion.position)
+        ).all()
+    )
+
+
+def _match_total(db: Session, match: RankedMatch, rows: list[RankedParticipant] | None = None) -> int:
+    """How many rounds this match plays: every player runs the same count."""
+    rows = rows if rows is not None else participants(db, match)
+    if rows and all(p.question_ids for p in rows):
+        return min(len(p.question_ids or []) for p in rows)
+    return len(_shared_rows(db, match))  # legacy match: one shared set
+
+
+def _question_at(db: Session, match: RankedMatch, participant: RankedParticipant, index: int) -> Question | None:
+    """The question THIS player answers in round ``index``."""
+    mine = list(participant.question_ids or [])
+    if mine:
+        if index < 0 or index >= len(mine):
+            return None
+        return db.get(Question, int(mine[index]))
+    rows = _shared_rows(db, match)  # legacy shared set
+    if index < 0 or index >= len(rows):
+        return None
+    return db.get(Question, rows[index].question_id)
+
+
 def advance_matches(db: Session) -> list[Event]:
     """Server-paced engine: start lobbies whose countdown ended, close expired
     questions, open the next one after the reveal window, finish at the end."""
@@ -351,6 +412,9 @@ def advance_matches(db: Session) -> list[Event]:
     for match in list(db.scalars(select(RankedMatch).where(RankedMatch.status == "live")).all()):
         info = OPEN.get(match.id)
         if info is None:
+            # Lost the in-memory pacing (server restart): resume from the
+            # persisted round index instead of stranding a live match.
+            events += _open_next(db, match)
             continue
         if "reveal_until" in info:
             if now >= info["reveal_until"]:
@@ -369,62 +433,102 @@ def _start_match(db: Session, match: RankedMatch) -> list[Event]:
 
 
 def _open_next(db: Session, match: RankedMatch) -> list[Event]:
-    questions = list(
-        db.scalars(
-            select(RankedQuestion).where(RankedQuestion.match_id == match.id).order_by(RankedQuestion.position)
-        ).all()
-    )
+    rows = participants(db, match)
+    total = _match_total(db, match, rows)
     nxt = match.round_index + 1
-    if nxt >= len(questions):
+    if nxt >= total:
         return _finish_match(db, match)
     match.round_index = nxt
     db.flush()
-    question = db.get(Question, questions[nxt].question_id)
     deadline = utcnow() + timedelta(seconds=match.per_question_seconds)
-    OPEN[match.id] = {"question_id": question.id, "index": nxt, "deadline": deadline}
-    return [
+    OPEN[match.id] = {"index": nxt, "deadline": deadline}
+    # Pacing is room-wide; question content is per player — a rival's set
+    # never crosses the wire.
+    events = [
         to_room(
             f"ranked:{match.id}",
-            "ranked_question",
+            "ranked_round",
             {
                 "index": nxt,
-                "total": len(questions),
+                "total": total,
                 "seconds": match.per_question_seconds,
                 "deadline": _iso(deadline),
                 "server_now": _iso(utcnow()),
-                "question": question_public(question, reveal=False),
             },
         )
     ]
+    for participant in rows:
+        question = _question_at(db, match, participant, nxt)
+        if question is None:
+            continue
+        events.append(
+            to_student(
+                participant.student_id,
+                "ranked_question",
+                {
+                    "index": nxt,
+                    "total": total,
+                    "seconds": match.per_question_seconds,
+                    "deadline": _iso(deadline),
+                    "server_now": _iso(utcnow()),
+                    "question": question_public(question, reveal=False),
+                },
+            )
+        )
+    return events
 
 
 def _close_question(db: Session, match: RankedMatch) -> list[Event]:
-    """Grade the open question, reveal the answer, publish standings."""
+    """Close the open round: each player sees THEIR OWN answer key, and the
+    standings (score meta only) go out with it."""
     info = OPEN.get(match.id)
     if info is None or "reveal_until" in info:
         return []
     info["reveal_until"] = utcnow() + timedelta(seconds=REVEAL_SECONDS)
-    reveal = _reveal_payload(db, match, info)
-    return [to_room(f"ranked:{match.id}", "ranked_reveal", reveal)] + _activity_events(db, match)
+    rows = participants(db, match)
+    events = [to_student(p.student_id, "ranked_reveal", _reveal_for(db, match, p, info)) for p in rows]
+    return events + _activity_events(db, match)
 
 
-def _reveal_payload(db: Session, match: RankedMatch, info: dict) -> dict:
-    question = db.get(Question, info["question_id"])
-    answers = list(
-        db.scalars(
-            select(RankedAnswer).where(
-                RankedAnswer.match_id == match.id, RankedAnswer.question_id == question.id
+def _round_answered(db: Session, match: RankedMatch, rows: list[RankedParticipant], index: int) -> int:
+    answered = 0
+    for participant in rows:
+        question = _question_at(db, match, participant, index)
+        if question is None:
+            continue
+        if db.scalar(
+            select(RankedAnswer.id).where(
+                RankedAnswer.match_id == match.id,
+                RankedAnswer.question_id == question.id,
+                RankedAnswer.student_id == participant.student_id,
             )
-        ).all()
+        ):
+            answered += 1
+    return answered
+
+
+def _reveal_for(db: Session, match: RankedMatch, participant: RankedParticipant, info: dict) -> dict:
+    """One player's reveal: their question's key, their grade, shared standings."""
+    rows = participants(db, match)
+    question = _question_at(db, match, participant, info["index"])
+    mine = (
+        db.scalar(
+            select(RankedAnswer).where(
+                RankedAnswer.match_id == match.id,
+                RankedAnswer.question_id == question.id,
+                RankedAnswer.student_id == participant.student_id,
+            )
+        )
+        if question is not None
+        else None
     )
-    correct_ids = sorted({row.student_id for row in answers if row.correct})
     return {
         "index": info["index"],
-        "question_id": question.id,
-        "correct": question.correct,
-        "explanation": question.explanation or "",
-        "correct_ids": correct_ids,
-        "answered": len(answers),
+        "question_id": question.id if question is not None else None,
+        "correct": question.correct if question is not None else "",
+        "explanation": (question.explanation or "") if question is not None else "",
+        "correct_ids": [participant.student_id] if mine is not None and mine.correct else [],
+        "answered": _round_answered(db, match, rows, info["index"]),
         "standings": standings_payload(db, match),
         "server_now": _iso(utcnow()),
     }
@@ -540,7 +644,11 @@ def submit_answer(
     )
     if participant is None:
         raise RankedError("You are not in this match.")
-    question = db.get(Question, info["question_id"])
+    # Server-authoritative: the only gradeable question is this player's own
+    # deal for the open round — nobody can answer (or probe) a rival's set.
+    question = _question_at(db, match, participant, info["index"])
+    if question is None:
+        raise RankedError("No question is open right now.")
     existing = db.scalar(
         select(RankedAnswer).where(
             RankedAnswer.match_id == match.id,
@@ -581,15 +689,9 @@ def submit_answer(
         )
     )
     db.flush()
-    answered = (
-        db.scalar(
-            select(func.count(RankedAnswer.id)).where(
-                RankedAnswer.match_id == match.id, RankedAnswer.question_id == question.id
-            )
-        )
-        or 0
-    )
-    return {"correct": correct, "points": points}, answered >= len(participants(db, match))
+    rows = participants(db, match)
+    answered = _round_answered(db, match, rows, info["index"])
+    return {"correct": correct, "points": points}, answered >= len(rows)
 
 
 def skip_question(db: Session, match: RankedMatch, student: Student) -> tuple[dict, bool]:
@@ -609,7 +711,11 @@ def skip_question(db: Session, match: RankedMatch, student: Student) -> tuple[di
     )
     if participant is None:
         raise RankedError("You are not in this match.")
-    question = db.get(Question, info["question_id"])
+    # Server-authoritative: the skip applies to THIS player's own deal for the
+    # open round — a rival's question is never even referenced.
+    question = _question_at(db, match, participant, info["index"])
+    if question is None:
+        raise RankedError("No question is open right now.")
     existing = db.scalar(
         select(RankedAnswer).where(
             RankedAnswer.match_id == match.id,
@@ -633,23 +739,28 @@ def skip_question(db: Session, match: RankedMatch, student: Student) -> tuple[di
         )
     )
     db.flush()
-    answered = (
-        db.scalar(
-            select(func.count(RankedAnswer.id)).where(
-                RankedAnswer.match_id == match.id, RankedAnswer.question_id == question.id
-            )
-        )
-        or 0
-    )
-    return {"skipped": True, "points": 0}, answered >= len(participants(db, match))
+    rows = participants(db, match)
+    answered = _round_answered(db, match, rows, info["index"])
+    return {"skipped": True, "points": 0}, answered >= len(rows)
 
 
-def close_if_all_answered(db: Session, match: RankedMatch) -> dict | None:
-    """When the last participant locks an answer the question closes early."""
+def close_if_all_answered(db: Session, match: RankedMatch, student: Student) -> tuple[list[Event], dict | None]:
+    """When the last participant locks an answer the round closes early.
+
+    Returns the per-player reveal events to dispatch plus the CALLER's own
+    reveal payload for the REST response.
+    """
     events = _close_question(db, match)
     if not events:
-        return None
-    return _reveal_payload(db, match, OPEN[match.id])
+        return [], None
+    participant = db.scalar(
+        select(RankedParticipant).where(
+            RankedParticipant.match_id == match.id, RankedParticipant.student_id == student.id
+        )
+    )
+    if participant is None:
+        return events, None
+    return events, _reveal_for(db, match, participant, OPEN[match.id])
 
 
 # --------------------------------------------------------------------- states
@@ -666,9 +777,8 @@ def participant_payload(
     )
     tier = tier_for(rating)
     connected = connected_ids is None or participant.student_id in connected_ids
-    total = (
-        db.scalar(select(func.count(RankedQuestion.id)).where(RankedQuestion.match_id == match.id)) or 0
-    )
+    # Everyone plays the same number of rounds — their own questions, though.
+    total = len(participant.question_ids or []) or match.question_count
     return {
         "student_id": student.id,
         "name": student.name,
@@ -718,30 +828,36 @@ def positions_map(match: RankedMatch, parts: list[RankedParticipant]) -> dict[in
 def match_state(
     db: Session, match: RankedMatch, viewer_id: int | None, connected_ids: set[int] | None = None
 ) -> dict:
-    total = db.scalar(select(func.count(RankedQuestion.id)).where(RankedQuestion.match_id == match.id)) or 0
+    rows = participants(db, match)
+    total = _match_total(db, match, rows)
     info = OPEN.get(match.id)
     question = None
     reveal = None
     me: dict | None = None
-    if match.status == "live" and info is not None:
+    viewer = next((p for p in rows if viewer_id is not None and p.student_id == viewer_id), None)
+    if match.status == "live" and info is not None and viewer is not None:
+        # Per-viewer only: the open round shows MY question, MY key at reveal.
+        mine_question = _question_at(db, match, viewer, info["index"])
         if "reveal_until" in info:
-            reveal = _reveal_payload(db, match, info)
-        else:
-            question_row = db.get(Question, info["question_id"])
-            question = question_public(question_row, reveal=False)
-        if viewer_id is not None:
-            mine = db.scalar(
+            reveal = _reveal_for(db, match, viewer, info)
+        elif mine_question is not None:
+            question = question_public(mine_question, reveal=False)
+        mine = (
+            db.scalar(
                 select(RankedAnswer).where(
                     RankedAnswer.match_id == match.id,
-                    RankedAnswer.question_id == info["question_id"],
+                    RankedAnswer.question_id == mine_question.id,
                     RankedAnswer.student_id == viewer_id,
                 )
             )
-            me = (
-                {"answered": True, "selected": mine.selected, "correct": mine.correct, "points": mine.points}
-                if mine is not None
-                else {"answered": False, "selected": None, "correct": None, "points": None}
-            )
+            if mine_question is not None
+            else None
+        )
+        me = (
+            {"answered": True, "selected": mine.selected, "correct": mine.correct, "points": mine.points}
+            if mine is not None
+            else {"answered": False, "selected": None, "correct": None, "points": None}
+        )
     parts = participants(db, match)
     pos_map = positions_map(match, parts)
     roster = []
@@ -840,13 +956,38 @@ def leaderboard_payload(db: Session, student: Student, top: int = 20) -> dict:
 
 
 def review_payload(db: Session, match: RankedMatch, viewer_id: int) -> dict:
-    """Post-match answer review: every question with the viewer's pick."""
-    questions = list(
-        db.scalars(
-            select(RankedQuestion).where(RankedQuestion.match_id == match.id).order_by(RankedQuestion.position)
-        ).all()
+    """Post-match answer review: MY OWN questions with MY picks — a rival's
+    set never leaves the server."""
+    participant = db.scalar(
+        select(RankedParticipant).where(
+            RankedParticipant.match_id == match.id, RankedParticipant.student_id == viewer_id
+        )
     )
+    mine_ids = list(participant.question_ids or []) if participant is not None else []
     items = []
+    if mine_ids:
+        for index, question_id in enumerate(mine_ids):
+            question = db.get(Question, int(question_id))
+            if question is None:
+                continue
+            mine = db.scalar(
+                select(RankedAnswer).where(
+                    RankedAnswer.match_id == match.id,
+                    RankedAnswer.question_id == question.id,
+                    RankedAnswer.student_id == viewer_id,
+                )
+            )
+            items.append(
+                {
+                    "index": index,
+                    "question": question_public(question, reveal=True),
+                    "selected": mine.selected if mine else None,
+                    "correct": mine.correct if mine else False,
+                    "points": mine.points if mine else 0,
+                }
+            )
+        return {"match_id": match.id, "items": items}
+    questions = _shared_rows(db, match)  # legacy match: one shared set
     for row in questions:
         question = db.get(Question, row.question_id)
         if question is None:

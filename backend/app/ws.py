@@ -31,6 +31,9 @@ class Client:
     admin_id: int | None = None
     name: str = ""
     rooms: set[str] = field(default_factory=lambda: {"live"})
+    # Presence state for group rooms: "online" while the tab is foregrounded,
+    # "away" when the client reports the page is hidden/idle.
+    status: str = "online"
     last_seen: float = field(default_factory=time.monotonic)
     closed: bool = False
 
@@ -45,6 +48,7 @@ class Hub:
     Rooms in use:
       * ``live``            – every authenticated connection (feed, leaderboard, invites)
       * ``duel:{duel_id}``  – the two players of a head-to-head match
+      * ``group:{group_id}``– study-group workspace (chat, quizzes, presence)
       * ``admin``           – staff console (live submission counters)
     """
 
@@ -114,6 +118,10 @@ class Hub:
     def student_ids_in_room(self, room: str) -> set[int]:
         """Which players currently hold a socket in a named room (presence)."""
         return {client.student_id for client in self._rooms.get(room, ()) if client.student_id is not None}
+
+    def room_clients(self, room: str) -> list[Client]:
+        """Every live client holding a socket in a named room."""
+        return list(self._rooms.get(room, ()))
 
     async def online_snapshot(self) -> dict[str, Any]:
         """Online count + ids, snapshotted under the lock in one quick pass.

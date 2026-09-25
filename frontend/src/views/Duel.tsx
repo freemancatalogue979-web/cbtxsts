@@ -479,6 +479,9 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
         setFinished(payload);
         setDuel(payload);
         setDeadlineAt(null);
+        /* The room feed carries the result only — my own questions and the
+           answer key arrive per-player via duel_result / the REST reload. */
+        void load();
         if (payload.winner_id === profile?.id) {
           celebrate({big: true});
           HAPTICS.win();
@@ -489,13 +492,12 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
         }
       }),
       on('duel_result', (data) => {
-        // Personal companion to duel_finished: carries THIS player's rewards.
-        // App.tsx defers the reveal to this screen while it is open, so the
-        // XP/coins breakdown merges in here.
+        // Server-private finale for me: my dealt set, my answer key and my
+        // XP/coins breakdown (App.tsx defers the rewards reveal to this
+        // screen) — never a rival's. applyDuel folds it all into state.
         const payload = data as Duel & {rewards?: RewardEvent[]};
         if (payload.id !== duelId) return;
-        setFinished((current) => (current ? {...current, ...payload} : payload));
-        setDuel((current) => (current && current.id === duelId ? {...current, ...payload} : current));
+        applyDuel(payload);
       }),
       on('duel_cancelled', (data) => {
         const payload = data as {id?: number; duel_id?: number};

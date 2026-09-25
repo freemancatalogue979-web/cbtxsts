@@ -68,6 +68,14 @@ interface SessionValue {
   register: (payload: {username: string; phone: string; password: string; displayName?: string}) => Promise<Profile>;
   signInAdmin: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  /** Instant Admin⇄Player switch using the stored slot for the other role. */
+  switchTo: (target: 'student' | 'admin') => Promise<'ok' | 'missing'>;
+  storedRole: (probe: 'student' | 'admin') => boolean;
+  /** Drop the shell (keeping both tokens) so the sign-in sheet can add the
+   *  missing role's session; the app re-renders by itself once it lands. */
+  beginSwitch: (target: 'student' | 'admin') => void;
+  cancelSwitch: () => void;
+  switchTarget: 'student' | 'admin' | null;
   refreshProfile: () => Promise<Profile | null>;
   setProfile: (profile: Profile) => void;
   loadBootstrap: () => Promise<void>;
@@ -96,6 +104,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
   const [ready, setReady] = useState(false);
   const [token, setToken] = useState<string | null>(() => tokenStore.get());
   const [role, setRole] = useState<'student' | 'admin' | null>(() => tokenStore.getRole());
+  const [switching, setSwitching] = useState<'student' | 'admin' | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   const [socketStatus, setSocketStatus] = useState<WsStatus>('closed');
@@ -620,6 +629,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
     async (sessionPromise: Promise<Session>) => {
       const session = await sessionPromise;
       tokenStore.set(session.token, 'student');
+      setSwitching(null);
       setToken(session.token);
       setRole('student');
       setProfile(session.profile);
@@ -656,6 +666,68 @@ export function SessionProvider({children}: {children: ReactNode}) {
     setToken(session.token);
     setRole('admin');
     setProfile(null);
+    setSwitching(null);
+  }, []);
+
+  /* --------------------------------------------- Admin ⇄ Player switching
+     Both tokens live side by side in localStorage slots, so switching is a
+     pointer flip: the other role's shell mounts with its data already loaded
+     and its websocket already reconnecting. No re-login, no page refresh,
+     no duplicate sessions — and a failed slot (revoked token) costs nothing
+     but that one slot, restoring whatever session was active before. */
+  const storedRole = useCallback((probe: 'student' | 'admin') => Boolean(tokenStore.getSlot(probe)), []);
+
+  const switchTo = useCallback(
+    async (target: 'student' | 'admin'): Promise<'ok' | 'missing'> => {
+      const stored = tokenStore.getSlot(target);
+      if (!stored) return 'missing';
+      const prevToken = tokenStore.get();
+      const prevRole = tokenStore.getRole();
+      tokenStore.set(stored, target);
+      setToken(stored);
+      setRole(target);
+      setSwitching(null);
+      try {
+        if (target === 'student') {
+          const me = await api.me();
+          setProfile(me);
+        } else {
+          // Prove the staff slot still works before trusting the console shell.
+          await api.admin.notifications({limit: 1});
+          setProfile(null);
+        }
+        await loadBootstrap();
+        sfx.play('whoosh');
+        return 'ok';
+      } catch {
+        tokenStore.clearSlot(target);
+        if (prevToken && prevRole) {
+          tokenStore.set(prevToken, prevRole);
+          setToken(prevToken);
+          setRole(prevRole);
+        } else {
+          tokenStore.clear();
+          setToken(null);
+          setRole(null);
+        }
+        setSwitching(null);
+        return 'missing';
+      }
+    },
+    [loadBootstrap],
+  );
+
+  const beginSwitch = useCallback((target: 'student' | 'admin') => {
+    setSwitching(target);
+    setRole(null); // shell falls back to Welcome without touching stored tokens
+  }, []);
+
+  const cancelSwitch = useCallback(() => {
+    setSwitching(null);
+    const stored = tokenStore.get();
+    const roleNow = tokenStore.getRole();
+    setToken(stored);
+    setRole(roleNow);
   }, []);
 
   const signOut = useCallback(() => {
@@ -664,7 +736,12 @@ export function SessionProvider({children}: {children: ReactNode}) {
       cacheClearScope(userScope(current?.id));
       return null;
     });
+    // Signing out logs out *this* role; the other role's stored session (if
+    // any) stays signed in so the switcher still works on next entry.
+    const activeRole = tokenStore.getRole();
+    if (activeRole) tokenStore.clearSlot(activeRole);
     tokenStore.clear();
+    setSwitching(null);
     socketRef.current?.close();
     socketRef.current = null;
     duelSocketsRef.current.forEach((socket) => socket.close());
@@ -685,6 +762,11 @@ export function SessionProvider({children}: {children: ReactNode}) {
       config,
       socketStatus,
       online,
+      switchTo,
+      storedRole,
+      beginSwitch,
+      cancelSwitch,
+      switchTarget: switching,
       onlineIds,
       leaderboard,
       notices,
@@ -714,6 +796,11 @@ export function SessionProvider({children}: {children: ReactNode}) {
       refreshInbox,
     }),
     [
+      switchTo,
+      storedRole,
+      beginSwitch,
+      cancelSwitch,
+      switching,
       ready,
       token,
       role,

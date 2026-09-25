@@ -24,6 +24,8 @@ from ..models import (
     Config,
     Course,
     Duel,
+    GroupMessage,
+    Material,
     Notification,
     Prize,
     PrizeClaim,
@@ -32,6 +34,8 @@ from ..models import (
     Quiz,
     Student,
     StudentBadge,
+    StudyGroup,
+    StudyGroupMember,
     utcnow,
 )
 from ..schemas import (
@@ -168,8 +172,32 @@ async def update_config(payload: ConfigIn, db: Session = Depends(get_db)) -> dic
 # ---------------------------------------------------------------------------
 @router.get("/courses")
 def list_courses(db: Session = Depends(get_db)) -> list[dict]:
-    counts = dict(db.execute(select(Quiz.course_id, func.count(Quiz.id)).group_by(Quiz.course_id)).all())
-    return [course_public(c, quiz_count=int(counts.get(c.id, 0))) for c in db.scalars(select(Course).order_by(Course.code)).all()]
+    counts = dict(
+        db.execute(select(Quiz.course_id, func.count(Quiz.id)).where(Quiz.is_bank.is_(False)).group_by(Quiz.course_id)).all()
+    )
+    question_counts = dict(
+        db.execute(select(Question.course_id, func.count(Question.id)).group_by(Question.course_id)).all()
+    )
+    topic_counts = dict(
+        db.execute(
+            select(Question.course_id, func.count(func.distinct(Question.topic)))
+            .where(Question.topic.is_not(None), Question.topic != "")
+            .group_by(Question.course_id)
+        ).all()
+    )
+    material_counts = dict(
+        db.execute(select(Material.course_id, func.count(Material.id)).group_by(Material.course_id)).all()
+    )
+    return [
+        course_public(
+            c,
+            quiz_count=int(counts.get(c.id, 0)),
+            question_count=int(question_counts.get(c.id, 0)),
+            topic_count=int(topic_counts.get(c.id, 0)),
+            material_count=int(material_counts.get(c.id, 0)),
+        )
+        for c in db.scalars(select(Course).order_by(Course.code)).all()
+    ]
 
 
 @router.post("/courses")
@@ -209,9 +237,27 @@ def delete_course(course_id: int, db: Session = Depends(get_db)) -> dict:
 # ---------------------------------------------------------------------------
 # quizzes
 # ---------------------------------------------------------------------------
+@router.post("/courses/{course_id}/bank-quiz")
+def open_course_bank(
+    course_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    """Open (creating on first use) a course's question bank and hand the admin
+    its holding quiz — the Questions tab works on it like any other."""
+    from ..services.questions import ensure_course_bank_quiz
+
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
+    quiz = ensure_course_bank_quiz(db, course, admin.email)
+    db.commit()
+    return quiz_public(quiz, submission_count=0)
+
+
 @router.get("/quizzes")
 def list_quizzes(db: Session = Depends(get_db)) -> list[dict]:
-    quizzes = db.scalars(select(Quiz).order_by(Quiz.id.desc())).all()
+    quizzes = db.scalars(select(Quiz).where(Quiz.is_bank.is_(False)).order_by(Quiz.id.desc())).all()
     payload = []
     for quiz in quizzes:
         submissions = db.scalar(
@@ -222,10 +268,35 @@ def list_quizzes(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.post("/quizzes")
-def create_quiz(payload: QuizIn, db: Session = Depends(get_db)) -> dict:
-    quiz = Quiz(**payload.model_dump())
+def create_quiz(payload: QuizIn, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """Create an exam. When `question_count` > 0 the server draws exactly that
+    many eligible questions from the selected course (optionally filtered by
+    topics) and stores them — the paper is frozen from the first save, so a
+    refresh never re-rolls it. Creating with more questions than the bank holds
+    fails cleanly instead of padding or duplicating."""
+    data = payload.model_dump()
+    count = int(data.pop("question_count", 0) or 0)
+    topics = [str(t) for t in (data.pop("topics", []) or []) if str(t).strip()]
+    if count and not data.get("course_id"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a course first — question draws come from the course bank.")
+    quiz = Quiz(**data, created_by=admin.email) if hasattr(Quiz, "created_by") else Quiz(**data)
     db.add(quiz)
+    db.flush()
+    if count:
+        quiz.draw_topics = topics
+        result = _draw_from_bank(db, quiz, count, topics, admin.email)
+        if result["drawn"] < count:
+            db.rollback()
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Not enough eligible questions to create a {count}-question exam — the selected "
+                f"{'topics' if topics else 'course'} hold {result['available']} unique approved questions. "
+                "Lower the question count or add questions to the bank.",
+            )
+        audit(db, actor=admin.email, action="quiz.create_draw", target_type="quiz", target_id=quiz.id,
+              detail={"drawn": result["drawn"], "count": count, "topics": topics})
     db.commit()
+    db.refresh(quiz)
     return quiz_public(quiz, questions=True, reveal=True)
 
 
@@ -453,6 +524,95 @@ def course_bank(course_id: int, db: Session = Depends(get_db)) -> dict:
     return {"course_id": course_id, "code": course.code, "bank": bank, "drawn_copies": copies}
 
 
+def _draw_from_bank(db: Session, quiz: Quiz, count: int, topics: list[str] | None, actor: str) -> dict:
+    """Randomly pull `count` approved bank questions into `quiz`, no repeats.
+
+    Drawn questions are copies tagged with source_id, so the bank itself never
+    shrinks, a question can never land in the same quiz twice, and every exam/
+    duel/study path keeps working untouched. The copy carries the *same* stored
+    answer — importing or drawing can never change the key. Raises nothing;
+    the caller compares `drawn` with `requested` and decides.
+    """
+    wanted_topics = [str(t).strip().lower() for t in (topics or []) if str(t).strip()]
+    owned = set(db.scalars(select(Question.id).where(Question.quiz_id == quiz.id)).all())
+    already_copied = set(
+        db.scalars(select(Question.source_id).where(Question.quiz_id == quiz.id, Question.source_id.is_not(None))).all()
+    )
+    stmt = select(Question).where(
+        Question.course_id == quiz.course_id,
+        Question.source_id.is_(None),
+        Question.status.in_(["approved"]),
+        Question.visible.is_(True),
+        Question.id.not_in(owned | already_copied),
+    )
+    if wanted_topics:
+        stmt = stmt.where(func.lower(Question.topic).in_(wanted_topics))
+    pool = list(db.scalars(stmt).all())
+    # Never draw the same question text twice into one quiz — two bank originals
+    # can legitimately share wording, and duplicate rows confuse players.
+    seen_texts = {(text or "").strip().lower() for text in db.scalars(select(Question.text).where(Question.quiz_id == quiz.id)).all()}
+    eligible = sum(1 for row in pool if (row.text or "").strip().lower() not in seen_texts)
+    picks: list[Question] = []
+    for candidate in random.sample(pool, len(pool)):
+        key = (candidate.text or "").strip().lower()
+        if key in seen_texts:
+            continue
+        seen_texts.add(key)
+        picks.append(candidate)
+        if len(picks) >= count:
+            break
+    position = _next_position(db, quiz.id)
+    for original in picks:
+        db.add(
+            Question(
+                quiz_id=quiz.id,
+                course_id=quiz.course_id,
+                position=position,
+                text=original.text,
+                option_a=original.option_a,
+                option_b=original.option_b,
+                option_c=original.option_c,
+                option_d=original.option_d,
+                correct=original.correct,
+                explanation=original.explanation,
+                difficulty=original.difficulty,
+                points=original.points,
+                question_type=original.question_type,
+                topic=original.topic,
+                subtopic=original.subtopic,
+                objective=original.objective,
+                tags=list(original.tags or []),
+                source=original.source,
+                reference=original.reference,
+                author=original.author,
+                hint=original.hint,
+                media=dict(original.media or {}),
+                content=dict(original.content or {}),
+                status="approved",
+                flashcard_enabled=original.flashcard_enabled,
+                duel_enabled=original.duel_enabled,
+                practice_enabled=original.practice_enabled,
+                time_limit_seconds=original.time_limit_seconds,
+                source_id=original.id,
+                created_by=actor,
+                updated_by=actor,
+            )
+        )
+        position += 1
+    db.flush()
+    total = db.scalar(select(func.count(Question.id)).where(Question.quiz_id == quiz.id)) or 0
+    return {
+        "drawn": len(picks),
+        "requested": count,
+        "available": eligible,
+        "total": total,
+        "bank": db.scalar(
+            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None))
+        )
+        or 0,
+    }
+
+
 @router.post("/quizzes/{quiz_id}/draw")
 def draw_from_bank(
     quiz_id: int,
@@ -460,13 +620,7 @@ def draw_from_bank(
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
-    """Randomly pull `count` questions from the quiz's course bank into the quiz.
-
-    Drawn questions are copies tagged with source_id, so the bank itself never
-    shrinks, a question can never land in the same quiz twice, and every existing
-    exam/duel/study path keeps working untouched. The copy carries the *same*
-    stored answer — importing or drawing can never change the key.
-    """
+    """Randomly pull `count` questions from the quiz's course bank into the quiz."""
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
@@ -475,88 +629,17 @@ def draw_from_bank(
             status.HTTP_400_BAD_REQUEST,
             "Give the quiz a course first — draws pull from that course's question bank only.",
         )
-    owned = set(db.scalars(select(Question.id).where(Question.quiz_id == quiz_id)).all())
-    already_copied = set(
-        db.scalars(select(Question.source_id).where(Question.quiz_id == quiz_id, Question.source_id.is_not(None))).all()
-    )
-    pool = list(
-        db.scalars(
-            select(Question).where(
-                Question.course_id == quiz.course_id,
-                Question.source_id.is_(None),
-                Question.status.in_(["approved"]),
-                Question.visible.is_(True),
-                Question.id.not_in(owned | already_copied),
-            )
-        ).all()
-    )
-    # Never draw the same question text twice into one exam — two bank originals
-    # can legitimately share wording, and duplicate rows confuse players.
-    existing_texts = {
-        (text or "").strip().lower()
-        for text in db.scalars(select(Question.text).where(Question.quiz_id == quiz_id)).all()
-    }
-    seen_texts = set(existing_texts)
-    picks: list[Question] = []
-    for candidate in random.sample(pool, len(pool)):
-        key = (candidate.text or "").strip().lower()
-        if key in seen_texts:
-            continue
-        seen_texts.add(key)
-        picks.append(candidate)
-        if len(picks) >= payload.count:
-            break
-    position = _next_position(db, quiz_id)
-    for original in picks:
-        clone = Question(
-            quiz_id=quiz_id,
-            course_id=quiz.course_id,
-            position=position,
-            text=original.text,
-            option_a=original.option_a,
-            option_b=original.option_b,
-            option_c=original.option_c,
-            option_d=original.option_d,
-            correct=original.correct,
-            explanation=original.explanation,
-            difficulty=original.difficulty,
-            points=original.points,
-            question_type=original.question_type,
-            topic=original.topic,
-            subtopic=original.subtopic,
-            objective=original.objective,
-            tags=list(original.tags or []),
-            source=original.source,
-            reference=original.reference,
-            author=original.author,
-            hint=original.hint,
-            media=dict(original.media or {}),
-            content=dict(original.content or {}),
-            status="approved",
-            flashcard_enabled=original.flashcard_enabled,
-            duel_enabled=original.duel_enabled,
-            practice_enabled=original.practice_enabled,
-            time_limit_seconds=original.time_limit_seconds,
-            source_id=original.id,
-            created_by=admin.email,
-            updated_by=admin.email,
+    result = _draw_from_bank(db, quiz, payload.count, payload.topics, admin.email)
+    if result["drawn"] < payload.count:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Not enough unique approved questions in the bank — {result['available']} eligible, {payload.count} requested.",
         )
-        db.add(clone)
-        position += 1
-    db.flush()
     audit(db, actor=admin.email, action="question.draw", target_type="quiz", target_id=quiz_id,
-          detail={"drawn": len(picks)})
+          detail={"drawn": result["drawn"], "topics": payload.topics or []})
     db.commit()
-    total = db.scalar(select(func.count(Question.id)).where(Question.quiz_id == quiz_id)) or 0
-    return {
-        "drawn": len(picks),
-        "requested": payload.count,
-        "available": sum(1 for row in pool if (row.text or "").strip().lower() not in seen_texts),
-        "total": total,
-        "bank": db.scalar(
-            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None))
-        ) or 0,
-    }
+    return result
 
 
 # ``:int`` keeps this route from swallowing sibling literal paths such as
@@ -853,20 +936,101 @@ def delete_student(student_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# study groups — a cross-group moderation list for staff
+# ---------------------------------------------------------------------------
+@router.get("/groups")
+def admin_list_groups(
+    db: Session = Depends(get_db),
+    q: str = Query(""),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Every study group in the arena, newest first, with owner + activity counts.
+
+    Server-paginated (``limit``/``offset``) and searchable by name or join code
+    so staff can moderate groups without an endless scroll.
+    """
+    stmt = select(StudyGroup)
+    needle = q.strip()
+    if needle:
+        like = f"%{needle}%"
+        stmt = stmt.where(StudyGroup.name.ilike(like) | StudyGroup.code.ilike(like))
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    groups = db.scalars(stmt.order_by(StudyGroup.id.desc()).limit(limit).offset(offset)).all()
+    group_ids = [group.id for group in groups] or [-1]
+    member_counts = dict(
+        db.execute(
+            select(StudyGroupMember.group_id, func.count(StudyGroupMember.id))
+            .where(StudyGroupMember.group_id.in_(group_ids))
+            .group_by(StudyGroupMember.group_id)
+        ).all()
+    )
+    message_counts = dict(
+        db.execute(
+            select(GroupMessage.group_id, func.count(GroupMessage.id))
+            .where(GroupMessage.group_id.in_(group_ids))
+            .group_by(GroupMessage.group_id)
+        ).all()
+    )
+    owners = {
+        row.id: row
+        for row in db.scalars(select(Student).where(Student.id.in_([g.owner_id for g in groups] or [-1]))).all()
+    }
+    courses = {
+        row.id: row
+        for row in db.scalars(
+            select(Course).where(Course.id.in_([g.course_id for g in groups if g.course_id] or [-1]))
+        ).all()
+    }
+    rows = []
+    for group in groups:
+        owner = owners.get(group.owner_id)
+        course = courses.get(group.course_id) if group.course_id else None
+        rows.append(
+            {
+                "id": group.id,
+                "name": group.name,
+                "code": group.code,
+                "goal": group.goal,
+                "description": group.description,
+                "owner": {"id": group.owner_id, "name": owner.name if owner else "Unknown"},
+                "course_title": course.title if course else None,
+                "member_count": int(member_counts.get(group.id, 0)),
+                "message_count": int(message_counts.get(group.id, 0)),
+                "created_at": iso(group.created_at),
+            }
+        )
+    return {"rows": rows, "total": int(total), "limit": limit, "offset": offset}
+
+
+# ---------------------------------------------------------------------------
 # results
 # ---------------------------------------------------------------------------
 @router.get("/results")
-def results(db: Session = Depends(get_db), quiz_id: int | None = Query(None), q: str = Query("")) -> dict:
+def results(
+    db: Session = Depends(get_db),
+    quiz_id: int | None = Query(None),
+    q: str = Query(""),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
     if quiz_id:
         rows = quiz_leaderboard(db, quiz_id)
         if q.strip():
             needle = q.strip().lower()
             rows = [r for r in rows if needle in r["student"]["name"].lower() or needle in r["student"]["phone"]]
-        return {"quiz_id": quiz_id, "rows": rows}
+        total = len(rows)
+        return {
+            "quiz_id": quiz_id,
+            "rows": rows[offset : offset + limit],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
-    attempts = db.scalars(
-        select(Attempt).where(Attempt.status == "submitted").order_by(Attempt.submitted_at.desc()).limit(200)
-    ).all()
+    base = select(Attempt).where(Attempt.status == "submitted")
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    attempts = db.scalars(base.order_by(Attempt.submitted_at.desc()).limit(limit).offset(offset)).all()
     return {
         "quiz_id": None,
         "rows": [
@@ -881,6 +1045,9 @@ def results(db: Session = Depends(get_db), quiz_id: int | None = Query(None), q:
             }
             for a in attempts
         ],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -932,9 +1099,16 @@ def clear_quiz_results(quiz_id: int, db: Session = Depends(get_db)) -> dict:
 # notifications, prizes, claims, badges
 # ---------------------------------------------------------------------------
 @router.get("/notifications")
-def admin_notifications(db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(select(Notification).order_by(Notification.created_at.desc()).limit(100)).all()
-    return [notification_public(n) for n in rows]
+def admin_notifications(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    total = db.scalar(select(func.count(Notification.id))) or 0
+    rows = db.scalars(
+        select(Notification).order_by(Notification.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {"rows": [notification_public(n) for n in rows], "total": int(total), "limit": limit, "offset": offset}
 
 
 @router.post("/notifications")
@@ -998,9 +1172,23 @@ def delete_prize(prize_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/claims")
-def list_claims(db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(select(PrizeClaim).order_by(PrizeClaim.created_at.desc()).limit(200)).all()
-    return [claim_public(row) for row in rows]
+def list_claims(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    total = db.scalar(select(func.count(PrizeClaim.id))) or 0
+    pending = db.scalar(select(func.count(PrizeClaim.id)).where(PrizeClaim.status == "pending")) or 0
+    rows = db.scalars(
+        select(PrizeClaim).order_by(PrizeClaim.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {
+        "rows": [claim_public(row) for row in rows],
+        "total": int(total),
+        "pending": int(pending),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.patch("/claims/{claim_id}")
@@ -1054,11 +1242,23 @@ def _event_or_404(db: Session, event_id: int) -> ArenaEvent:
 
 
 @router.get("/events")
-def admin_list_events(db: Session = Depends(get_db)) -> dict:
+def admin_list_events(
+    db: Session = Depends(get_db),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
     from ..services.events import event_public
 
-    rows = db.scalars(select(ArenaEvent).order_by(ArenaEvent.starts_at.desc()).limit(100)).all()
-    return {"events": [event_public(db, row, None) for row in rows]}
+    total = db.scalar(select(func.count(ArenaEvent.id))) or 0
+    rows = db.scalars(
+        select(ArenaEvent).order_by(ArenaEvent.starts_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return {
+        "events": [event_public(db, row, None) for row in rows],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/events")
@@ -1086,6 +1286,7 @@ def admin_create_event(payload: EventCreateInUtc, db: Session = Depends(get_db),
         allow_join_during=payload.allow_join_during,
         allow_leave=payload.allow_leave,
         leaderboard_visible=payload.leaderboard_visible,
+        featured=payload.featured,
         status="scheduled",
         created_by=admin.email,
     )

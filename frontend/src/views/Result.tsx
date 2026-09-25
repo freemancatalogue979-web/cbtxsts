@@ -96,7 +96,10 @@ export default function Result({
     );
   }
 
-  const passed = state.percentage >= 45;
+  /* The server owns the pass mark (exam setting); 45% stays as the legacy
+     fallback for results created before one was configured. */
+  const passBar = typeof state.pass_score === 'number' ? state.pass_score : 45;
+  const passed = typeof state.passed === 'boolean' ? state.passed : state.percentage >= passBar;
   const gradeClass = GRADE_STYLES[state.grade] ?? 'border-white/14 bg-white/6 text-mist-200';
 
   return (

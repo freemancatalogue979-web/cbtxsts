@@ -31,15 +31,21 @@ const emptyPrize = {
 function NoticesTab({onChanged}: {onChanged: () => void}) {
   const {toast} = useSession();
   const [notices, setNotices] = useState<Notice[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<typeof emptyNotice | null>(null);
   const [busy, setBusy] = useState(false);
+  const limit = 40;
 
   const load = useCallback(() => {
     api.admin
-      .notifications()
-      .then(setNotices)
+      .notifications({limit, offset})
+      .then((data) => {
+        setNotices(data.rows);
+        setTotal(data.total);
+      })
       .catch((error: Error) => toast('error', 'Could not load announcements', error.message));
-  }, [toast]);
+  }, [offset, toast]);
 
   useEffect(load, [load]);
 
@@ -118,6 +124,18 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
           ))}
         </ul>
       )}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          Previous
+        </Button>
+        <span className="text-[0.78rem] font-bold text-mist-500">
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+        </span>
+        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+          Next
+        </Button>
+      </div>
 
       <Modal
         open={Boolean(form)}

@@ -13,9 +13,11 @@ import MaterialsPanel from '../panels/MaterialsPanel';
 import GameArenaPanel from '../panels/GameArenaPanel';
 import RankedPanel from '../panels/RankedPanel';
 import EventsPanel from '../panels/EventsPanel';
+import MysteryPanel from '../panels/MysteryPanel';
+import SupportPanel from '../panels/SupportPanel';
 import WorldMapPanel from '../panels/WorldMapPanel';
 import type {Tab} from '../lib/nav';
-import type {Duel, Quiz} from '../lib/types';
+import type {Duel, GroupSection, Quiz} from '../lib/types';
 
 export default function Dashboard({
   tab,
@@ -25,6 +27,7 @@ export default function Dashboard({
   onOpenResult,
   onOpenDuels,
   onOpenMaterial,
+  onOpenGroup,
   onSignOut,
 }: {
   tab: Tab;
@@ -34,6 +37,7 @@ export default function Dashboard({
   onOpenResult: (attemptId: number) => void;
   onOpenDuels: () => void;
   onOpenMaterial: (materialId: number) => void;
+  onOpenGroup: (groupId: number, section?: GroupSection) => void;
   onSignOut: () => void;
 }) {
   return (
@@ -54,8 +58,10 @@ export default function Dashboard({
         {tab === 'arena' && <GameArenaPanel />}
         {tab === 'ranked' && <RankedPanel />}
         {tab === 'events' && <EventsPanel />}
+        {tab === 'mystery' && <MysteryPanel />}
+        {tab === 'support' && <SupportPanel />}
         {tab === 'duels' && <DuelsPanel onOpenDuel={onOpenDuel} onOpenRoom={onOpenRoom} />}
-        {tab === 'friends' && <FriendsPanel onOpenDuel={onOpenDuel} onStartExam={onStartExam} />}
+        {tab === 'friends' && <FriendsPanel onOpenDuel={onOpenDuel} onStartExam={onStartExam} onOpenGroup={onOpenGroup} />}
         {tab === 'ranks' && <RanksPanel />}
         {tab === 'shop' && <ShopPanel />}
         {tab === 'prizes' && <PrizesPanel />}

@@ -198,7 +198,11 @@ def main() -> int:
     live = wait_for(lambda: (call("GET", f"/events/{event_id}", token=p1)[1] or {}).get("event", {}).get("status") == "live", timeout=30)
     check("the server starts the event (never the client)", bool(live), "never went live")
     status, notices = call("GET", "/admin/notifications", token=admin)
-    rows = notices if isinstance(notices, list) else notices.get("notifications", []) if isinstance(notices, dict) else []
+    rows = (
+        notices
+        if isinstance(notices, list)
+        else (notices.get("rows") or notices.get("notifications", [])) if isinstance(notices, dict) else []
+    )
     check("a start notice is recorded", any(n.get("title", "").startswith(name[:10]) for n in rows), str([n.get("title") for n in rows][:4]))
 
     # ---------------------------------------------------------------- run

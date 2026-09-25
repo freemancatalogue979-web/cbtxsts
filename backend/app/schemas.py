@@ -128,8 +128,79 @@ class PhotoIn(BaseModel):
     image: str  # data URL: data:image/(jpeg|png|webp);base64,...
 
 
+class StudyAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=3_600_000)
+
+
+class StudyRunIn(BaseModel):
+    topic: str = Field(min_length=1, max_length=120)
+    kind: Literal["practice", "check"] = "practice"
+    count: int = Field(default=0, ge=0, le=25)  # 0 = sensible mode default
+
+
+class StudyPathActionIn(BaseModel):
+    action: Literal["understood", "section_done", "review_done", "reset_stage"]
+    section_id: int | None = None
+
+
+class MysteryAnswerIn(BaseModel):
+    selected: str = Field(min_length=1, max_length=8)
+
+
+class MysteryBeginIn(BaseModel):
+    reset: bool = False
+
+
+class SupportTicketIn(BaseModel):
+    category: Literal["bug", "question", "account", "quiz", "duel", "ranked", "study_group", "shop", "other"] = "other"
+    subject: str = Field(min_length=4, max_length=200)
+    message: str = Field(min_length=3, max_length=4000)
+    attachment_url: str = Field(default="", max_length=400)
+    attachment_name: str = Field(default="", max_length=160)
+
+
+class SupportMessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class SupportStaffMessageIn(SupportMessageIn):
+    internal: bool = False
+
+
+class SupportTicketUpdateIn(BaseModel):
+    status: Literal["open", "in_progress", "waiting_user", "resolved", "closed", "reopened"] | None = None
+    assignee: str | None = Field(default=None, max_length=120)
+    category: Literal["bug", "question", "account", "quiz", "duel", "ranked", "study_group", "shop", "other"] | None = None
+
+
+class RankedLobbyCreateIn(BaseModel):
+    team_size: int = Field(default=1, ge=1, le=5)
+    course_id: int | None = None
+
+
+class RankedLobbyCodeIn(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
+
+
+class RankedLobbyStudentIn(BaseModel):
+    student_id: int
+
+
+class RankedLobbyReadyIn(BaseModel):
+    ready: bool = True
+
+
+class TeamMatchAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=3_600_000)
+
+
 class BankDrawIn(BaseModel):
     count: int = Field(default=20, ge=1, le=200)
+    topics: list[str] = []  # optional topic filter — draw respects it end to end
 
 
 class QuestionIn(BaseModel):
@@ -438,6 +509,10 @@ class DuelSeriesIn(BaseModel):
 
 
 class QuizIn(BaseModel):
+    """Exam creation. `question_count` > 0 draws that many questions from the
+    course bank (optionally filtered by `topics`) at creation time — the draw
+    is stored, so players never see a re-roll on refresh."""
+
     title: str = Field(min_length=3, max_length=200)
     course_id: int | None = None
     instructions: str = ""
@@ -459,6 +534,16 @@ class QuizIn(BaseModel):
     review_before_submit: bool = True
     max_attempts: int = Field(default=1, ge=0, le=50)
     practice_mode: bool = False
+    question_count: int = Field(default=0, ge=0, le=200)  # 0 = build the paper by hand
+    topics: list[str] = []  # creation-time draw filter (empty = whole course bank)
+
+    @field_validator("question_count")
+    @classmethod
+    def _count_or_by_hand(cls, value: int) -> int:
+        if 0 < value < 3:
+            raise ValueError("A drawn paper needs at least 3 questions — use 0 to build the paper by hand.")
+        return value
+    pass_score: int = Field(default=50, ge=0, le=100)  # percent needed to pass
 
 
 class QuizBuilderIn(BaseModel):
@@ -818,6 +903,7 @@ class EventCreateIn(BaseModel):
     allow_join_during: bool = True
     allow_leave: bool = True
     leaderboard_visible: bool = True
+    featured: bool = False
 
 
 class EventUpdateIn(BaseModel):
@@ -840,6 +926,7 @@ class EventUpdateIn(BaseModel):
     allow_join_during: bool | None = None
     allow_leave: bool | None = None
     leaderboard_visible: bool | None = None
+    featured: bool | None = None
     status: Literal["scheduled", "live", "finished", "cancelled"] | None = None
 
 
@@ -856,11 +943,17 @@ def _naive_utc(value: datetime) -> datetime:
 
 
 class _NaiveUtc(BaseModel):
-    """Mixin: normalizes any inbound datetime to naive UTC."""
+    """Mixin: normalizes any inbound datetime to naive UTC.
 
-    @field_validator("*", mode="before")
+    Runs *after* parsing so it catches both native ``datetime`` objects and
+    ISO-8601 strings (``...Z`` / ``+00:00``) that pydantic decodes into
+    timezone-aware datetimes — the browser sends the latter, and an aware value
+    stored on a model would later blow up when compared against naive UTC.
+    """
+
+    @field_validator("*", mode="after")
     @classmethod
-    def _to_naive_utc(cls, value, info: ValidationInfo):  # noqa: ANN001
+    def _to_naive_utc(cls, value):  # noqa: ANN001
         if isinstance(value, datetime) and value.tzinfo is not None:
             return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
@@ -872,3 +965,98 @@ class EventCreateInUtc(_NaiveUtc, EventCreateIn):
 
 class EventUpdateInUtc(_NaiveUtc, EventUpdateIn):
     pass
+
+
+# ---------------------------------------------------------------------------
+# Study groups — the community workspace (chat, quizzes, Q&A, announcements)
+# ---------------------------------------------------------------------------
+class GroupSendIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    reply_to_id: int | None = None
+
+
+class GroupEditIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class GroupReactIn(BaseModel):
+    emoji: str = Field(min_length=1, max_length=8)
+
+
+class GroupAnnouncementIn(_NaiveUtc):
+    title: str = Field(min_length=2, max_length=180)
+    body: str = Field(default="", max_length=4000)
+    image: str = ""
+    priority: Literal["normal", "high"] = "normal"
+    pinned: bool = False
+    scheduled_at: datetime | None = None
+
+
+class GroupAnnouncementPatchIn(_NaiveUtc):
+    title: str | None = Field(default=None, min_length=2, max_length=180)
+    body: str | None = Field(default=None, max_length=4000)
+    image: str | None = None
+    priority: Literal["normal", "high"] | None = None
+    pinned: bool | None = None
+    scheduled_at: datetime | None = None
+
+
+class GroupQuizIn(_NaiveUtc):
+    title: str = Field(min_length=3, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    question_count: int = Field(default=10, ge=1, le=100)  # hard cap: 100 questions
+    per_question_seconds: int = Field(default=30, ge=5, le=300)
+    duration_minutes: int = Field(default=0, ge=0, le=240)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    max_attempts: int = Field(default=1, ge=0, le=10)  # 0 = unlimited
+    randomize: bool = True
+    visibility: Literal["group"] = "group"
+    reward_xp: int = Field(default=0, ge=0, le=5000)
+    reward_coins: int = Field(default=0, ge=0, le=5000)
+    pass_score: int = Field(default=50, ge=0, le=100)
+
+
+class GroupQuizAnswerIn(BaseModel):
+    question_id: int
+    selected: str = Field(min_length=1, max_length=8)
+    elapsed_ms: int = Field(default=0, ge=0, le=600_000)
+
+
+class GroupQuestionIn(BaseModel):
+    title: str = Field(min_length=5, max_length=220)
+    body: str = Field(default="", max_length=4000)
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    attachment: str = Field(default="", max_length=400_000)  # optional image data URL
+
+
+class GroupReplyIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    parent_id: int | None = None
+
+
+class GroupDuelIn(BaseModel):
+    opponent_id: int
+    course_id: int | None = None
+    topic: str = Field(default="", max_length=120)
+    question_count: int = Field(default=10, ge=3, le=100)  # hard cap: 100 questions
+    public: bool = True
+    message: str = Field(default="", max_length=240)
+
+
+class GroupInviteIn(BaseModel):
+    student_id: int
+
+
+class GroupRoleIn(BaseModel):
+    role: Literal["moderator", "member"]
+
+
+class GroupSettingsIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=140)
+    description: str | None = Field(default=None, max_length=300)
+    goal: str | None = Field(default=None, max_length=200)
+    course_id: int | None = None

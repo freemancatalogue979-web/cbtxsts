@@ -11,6 +11,7 @@ import asyncio
 import json
 import random
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -522,42 +523,95 @@ async def main() -> None:
     check("cannot duel yourself", status_code == 400, str(selfduel))
 
     status_code, accepted = call("POST", f"/api/duels/{duel_id}/accept", token=token_b)
-    check("accepting starts the duel", status_code == 200 and accepted["status"] == "live", str(accepted)[:160])
+    check("accepting starts the duel", status_code == 200 and accepted["status"] in ("starting", "live"), str(accepted)[:160])
     check("live duel ships its questions", len(accepted.get("questions", [])) == 5, str(len(accepted.get("questions", []))))
     check("duel answer key hidden", all("correct" not in q for q in accepted.get("questions", [])), "")
+
+    # Multiplayer rule: each player gets their OWN server-dealt set.
+    status_code, mine_a = call("GET", f"/api/duels/{duel_id}", token=token_a)
+    check("challenger sees their own set", status_code == 200 and len(mine_a.get("questions", [])) == 5, str(status_code))
+    ids_a = {q["id"] for q in mine_a.get("questions", [])}
+    ids_b = {q["id"] for q in accepted.get("questions", [])}
+    check("the two sets do not overlap", not (ids_a & ids_b), str(sorted(ids_a & ids_b)))
+    check("each set has no duplicates", len(ids_a) == 5 and len(ids_b) == 5, "")
 
     room = await ws_collect(f"ws://127.0.0.1:3000/ws/duel/{duel_id}?token={token_a}", seconds=2, expect=3)
     check("duel websocket streams state", any(m.get("event") == "duel_state" for m in room), str(room)[:160])
 
-    for index, question in enumerate(accepted["questions"]):
+    status_code, cross = call(
+        "POST", f"/api/duels/{duel_id}/answer", token=token_a,
+        body={"question_id": accepted["questions"][0]["id"], "selected": "A", "elapsed_ms": 100},
+    )
+    check("a rival's question is not answerable", status_code == 400, str(cross))
+
+    # Server-paced rounds: the countdown flips the duel live, then each round
+    # only accepts its own question while it is on the clock. Once BOTH
+    # fighters answer, the 1-second ticker opens the next round.
+    order_a = [q["id"] for q in mine_a["questions"]]
+    order_b = [q["id"] for q in accepted["questions"]]
+
+    def await_round(index: int) -> dict:
+        budget = time.monotonic() + 30
+        state: dict = {}
+        while time.monotonic() < budget:
+            sc, payload = call("GET", f"/api/duels/{duel_id}", token=token_a)
+            state = payload if sc == 200 else {}
+            cursor = state.get("round_index")
+            if state.get("status") == "finished":
+                return state
+            # NB: `cursor or -1` would swallow round 0 (falsy zero) — compare explicitly.
+            if state.get("status") == "live" and cursor is not None and cursor >= index:
+                return state
+            time.sleep(0.4)
+        return state
+
+    live_state = await_round(0)
+    check("countdown flips the duel to live", live_state.get("status") in ("live", "finished"), str(live_state.get("status")))
+
+    for index in range(5):
+        st_now = await_round(index)
         option = ["A", "B", "C", "D"][index % 4]
-        status_code, _ = call(
+        status_code, reply = call(
             "POST",
             f"/api/duels/{duel_id}/answer",
             token=token_a,
-            body={"question_id": question["id"], "selected": option, "elapsed_ms": 1200 + index * 500},
+            body={"question_id": order_a[index], "selected": option, "elapsed_ms": 1200 + index * 500},
         )
-        check(f"player A answers duel question #{index + 1}", status_code == 200, str(status_code))
+        check(f"player A answers duel question #{index + 1}", status_code == 200, f"{status_code} ri={st_now.get('round_index')} status={st_now.get('status')} {str(reply)[:110]}")
+        status_code, reply = call(
+            "POST",
+            f"/api/duels/{duel_id}/answer",
+            token=token_b,
+            body={"question_id": order_b[index], "selected": "A", "elapsed_ms": 1500},
+        )
+        check(f"player B answers duel question #{index + 1}", status_code == 200, f"{status_code} {str(reply)[:140]}")
 
     status_code, dupe = call(
         "POST", f"/api/duels/{duel_id}/answer", token=token_a,
-        body={"question_id": accepted["questions"][0]["id"], "selected": "A", "elapsed_ms": 100},
+        body={"question_id": order_a[0], "selected": "A", "elapsed_ms": 100},
     )
     check("duplicate duel answer blocked", status_code == 400, str(dupe))
 
     status_code, trespass = call(
         "POST", f"/api/duels/{duel_id}/answer", token=known_token,
-        body={"question_id": accepted["questions"][0]["id"], "selected": "A"},
+        body={"question_id": order_a[0], "selected": "A"},
     )
     check("non-participant cannot answer", status_code == 403, str(trespass))
 
-    for question in accepted["questions"]:
-        call("POST", f"/api/duels/{duel_id}/answer", token=token_b,
-             body={"question_id": question["id"], "selected": "A", "elapsed_ms": 3000})
-
-    status_code, final = call("GET", f"/api/duels/{duel_id}", token=token_a)
-    check("duel finishes when both sides complete", status_code == 200 and final["status"] == "finished", str(final)[:160])
+    budget = time.monotonic() + 20
+    final: dict = {}
+    while time.monotonic() < budget:
+        status_code, final = call("GET", f"/api/duels/{duel_id}", token=token_a)
+        if isinstance(final, dict) and final.get("status") == "finished":
+            break
+        time.sleep(0.5)
+    check("duel finishes when both sides complete", status_code == 200 and final.get("status") == "finished", str(final)[:160])
     check("finished duel reveals answers", any("correct" in q for q in final.get("questions", [])), "")
+    check(
+        "the reveal stays inside my own set",
+        {q["id"] for q in final.get("questions", [])} == ids_a,
+        str(sorted({q["id"] for q in final.get("questions", [])} ^ ids_a)),
+    )
     check("duel winner recorded", "winner_id" in final, str(final.get("winner_id")))
 
     status_code, quick = call("POST", "/api/duels/quick", token=token_a, body={"question_count": 3, "stake_coins": 0})
@@ -567,7 +621,7 @@ async def main() -> None:
     check("open duel publishes a join code", status_code == 200 and bool(opened.get("code")), str(opened)[:160])
     if status_code == 200:
         status_code, joined = call("POST", f"/api/duels/join/{opened['code']}", token=token_b)
-        check("second player joins by code", status_code == 200 and joined["status"] == "live", str(joined)[:160])
+        check("second player joins by code", status_code == 200 and joined["status"] in ("starting", "live"), str(joined)[:160])
 
     status_code, my_duels = call("GET", "/api/duels", token=token_a)
     check("duel history", status_code == 200 and len(my_duels.get("history", [])) >= 1, str(status_code))
@@ -613,7 +667,11 @@ async def main() -> None:
     check("admin exports results CSV", status_code == 200, str(status_code))
 
     status_code, claims = call("GET", "/api/admin/claims", token=admin_token)
-    check("admin sees prize claims", status_code == 200 and isinstance(claims, list), str(status_code))
+    check(
+        "admin sees prize claims",
+        status_code == 200 and isinstance(claims.get("rows"), list),
+        str(status_code),
+    )
 
     status_code, _ = call("DELETE", f"/api/admin/quizzes/{new_quiz_id}", token=admin_token)
     check("admin deletes a quiz", status_code == 200, str(status_code))

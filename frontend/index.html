@@ -33,13 +33,13 @@
         var FONTS = {
           montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
           arena: ["'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Orbitron', 'Exo 2', sans-serif"],
-          grotesk: ["'Space Grotesk Variable', ui-sans-serif, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
+          grotesk: ["'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
           orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
         };
         // Space Grotesk is the default; an explicit choice always wins.
-        // prefs.ts persists under 'arena.font.v2'; the old 'arena.font' key is
-        // honoured as a fallback so an earlier choice still applies pre-paint.
-        var font = localStorage.getItem('arena.font.v2') || localStorage.getItem('arena.font') || 'grotesk';
+        // prefs.ts persists under 'arena.font.v3'; the legacy v2/v1 keys are
+        // honoured as fallbacks so an earlier choice still applies pre-paint.
+        var font = localStorage.getItem('arena.font.v3') || localStorage.getItem('arena.font.v2') || localStorage.getItem('arena.font') || 'grotesk';
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
           document.documentElement.style.setProperty('--font-display', FONTS[font][1]);

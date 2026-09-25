@@ -98,7 +98,7 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-const FONT_KEY = 'arena.font.v2';
+const FONT_KEY = 'arena.font.v3';
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';

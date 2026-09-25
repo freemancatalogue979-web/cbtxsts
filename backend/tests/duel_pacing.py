@@ -169,9 +169,11 @@ async def main() -> None:
     ws_b = await websockets.connect(f"{WS_BASE}/ws/duel/{pub['id']}?token={token_b}")
     state_b = await recv_event(ws_b, "duel_state")
     check("guest receives duel_state too", state_b is not None)
-    questions_a = [q["id"] for q in (state or {}).get("data", {}).get("questions", [])]
-    questions_b = [q["id"] for q in (state_b or {}).get("data", {}).get("questions", [])]
-    check("both players hold the SAME server-built question set", len(questions_a) == 5 and questions_a == questions_b, f"{questions_a} {questions_b}")
+    # Global multiplayer rule: per-player deals. Before the sets are dealt the
+    # waiting creator sees NOTHING (the union would leak the rival's future
+    # questions); after the start each fighter fetches their own five.
+    pre_questions = (state or {}).get("data", {}).get("questions") or []
+    check("the waiting room leaks no questions before the deal", len(pre_questions) == 0, pre_questions)
 
     await ws_b.send(json.dumps({"type": "chat", "body": "ready when you are"}))
     # The room broadcast also echoes a sender's own lines, so scan past A's
@@ -200,17 +202,33 @@ async def main() -> None:
         q1 = await recv_event(ws_a, "duel_question", timeout=10)
     check("server starts question 1 after the countdown", q1 is not None and q1.get("data", {}).get("index") == 0, q1)
     q1_b = await recv_event(ws_b, "duel_question", timeout=6)
-    check("both players get the same round event", bool(q1_b) and q1_b.get("data", {}).get("question_id") == q1.get("data", {}).get("question_id"), f"{q1} {q1_b}")
+    check(
+        "both players get the same round event (pacing only, no question id)",
+        bool(q1_b)
+        and q1_b.get("data", {}).get("index") == q1.get("data", {}).get("index")
+        and "question_id" not in q1_b.get("data", {})
+        and "question_id" not in q1.get("data", {}),
+        f"{q1} {q1_b}",
+    )
 
     status, live = call("GET", f"/duels/{pub['id']}", token=token_a)
     check("duel is live with round cursor 0", status == 200 and live.get("status") == "live" and live.get("round_index") == 0, live.get("status"))
+
+    status_b, live_b = call("GET", f"/duels/{pub['id']}", token=token_b)
+    questions_a = [q["id"] for q in (live or {}).get("questions", [])]
+    questions_b = [q["id"] for q in (live_b or {}).get("questions", [])]
+    check(
+        "each player holds their OWN server-dealt set (five apiece, disjoint)",
+        status_b == 200 and len(questions_a) == 5 and len(questions_b) == 5 and not (set(questions_a) & set(questions_b)),
+        f"{questions_a} {questions_b}",
+    )
 
     # chat must be locked once the duel started
     await ws_a.send(json.dumps({"type": "chat", "body": "this must not arrive"}))
     leaked = await recv_event(ws_b, "duel_chat", timeout=2.5)
     check("waiting-room chat is disabled after the start", leaked is None, leaked)
 
-    first_question_id = q1.get("data", {}).get("question_id")
+    first_question_id = questions_a[0] if questions_a else None
 
     # ------------------------------------------------ server timing authority
     status, graded = answer_question(token_a, pub["id"], first_question_id, "A", elapsed_ms=9_999_999)
@@ -249,7 +267,7 @@ async def main() -> None:
     status, short = call("POST", "/duels/open", {"question_count": 100, "stake_coins": 0}, token=token_a)
     check(
         "asking for more than the bank holds fails loudly",
-        status == 400 and "duel-ready" in str(short),
+        status == 400 and "Not enough unique questions" in str(short),
         f"{status} {short}",
     )
     status, capped = call("POST", "/duels/open", {"question_count": 4, "stake_coins": 0}, token=token_a)
