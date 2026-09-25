@@ -27,12 +27,14 @@ import {
   NotebookPen,
   Pencil,
   Search,
+  FileUp,
 } from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
+import MaterialImport from './MaterialImport';
 import type {Course, MaterialAnalytics, MaterialBlock, MaterialCard, MaterialDetail} from '../lib/types';
 
 const BLOCK_TYPES: {value: MaterialBlock['type']; label: string}[] = [
@@ -859,6 +861,55 @@ function NoteEditor({
   );
 }
 
+/** Compact read-only rendering of one block (staff preview of a note). */
+function PlainBlock({block}: {block: MaterialBlock}) {
+  const text = 'text-[0.86rem] leading-relaxed text-mist-200 [overflow-wrap:anywhere]';
+  if (block.type === 'heading') return <h4 className="pt-1 text-[0.9rem] font-extrabold text-mist-50">{block.text}</h4>;
+  if (block.type === 'subheading') return <h5 className="text-[0.84rem] font-bold text-mist-100">{block.text}</h5>;
+  if (block.type === 'list' || block.type === 'numbers') {
+    const List = block.type === 'numbers' ? 'ol' : 'ul';
+    return (
+      <List className={`${text} space-y-0.5 pl-5 ${block.type === 'numbers' ? 'list-decimal' : 'list-disc'}`}>
+        {(block.items ?? []).map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </List>
+    );
+  }
+  if (block.type === 'table') {
+    return (
+      <div className="max-w-full overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full text-left text-[0.78rem] text-mist-200">
+          {block.head && block.head.length > 0 && (
+            <thead className="bg-white/5 font-bold">
+              <tr>
+                {block.head.map((cell, index) => (
+                  <th key={index} className="px-2.5 py-1.5">
+                    {cell}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {(block.rows ?? []).map((row, index) => (
+              <tr key={index} className="border-t border-white/6">
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} className="px-2.5 py-1.5 align-top">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (block.type === 'divider') return <hr className="border-white/10" />;
+  return block.text ? <p className={`${text} whitespace-pre-line`}>{block.text}</p> : null;
+}
+
 function statusTone(status: string): string {
   return status === 'published'
     ? 'border-mint-500/25 bg-mint-500/12 text-mint-300'
@@ -892,6 +943,7 @@ function MaterialsTab({
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [noteDraft, setNoteDraft] = useState<NoteDraft | null>(null);
   const [reading, setReading] = useState<MaterialDetail | null>(null);
+  const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const limit = kind === 'note' ? 24 : 40;
   const isNotes = kind === 'note';
@@ -939,7 +991,10 @@ function MaterialsTab({
   const openNote = async (row: MaterialCard, mode: 'read' | 'edit') => {
     try {
       const detail = await api.materials.adminRead(row.id);
+      const structured =
+        (detail.sections?.length ?? 0) > 1 || (detail.sections ?? []).some((section) => (section.blocks ?? []).some((block) => block.type !== 'paragraph'));
       if (mode === 'read') setReading(detail);
+      else if (structured) setEditing(detail.id); // keep headings, lists and tables intact
       else
         setNoteDraft({
           id: detail.id,
@@ -990,14 +1045,19 @@ function MaterialsTab({
   return (
     <div className="min-w-0 space-y-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <p className="min-w-0 flex-1 text-[0.8rem] font-semibold text-mist-400">
+        <p className="min-w-0 flex-1 basis-full text-[0.8rem] font-semibold text-mist-400 sm:basis-auto">
           {course
             ? `${formatNumber(stats.total ?? 0)} ${noun}${(stats.total ?? 0) === 1 ? '' : 's'} in ${course.code} · ${formatNumber(stats.published ?? 0)} published`
             : 'Long-form reading that unlocks arena time.'}
         </p>
-        <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
-          New {noun}
-        </Button>
+        <div className="flex shrink-0 gap-1.5">
+          <Button size="sm" variant="outline" icon={<FileUp className="size-4" />} onClick={() => setImporting(true)}>
+            Import
+          </Button>
+          <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
+            New {noun}
+          </Button>
+        </div>
       </div>
 
       {!course && (
@@ -1057,9 +1117,14 @@ function MaterialsTab({
           title={query || topic ? `No ${noun}s match` : `No ${noun}s yet`}
           detail={course ? `${isNotes ? 'Notes' : 'Materials'} you add here belong to ${course.code} only.` : 'Create the first one.'}
           action={
-            <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
-              New {noun}
-            </Button>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <Button size="sm" variant="outline" icon={<FileUp className="size-4" />} onClick={() => setImporting(true)}>
+                Import from file
+              </Button>
+              <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
+                New {noun}
+              </Button>
+            </div>
           }
         />
       ) : isNotes ? (
@@ -1155,19 +1220,30 @@ function MaterialsTab({
         />
       )}
 
+      <MaterialImport
+        open={importing}
+        onClose={() => setImporting(false)}
+        course={course}
+        kind={kind}
+        topics={topics}
+        onImported={() => {
+          onChanged();
+          void load();
+        }}
+      />
+
       <Modal open={Boolean(reading)} onClose={() => setReading(null)} title={reading?.title} subtitle={reading ? `${reading.topic || 'No topic'} · updated ${formatDate(reading.updated_at)}` : ''} size="lg">
         {reading && (
           <div className="min-w-0 space-y-3">
-            {noteBody(reading)
-              .split('\n\n')
-              .map((text, index) => (
-                <p key={index} className="text-[0.88rem] leading-relaxed whitespace-pre-line text-mist-200 [overflow-wrap:anywhere]">
-                  {text}
-                </p>
-              ))}
+            {(reading.sections ?? []).map((section) => (
+              <section key={section.id} className="min-w-0 space-y-2">
+                {(reading.sections?.length ?? 0) > 1 && <h3 className="text-[0.95rem] font-extrabold text-mist-50">{section.title}</h3>}
+                {(section.blocks ?? []).map((block, index) => <PlainBlock key={index} block={block} />)}
+              </section>
+            ))}
             {reading.link_url && (
               <a href={reading.link_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[0.82rem] font-bold text-nova-200">
-                <ExternalLink className="size-4" /> Open attached link
+                <ExternalLink className="size-4" /> {reading.link_url.startsWith('/api/material-files/') ? 'Open the original file' : 'Open attached link'}
               </a>
             )}
           </div>

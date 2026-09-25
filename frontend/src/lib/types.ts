@@ -1963,3 +1963,17 @@ export interface AdminGroupRow {
   message_count: number;
   created_at: string | null;
 }
+
+/** What the server read from an uploaded document (nothing saved yet). */
+export interface MaterialImportPreview {
+  filename: string;
+  format: string;
+  bytes: number;
+  pages: number | null;
+  title: string;
+  description: string;
+  words: number;
+  estimated_minutes: number;
+  sections: {title: string; words: number; blocks: number; excerpt: string}[];
+  notes: string[];
+}

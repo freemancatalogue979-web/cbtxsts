@@ -121,6 +121,19 @@ grading use the same paper, and two players get different papers. The bank keeps
 difficulty on every question for distribution control. The admin *Courses & exams* area is
 organised by course: each course opens a workspace with **Overview · Topics · Question bank ·
 Notes · Materials · Discussion**, and nothing from one course shows up in another.
+
+**Importing materials instead of typing them.** In a course's *Notes* or *Materials* tab,
+**Import** takes one or more files — Word (`.docx`), PDF, text (`.txt`), Markdown, OpenDocument
+(`.odt`), RTF, HTML or PowerPoint (`.pptx`), up to 20 MB each. The server reads each file and
+shows what it found (name, word count, sections); staff only confirm the basics — the name
+(pre-filled from the document), topic and whether to publish now — and the document becomes the
+content. Word/ODT headings become sections, bullets and numbered lists stay lists, tables stay
+tables, each slide becomes a section, and long documents are split into readable sections
+without dropping a word. The original file is kept (optional) so players can open or download
+it from the reader. Old `.doc`/`.ppt` files, scanned PDFs with no text and unsupported types are
+refused with a reason (for example *"In Word choose File → Save As → .docx"*). The reader lives in
+`backend/app/services/material_import.py` (standard library + `pypdf`, no extra dependencies);
+uploaded originals are stored in `backend/data/material_files/` (git-ignored).
 The correct answer may be given as a letter (**B**) *or as the option's actual
 text* (**Savigny**) — the text is resolved to the option's canonical key on upload, so it
 stays correct however options are later shuffled; an ambiguous or unknown answer is
@@ -262,6 +275,12 @@ cd backend && ./.venv/bin/python scripts/smoke.py
 #          survives refresh and grades correctly, exam-specific questions never
 #          leak into the bank, topic / difficulty-mix draws, over-pool rejected
 cd backend && ./.venv/bin/python scripts/verify_course_bank.py
+
+# Backend: material import — builds real .docx / .pdf / .pptx / .odt / .rtf / .html /
+#          .md / .txt files in memory and checks sections, lists, tables, long-document
+#          splitting, preview-saves-nothing, course scoping, original-file download,
+#          player reading and every refusal (old .doc, unknown course, non-staff)
+cd backend && ./.venv/bin/python scripts/verify_material_import.py
 
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder

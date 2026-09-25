@@ -632,7 +632,8 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
             >
               {section === 'overview' && <Overview key={`overview-${bump}`} onGoto={goto} />}
               {section === 'studio' && <StudioAdmin key={`studio-${bump}`} />}
-              {section === 'content' && <ContentAdmin key={`content-${bump}`} onChanged={refresh} />}
+              {/* ContentAdmin is not re-keyed on refresh: it reloads its own lists and must keep the open course / tab. */}
+              {section === 'content' && <ContentAdmin onChanged={refresh} />}
               {section === 'events' && <EventsAdmin key={`events-${bump}`} onChanged={refresh} />}
               {(section === 'broadcast' || section === 'prizes') && (
                 <BroadcastAdmin key={`broadcast-${section}-${bump}`} tab={section === 'broadcast' ? 'notices' : 'prizes'} onChanged={refresh} />

@@ -7,10 +7,12 @@ every reward is decided here on the server.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -55,6 +57,9 @@ from ..services import materials as engine
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 admin_router = APIRouter(prefix="/admin/materials", tags=["materials-admin"])
+# Original uploaded documents (download / open in a new tab). Separate prefix so
+# it can never collide with /materials/{material_id}/... routes.
+files_router = APIRouter(prefix="/material-files", tags=["materials"])
 
 
 def _loads(raw: str | None, fallback: Any) -> Any:
@@ -1155,6 +1160,121 @@ def admin_create(
     engine.record_version(db, row, note="Created", author=admin.email)
     db.commit()
     return admin_read(row.id, db, admin)
+
+
+# ---------------------------------------------------------------------------
+# Import a document (Word / PDF / text / slides) as a material
+# ---------------------------------------------------------------------------
+def _material_files_dir():
+    from ..config import DATA_DIR
+
+    folder = DATA_DIR / "material_files"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+_SAFE_FILE = re.compile(r"^[a-f0-9]{32}-[a-z0-9._-]{1,120}$")
+
+
+def _store_original(filename: str, data: bytes) -> str:
+    """Keep the uploaded file so players can open the original; returns its URL."""
+    import uuid
+
+    stem = re.sub(r"[^a-z0-9._-]+", "-", (filename or "document").lower()).strip("-.") or "document"
+    name = f"{uuid.uuid4().hex}-{stem[-120:]}"
+    (_material_files_dir() / name).write_bytes(data)
+    return f"/api/material-files/{name}"
+
+
+def _read_upload(filename: str, data: bytes) -> dict:
+    from ..services.material_import import DocumentError, read_document
+
+    try:
+        return read_document(filename, data)
+    except DocumentError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@admin_router.post("/import/preview")
+async def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
+    """Read a document and show what would be created — nothing is saved."""
+    draft = _read_upload(file.filename or "document", await file.read())
+    return {
+        **{key: value for key, value in draft.items() if key != "sections"},
+        "sections": [
+            {
+                "title": section["title"],
+                "words": section["words"],
+                "blocks": len(section["blocks"]),
+                "excerpt": next((b.get("text", "") for b in section["blocks"] if b.get("text")), "")[:160],
+            }
+            for section in draft["sections"]
+        ],
+    }
+
+
+@admin_router.post("/import", status_code=status.HTTP_201_CREATED)
+async def admin_import(
+    file: UploadFile = File(...),
+    course_id: int = Form(...),
+    title: str = Form(""),
+    topic: str = Form(""),
+    description: str = Form(""),
+    kind: str = Form("material"),
+    status_value: str = Form("draft", alias="status"),
+    keep_file: bool = Form(True),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    """Create a material from an uploaded document. Staff only fill the basics
+    (course, title, topic); the content is the document itself."""
+    from ..models import Course as CourseModel
+    from ..services.questions import audit
+
+    if db.get(CourseModel, course_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Choose a course for this material.")
+    filename = file.filename or "document"
+    data = await file.read()
+    draft = _read_upload(filename, data)
+    kind = kind if kind in {"material", "note"} else "material"
+    publish = status_value if status_value in {"draft", "published", "archived"} else "draft"
+    link = _store_original(filename, data) if keep_file else ""
+    payload = MaterialIn(
+        title=(title.strip() or draft["title"])[:200],
+        course_id=course_id,
+        kind=kind,
+        link_url=link,
+        topic=topic.strip()[:120],
+        description=(description.strip() or draft["description"])[:500],
+        estimated_minutes=draft["estimated_minutes"],
+        status=publish,
+        sections=[
+            MaterialSectionIn(title=section["title"], blocks=section["blocks"], estimated_minutes=section["estimated_minutes"])
+            for section in draft["sections"]
+        ],
+    )
+    created = admin_create(payload, db, admin)
+    audit(
+        db,
+        actor=admin.email,
+        action="material.import",
+        target_type="material",
+        target_id=int(created["id"]),
+        detail={"file": filename[:200], "format": draft["format"], "words": draft["words"], "sections": len(draft["sections"])},
+    )
+    db.commit()
+    return {**created, "import": {key: draft[key] for key in ("filename", "format", "pages", "words", "notes")}}
+
+
+@files_router.get("/{name}")
+def material_file(name: str) -> FileResponse:
+    if not _SAFE_FILE.match(name or ""):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found.")
+    path = _material_files_dir() / name
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found.")
+    original = name.split("-", 1)[1]
+    return FileResponse(path, filename=original, content_disposition_type="inline")
 
 
 @admin_router.patch("/{material_id}")

@@ -57,6 +57,7 @@ import type {
   MyLearning,
   MaterialCard,
   MaterialDetail,
+  MaterialImportPreview,
   MaterialProgressResult,
   MaterialPost,
   MaterialExamPrep,
@@ -682,6 +683,28 @@ export const api = {
     create: (body: Record<string, unknown>) => request<MaterialDetail>('/api/admin/materials', {method: 'POST', body}),
     update: (id: number, body: Record<string, unknown>) => request<MaterialDetail>(`/api/admin/materials/${id}`, {method: 'PATCH', body}),
     remove: (id: number) => request<{ok: boolean}>(`/api/admin/materials/${id}`, {method: 'DELETE'}),
+    /* Import a document (Word / PDF / text / slides…) as a material. The
+       server reads the file into sections; staff only choose the basics. */
+    importPreview: (file: File) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return request<MaterialImportPreview>('/api/admin/materials/import/preview', {method: 'POST', body: form});
+    },
+    importFile: (
+      file: File,
+      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean},
+    ) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      form.append('course_id', String(params.course_id));
+      if (params.title) form.append('title', params.title);
+      if (params.topic) form.append('topic', params.topic);
+      if (params.description) form.append('description', params.description);
+      form.append('kind', params.kind ?? 'material');
+      form.append('status', params.status ?? 'draft');
+      form.append('keep_file', String(params.keep_file ?? true));
+      return request<MaterialDetail>('/api/admin/materials/import', {method: 'POST', body: form});
+    },
     duplicate: (id: number) => request<MaterialDetail>(`/api/admin/materials/${id}/duplicate`, {method: 'POST', body: {}}),
     publish: (id: number, status: 'draft' | 'published' | 'archived' = 'published') =>
       request<MaterialDetail>(`/api/admin/materials/${id}/publish`, {method: 'POST', body: {status}}),

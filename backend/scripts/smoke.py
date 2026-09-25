@@ -170,7 +170,9 @@ async def main() -> None:
     status_code, overview = call("GET", "/api/admin/overview", token=admin_token)
     check(
         "admin overview stats",
-        status_code == 200 and overview["players"] >= 3 and overview["questions"] >= 90,
+        # Seeded content is ~78 questions: random-from-course exams draw from the bank
+        # instead of holding duplicate copies (the old seed produced 90+ rows).
+        status_code == 200 and overview["players"] >= 3 and overview["questions"] >= 70,
         str(overview)[:160],
     )
 

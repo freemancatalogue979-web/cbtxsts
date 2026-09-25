@@ -40,6 +40,7 @@ import {
   Video,
   XCircle,
   Zap,
+  ExternalLink,
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -546,6 +547,17 @@ function Reader({
           </div>
           <h1 className="mt-2 text-[1.15rem] font-black leading-tight text-mist-50 sm:text-[1.4rem]">{detail.title}</h1>
           {detail.description ? <p className="mt-1 text-[0.86rem] leading-relaxed text-mist-400">{detail.description}</p> : null}
+          {detail.link_url ? (
+            <a
+              href={detail.link_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-xl border border-nova-500/30 bg-nova-500/10 px-3 text-[0.8rem] font-bold text-nova-100 hover:bg-nova-500/20"
+            >
+              <ExternalLink className="size-4 shrink-0" />
+              <span className="truncate">{detail.link_url.startsWith('/api/material-files/') ? 'Open the original document' : 'Open attached resource'}</span>
+            </a>
+          ) : null}
           <div className="mt-3 flex min-w-0 items-center gap-2.5">
             <ProgressBar className="min-w-0 flex-1" value={detail.progress?.percent ?? 0} />
             <span className="shrink-0 text-[0.78rem] font-black text-mist-200 tabular">{detail.progress?.percent ?? 0}%</span>
