@@ -208,7 +208,18 @@ class Quiz(Base):
     max_attempts: Mapped[int] = mapped_column(Integer, default=1)  # 0 = unlimited retakes
     practice_mode: Mapped[bool] = mapped_column(Boolean, default=False)
     pass_score: Mapped[int] = mapped_column(Integer, default=50)  # percent needed to pass
-    draw_topics: Mapped[list] = mapped_column(JSON, default=list)  # topics the creation-time draw filtered on
+    draw_topics: Mapped[list] = mapped_column(JSON, default=list)  # topics the per-player draw is limited to
+    # --- where an exam's questions come from ---------------------------------
+    # "course_random": every player gets a fresh random draw of `draw_count`
+    #                  questions from the course question bank at start time.
+    # "exam_specific": the exam owns its own question set (rows in this quiz,
+    #                  flagged `exam_only`); `draw_count` > 0 serves a random
+    #                  subset of that set, 0 serves all of it.
+    # The course bank size and the exam question count are never the same number.
+    question_source: Mapped[str] = mapped_column(String(20), default="exam_specific")
+    draw_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Optional difficulty quota for random draws, e.g. {"easy": 10, "medium": 20, "hard": 10}.
+    draw_difficulty: Mapped[dict] = mapped_column(JSON, default=dict)
 
     course: Mapped[Course | None] = relationship(back_populates="quizzes")
     questions: Mapped[list["Question"]] = relationship(
@@ -287,6 +298,9 @@ class Question(Base):
     flagged_by: Mapped[str] = mapped_column(String(120), default="")
     flagged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     order_locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True for questions written for ONE exam only. They never join the course
+    # bank, so practice / duels / ranked / random exam draws never see them.
+    exam_only: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     # --- mode eligibility --------------------------------------------------
     flashcard_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -424,6 +438,10 @@ class Attempt(Base):
     # First time each question was put on screen: {question_id: ISO timestamp}.
     # Used to enforce per-question timers on the server, never in the browser.
     question_times: Mapped[dict] = mapped_column(JSON, default=dict)
+    # The exact questions this player was dealt, in display order. Random-draw
+    # exams fill it at start time so every player can get a different paper
+    # that still survives refreshes. Empty on legacy attempts (whole quiz).
+    question_ids: Mapped[list] = mapped_column(JSON, default=list)
 
     student: Mapped[Student] = relationship(back_populates="attempts")
     quiz: Mapped[Quiz] = relationship(back_populates="attempts")
@@ -1485,6 +1503,25 @@ class ExamBlueprint(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
+class CourseTopic(Base):
+    """A named topic inside a course: Course -> Topic -> questions / notes / materials.
+
+    Content still carries its topic as a string (so older rows keep working);
+    this table is the course's curated topic list with order and a description.
+    """
+
+    __tablename__ = "course_topics"
+    __table_args__ = (UniqueConstraint("course_id", "name", name="uq_course_topic"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(String(400), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 # ===========================================================================
 # Materials — the "understand it before you're tested on it" layer
 # ===========================================================================
@@ -1497,9 +1534,13 @@ class Material(Base):
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
     quiz_id: Mapped[int | None] = mapped_column(ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True)
     title: Mapped[str] = mapped_column(String(200), default="")
+    # "material" = long-form sectioned reading, "note" = a short course note.
+    kind: Mapped[str] = mapped_column(String(16), default="material", index=True)
     topic: Mapped[str] = mapped_column(String(120), default="", index=True)
     subtopic: Mapped[str] = mapped_column(String(120), default="")
     description: Mapped[str] = mapped_column(String(500), default="")
+    # Optional external resource (PDF, slides, video, reading) for this item.
+    link_url: Mapped[str] = mapped_column(String(600), default="")
     # Everything readable lives in sections; `summary` is the exam-night digest.
     difficulty: Mapped[str] = mapped_column(String(16), default="intermediate")  # beginner|intermediate|advanced
     estimated_minutes: Mapped[int] = mapped_column(Integer, default=10)

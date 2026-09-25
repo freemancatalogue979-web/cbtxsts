@@ -285,6 +285,9 @@ def _fill_deck(db: Session, deck: FlashcardDeck, student: Student) -> int:
             Question.visible.is_(True),
             Question.flashcard_enabled.is_(True),
         )
+        if not config.get("quiz_id") and not config.get("question_ids"):
+            # Course-bank originals only: exam-specific questions stay inside their exam.
+            query = query.where(Question.source_id.is_(None), Question.exam_only.is_(False))
         if config.get("question_ids"):
             # A material (or any caller) can hand over an exact question list.
             ids = [int(value) for value in config["question_ids"] if str(value).isdigit()][:300]
@@ -312,7 +315,7 @@ def _fill_deck(db: Session, deck: FlashcardDeck, student: Student) -> int:
             .limit(60)
         )
     if deck.kind == "mixed":
-        query = select(Question).where(Question.status == "approved", Question.visible.is_(True)).limit(60)
+        query = select(Question).where(Question.status == "approved", Question.visible.is_(True), Question.source_id.is_(None), Question.exam_only.is_(False)).limit(60)
 
     questions = list(db.scalars(query).all())
     if not questions:

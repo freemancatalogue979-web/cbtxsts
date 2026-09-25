@@ -282,6 +282,10 @@ export interface QuestionPublic {
   points: number;
   difficulty: string;
   drawn?: boolean;
+  /** Written for one exam only — never part of the course bank. */
+  exam_only?: boolean;
+  /** An exam-specific question that was also copied into the course bank. */
+  in_bank?: boolean;
   correct?: OptionKey;
   /** Display letter of the answer for this attempt (option shuffle aware). */
   correct_label?: OptionKey | null;
@@ -386,6 +390,65 @@ export interface Quiz {
   practice_mode?: boolean;
   pass_score?: number;
   draw_topics?: string[];
+  /* --- where questions come from (see backend services/course_bank.py) --- */
+  /** "course_random": each player gets `draw_count` random bank questions; "exam_specific": the exam's own set. */
+  question_source?: QuestionSource;
+  /** Questions served to each player (random exams), or a subset size of the exam set (0 = all). */
+  draw_count?: number;
+  draw_difficulty?: Partial<Record<'easy' | 'medium' | 'hard', number>>;
+  /** Questions the exam owns itself (exam-specific set). */
+  exam_question_count?: number;
+  /** Size of the course question bank (random exams only). */
+  bank_size?: number;
+  /** Approved + visible bank questions that match the exam's topic filter. */
+  bank_eligible?: number;
+}
+
+export type QuestionSource = 'course_random' | 'exam_specific';
+
+export interface CourseBankStats {
+  course_id: number;
+  code: string;
+  bank: number;
+  eligible: number;
+  drawn_copies: number;
+  exam_specific: number;
+}
+
+export interface CourseTopicRow {
+  id: number | null;
+  name: string;
+  description: string;
+  position: number;
+  curated: boolean;
+  questions: number;
+  notes: number;
+  materials: number;
+}
+
+export interface CourseOverview {
+  course: {id: number; code: string; title: string; description: string; lecturer: string; semester: string; accent: string; is_active: boolean};
+  bank: {total: number; ready: number; by_difficulty: Record<string, number>};
+  exam_specific_questions: number;
+  exams: {id: number; title: string; status: string; question_source: QuestionSource; draw_count: number}[];
+  submissions: number;
+  notes: number;
+  materials: number;
+  discussion_posts: number;
+  topics: number;
+}
+
+export interface CourseDiscussionPost {
+  id: number;
+  material_id: number;
+  material_title: string;
+  material_kind: 'material' | 'note';
+  topic: string;
+  name: string;
+  kind: string;
+  body: string;
+  parent_id: number | null;
+  created_at: string | null;
 }
 
 export interface ReviewRow {
@@ -994,6 +1057,10 @@ export interface MaterialProgress {
 export interface MaterialCard {
   id: number;
   title: string;
+  /** "material" = sectioned reading, "note" = a short course note. */
+  kind?: 'material' | 'note';
+  /** Optional external file / link (PDF, slides, video…). */
+  link_url?: string;
   course_id?: number | null;
   quiz_id?: number | null;
   topic: string;

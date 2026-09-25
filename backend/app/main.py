@@ -21,6 +21,7 @@ from .config import APP_NAME, APP_TAGLINE, CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_O
 from .db import async_engine, init_db, session_scope
 from .routers import (
     admin,
+    course_workspace,
     auth,
     chat,
     competitive,
@@ -206,6 +207,7 @@ app.include_router(chat.router, prefix=API_PREFIX)
 app.include_router(study.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(studio.router, prefix=API_PREFIX)
+app.include_router(course_workspace.router, prefix=API_PREFIX)
 app.include_router(flashcards.router, prefix=API_PREFIX)
 app.include_router(practice.router, prefix=API_PREFIX)
 app.include_router(competitive.router, prefix=API_PREFIX)

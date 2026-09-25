@@ -515,26 +515,10 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
             Staff console
           </Chip>
           <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
-            {onSwitchToPlayer && (
-              <IconButton label="Switch to player" className="rounded-2xl sm:hidden" onClick={onSwitchToPlayer}>
-                <Gamepad2 className="size-[18px] text-emerald-300" />
-              </IconButton>
-            )}
             <AdminBell />
             <span className="hidden sm:block">
               <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
-            {onSwitchToPlayer && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="hidden items-center gap-1.5 border-emerald-400/35 text-[0.78rem] font-black text-emerald-300 hover:border-emerald-400/60 lg:inline-flex"
-                onClick={onSwitchToPlayer}
-                icon={<Gamepad2 className="size-4" />}
-              >
-                Player view
-              </Button>
-            )}
             <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={onExit} icon={<Activity className="size-4" />}>
               Sign out
             </Button>

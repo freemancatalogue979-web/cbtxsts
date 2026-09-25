@@ -128,9 +128,9 @@ def _pool(
     if quiz_id:
         stmt = stmt.where(Question.quiz_id == quiz_id)
     elif course_id:
-        stmt = stmt.where(Question.course_id == course_id, Question.source_id.is_(None))
+        stmt = stmt.where(Question.course_id == course_id, Question.source_id.is_(None), Question.exam_only.is_(False))
     else:
-        stmt = stmt.where(Question.source_id.is_(None))
+        stmt = stmt.where(Question.source_id.is_(None), Question.exam_only.is_(False))
     if topic:
         stmt = stmt.where(func.lower(Question.topic) == topic.lower())
     if difficulty:
@@ -140,7 +140,9 @@ def _pool(
         # Never leave a player with nothing to practise: widen the net.
         pool = list(
             db.scalars(
-                select(Question).where(Question.status == "approved", Question.visible.is_(True)).limit(200)
+                select(Question)
+                .where(Question.status == "approved", Question.visible.is_(True), Question.exam_only.is_(False))
+                .limit(200)
             ).all()
         )
     return pool
@@ -284,7 +286,7 @@ def practice_catalog(db: Session = Depends(get_db), student: Student = Depends(r
             Question.status == "approved",
             Question.visible.is_(True),
             Question.practice_enabled.is_(True),
-            Question.source_id.is_(None),
+            Question.source_id.is_(None), Question.exam_only.is_(False),
             Question.course_id.is_not(None),
         )
         .group_by(Question.course_id, Question.topic)

@@ -97,6 +97,7 @@ def library(
     topic: str = Query(""),
     search: str = Query(""),
     difficulty: str = Query(""),
+    kind: str = Query("", pattern="^(|material|note)$"),
     limit: int = Query(40, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -106,6 +107,8 @@ def library(
     stmt = select(Material).where(Material.status == "published")
     if course_id:
         stmt = stmt.where(Material.course_id == course_id)
+    if kind:
+        stmt = stmt.where(Material.kind == kind)
     if topic:
         stmt = stmt.where(func.lower(Material.topic) == topic.lower())
     if difficulty:
@@ -961,6 +964,10 @@ def self_test_answer(
 def admin_list(
     status_filter: str = Query("", alias="status"),
     course_id: int | None = Query(None),
+    kind: str = Query("", pattern="^(|material|note)$"),
+    topic: str = Query(""),
+    q: str = Query(""),
+    unassigned: bool = Query(False),
     limit: int = Query(40, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -971,6 +978,22 @@ def admin_list(
         conds.append(Material.status == status_filter)
     if course_id:
         conds.append(Material.course_id == course_id)
+    if kind:
+        conds.append(Material.kind == kind)
+    if unassigned:
+        # Materials saved before course scoping existed (course_id was never sent).
+        conds.append(Material.course_id.is_(None))
+    if topic.strip():
+        conds.append(func.lower(Material.topic) == topic.strip().lower())
+    if q.strip():
+        needle = f"%{q.strip().lower()}%"
+        conds.append(
+            or_(
+                func.lower(Material.title).like(needle),
+                func.lower(Material.description).like(needle),
+                func.lower(Material.topic).like(needle),
+            )
+        )
 
     def _filtered(stmt):
         for cond in conds:
@@ -1088,6 +1111,13 @@ def _apply_material(row: Material, payload: MaterialIn) -> None:
     row.icon = (payload.icon or "book")[:40]
     row.accent = (payload.accent or "violet")[:16]
     row.allow_discussion = bool(payload.allow_discussion)
+    if payload.kind in {"material", "note"}:
+        row.kind = payload.kind
+    if payload.link_url is not None:
+        link = payload.link_url.strip()
+        if link and not link.lower().startswith(("http://", "https://", "/")):
+            link = "https://" + link
+        row.link_url = link[:600]
     row.updated_at = utcnow()
 
 
@@ -1192,6 +1222,8 @@ def admin_duplicate(material_id: int, db: Session = Depends(get_db), admin: Admi
         course_id=source.course_id,
         quiz_id=source.quiz_id,
         title=f"{source.title} (copy)",
+        kind=source.kind or "material",
+        link_url=source.link_url or "",
         topic=source.topic,
         subtopic=source.subtopic,
         description=source.description,

@@ -629,7 +629,11 @@ def promote(db: Session, student: Student, rank_key: str, events: list[dict] | N
 
 def _completed_courses(db: Session, student: Student) -> list[tuple[int, str]]:
     """Courses where this player has a submitted attempt on every quiz."""
-    quizzes = db.execute(select(Quiz.id, Quiz.course_id).where(Quiz.status != "draft")).all()
+    quizzes = db.execute(
+        select(Quiz.id, Quiz.course_id).where(
+            Quiz.status != "draft", Quiz.is_bank.is_(False), Quiz.course_id.is_not(None)
+        )
+    ).all()
     if not quizzes:
         return []
     submitted = set(

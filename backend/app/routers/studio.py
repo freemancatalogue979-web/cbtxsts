@@ -129,6 +129,7 @@ def search_questions(
     question_type: str = Query(""),
     flagged: bool | None = Query(None),
     drawn: bool | None = Query(None),
+    scope: str = Query("", pattern="^(|bank|exam)$"),
     min_usage: int | None = Query(None),
     max_success: float | None = Query(None),
     sort: str = Query("position"),
@@ -150,6 +151,7 @@ def search_questions(
         question_type=question_type,
         flagged=flagged,
         drawn=drawn,
+        scope=scope,
         min_usage=min_usage,
         max_success=max_success,
         sort=sort,
@@ -503,6 +505,9 @@ def run_import(
             position=position,
             created_by=admin.email,
             updated_by=admin.email,
+            # Imported into an exam = that exam's own questions; into the course
+            # bank = bank originals. The two never mix silently.
+            exam_only=not target.is_bank,
             **cleaned,
         )
         db.add(question)
@@ -662,6 +667,12 @@ def duplicate_quiz(
         practice_mode=bool(getattr(quiz, "practice_mode", False)),
         version_label=("" if payload.as_template else quiz.version_label),
         template_of=quiz.id if not payload.as_template else None,
+        pass_score=int(getattr(quiz, "pass_score", 50) or 0),
+        # Same question source: a random-from-course exam stays a random draw.
+        question_source=quiz.question_source or "exam_specific",
+        draw_count=int(quiz.draw_count or 0),
+        draw_topics=list(quiz.draw_topics or []),
+        draw_difficulty=dict(quiz.draw_difficulty or {}),
     )
     db.add(clone)
     db.flush()
@@ -755,7 +766,7 @@ def delete_blueprint(blueprint_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 def _blueprint_candidates(db: Session, config: dict, course_id: int | None) -> list[Question]:
-    stmt = select(Question).where(Question.source_id.is_(None), Question.visible.is_(True))
+    stmt = select(Question).where(Question.source_id.is_(None), Question.exam_only.is_(False), Question.visible.is_(True))
     if course_id:
         stmt = stmt.where(Question.course_id == course_id)
     if config.get("course_ids"):

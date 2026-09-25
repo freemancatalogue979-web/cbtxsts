@@ -131,7 +131,7 @@ def list_courses(db: Session = Depends(get_db)) -> list[dict]:
         db.execute(
             select(Question.course_id, func.count(Question.id))
             .where(
-                Question.source_id.is_(None),
+                Question.source_id.is_(None), Question.exam_only.is_(False),
                 Question.visible.is_(True),
                 Question.status == "approved",
                 Question.duel_enabled.is_(True),

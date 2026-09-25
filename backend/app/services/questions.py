@@ -368,7 +368,9 @@ def question_admin_public(question: Question, *, stats: dict[str, Any] | None = 
         "quiz_id": question.quiz_id,
         "course_id": question.course_id,
         "source_id": question.source_id,
-        "drawn": bool(question.source_id),
+        "drawn": bool(question.source_id) and not bool(getattr(question, "exam_only", False)),
+        "exam_only": bool(getattr(question, "exam_only", False)),
+        "in_bank": bool(getattr(question, "exam_only", False)) and bool(question.source_id),
         "position": question.position,
         "text": question.text,
         "options": options,
@@ -773,6 +775,7 @@ def duplicate_question(
     clone = Question(
         quiz_id=quiz_id,
         course_id=course_id,
+        exam_only=bool(quiz is not None and not quiz.is_bank),
         source_id=question.id if keep_source else question.source_id,
         position=position,
         text=question.text,
@@ -845,6 +848,7 @@ def question_query(
     question_type: str = "",
     flagged: bool | None = None,
     drawn: bool | None = None,
+    scope: str = "",
     min_usage: int | None = None,
     max_success: float | None = None,
     sort: str = "position",
@@ -890,6 +894,11 @@ def question_query(
         stmt = stmt.where(Question.source_id.is_not(None))
     elif drawn is False:
         stmt = stmt.where(Question.source_id.is_(None))
+    # bank = course-bank originals; exam = exam-specific questions.
+    if scope == "bank":
+        stmt = stmt.where(Question.source_id.is_(None), Question.exam_only.is_(False))
+    elif scope == "exam":
+        stmt = stmt.where(Question.exam_only.is_(True))
     if not include_archived and status == "":
         stmt = stmt.where(Question.status != "archived")
     if min_usage is not None:
@@ -907,21 +916,32 @@ def question_query(
         rows = [row for row in rows if needle in {str(item).lower() for item in (row.tags or [])}]
         total = len(rows)
 
+    # Facets follow the place being browsed (course / exam / bank vs exam scope)
+    # so counts in the Questions tab match what the admin is looking at.
+    facet_where = []
+    if quiz_id:
+        facet_where.append(Question.quiz_id == quiz_id)
+    if course_id:
+        facet_where.append(Question.course_id == course_id)
+    if scope == "bank":
+        facet_where += [Question.source_id.is_(None), Question.exam_only.is_(False)]
+    elif scope == "exam":
+        facet_where.append(Question.exam_only.is_(True))
     counts = db.execute(
-        select(Question.status, func.count(Question.id)).group_by(Question.status)
+        select(Question.status, func.count(Question.id)).where(*facet_where).group_by(Question.status)
     ).all()
     difficulty_counts = db.execute(
-        select(Question.difficulty, func.count(Question.id)).group_by(Question.difficulty)
+        select(Question.difficulty, func.count(Question.id)).where(*facet_where).group_by(Question.difficulty)
     ).all()
     topics = db.execute(
         select(Question.topic, func.count(Question.id))
-        .where(Question.topic != "")
+        .where(Question.topic != "", *facet_where)
         .group_by(Question.topic)
         .order_by(func.count(Question.id).desc())
-        .limit(40)
+        .limit(60)
     ).all()
     tag_counter: dict[str, int] = {}
-    for row in db.scalars(select(Question.tags)).all() or []:
+    for row in db.scalars(select(Question.tags).where(*facet_where)).all() or []:
         for item in row or []:
             tag_counter[str(item)] = tag_counter.get(str(item), 0) + 1
 
@@ -1172,22 +1192,11 @@ def export_questions(questions: Iterable[Question], *, fmt: str = "json") -> tup
 def ensure_course_bank_quiz(db: Session, course: Course, actor: str) -> Quiz:
     """The hidden holding quiz that keeps a course's *question bank*.
 
-    Course questions live here and nowhere else: a paper only holds the copies
-    it drew, and these quizzes are never listed as exams. An approved original
-    in the bank is automatically eligible for exam draws and for the practice /
-    ranked / event pools that read the same course bank."""
-    quiz = db.scalar(select(Quiz).where(Quiz.course_id == course.id, Quiz.is_bank.is_(True)))
-    if quiz is None:
-        quiz = Quiz(
-            title=f"{course.code or course.title} — question bank",
-            course_id=course.id,
-            instructions="Not an exam. Questions that belong to the course live here so papers can draw from them.",
-            status="draft",
-            is_bank=True,
-        )
-        db.add(quiz)
-        db.flush()
-    return quiz
+    Never listed as an exam. Approved originals here feed random exam draws and
+    the practice / duel / ranked / event pools that read the course bank."""
+    from .course_bank import ensure_bank_quiz
+
+    return ensure_bank_quiz(db, course)
 
 
 def import_payload(data: Any, *, default_quiz_id: int, default_course_id: int | None) -> dict[str, Any]:

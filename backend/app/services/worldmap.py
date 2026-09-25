@@ -385,7 +385,7 @@ def build_world_map(db: Session, student: Student) -> dict:
         question_rows = list(
             db.scalars(
                 select(Question)
-                .where(Question.course_id == course.id, Question.status == "approved", Question.visible.is_(True))
+                .where(Question.course_id == course.id, Question.status == "approved", Question.visible.is_(True), Question.source_id.is_(None), Question.exam_only.is_(False))
                 .order_by(Question.id)
             ).all()
         )

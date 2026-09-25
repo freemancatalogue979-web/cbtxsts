@@ -113,7 +113,7 @@ def _question_ids(db: Session, quiz_id: int | None = None) -> list[int]:
         query = query.where(Question.quiz_id == quiz_id)
     else:
         # Mixed pools draw from bank originals only — exam copies would duplicate text.
-        query = query.join(Quiz, Quiz.id == Question.quiz_id).where(Question.source_id.is_(None))
+        query = query.join(Quiz, Quiz.id == Question.quiz_id).where(Question.source_id.is_(None), Question.exam_only.is_(False))
     return list(db.scalars(query).all())
 
 

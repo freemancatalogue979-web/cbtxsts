@@ -78,3 +78,34 @@ export async function audioBlobDeleteAll(): Promise<void> {
     }
   });
 }
+
+/** Every key currently stored (used to purge files that are no longer approved). */
+export async function audioBlobKeys(): Promise<string[]> {
+  const handle = await db();
+  if (!handle) return [];
+  return new Promise((resolve) => {
+    try {
+      const req = handle.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys();
+      req.onsuccess = () => resolve((req.result || []).map((key) => String(key)));
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+export async function audioBlobDelete(key: string): Promise<void> {
+  const handle = await db();
+  if (!handle) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = handle.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}

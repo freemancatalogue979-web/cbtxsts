@@ -23,13 +23,17 @@ import {
   Trash2,
   TriangleAlert,
   Upload,
+  ExternalLink,
+  NotebookPen,
+  Pencil,
+  Search,
 } from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
-import type {MaterialAnalytics, MaterialBlock, MaterialCard, MaterialDetail} from '../lib/types';
+import type {Course, MaterialAnalytics, MaterialBlock, MaterialCard, MaterialDetail} from '../lib/types';
 
 const BLOCK_TYPES: {value: MaterialBlock['type']; label: string}[] = [
   {value: 'heading', label: 'Heading'},
@@ -153,12 +157,20 @@ function MaterialEditor({
   materialId,
   onBack,
   onSaved,
+  course,
+  kind = 'material',
 }: {
   materialId: number | 'new';
   onBack: () => void;
   onSaved: () => void;
+  /** When set, the material belongs to this course (the course workspace). */
+  course?: Course | null;
+  kind?: 'material' | 'note';
 }) {
   const {toast} = useSession();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [topicNames, setTopicNames] = useState<string[]>([]);
+  const [linkUrl, setLinkUrl] = useState('');
   const [draft, setDraft] = useState({
     title: '',
     topic: '',
@@ -171,10 +183,29 @@ function MaterialEditor({
     author: '',
     accent: 'violet',
     status: 'draft' as 'draft' | 'published' | 'archived',
-    course_id: null as number | null,
+    course_id: (course?.id ?? null) as number | null,
     quiz_id: null as number | null,
     allow_discussion: true,
   });
+
+  useEffect(() => {
+    if (course) return;
+    api.admin
+      .courses()
+      .then(setCourses)
+      .catch(() => setCourses([]));
+  }, [course]);
+
+  useEffect(() => {
+    if (!draft.course_id) {
+      setTopicNames([]);
+      return;
+    }
+    api.admin
+      .courseTopics(draft.course_id)
+      .then((payload) => setTopicNames(payload.topics.map((row) => row.name)))
+      .catch(() => setTopicNames([]));
+  }, [draft.course_id]);
   const [sections, setSections] = useState<SectionDraft[]>([blankSection(1)]);
   const [loading, setLoading] = useState(materialId !== 'new');
   const [saving, setSaving] = useState(false);
@@ -202,10 +233,11 @@ function MaterialEditor({
         author: row.author,
         accent: row.accent,
         status: row.status,
-        course_id: row.course_id ?? null,
+        course_id: row.course_id ?? course?.id ?? null,
         quiz_id: row.quiz_id ?? null,
         allow_discussion: row.allow_discussion,
       });
+      setLinkUrl(row.link_url ?? '');
       setSections(
         (row.sections ?? []).map((section) => ({
           id: section.id,
@@ -223,7 +255,7 @@ function MaterialEditor({
     } finally {
       setLoading(false);
     }
-  }, [materialId, toast]);
+  }, [materialId, toast, course?.id]);
 
   useEffect(() => {
     void load();
@@ -232,6 +264,10 @@ function MaterialEditor({
   const save = async (status?: 'draft' | 'published' | 'archived') => {
     if (!draft.title.trim()) {
       toast('error', 'Give the material a title');
+      return;
+    }
+    if (!draft.course_id) {
+      toast('error', 'Choose a course', 'Every material belongs to one course.');
       return;
     }
     setSaving(true);
@@ -249,6 +285,8 @@ function MaterialEditor({
       status: status ?? draft.status,
       course_id: draft.course_id,
       quiz_id: draft.quiz_id,
+      kind,
+      link_url: linkUrl.trim(),
       allow_discussion: draft.allow_discussion,
       sections: sections.map((section) => ({
         id: section.id ?? null,
@@ -292,7 +330,7 @@ function MaterialEditor({
     <div className="min-w-0 space-y-4">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={onBack}>
-          Materials
+          {course ? `${course.code} materials` : 'Materials'}
         </Button>
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5">
           <Chip className={draft.status === 'published' ? 'border-mint-500/25 bg-mint-500/12 text-mint-300' : 'border-white/10 bg-white/4 text-mist-400'}>{draft.status}</Chip>
@@ -311,8 +349,25 @@ function MaterialEditor({
           <Field label="Title">
             <TextInput value={draft.title} onChange={(event) => setDraft({...draft, title: event.target.value})} placeholder="Cell transport in plants" />
           </Field>
+          {!course && (
+            <Field label="Course">
+              <Select value={draft.course_id ?? ''} onChange={(event) => setDraft({...draft, course_id: event.target.value ? Number(event.target.value) : null})}>
+                <option value="">Choose a course…</option>
+                {courses.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.code} — {row.title}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="Topic">
-            <TextInput value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Cell Biology" />
+            <TextInput list="material-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Cell Biology" />
+            <datalist id="material-topics">
+              {topicNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Sub-topic">
             <TextInput value={draft.subtopic} onChange={(event) => setDraft({...draft, subtopic: event.target.value})} placeholder="Osmosis" />
@@ -347,6 +402,9 @@ function MaterialEditor({
           </Field>
           <Field label="Tags (comma separated)">
             <TextInput value={draft.tags} onChange={(event) => setDraft({...draft, tags: event.target.value})} placeholder="osmosis, membranes" />
+          </Field>
+          <Field label="File or link (optional)" hint="PDF, slides, video or any https:// resource." className="sm:col-span-2">
+            <TextInput value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://…" inputMode="url" />
           </Field>
           <Field label="Short description" className="sm:col-span-2">
             <TextArea rows={2} value={draft.description} onChange={(event) => setDraft({...draft, description: event.target.value})} />
@@ -674,22 +732,180 @@ function MaterialEditor({
 
 /* ----------------------------------------------------------------- list */
 
-function MaterialsTab({onChanged}: {onChanged: () => void}) {
+/* ------------------------------------------------------------------ notes */
+
+type NoteDraft = {id?: number; title: string; topic: string; description: string; body: string; link_url: string; status: 'draft' | 'published' | 'archived'};
+
+/** Plain text of a note: its section paragraphs, blank-line separated. */
+function noteBody(detail: MaterialDetail): string {
+  return (detail.sections ?? [])
+    .flatMap((section) => section.blocks ?? [])
+    .map((block) => (block.items?.length ? block.items.join('\n') : (block.text ?? '')))
+    .filter((text) => text.trim())
+    .join('\n\n');
+}
+
+function NoteEditor({
+  draft,
+  setDraft,
+  course,
+  topics,
+  onSaved,
+}: {
+  draft: NoteDraft | null;
+  setDraft: (next: NoteDraft | null) => void;
+  course: Course;
+  topics: string[];
+  onSaved: () => void;
+}) {
+  const {toast} = useSession();
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!draft) return;
+    if (!draft.title.trim()) {
+      toast('error', 'Give the note a title');
+      return;
+    }
+    setBusy(true);
+    const paragraphs = draft.body
+      .split(/\n\s*\n/)
+      .map((text) => text.trim())
+      .filter(Boolean);
+    const body = {
+      title: draft.title,
+      topic: draft.topic,
+      description: draft.description || paragraphs[0]?.slice(0, 280) || '',
+      course_id: course.id,
+      kind: 'note',
+      link_url: draft.link_url.trim(),
+      status: draft.status,
+      estimated_minutes: Math.max(1, Math.round(draft.body.split(/\s+/).length / 200)),
+      sections: [{title: draft.title, estimated_minutes: 3, check_enabled: false, blocks: paragraphs.map((text) => ({type: 'paragraph', text}))}],
+    };
+    try {
+      if (draft.id) {
+        // keep the existing section id so the reader's progress survives an edit
+        const current = await api.materials.adminRead(draft.id);
+        const sectionId = current.sections?.[0]?.id ?? null;
+        await api.materials.update(draft.id, {
+          ...current,
+          ...body,
+          tags: current.tags,
+          summary: current.summary,
+          sections: [{...body.sections[0], id: sectionId}],
+        });
+      } else {
+        await api.materials.create(body);
+      }
+      toast('success', draft.id ? 'Note saved' : 'Note created', draft.status === 'published' ? 'Visible to players.' : 'Saved as a draft.');
+      setDraft(null);
+      onSaved();
+    } catch (error) {
+      toast('error', 'Could not save note', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open={Boolean(draft)}
+      onClose={() => setDraft(null)}
+      title={draft?.id ? 'Edit note' : 'New note'}
+      subtitle={`${course.code} · ${course.title}`}
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => setDraft(null)}>
+            Cancel
+          </Button>
+          <Button onClick={save} loading={busy} icon={<Save className="size-4" />}>
+            Save note
+          </Button>
+        </>
+      }
+    >
+      {draft && (
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <Field label="Title" className="sm:col-span-2">
+            <TextInput value={draft.title} onChange={(event) => setDraft({...draft, title: event.target.value})} placeholder="Doctrine of covering the field" />
+          </Field>
+          <Field label="Topic">
+            <TextInput list="note-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Federalism" />
+            <datalist id="note-topics">
+              {topics.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="Status">
+            <Select value={draft.status} onChange={(event) => setDraft({...draft, status: event.target.value as NoteDraft['status']})}>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </Select>
+          </Field>
+          <Field label="Note" hint="Separate paragraphs with a blank line." className="sm:col-span-2">
+            <TextArea rows={9} value={draft.body} onChange={(event) => setDraft({...draft, body: event.target.value})} />
+          </Field>
+          <Field label="Short excerpt (optional)" hint="Shown on the note card. Defaults to the first paragraph." className="sm:col-span-2">
+            <TextArea rows={2} maxLength={500} value={draft.description} onChange={(event) => setDraft({...draft, description: event.target.value})} />
+          </Field>
+          <Field label="File or link (optional)" className="sm:col-span-2">
+            <TextInput value={draft.link_url} onChange={(event) => setDraft({...draft, link_url: event.target.value})} placeholder="https://…" inputMode="url" />
+          </Field>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function statusTone(status: string): string {
+  return status === 'published'
+    ? 'border-mint-500/25 bg-mint-500/12 text-mint-300'
+    : status === 'draft'
+      ? 'border-gold-500/25 bg-gold-500/12 text-gold-300'
+      : 'border-white/10 bg-white/4 text-mist-400';
+}
+
+/* ----------------------------------------------------------------- list */
+
+function MaterialsTab({
+  onChanged,
+  course = null,
+  kind = 'material',
+  unassigned = false,
+}: {
+  onChanged: () => void;
+  course?: Course | null;
+  kind?: 'material' | 'note';
+  unassigned?: boolean;
+}) {
   const {toast} = useSession();
   const [items, setItems] = useState<MaterialCard[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
+  const [query, setQuery] = useState('');
+  const [topic, setTopic] = useState('');
+  const [topics, setTopics] = useState<string[]>([]);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [noteDraft, setNoteDraft] = useState<NoteDraft | null>(null);
+  const [reading, setReading] = useState<MaterialDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const limit = 40;
+  const limit = kind === 'note' ? 24 : 40;
+  const isNotes = kind === 'note';
+  const noun = isNotes ? 'note' : 'material';
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const payload = await api.materials.adminList({
         ...(filter === 'all' ? {} : {status: filter}),
+        ...(course ? {course_id: course.id, kind} : {}),
+        ...(unassigned ? {unassigned: true} : {}),
+        ...(query.trim() ? {q: query.trim()} : {}),
+        ...(topic ? {topic} : {}),
         limit,
         offset,
       });
@@ -697,25 +913,66 @@ function MaterialsTab({onChanged}: {onChanged: () => void}) {
       setStats(payload.stats ?? {});
       setTotal(payload.total ?? 0);
     } catch (error) {
-      toast('error', 'Could not load materials', (error as Error).message);
+      toast('error', `Could not load ${noun}s`, (error as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [filter, offset, toast]);
+  }, [filter, offset, toast, course, kind, query, topic, limit, noun, unassigned]);
 
-  // Changing the status filter jumps back to the first page.
   useEffect(() => {
     setOffset(0);
-  }, [filter]);
+  }, [filter, query, topic]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const handle = window.setTimeout(() => void load(), query ? 250 : 0);
+    return () => window.clearTimeout(handle);
+  }, [load, query]);
+
+  useEffect(() => {
+    if (!course) return;
+    api.admin
+      .courseTopics(course.id)
+      .then((payload) => setTopics(payload.topics.map((row) => row.name)))
+      .catch(() => setTopics([]));
+  }, [course]);
+
+  const openNote = async (row: MaterialCard, mode: 'read' | 'edit') => {
+    try {
+      const detail = await api.materials.adminRead(row.id);
+      if (mode === 'read') setReading(detail);
+      else
+        setNoteDraft({
+          id: detail.id,
+          title: detail.title,
+          topic: detail.topic,
+          description: detail.description,
+          body: noteBody(detail),
+          link_url: detail.link_url ?? '',
+          status: detail.status,
+        });
+    } catch (error) {
+      toast('error', 'Could not open the note', (error as Error).message);
+    }
+  };
+
+  const remove = async (row: MaterialCard) => {
+    if (!window.confirm(`Delete “${row.title}”?`)) return;
+    try {
+      await api.materials.remove(row.id);
+      toast('info', `${isNotes ? 'Note' : 'Material'} deleted`);
+      onChanged();
+      void load();
+    } catch (error) {
+      toast('error', 'Could not delete', (error as Error).message);
+    }
+  };
 
   if (editing !== null) {
     return (
       <MaterialEditor
         materialId={editing}
+        course={course}
+        kind={kind}
         onBack={() => setEditing(null)}
         onSaved={() => {
           onChanged();
@@ -725,28 +982,56 @@ function MaterialsTab({onChanged}: {onChanged: () => void}) {
     );
   }
 
+  const create = () => {
+    if (isNotes && course) setNoteDraft({title: '', topic: topic, description: '', body: '', link_url: '', status: 'published'});
+    else setEditing('new');
+  };
+
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <SectionHeading title="Materials studio" subtitle="Long-form reading that unlocks arena time." />
-        <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing('new')}>
-          New material
+        <p className="min-w-0 flex-1 text-[0.8rem] font-semibold text-mist-400">
+          {course
+            ? `${formatNumber(stats.total ?? 0)} ${noun}${(stats.total ?? 0) === 1 ? '' : 's'} in ${course.code} · ${formatNumber(stats.published ?? 0)} published`
+            : 'Long-form reading that unlocks arena time.'}
+        </p>
+        <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
+          New {noun}
         </Button>
       </div>
 
-      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          {label: 'Total', value: stats.total ?? 0, icon: BookOpen},
-          {label: 'Published', value: stats.published ?? 0, icon: Rocket},
-          {label: 'Views', value: stats.views ?? 0, icon: Eye},
-          {label: 'Confusions', value: stats.confusion_reports ?? 0, icon: TriangleAlert},
-        ].map((tile) => (
-          <Card key={tile.label} className="min-w-0 p-3">
-            <tile.icon className="size-4 text-nova-300" />
-            <p className="mt-1.5 text-[1.05rem] font-black text-mist-50 tabular">{formatNumber(tile.value)}</p>
- <p className="text-[0.66rem] font-bold tracking-wide text-mist-500">{tile.label}</p>
-          </Card>
-        ))}
+      {!course && (
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {label: 'Total', value: stats.total ?? 0, icon: BookOpen},
+            {label: 'Published', value: stats.published ?? 0, icon: Rocket},
+            {label: 'Views', value: stats.views ?? 0, icon: Eye},
+            {label: 'Confusions', value: stats.confusion_reports ?? 0, icon: TriangleAlert},
+          ].map((tile) => (
+            <Card key={tile.label} className="min-w-0 p-3">
+              <tile.icon className="size-4 text-nova-300" />
+              <p className="mt-1.5 text-[1.05rem] font-black text-mist-50 tabular">{formatNumber(tile.value)}</p>
+              <p className="text-[0.66rem] font-bold tracking-wide text-mist-500">{tile.label}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <div className="relative min-w-0">
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-mist-500" />
+          <TextInput className="pl-9" placeholder={`Search ${noun}s…`} value={query} onChange={(event) => setQuery(event.target.value)} aria-label={`Search ${noun}s`} />
+        </div>
+        {course && (
+          <Select value={topic} onChange={(event) => setTopic(event.target.value)} aria-label="Filter by topic">
+            <option value="">All topics</option>
+            {topics.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <Segmented
@@ -761,69 +1046,152 @@ function MaterialsTab({onChanged}: {onChanged: () => void}) {
       />
 
       {loading ? (
-        <div className="space-y-2">
+        <div className={isNotes ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-2'}>
           {[0, 1, 2].map((key) => (
-            <Skeleton key={key} className="h-20 w-full" />
+            <Skeleton key={key} className="h-28 w-full" />
           ))}
         </div>
-      ) : items.length ? (
-        <ul className="min-w-0 space-y-2">
+      ) : !items.length ? (
+        <EmptyState
+          icon={isNotes ? <NotebookPen className="size-5" /> : <BookOpen className="size-5" />}
+          title={query || topic ? `No ${noun}s match` : `No ${noun}s yet`}
+          detail={course ? `${isNotes ? 'Notes' : 'Materials'} you add here belong to ${course.code} only.` : 'Create the first one.'}
+          action={
+            <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={create}>
+              New {noun}
+            </Button>
+          }
+        />
+      ) : isNotes ? (
+        <ul className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((row) => (
-            <li key={row.id} className="card min-w-0 p-3">
-              <div className="flex min-w-0 flex-wrap items-start gap-2">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-nova-500/25 bg-nova-500/10">
-                  <BookOpen className="size-4 text-nova-300" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="line-clamp-2 text-[0.9rem] font-extrabold text-mist-50">{row.title}</p>
-                  <p className="mt-0.5 text-[0.72rem] font-bold text-mist-500">
-                    {row.topic || 'General'} · {row.section_count} sections · v{row.version} · {formatNumber(row.views ?? 0)} views
-                  </p>
+            <li key={row.id} className="min-w-0">
+              <Card className="flex h-full min-w-0 flex-col p-3">
+                <div className="flex min-w-0 items-start gap-2">
+                  <p className="line-clamp-2 min-w-0 flex-1 text-[0.9rem] font-extrabold text-mist-50">{row.title}</p>
+                  <Chip className={`shrink-0 ${statusTone(row.status)}`}>{row.status}</Chip>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  <Chip
-                    className={
-                      row.status === 'published' ? 'border-mint-500/25 bg-mint-500/12 text-mint-300' : row.status === 'draft' ? 'border-gold-500/25 bg-gold-500/12 text-gold-300' : 'border-white/10 bg-white/4 text-mist-400'
-                    }
-                  >
-                    {row.status}
-                  </Chip>
-                  <Button size="sm" variant="outline" icon={<FileText className="size-4" />} onClick={() => setEditing(row.id)}>
+                {row.description && <p className="mt-1 line-clamp-3 text-[0.78rem] leading-snug text-mist-400 [overflow-wrap:anywhere]">{row.description}</p>}
+                <p className="mt-2 truncate text-[0.7rem] font-bold text-mist-500">
+                  {row.topic || 'No topic'} · updated {formatDate(row.updated_at)}
+                </p>
+                <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
+                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')}>
+                    Open
+                  </Button>
+                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')}>
                     Edit
                   </Button>
+                  <Button size="sm" variant="ghost" title="Delete note" icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(row)} />
                 </div>
-              </div>
+              </Card>
             </li>
           ))}
         </ul>
       ) : (
-        <EmptyState
-          icon={<BookOpen className="size-5" />}
-          title="No materials yet"
-          detail="Create the first one — sections, key terms and a self-test draw from your question bank."
-          action={
-            <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing('new')}>
-              New material
-            </Button>
-          }
+        <ul className="min-w-0 space-y-1.5">
+          {items.map((row) => (
+            <li key={row.id} className="min-w-0">
+              <Card className="min-w-0 p-3">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-nova-500/25 bg-nova-500/10">
+                    <BookOpen className="size-4 text-nova-300" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-[0.88rem] font-extrabold text-mist-50">{row.title}</p>
+                    <p className="mt-0.5 truncate text-[0.72rem] font-bold text-mist-500">
+                      {row.topic || 'No topic'} · {row.section_count} section{row.section_count === 1 ? '' : 's'} · updated {formatDate(row.updated_at)}
+                      {!course && row.course_title ? ` · ${row.course_title}` : ''}
+                    </p>
+                  </div>
+                  <Chip className={`shrink-0 ${statusTone(row.status)}`}>{row.status}</Chip>
+                </div>
+                <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+                  <Button size="sm" variant="outline" icon={<FileText className="size-3.5" />} onClick={() => setEditing(row.id)}>
+                    Edit
+                  </Button>
+                  {row.link_url && (
+                    <a
+                      href={row.link_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-8 items-center gap-1 rounded-xl px-2.5 text-[0.76rem] font-bold text-nova-200 hover:bg-white/5"
+                    >
+                      <ExternalLink className="size-3.5" /> Link
+                    </a>
+                  )}
+                  <Button size="sm" variant="ghost" title="Delete material" icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(row)} />
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {total > limit && (
+        <div className="flex items-center justify-between gap-3">
+          <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+            Previous
+          </Button>
+          <span className="text-[0.76rem] font-bold text-mist-500 tabular">
+            {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
+          </span>
+          <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
+            Next
+          </Button>
+        </div>
+      )}
+
+      {course && (
+        <NoteEditor
+          draft={noteDraft}
+          setDraft={setNoteDraft}
+          course={course}
+          topics={topics}
+          onSaved={() => {
+            onChanged();
+            void load();
+          }}
         />
       )}
 
-      <div className="flex items-center justify-between gap-3">
-        <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-          Previous
-        </Button>
-        <span className="text-[0.78rem] font-bold text-mist-500">
-          {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
-        </span>
-        <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
-          Next
-        </Button>
-      </div>
+      <Modal open={Boolean(reading)} onClose={() => setReading(null)} title={reading?.title} subtitle={reading ? `${reading.topic || 'No topic'} · updated ${formatDate(reading.updated_at)}` : ''} size="lg">
+        {reading && (
+          <div className="min-w-0 space-y-3">
+            {noteBody(reading)
+              .split('\n\n')
+              .map((text, index) => (
+                <p key={index} className="text-[0.88rem] leading-relaxed whitespace-pre-line text-mist-200 [overflow-wrap:anywhere]">
+                  {text}
+                </p>
+              ))}
+            {reading.link_url && (
+              <a href={reading.link_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[0.82rem] font-bold text-nova-200">
+                <ExternalLink className="size-4" /> Open attached link
+              </a>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
 
-export default function MaterialsAdmin({onChanged}: {onChanged: () => void}) {
-  return <MaterialsTab onChanged={onChanged} />;
+/**
+ * Materials authoring. Inside a course workspace pass `course` (and `kind`):
+ * the list, filters and new items are scoped to that course only.
+ */
+export default function MaterialsAdmin({
+  onChanged,
+  course = null,
+  kind = 'material',
+  unassigned = false,
+}: {
+  onChanged: () => void;
+  course?: Course | null;
+  kind?: 'material' | 'note';
+  /** List only materials that have no course yet, so staff can assign them. */
+  unassigned?: boolean;
+}) {
+  return <MaterialsTab onChanged={onChanged} course={course} kind={kind} unassigned={unassigned} />;
 }

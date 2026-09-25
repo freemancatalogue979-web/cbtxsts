@@ -534,15 +534,15 @@ class QuizIn(BaseModel):
     review_before_submit: bool = True
     max_attempts: int = Field(default=1, ge=0, le=50)
     practice_mode: bool = False
-    question_count: int = Field(default=0, ge=0, le=200)  # 0 = build the paper by hand
-    topics: list[str] = []  # creation-time draw filter (empty = whole course bank)
+    # Where the questions come from — see services/course_bank.py.
+    question_source: Literal["course_random", "exam_specific"] = "exam_specific"
+    # Questions served to EACH player. For course_random: drawn at random from
+    # the course bank per player. For exam_specific: 0 = the whole exam set.
+    draw_count: int = Field(default=0, ge=0, le=500)
+    draw_difficulty: dict[str, int] = Field(default_factory=dict)
+    question_count: int = Field(default=0, ge=0, le=500)  # legacy alias of draw_count
+    topics: list[str] = []  # random-draw topic filter (empty = whole course bank)
 
-    @field_validator("question_count")
-    @classmethod
-    def _count_or_by_hand(cls, value: int) -> int:
-        if 0 < value < 3:
-            raise ValueError("A drawn paper needs at least 3 questions — use 0 to build the paper by hand.")
-        return value
     pass_score: int = Field(default=50, ge=0, le=100)  # percent needed to pass
 
 
@@ -569,6 +569,11 @@ class QuizBuilderIn(BaseModel):
     review_before_submit: bool | None = None
     max_attempts: int | None = Field(default=None, ge=0, le=50)
     practice_mode: bool | None = None
+    pass_score: int | None = Field(default=None, ge=0, le=100)
+    question_source: Literal["course_random", "exam_specific"] | None = None
+    draw_count: int | None = Field(default=None, ge=0, le=500)
+    draw_topics: list[str] | None = None
+    draw_difficulty: dict[str, int] | None = None
 
 
 class QuizStatusIn(BaseModel):
@@ -762,6 +767,9 @@ class MaterialSectionIn(BaseModel):
 class MaterialIn(BaseModel):
     title: str = Field(default="", max_length=200)
     course_id: int | None = None
+    # None = leave unchanged on update (older clients don't send these).
+    kind: Literal["material", "note"] | None = None
+    link_url: str | None = Field(default=None, max_length=600)
     quiz_id: int | None = None
     topic: str = Field(default="", max_length=120)
     subtopic: str = Field(default="", max_length=120)

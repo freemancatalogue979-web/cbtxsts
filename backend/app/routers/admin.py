@@ -175,13 +175,15 @@ def list_courses(db: Session = Depends(get_db)) -> list[dict]:
     counts = dict(
         db.execute(select(Quiz.course_id, func.count(Quiz.id)).where(Quiz.is_bank.is_(False)).group_by(Quiz.course_id)).all()
     )
-    question_counts = dict(
-        db.execute(select(Question.course_id, func.count(Question.id)).group_by(Question.course_id)).all()
-    )
+    from ..services.course_bank import bank_conditions, bank_counts_by_course
+
+    # Course question count = the course BANK only (never exam copies or
+    # exam-specific questions, which belong to one exam).
+    question_counts = bank_counts_by_course(db)
     topic_counts = dict(
         db.execute(
             select(Question.course_id, func.count(func.distinct(Question.topic)))
-            .where(Question.topic.is_not(None), Question.topic != "")
+            .where(Question.topic.is_not(None), Question.topic != "", bank_conditions())
             .group_by(Question.course_id)
         ).all()
     )
@@ -267,34 +269,70 @@ def list_quizzes(db: Session = Depends(get_db)) -> list[dict]:
     return payload
 
 
+def _apply_source(db: Session, quiz: Quiz, data: dict) -> None:
+    """Write the question-source fields and refuse configurations that cannot run."""
+    from ..services.course_bank import COURSE_RANDOM, EXAM_SPECIFIC
+
+    if "question_source" in data and data["question_source"] in (COURSE_RANDOM, EXAM_SPECIFIC):
+        quiz.question_source = data["question_source"]
+    if "draw_count" in data and data["draw_count"] is not None:
+        quiz.draw_count = max(0, int(data["draw_count"]))
+    if "draw_topics" in data and data["draw_topics"] is not None:
+        quiz.draw_topics = [str(t).strip() for t in data["draw_topics"] if str(t).strip()]
+    if "draw_difficulty" in data and data["draw_difficulty"] is not None:
+        quiz.draw_difficulty = {
+            str(k): int(v) for k, v in data["draw_difficulty"].items() if str(k) in {"easy", "medium", "hard"} and int(v or 0) > 0
+        }
+
+
+def _source_problem(db: Session, quiz: Quiz, *, strict: bool) -> str | None:
+    """Configuration problems. Random-draw setup errors always block; an empty
+    exam-specific set only blocks when the exam is live (strict)."""
+    from ..services.course_bank import COURSE_RANDOM, validate_exam_source
+
+    problem = validate_exam_source(db, quiz)
+    if problem is None:
+        return None
+    if quiz.question_source == COURSE_RANDOM or strict:
+        return problem
+    return None
+
+
 @router.post("/quizzes")
 def create_quiz(payload: QuizIn, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
-    """Create an exam. When `question_count` > 0 the server draws exactly that
-    many eligible questions from the selected course (optionally filtered by
-    topics) and stores them — the paper is frozen from the first save, so a
-    refresh never re-rolls it. Creating with more questions than the bank holds
-    fails cleanly instead of padding or duplicating."""
+    """Create an exam.
+
+    * ``question_source="course_random"`` — nothing is copied. Each player who
+      starts the exam is dealt ``draw_count`` random questions from the course
+      bank (optionally limited to ``topics`` / a difficulty mix). A 10,000
+      question bank with ``draw_count=40`` stays a 10,000 question bank.
+    * ``question_source="exam_specific"`` — the exam owns its own questions,
+      added afterwards (they never join the course bank unless asked).
+    """
+    from ..services.course_bank import COURSE_RANDOM
+
     data = payload.model_dump()
-    count = int(data.pop("question_count", 0) or 0)
+    legacy_count = int(data.pop("question_count", 0) or 0)
     topics = [str(t) for t in (data.pop("topics", []) or []) if str(t).strip()]
-    if count and not data.get("course_id"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a course first — question draws come from the course bank.")
-    quiz = Quiz(**data, created_by=admin.email) if hasattr(Quiz, "created_by") else Quiz(**data)
+    source_fields = {
+        "question_source": data.pop("question_source"),
+        "draw_count": int(data.pop("draw_count", 0) or 0) or legacy_count,
+        "draw_difficulty": data.pop("draw_difficulty", {}) or {},
+        "draw_topics": topics,
+    }
+    # Old clients sent question_count without a source: that always meant "draw from the course".
+    if legacy_count and not payload.draw_count and payload.question_source == "exam_specific":
+        source_fields["question_source"] = COURSE_RANDOM
+    quiz = Quiz(**data)
+    _apply_source(db, quiz, source_fields)
     db.add(quiz)
     db.flush()
-    if count:
-        quiz.draw_topics = topics
-        result = _draw_from_bank(db, quiz, count, topics, admin.email)
-        if result["drawn"] < count:
-            db.rollback()
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Not enough eligible questions to create a {count}-question exam — the selected "
-                f"{'topics' if topics else 'course'} hold {result['available']} unique approved questions. "
-                "Lower the question count or add questions to the bank.",
-            )
-        audit(db, actor=admin.email, action="quiz.create_draw", target_type="quiz", target_id=quiz.id,
-              detail={"drawn": result["drawn"], "count": count, "topics": topics})
+    problem = _source_problem(db, quiz, strict=quiz.status == "active")
+    if problem:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    audit(db, actor=admin.email, action="quiz.create", target_type="quiz", target_id=quiz.id,
+          detail={"source": quiz.question_source, "draw_count": quiz.draw_count, "topics": topics})
     db.commit()
     db.refresh(quiz)
     return quiz_public(quiz, questions=True, reveal=True)
@@ -316,9 +354,18 @@ async def update_quiz(quiz_id: int, payload: QuizBuilderIn, db: Session = Depend
     data = payload.model_dump(exclude_unset=True, exclude_none=True)
     if "max_attempts" in data and data["max_attempts"] < 0:
         data["max_attempts"] = 0
+    source_keys = {"question_source", "draw_count", "draw_topics", "draw_difficulty"}
     for field, value in data.items():
+        if field in source_keys:
+            continue
         if hasattr(quiz, field):
             setattr(quiz, field, value)
+    _apply_source(db, quiz, {k: v for k, v in data.items() if k in source_keys})
+    db.flush()
+    problem = _source_problem(db, quiz, strict=quiz.status == "active")
+    if problem:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
     db.commit()
     await dispatch([to_everyone("quiz_updated", quiz_public(quiz))])
     return quiz_public(quiz, questions=True, reveal=True)
@@ -329,7 +376,14 @@ async def set_quiz_status(quiz_id: int, payload: QuizStatusIn, db: Session = Dep
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
+    if quiz.is_bank:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A course question bank is not an exam and cannot go live.")
     quiz.status = payload.status
+    if payload.status == "active":
+        problem = _source_problem(db, quiz, strict=True)
+        if problem:
+            db.rollback()
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
     if payload.status == "active" and quiz.scheduled_at is None:
         quiz.scheduled_at = utcnow()
     db.commit()
@@ -367,10 +421,59 @@ def _next_position(db: Session, quiz_id: int) -> int:
     return int(highest or 0) + 1
 
 
+def _copy_to_bank(db: Session, question: Question, actor: str) -> Question | None:
+    """Explicitly add an exam-specific question to its course bank as well.
+
+    The exam keeps its own row (still exam-only); the bank gets an independent
+    original with the same content and the same stored answer. Re-running is a
+    no-op when the bank already holds that text."""
+    from ..services.course_bank import bank_conditions, copy_into_bank, ensure_bank_quiz
+
+    if not question.course_id:
+        return None
+    course = db.get(Course, question.course_id)
+    if course is None:
+        return None
+    bank = ensure_bank_quiz(db, course)
+    existing = db.scalar(
+        select(Question).where(
+            bank_conditions(course.id), func.lower(func.trim(Question.text)) == (question.text or "").strip().lower()
+        )
+    )
+    if existing is not None:
+        question.source_id = existing.id
+        return existing
+    original = copy_into_bank(db, question, bank, position=_next_position(db, bank.id), actor=actor)
+    record_version(db, original, note=f"Added to bank from exam question #{question.id}", author=actor)
+    question.source_id = original.id
+    return original
+
+
+@router.post("/questions/{question_id:int}/add-to-bank")
+def add_question_to_bank(
+    question_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    question = db.get(Question, question_id)
+    if question is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found.")
+    if not question.exam_only:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only exam-specific questions can be added to the course bank.")
+    original = _copy_to_bank(db, question, admin.email)
+    if original is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Give the exam a course first — the bank belongs to a course.")
+    audit(db, actor=admin.email, action="question.add_to_bank", target_type="question", target_id=question.id,
+          detail={"bank_question": original.id})
+    db.commit()
+    return {"ok": True, "bank_question_id": original.id, "question": question_admin_public(question)}
+
+
 @router.post("/quizzes/{quiz_id}/questions")
 def create_question(
     quiz_id: int,
     payload: QuestionIn,
+    add_to_bank: bool = Query(False),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
@@ -396,12 +499,17 @@ def create_question(
         position=position,
         created_by=admin.email,
         updated_by=admin.email,
+        # Written inside an exam = belongs to that exam only; inside the
+        # course bank = a bank original every random draw can use.
+        exam_only=not quiz.is_bank,
         **cleaned,
     )
     db.add(question)
     db.flush()
     validate_saved_question(question)
     record_version(db, question, note="Created", author=admin.email)
+    if add_to_bank and not quiz.is_bank:
+        _copy_to_bank(db, question, admin.email)
     audit(db, actor=admin.email, action="question.create", target_type="question", target_id=question.id,
           detail={"quiz_id": quiz_id, "correct": question.correct})
     db.commit()
@@ -484,6 +592,7 @@ def bulk_create_questions(
             position=position,
             created_by=admin.email,
             updated_by=admin.email,
+            exam_only=not quiz.is_bank,
             **cleaned,
         )
         db.add(question)
@@ -515,13 +624,24 @@ def course_bank(course_id: int, db: Session = Depends(get_db)) -> dict:
     course = db.get(Course, course_id)
     if course is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
-    bank = db.scalar(
-        select(func.count(Question.id)).where(Question.course_id == course_id, Question.source_id.is_(None))
-    ) or 0
+    from ..services.course_bank import bank_count
+
+    bank = bank_count(db, course_id)
+    eligible = bank_count(db, course_id, eligible_only=True)
     copies = db.scalar(
         select(func.count(Question.id)).where(Question.course_id == course_id, Question.source_id.is_not(None))
     ) or 0
-    return {"course_id": course_id, "code": course.code, "bank": bank, "drawn_copies": copies}
+    exam_specific = db.scalar(
+        select(func.count(Question.id)).where(Question.course_id == course_id, Question.exam_only.is_(True))
+    ) or 0
+    return {
+        "course_id": course_id,
+        "code": course.code,
+        "bank": bank,
+        "eligible": eligible,
+        "drawn_copies": copies,
+        "exam_specific": exam_specific,
+    }
 
 
 def _draw_from_bank(db: Session, quiz: Quiz, count: int, topics: list[str] | None, actor: str) -> dict:
@@ -540,7 +660,7 @@ def _draw_from_bank(db: Session, quiz: Quiz, count: int, topics: list[str] | Non
     )
     stmt = select(Question).where(
         Question.course_id == quiz.course_id,
-        Question.source_id.is_(None),
+        Question.source_id.is_(None), Question.exam_only.is_(False),
         Question.status.in_(["approved"]),
         Question.visible.is_(True),
         Question.id.not_in(owned | already_copied),
@@ -607,7 +727,7 @@ def _draw_from_bank(db: Session, quiz: Quiz, count: int, topics: list[str] | Non
         "available": eligible,
         "total": total,
         "bank": db.scalar(
-            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None))
+            select(func.count(Question.id)).where(Question.course_id == quiz.course_id, Question.source_id.is_(None), Question.exam_only.is_(False))
         )
         or 0,
     }
@@ -729,7 +849,13 @@ def duplicate_question_endpoint(
     question = db.get(Question, question_id)
     if question is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found.")
-    clone = duplicate_question(db, question, target_quiz_id=quiz_id, author=admin.email)
+    target = db.get(Quiz, quiz_id or question.quiz_id)
+    into_bank = bool(target and target.is_bank)
+    # A duplicate inside the bank is a new bank original, not a "drawn copy".
+    clone = duplicate_question(db, question, target_quiz_id=quiz_id, author=admin.email, keep_source=not into_bank)
+    clone.exam_only = not into_bank
+    if into_bank:
+        clone.source_id = None
     audit(db, actor=admin.email, action="question.duplicate", target_type="question", target_id=clone.id,
           detail={"from": question.id})
     db.commit()
@@ -1066,7 +1192,8 @@ def export_results(quiz_id: int, db: Session = Depends(get_db)) -> Response:
                 row["student"]["name"],
                 row["student"]["phone"],
                 row["result"]["score"],
-                len(quiz.questions),
+                # Each player's own paper length (random draws are per player).
+                row["result"]["correct_count"] + row["result"]["wrong_count"] + row["result"]["unanswered_count"],
                 row["result"]["percentage"],
                 row["result"]["grade"],
                 row["result"]["submitted_at"] or "",

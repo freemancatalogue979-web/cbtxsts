@@ -9,7 +9,9 @@
  *   …a sleeping tab does not machine-gun the bars it missed
  *   …muting is a gain fade: the transport keeps running underneath
  *   …switching tracks stops the old one dead (two tracks never mix)
- *   …a file this device cannot decode is covered by the synth, not silence
+ *   …ONLY the three approved files ever play: no synth, no generated or
+ *    hidden music, not even when a file fails or media is unavailable
+ *   …the player can select each of the three tracks
  *
  *     node scripts/music-check.mjs
  */
@@ -180,11 +182,28 @@ async function boot({files = true, breakFiles = false} = {}) {
         this.loop = false;
         this.volume = 1;
         this.preload = '';
-        this.src = '';
+        this._src = '';
+        this.listeners = {};
+        this.srcHistory = [];
         elements.push(this);
       }
+      get src() {
+        return this._src;
+      }
+      set src(value) {
+        this._src = value;
+        this.srcHistory.push(value);
+      }
+      addEventListener(type, fn) {
+        (this.listeners[type] ||= []).push(fn);
+      }
       play() {
-        if (breakFiles) return Promise.reject(new Error('decode failed'));
+        if (breakFiles) {
+          const error = new Error('decode failed');
+          error.name = 'NotSupportedError';
+          setTimeout(() => (this.listeners.error || []).forEach((fn) => fn()), 0);
+          return Promise.reject(error);
+        }
         this.paused = false;
         return Promise.resolve();
       }
@@ -252,100 +271,75 @@ async function fileSuite() {
   /* ---- off ---- */
   music.setEnabled(false);
   check('off pauses the file', elements[1].paused === true && music.state() === 'off', `${elements[1].paused}/${music.state()}`);
-  check('off stops the synth scheduler too', music._debug().timer === false, JSON.stringify(music._debug()));
-}
+  check('no oscillator/generated audio was ever created', fake.notes.length === 0, String(fake.notes.length));
 
-/* ------------------------------------- a file that will not play, covered --- */
-
-async function fallbackSuite() {
-  console.log('\n-- a file this device cannot play is covered by the synth');
-  const {music, fake, elements} = await boot({files: true, breakFiles: true});
-
+  /* ---- every approved track can be selected and played ---- */
   music.setEnabled(true);
-  await wait(120);
-  check('a broken file does not leave the arena silent', music.state() === 'playing', music.state());
-  check('the synth takes over the broken file', music._debug().backend === 'synth', JSON.stringify(music._debug()));
-  check('the synth schedules notes when covering', fake.notes.length > 0, String(fake.notes.length));
-  check('the failed file is not retried in a loop', elements.length <= 2, String(elements.length));
-}
+  await wait(40);
+  for (const track of tracks) {
+    music.setTrack(track.id);
+    await wait(30);
+    const playing = elements.filter((el) => !el.paused);
+    check(`selecting "${track.name}" plays exactly that file`, playing.length === 1 && playing[0].src.endsWith(track.src.split('/').pop()), playing.map((el) => el.src).join(','));
+  }
+  check('unknown track ids are ignored', (() => {
+    const before = music.track();
+    music.setTrack('ambient');
+    return music.track() === before;
+  })());
+  const allSources = elements.flatMap((el) => el.srcHistory).filter(Boolean);
+  const approved = new Set(tracks.map((row) => row.src));
+  check('only approved files were ever loaded', allSources.every((src) => approved.has(src.replace(/^https?:\/\/[^/]+/, ''))), allSources.join(','));
+  check('never two tracks at once', music._debug().playingElements <= 1, String(music._debug().playingElements));
 
-/* --------------------------------------- a device with no media element --- */
-
-async function synthSuite() {
-  console.log('\n-- a device without a media element falls back to the synth');
-  const {music, fake} = await boot({files: false});
-
-  music.setEnabled(true);
-  await wait(60);
-  check('music still plays without media elements', music.state() === 'playing', music.state());
-  check('the synth backend is used', music._debug().backend === 'synth', JSON.stringify(music._debug()));
-  check('the synth schedules notes to play', fake.notes.length > 0, String(fake.notes.length));
-
-  /* ---- pause keeps the place ---- */
-  const atPause = music._debug();
-  music.pause();
-  check('pause reports paused', music.state() === 'paused', music.state());
-  check('pause stops scheduling', music._debug().timer === false, JSON.stringify(music._debug()));
-
-  const afterPause = fake.notes.length;
-  fake.advance(30);
-  await wait(300);
-  check('nothing is scheduled while paused', fake.notes.length === afterPause, `${fake.notes.length} vs ${afterPause}`);
-
-  music.resume();
-  await wait(80);
-  check('resume reports playing again', music.state() === 'playing', music.state());
-  check('resume continues the progression, it does not restart', music._debug().bar >= atPause.bar, `${atPause.bar} -> ${music._debug().bar}`);
-
-  const late = fake.notes.slice(afterPause);
-  check('resume never replays the bars the nap skipped', late.filter((note) => note.at < 30).length === 0, `${late.filter((note) => note.at < 30).length} notes in the past`);
-  check('resume does not machine-gun a burst of bars', late.filter((note) => note.at < 32).length < 120, `${late.filter((note) => note.at < 32).length} note starts in the first 2s`);
-
-  /* ---- a throttled tick never catches up ---- */
-  const beforeStall = fake.notes.length;
-  fake.advance(20);
-  await wait(600);
-  const stalled = fake.notes.slice(beforeStall);
-  const piled = stalled.filter((note) => note.at < 20.06);
-  // one bar is ~32 note starts; the un-anchored engine piled 90 onto one instant
-  check('a late tick starts one bar instead of a pile of them', piled.length < 48, `${piled.length} notes bunched at one instant`);
-  check('a late tick still plays something', stalled.length > 0, String(stalled.length));
-
-  /* ---- mute is not pause ---- */
-  const beforeMute = music._debug();
-  music.setVolume(0);
-  check('mute leaves the transport running', music.state() === 'playing' && music._debug().timer, JSON.stringify(music._debug()));
-  check('mute does not restart the phrase', music._debug().bar >= beforeMute.bar, `${beforeMute.bar} -> ${music._debug().bar}`);
-  music.setVolume(70);
-  check('unmute keeps playing from the same place', music.state() === 'playing' && music._debug().bar >= beforeMute.bar, JSON.stringify(music._debug()));
-
-  /* ---- switching cannot mix ---- */
-  const generationBefore = fake.notes.length;
-  music.setTrack('arcade');
-  await wait(80);
-  check('switching tracks keeps playing', music.state() === 'playing', music.state());
-  check('the new track starts a new phrase', music._debug().bar <= 2, String(music._debug().bar));
-  check('the new track schedules its own notes', fake.notes.length > generationBefore, `${fake.notes.length}`);
-  check('the bus generation advanced, so the old notes are gone', music._debug().generation >= 2, String(music._debug().generation));
-
-  /* ---- off ---- */
+  /* ---- a hidden tab pauses, a manual pause survives coming back ---- */
   music.setEnabled(false);
-  check('turning music off reports off', music.state() === 'off', music.state());
-  check('off stops the scheduler', music._debug().timer === false, JSON.stringify(music._debug()));
-  const afterOff = fake.notes.length;
-  fake.advance(20);
-  await wait(250);
-  check('nothing plays once the music is off', fake.notes.length === afterOff, `${fake.notes.length} vs ${afterOff}`);
+}
 
-  /* ---- paused stays paused ---- */
+async function visibilitySuite() {
+  console.log('\n-- hiding the tab pauses; a manual pause is respected');
+  const {music, window, elements} = await boot({files: true});
+  let hidden = false;
+  Object.defineProperty(window.document, 'hidden', {get: () => hidden, configurable: true});
+  music.setEnabled(true);
+  await wait(40);
+  hidden = true;
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  check('hidden tab pauses the music', music.state() === 'paused' && elements[0].paused, music.state());
+  hidden = false;
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  await wait(20);
+  check('returning resumes it', music.state() === 'playing' && !elements[0].paused, music.state());
+  music.pause();
+  hidden = true;
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  hidden = false;
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  await wait(20);
+  check('a player who pressed pause stays paused after returning', music.state() === 'paused' && elements[0].paused, music.state());
+}
+
+/* -------------------------------- a broken file never gets substitute music --- */
+
+async function brokenSuite() {
+  console.log('\n-- a file that cannot play leaves the player quiet (no substitute music)');
+  const {music, fake, elements} = await boot({files: true, breakFiles: true});
+  music.setEnabled(true);
+  await wait(150);
+  check('a broken file is not reported as playing', music.state() !== 'playing', music.state());
+  check('no synth/generated notes cover for it', fake.notes.length === 0, String(fake.notes.length));
+  check('no other element was started instead', elements.every((el) => el.paused), elements.map((el) => el.paused).join(','));
+  check('the failed file is not retried in a loop', elements.length <= 1, String(elements.length));
+}
+
+async function noMediaSuite() {
+  console.log('\n-- a device without media elements stays silent');
+  const {music, fake} = await boot({files: false});
   music.setEnabled(true);
   await wait(60);
-  music.pause();
-  music.warm();
-  check('warming a paused player does not restart it', music.state() === 'paused', music.state());
-  music.resume();
-  await wait(60);
-  check('and it still resumes on request', music.state() === 'playing', music.state());
+  check('nothing plays without a media element', music.state() !== 'playing', music.state());
+  check('no generated audio is scheduled', fake.notes.length === 0, String(fake.notes.length));
+  check('the debug backend is never "synth"', music._debug().backend !== 'synth', JSON.stringify(music._debug()));
 }
 
 async function main() {
@@ -365,8 +359,9 @@ async function main() {
   );
 
   await fileSuite();
-  await fallbackSuite();
-  await synthSuite();
+  await visibilitySuite();
+  await brokenSuite();
+  await noMediaSuite();
 
   const passed = results.filter((row) => row.ok).length;
   console.log(`\n${passed} passed, ${failures.length} failed`);

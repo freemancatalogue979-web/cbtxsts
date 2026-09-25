@@ -94,7 +94,7 @@ Interactive API docs: **http://localhost:3000/docs**.
 | **Signature question cards** | Questions never render as plain text: every question — exam papers, blitz, sudden death, daily challenge, flashcards, Mind Match tiles — sits in a unique gradient-framed card with a ghost question number, shine sweep, difficulty chip and a brand-gradient quote bar. |
 | **Personal notifications** | Help requests, answers and nudges land in a personal inbox with live socket delivery; the bell merges them with announcements. Players carry a bio, a status line and a shareable 6-character player code for instant friend adds. |
 | **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**Quite Magical** hand-lettered default, Montserrat, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
-| **Background music** | Three uploaded tracks (**Arena Rock**, **Arcade Session**, **Sound Surfer**) played from `frontend/public/music`, with on/off, pause/resume, track switch and a volume slider in Profile → Make it yours plus a quick toggle in the header. Pause holds your place to the second, mute is a gain fade rather than a stop, and no two tracks ever sound at once; the generative synth only steps in when a device cannot play a file. It tries to autoplay; when the browser refuses, a floating **Start music** button waits for the first tap. |
+| **Background music** | Three uploaded tracks (**Arena Rock**, **Arcade Session**, **Sound Surfer**) played from `frontend/public/music`, with on/off, pause/resume, track switch and a volume slider in Profile → Make it yours plus a quick toggle in the header. Pause holds your place to the second, mute is a gain fade rather than a stop, and no two tracks ever sound at once. Nothing else ever plays — there is no synth or fallback music. It tries to autoplay; when the browser refuses, a floating **Start music** button waits for the first tap. |
 | **Shell & navigation** | A floating HUD instead of a banner: the top bar has no strip, blur or shadow — every control carries its own chip and rides on top of the scrolling world, so nothing is covered and nothing disappears. **Every screen is a real page** (`#/study`, `#/exam/42`, `#/duel/7`): the in-page back button, the Android back button, the iOS edge swipe and the browser's back all land on the page you actually came from, and a refresh puts you back where you were — including mid-exam, on the same attempt. |
 | **Fixed scale** | The arena renders at exactly the viewport it lands on: `maximum-scale=1` + `user-scalable=no`, `touch-action: pan-x pan-y` on the body, and a gesture guard for iOS Safari's `gesture*` events and desktop ctrl/cmd + wheel or `+`/`-` zoom. Pinch, double-tap and browser zoom are off on phones and desktops; panning, scrolling and every tap still work. |
 | **Arena shop & inventory** | Split-tier economy with **Coins** (earned through questions, materials, daily quests, duels, streaks) for everyday cosmetics, and **Diamonds** (strictly earned from major milestones, long streaks, course completions, and rank promotions — never casually farmable, never convertible from coins) for ultra-rare trophies. Features an animated marketplace with rotating **featured shelves**, **daily deals** (live midnight countdown), the **Dark Academy** limited-time event, **earned mystery chests** (open for coins, XP, diamonds, or cosmetics), and the **Diamond Vault** (up to 25k diamonds for The Arena Founder). The **Inventory** tab lets players view their active loadout, equip 8 cosmetic slots (Avatar, Aura, Frame, Title, Theme, Chat, Duel, Answer), and inspect each item's **history plaque** (Rarity, Release Season, Total Owners count, and Obtained From provenance). Desktop views render at full viewport width with zero cut aspect ratios. |
@@ -103,10 +103,25 @@ Interactive API docs: **http://localhost:3000/docs**.
 ## What staff get
 
 Courses, exams, questions (single **or** bulk paste-import), scheduling and status control.
-Every question belongs to its course's **single question bank**; any exam carries a
-**Draw from Question Bank** button — pick a number (10/20/50/70 or exact), and the system
-randomly pulls that many questions from *that course only*, never repeating one already in
-the exam. The correct answer may be given as a letter (**B**) *or as the option's actual
+
+**Question banks and exams are three separate things:**
+
+| concept | where it lives | example |
+| --- | --- | --- |
+| **Course question bank** | every course owns one bank (a hidden `is_bank` quiz); bank originals have `exam_only = false` and no `source_id` | 10,000 questions |
+| **Questions per player** | `Quiz.draw_count` on a *Random from course* exam — never changes the bank | 40 |
+| **Exam-specific questions** | rows owned by one exam with `exam_only = true`; never in the bank unless staff tick *Also add to the bank* | a fixed 30-question paper |
+
+The exam builder's **Question source** picks one: **Random from course** (choose the course and
+how many questions each player gets, optionally limited to topics and/or a difficulty mix that
+must add up to the count) or **Exam-specific** (questions created, uploaded or imported for that
+exam only). A random exam copies nothing — each player gets their own random draw from the
+course bank when they start, stored on their attempt (`Attempt.question_ids`) so refresh and
+grading use the same paper, and two players get different papers. The bank keeps topic and
+difficulty on every question for distribution control. The admin *Courses & exams* area is
+organised by course: each course opens a workspace with **Overview · Topics · Question bank ·
+Notes · Materials · Discussion**, and nothing from one course shows up in another.
+The correct answer may be given as a letter (**B**) *or as the option's actual
 text* (**Savigny**) — the text is resolved to the option's canonical key on upload, so it
 stays correct however options are later shuffled; an ambiguous or unknown answer is
 rejected with a reason, never defaulted. Also: player management
@@ -189,24 +204,17 @@ The soundtrack is three uploaded tracks, shipped in `frontend/public/music/` and
 | `arcade` | Arcade Session | `alex-morgan-gaming-stream-arcade-session-578484.mp3` | 2:07 |
 | `surfer` | Sound Surfer | `soundsurfer-gaming-331807.mp3` | 2:14 |
 
-`frontend/src/lib/music.ts` plays them through one transport with two backends: an `<audio>`
-element per file track (position-exact pause/resume, looped for the whole track) and a generative
-synth that stands in only when a device cannot play the file — the arena is never silent, and the
-three files stay the only music the deck offers. The rules the transport enforces:
+`frontend/src/lib/music.ts` plays **only these three files**, one `<audio>` element per track
+(position-exact pause/resume, looped). There is no generative synth, fallback track or hidden
+background music: if a device cannot play a file, the music stays silent and says so. The player
+picks which of the three plays (Profile → Make it yours). The rules the transport enforces:
 
-* **Pause keeps your place.** A file element resumes from the sample it stopped on; the synth keeps
-  its bar counter and re-anchors to "now + one breath".
-* **Mute is not pause.** It fades the master bus and leaves playback running, so unmuting lands
-  mid-phrase as if you never touched it.
-* **A switch stops the old track dead.** Every playback generation owns a gain bus; a switch
-  disconnects it, killing queued notes and sustained pads instantly.
-* **A sleeping tab never catches up.** The scheduler re-anchors after a clock jump, so a background
-  tab resumes with the next bar instead of dumping every bar it slept through (measured: 90 note
-  starts piled on one instant before that guard existed, 0 after).
+* **Pause keeps your place.** A file element resumes from the second it stopped on.
+* **Mute is not pause.** It fades the volume and leaves playback running.
+* **A switch stops the old track dead.** No two tracks ever sound at once.
+* **Only approved files.** Any track id other than `rock`, `arcade` or `surfer` is refused.
 
-`node scripts/music-check.mjs` proves all four against a recording fake audio graph — 50 checks in
-three suites: the uploaded files and the transport above, the synth fallback for a file the device
-cannot play, and the no-media path.
+`node scripts/music-check.mjs` proves these (38 checks), including that no synth backend exists.
 
 ## Seasons
 
@@ -249,6 +257,12 @@ Six suites, all runnable against live servers:
 #         help requests, missions, shop, ranks, prizes, admin)
 cd backend && ./.venv/bin/python scripts/smoke.py
 
+# Backend: course bank vs exam — a 2,000-question bank with a 40-question random
+#          exam stays 2,000, each player gets a different random paper that
+#          survives refresh and grades correctly, exam-specific questions never
+#          leak into the bank, topic / difficulty-mix draws, over-pool rejected
+cd backend && ./.venv/bin/python scripts/verify_course_bank.py
+
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder
 cd frontend && node scripts/render-check.mjs
@@ -268,11 +282,9 @@ cd frontend && node scripts/flow-check.mjs
 #           viewport lock disappears, and the daylight guard — white type on the bright skin
 cd frontend && node scripts/mobile-audit.mjs && node scripts/theme-audit.mjs
 
-# Frontend: 50 audio-transport checks — boots the real music engine against a
-#           recording fake AudioContext: pause keeps your place, resume continues
-#           the phrase, a throttled tab never machine-guns the bars it missed,
-#           mute is a gain fade that leaves the transport running, and switching
-#           tracks disconnects the old generation so two tracks cannot mix
+# Frontend: 38 audio-transport checks — only the three approved files can play,
+#           pause keeps your place, mute leaves the transport running, switching
+#           tracks never lets two play at once, and there is no synth fallback
 cd frontend && node scripts/music-check.mjs
 
 # Practice system: 58 backend checks (catalog counts, size caps, random unique

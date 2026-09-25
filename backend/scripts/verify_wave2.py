@@ -83,19 +83,23 @@ def main() -> None:
     )
     check("scoped exam created with 6 questions", status == 200 and quiz.get("question_count") == 6, str(quiz)[:120])
     if status == 200:
-        ids_a = [q["id"] for q in quiz["questions"]]
-        status, again = call("GET", f"/admin/quizzes/{quiz['id']}", token=T)
-        ids_b = [q["id"] for q in again["questions"]]
-        check("paper stable across refresh", ids_a == ids_b)
-        check("topic purity on drawn paper", all((q.get("topic") or "").lower() == big_topic.lower() for q in again["questions"]))
-        check("pass score stored", again.get("pass_score") == 70)
-        # student answers: 2 right, 4 wrong → weak evidence and pass fail
+        check("random-from-course exam copies nothing", quiz.get("question_source") == "course_random" and quiz["questions"] == [])
+        check("pass score stored", quiz.get("pass_score") == 70)
+        # Each player is dealt their own random paper at start; it is fixed for
+        # the attempt (a refresh re-reads the same paper).
         status, att = call("POST", f"/exams/{quiz['id']}/start", {}, token=t1)
         check("attempt starts with 6 questions", status == 200 and len(att["questions"]) == 6)
         aid = att.get("attempt_id") or att.get("id") or (att.get("attempt") or {}).get("id")
-        keys = {q["id"]: (q.get("correct") or "A") for q in again["questions"]}
-        correct_ids = [q["id"] for q in again["questions"]][:2]
-        for q in again["questions"]:
+        status, again = call("POST", f"/exams/{quiz['id']}/start", {}, token=t1)
+        check("paper stable across refresh", [q["id"] for q in att["questions"]] == [q["id"] for q in again["questions"]])
+        paper = []
+        for q in att["questions"]:
+            _, full = call("GET", f"/admin/questions/{q['id']}", token=T)
+            paper.append(full)
+        check("topic purity on drawn paper", all((q.get("topic") or "").lower() == big_topic.lower() for q in paper))
+        keys = {q["id"]: (q.get("correct") or "A") for q in paper}
+        correct_ids = [q["id"] for q in paper][:2]
+        for q in paper:
             want_right = q["id"] in correct_ids
             selected = keys[q["id"]] if want_right else ({"A": "B", "B": "A", "C": "A", "D": "A"}.get(keys[q["id"]], "B"))
             call("POST", f"/exams/attempts/{aid}/answer", {"question_id": q["id"], "selected": selected, "seconds_spent": 4}, token=t1)
@@ -104,7 +108,8 @@ def main() -> None:
         check("passed flag false at 33% vs 70 bar", result.get("passed") is False and result.get("pass_score") == 70, str(result)[:120])
     else:
         aid = None
-    status, res = call("POST", "/admin/quizzes", {"title": f"W2 TooBig {SUFFIX}", "course_id": cid, "question_count": 200}, token=T)
+    small = min(courses, key=lambda row: row["question_count"])  # draws are capped at 500, so use a bank below that
+    status, res = call("POST", "/admin/quizzes", {"title": f"W2 TooBig {SUFFIX}", "course_id": small["id"], "question_count": small["question_count"] + 50}, token=T)
     check("over-pool creation rejected with real message", status == 400 and "Not enough" in str(res.get("detail", "")), str(res)[:120])
     status, res = call("POST", "/admin/quizzes", {"title": f"W2 NoCourse {SUFFIX}", "question_count": 5}, token=T)
     check("count without course rejected", status == 400)

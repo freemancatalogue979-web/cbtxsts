@@ -30,6 +30,7 @@ from .models import (
     utcnow,
 )
 from .security import hash_password
+from .services.course_bank import ensure_bank_quiz, promote_legacy_exam_questions
 from .seed_data.questions import QUESTIONS
 from .seed_data.roster import ROSTER
 
@@ -243,13 +244,15 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "key": "constitutional",
             "title": "Constitutional Law Arena Exam",
             "course": "LAW 411",
-            "instructions": "70 objective questions • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
+            "instructions": "40 objective questions drawn at random from the LAW 411 bank • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
             "duration_minutes": 25,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
             "end_at": now + timedelta(days=14),
             "shuffle_questions": True,
             "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 40,
         },
         {
             "key": "speed",
@@ -262,6 +265,8 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "end_at": now + timedelta(days=14),
             "shuffle_questions": True,
             "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 15,
         },
         {
             "key": "jurisprudence",
@@ -274,6 +279,8 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "end_at": now + timedelta(days=14),
             "shuffle_questions": True,
             "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 8,
         },
         {
             "key": "commercial",
@@ -298,22 +305,13 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             db.flush()
         quizzes[spec["key"]] = quiz
 
-    seed_questions(db, quizzes["constitutional"], QUESTIONS)
-    speed_rows = [
-        {
-            "text": row["text"],
-            "option_a": row["option_a"],
-            "option_b": row["option_b"],
-            "option_c": row.get("option_c", ""),
-            "option_d": row.get("option_d", ""),
-            "correct": row["correct"],
-            "explanation": row.get("explanation", ""),
-            "difficulty": row.get("difficulty", "medium"),
-        }
-        for row in random.Random(4110).sample(QUESTIONS, 15)
-    ]
-    seed_questions(db, quizzes["speed"], speed_rows)
-    seed_questions(db, quizzes["jurisprudence"], JURISPRUDENCE_QUESTIONS)
+    # Existing databases: questions that used to live inside exam papers move
+    # into their course bank (the exam keeps serving its old fixed paper).
+    promote_legacy_exam_questions(db)
+    # Fresh databases: questions are seeded into the COURSE BANK; the exams
+    # above draw from it at random, per player.
+    seed_questions(db, ensure_bank_quiz(db, courses["LAW 411"]), QUESTIONS)
+    seed_questions(db, ensure_bank_quiz(db, courses["LAW 421"]), JURISPRUDENCE_QUESTIONS)
     return quizzes
 
 

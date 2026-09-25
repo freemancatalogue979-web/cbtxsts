@@ -121,6 +121,7 @@ def topic_page(
                 func.lower(Question.topic) == key.lower(),
                 Question.status == "approved",
                 Question.visible.is_(True),
+                Question.source_id.is_(None), Question.exam_only.is_(False),
             )
         ).all()
     )
@@ -241,6 +242,7 @@ def _pick_questions(db: Session, student: Student, key: str, kind: str, count: i
                 func.lower(Question.topic) == key.lower(),
                 Question.status == "approved",
                 Question.visible.is_(True),
+                Question.source_id.is_(None), Question.exam_only.is_(False),
             )
         ).all()
     )

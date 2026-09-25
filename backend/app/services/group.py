@@ -548,7 +548,7 @@ def question_pool(db: Session, *, course_id: int | None, topic: str) -> list[Que
     stmt = select(Question).where(
         Question.status == "approved",
         Question.visible.is_(True),
-        Question.source_id.is_(None),
+        Question.source_id.is_(None), Question.exam_only.is_(False),
     )
     if course_id:
         stmt = stmt.where(Question.course_id == course_id)
@@ -560,7 +560,7 @@ def question_pool(db: Session, *, course_id: int | None, topic: str) -> list[Que
         stmt = select(Question).where(
             Question.status == "approved",
             Question.visible.is_(True),
-            Question.source_id.is_(None),
+            Question.source_id.is_(None), Question.exam_only.is_(False),
         )
         if course_id:
             stmt = stmt.where(Question.course_id == course_id)

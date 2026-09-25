@@ -64,7 +64,9 @@ def question_pool(
     query = (
         select(Question)
         .join(Quiz, Quiz.id == Question.quiz_id)
-        .where(Quiz.allow_duel.is_(True), Quiz.status != "draft")
+        # Course banks are hidden "draft" holders by construction but ARE the
+        # course pool; exam papers only count once they are out of draft.
+        .where(Quiz.allow_duel.is_(True), or_(Quiz.is_bank.is_(True), Quiz.status != "draft"))
         # Staff can take a question out of competitive play without deleting it.
         .where(Question.duel_enabled.is_(True), Question.visible.is_(True), Question.status == "approved")
     )
@@ -73,7 +75,7 @@ def question_pool(
     else:
         # Course duel: that course's bank only. Random duel: the whole bank.
         # Drawn exam copies (source_id set) stay out of the global pools.
-        query = query.where(Question.source_id.is_(None))
+        query = query.where(Question.source_id.is_(None), Question.exam_only.is_(False))
         if course_id:
             query = query.where(Question.course_id == course_id)
     if topic:

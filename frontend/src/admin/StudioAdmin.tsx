@@ -12,6 +12,7 @@ import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
 import type {Course, QuestionPublic, Quiz} from '../lib/types';
+import {sourceSummary} from './ContentAdmin';
 
 type Pane = 'pulse' | 'bank' | 'review' | 'builders';
 
@@ -691,12 +692,14 @@ function Builders() {
     }
   };
 
+  const courseCode = (id: number | null | undefined) => courses.find((course) => course.id === id)?.code ?? '';
+
   return (
-    <div className="space-y-3">
-      <Card className="min-w-0 p-3.5">
-        <SectionHeading title="Paper blueprints" subtitle="Quotas by topic and difficulty, sat by every version automatically." icon={<Boxes className="size-4" />} />
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_6rem_auto]">
-          <TextInput placeholder="Blueprint name" value={name} onChange={(event) => setName(event.target.value)} aria-label="Blueprint name" />
+    <div className="min-w-0 space-y-3">
+      <Card className="min-w-0 p-3">
+        <SectionHeading title="Paper blueprints" subtitle="Quotas by topic and difficulty — each generated paper is a fixed, exam-specific set." icon={<Boxes className="size-4" />} />
+        <div className="mt-2.5 grid min-w-0 grid-cols-[minmax(0,1fr)_5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_5.5rem_auto]">
+          <TextInput className="col-span-2 sm:col-span-1" placeholder="Blueprint name" value={name} onChange={(event) => setName(event.target.value)} aria-label="Blueprint name" />
           <Select value={courseId} onChange={(event) => setCourseId(event.target.value)} aria-label="Blueprint course">
             <option value="">Any course</option>
             {courses.map((course) => (
@@ -705,40 +708,48 @@ function Builders() {
               </option>
             ))}
           </Select>
-          <TextInput type="number" min={5} max={100} value={total} onChange={(event) => setTotal(Math.max(5, Number(event.target.value) || 20))} aria-label="Questions per paper" />
-          <Button onClick={create} loading={busy} icon={<Sparkles className="size-4" />}>
+          <TextInput type="number" min={5} max={100} value={total} onChange={(event) => setTotal(Math.max(5, Number(event.target.value) || 20))} aria-label="Questions per paper" title="Questions per paper" />
+          <Button className="col-span-2 sm:col-span-1" onClick={create} loading={busy} disabled={name.trim().length < 2} icon={<Sparkles className="size-4" />}>
             Create
           </Button>
         </div>
 
         {!blueprints ? (
-          <Skeleton className="mt-3 h-20" />
+          <Skeleton className="mt-2.5 h-16" />
         ) : blueprints.length === 0 ? (
-          <p className="mt-3 text-[0.8rem] font-semibold text-mist-500">No blueprints yet — make one above and the generator does the rest.</p>
+          <p className="mt-2.5 text-[0.78rem] font-semibold text-mist-500">No blueprints yet — make one above and the generator does the rest.</p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {blueprints.map((row) => (
-              <li key={String(row.id)} className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
-                <span className="min-w-0 flex-1 break-words text-[0.84rem] font-bold text-mist-100">{String(row.name)}</span>
-                <Chip>{String((row.config as Record<string, unknown>)?.total ?? '—')} questions</Chip>
-                {row.is_template ? <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">Template</Chip> : null}
-                <Button size="sm" variant="outline" onClick={() => void runBlueprint(Number(row.id), 'preview')} icon={<Eye className="size-3.5" />}>
-                  Preview
-                </Button>
-                <Button size="sm" variant="mint" onClick={() => void runBlueprint(Number(row.id), 'generate')} icon={<Layers className="size-3.5" />}>
-                  Generate
-                </Button>
-              </li>
-            ))}
+          <ul className="mt-2.5 min-w-0 divide-y divide-white/6 rounded-2xl border border-white/8">
+            {blueprints.map((row) => {
+              const config = (row.config ?? {}) as Record<string, unknown>;
+              const code = courseCode(row.course_id as number | null);
+              return (
+                <li key={String(row.id)} className="flex min-w-0 items-center gap-2 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.84rem] font-bold text-mist-100">{String(row.name)}</p>
+                    <p className="truncate text-[0.7rem] font-semibold text-mist-500">
+                      {String(config.total ?? '—')} questions · {code || 'any course'}
+                      {row.is_template ? ' · template' : ''}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" title="Preview" aria-label="Preview blueprint" onClick={() => void runBlueprint(Number(row.id), 'preview')} icon={<Eye className="size-3.5" />}>
+                    <span className="hidden sm:inline">Preview</span>
+                  </Button>
+                  <Button size="sm" variant="mint" title="Generate a paper" aria-label="Generate a paper" onClick={() => void runBlueprint(Number(row.id), 'generate')} icon={<Layers className="size-3.5" />}>
+                    <span className="hidden sm:inline">Generate</span>
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card className="min-w-0 p-3.5">
-          <SectionHeading title="Deck builder" subtitle="Publish an arena-wide flashcard deck from the bank." icon={<Layers className="size-4" />} />
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
-            <TextInput placeholder="Deck name" value={deckName} onChange={(event) => setDeckName(event.target.value)} aria-label="Deck name" />
+      <div className="grid min-w-0 gap-3 md:grid-cols-2">
+        <Card className="min-w-0 p-3">
+          <SectionHeading title="Deck builder" subtitle="Publish an arena-wide flashcard deck from a course bank." icon={<Layers className="size-4" />} />
+          <div className="mt-2.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <TextInput className="col-span-2" placeholder="Deck name" value={deckName} onChange={(event) => setDeckName(event.target.value)} aria-label="Deck name" />
             <Select value={deckCourse} onChange={(event) => setDeckCourse(event.target.value)} aria-label="Deck course">
               <option value="">Any course</option>
               {courses.map((course) => (
@@ -747,26 +758,22 @@ function Builders() {
                 </option>
               ))}
             </Select>
-            <Button onClick={buildDeck} loading={busy} icon={<Upload className="size-4" />}>
+            <Button onClick={buildDeck} loading={busy} disabled={deckName.trim().length < 2} icon={<Upload className="size-4" />}>
               Publish
             </Button>
           </div>
         </Card>
 
-        <Card className="min-w-0 p-3.5">
-          <SectionHeading title="Challenge pool" subtitle="What candidates a duel, boss or practice run can draw from." icon={<Gem className="size-4" />} />
+        <Card className="min-w-0 p-3">
+          <SectionHeading title="Challenge pool" subtitle="What a duel, boss or practice run can draw from." icon={<Gem className="size-4" />} />
           {!pool ? (
-            <Skeleton className="mt-3 h-20" />
+            <Skeleton className="mt-2.5 h-16" />
           ) : (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
- <p className="text-[0.6rem] font-black tracking-[0.14em] text-mist-500">Eligible</p>
-                <p className="mt-1 font-display text-lg font-black tabular text-mist-50">{formatNumber(Number(pool.total ?? 0))}</p>
-              </div>
-              {Object.entries((pool.eligible ?? {}) as Record<string, number>).map(([key, value]) => (
-                <div key={key} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
- <p className="text-[0.6rem] font-black tracking-[0.14em] text-mist-500">{key}</p>
-                  <p className="mt-1 font-display text-lg font-black tabular text-mist-50">{formatNumber(value)}</p>
+            <div className="mt-2.5 grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
+              {[['Eligible', Number(pool.total ?? 0)] as const, ...Object.entries((pool.eligible ?? {}) as Record<string, number>)].map(([key, value]) => (
+                <div key={key} className="min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-2.5 py-2">
+                  <p className="truncate text-[0.62rem] font-black tracking-[0.12em] text-mist-500 uppercase">{key}</p>
+                  <p className="font-display text-base font-black tabular text-mist-50">{formatNumber(value)}</p>
                 </div>
               ))}
             </div>
@@ -774,51 +781,67 @@ function Builders() {
         </Card>
       </div>
 
-      <Card className="min-w-0 p-3.5">
-        <SectionHeading title="Exam tools" subtitle="Duplicate an exam, start from a template, or preview the player view." icon={<Copy className="size-4" />} />
-        <ul className="mt-3 space-y-2">
-          {quizzes.slice(0, 8).map((quiz) => (
-            <li key={quiz.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
-              <span className="min-w-0 flex-1 break-words text-[0.84rem] font-bold text-mist-100">{quiz.title}</span>
-              <Chip className="capitalize">{quiz.status}</Chip>
-              <Chip>{quiz.question_count} questions</Chip>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  void api.admin.studio
-                    .previewQuiz(quiz.id)
-                    .then((payload) => setPreview(payload as Record<string, unknown>))
-                    .catch((error: Error) => toast('error', 'Preview failed', error.message))
-                }
-                icon={<Eye className="size-3.5" />}
-              >
-                Preview
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  void api.admin.studio
-                    .duplicateQuiz(quiz.id, {title: `${quiz.title} (copy)`})
-                    .then(() => {
-                      toast('success', 'Exam duplicated', 'Questions and answers were copied as-is.');
-                      load();
-                    })
-                    .catch((error: Error) => toast('error', 'Could not duplicate', error.message))
-                }
-                icon={<Copy className="size-3.5" />}
-              >
-                Duplicate
-              </Button>
-            </li>
-          ))}
-        </ul>
+      <Card className="min-w-0 p-3">
+        <SectionHeading title="Exam tools" subtitle="Duplicate an exam (its question source comes along) or preview a paper." icon={<Copy className="size-4" />} />
+        {quizzes.length === 0 ? (
+          <p className="mt-2.5 text-[0.78rem] font-semibold text-mist-500">No exams yet.</p>
+        ) : (
+          <ul className="mt-2.5 min-w-0 divide-y divide-white/6 rounded-2xl border border-white/8">
+            {quizzes.slice(0, 10).map((quiz) => (
+              <li key={quiz.id} className="flex min-w-0 items-center gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[0.84rem] font-bold text-mist-100">{quiz.title}</p>
+                  <p className="truncate text-[0.7rem] font-semibold text-mist-500">
+                    <span className="capitalize">{quiz.status}</span>
+                    {quiz.course ? ` · ${quiz.course.code}` : ''} · {sourceSummary(quiz)}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  title="Preview"
+                  aria-label={`Preview ${quiz.title}`}
+                  onClick={() =>
+                    void api.admin.studio
+                      .previewQuiz(quiz.id)
+                      .then((payload) => setPreview(payload as Record<string, unknown>))
+                      .catch((error: Error) => toast('error', 'Preview failed', error.message))
+                  }
+                  icon={<Eye className="size-3.5" />}
+                >
+                  <span className="hidden sm:inline">Preview</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Duplicate"
+                  aria-label={`Duplicate ${quiz.title}`}
+                  onClick={() =>
+                    void api.admin.studio
+                      .duplicateQuiz(quiz.id, {title: `${quiz.title} (copy)`})
+                      .then(() => {
+                        toast(
+                          'success',
+                          'Exam duplicated',
+                          quiz.question_source === 'course_random' ? 'Same course and draw settings — players still get fresh random papers.' : 'Its exam-specific questions were copied.',
+                        );
+                        load();
+                      })
+                      .catch((error: Error) => toast('error', 'Could not duplicate', error.message))
+                  }
+                  icon={<Copy className="size-3.5" />}
+                >
+                  <span className="hidden sm:inline">Duplicate</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Modal open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview" subtitle="Read-only — the answer key is shown for staff only.">
         {preview && (
-          <pre className="keep-dark max-h-80 overflow-auto rounded-2xl border border-white/10 bg-ink-950/70 p-3 font-mono text-[0.7rem] leading-relaxed text-mist-300">
+          <pre className="keep-dark max-h-80 overflow-auto rounded-2xl border border-white/10 bg-ink-950/70 p-3 font-mono text-[0.7rem] leading-relaxed whitespace-pre-wrap text-mist-300 [overflow-wrap:anywhere]">
             {JSON.stringify(preview, null, 2).slice(0, 6000)}
           </pre>
         )}

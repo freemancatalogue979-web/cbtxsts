@@ -33,6 +33,7 @@ from .questions import (
     register_question_attempt,
 )
 from .study_lab import record_mistake, resolve_mistake
+from .course_bank import draw_question_ids, is_random, validate_exam_source
 
 
 class ExamError(Exception):
@@ -45,11 +46,21 @@ def _grading_scale(db: Session) -> list[dict]:
 
 
 def question_order(db: Session, quiz: Quiz, student: Student, attempt: Attempt | None = None) -> list[Question]:
-    """Shuffled per student, but stable across refreshes (seeded by quiz+student).
+    """The paper this player sees, in display order.
 
-    Questions hidden by staff (``visible=False``) are skipped for fresh papers,
-    but never yanked out from under an attempt that already answered them.
+    Attempts started under the course-bank model carry their own dealt list
+    (``attempt.question_ids``): a random draw from the course bank or from the
+    exam's own set, fixed at start time so a refresh never re-rolls it. Legacy
+    attempts (no dealt list) fall back to the whole quiz, shuffled per student.
+    Questions hidden by staff are skipped for fresh papers, but never yanked out
+    from under an attempt that already answered them.
     """
+    if attempt is None:
+        attempt = db.scalar(select(Attempt).where(Attempt.quiz_id == quiz.id, Attempt.student_id == student.id))
+    dealt = [int(qid) for qid in (getattr(attempt, "question_ids", None) or [])] if attempt is not None else []
+    if dealt:
+        rows = {row.id: row for row in db.scalars(select(Question).where(Question.id.in_(dealt))).all()}
+        return [rows[qid] for qid in dealt if qid in rows]
     questions = list(
         db.scalars(
             select(Question).where(Question.quiz_id == quiz.id).order_by(Question.position, Question.id)
@@ -58,9 +69,23 @@ def question_order(db: Session, quiz: Quiz, student: Student, attempt: Attempt |
     if attempt is not None:
         answered = {row.question_id for row in attempt.answers}
         questions = [row for row in questions if row.visible or row.id in answered]
+    else:
+        questions = [row for row in questions if row.visible]
     if quiz.shuffle_questions and questions:
         random.Random(f"{quiz.id}:{student.id}").shuffle(questions)
     return questions
+
+
+def attempt_questions(db: Session, attempt: Attempt) -> list[Question]:
+    """Every question that counts toward this attempt's score."""
+    return question_order(db, attempt.quiz, attempt.student, attempt)
+
+
+def attempt_total(db: Session, attempt: Attempt) -> int:
+    dealt = getattr(attempt, "question_ids", None) or []
+    if dealt:
+        return len(dealt)
+    return len(attempt_questions(db, attempt))
 
 
 def ensure_option_orders(db: Session, quiz: Quiz, questions: list[Question], attempt: Attempt) -> dict:
@@ -154,9 +179,7 @@ def finalize(db: Session, attempt: Attempt, submission_type: str) -> tuple[Attem
     if attempt.status == "submitted":
         return attempt, []
 
-    questions = [row for row in attempt.quiz.questions if row.visible or row.id in {a.question_id for a in attempt.answers}]
-    if not questions:
-        questions = list(attempt.quiz.questions)
+    questions = attempt_questions(db, attempt)
     total = len(questions)
     answers = {row.question_id: row for row in attempt.answers}
 
@@ -289,8 +312,8 @@ def open_attempt(db: Session, student: Student, quiz: Quiz) -> tuple[Attempt, li
         raise ExamError("This account is not allowed to sit examinations.")
     if quiz.status != "active":
         raise ExamError(f"This examination is not open (status: {quiz.status}).")
-    if not quiz.questions:
-        raise ExamError("This examination has no questions yet.")
+    if quiz.is_bank:
+        raise ExamError("A course question bank is not an examination.")
 
     existing = db.scalar(select(Attempt).where(Attempt.quiz_id == quiz.id, Attempt.student_id == student.id))
     now = utcnow()
@@ -322,6 +345,13 @@ def open_attempt(db: Session, student: Student, quiz: Quiz) -> tuple[Attempt, li
             return finalize(db, existing, "expired")
         return existing, []
 
+    problem = validate_exam_source(db, quiz)
+    if problem:
+        raise ExamError(problem if is_random(quiz) else "This examination has no questions yet.")
+    dealt = draw_question_ids(db, quiz)
+    if not dealt:
+        raise ExamError("This examination has no questions yet.")
+
     duration = max(1, quiz.duration_minutes) * 60
     attempt = Attempt(
         quiz_id=quiz.id,
@@ -333,6 +363,7 @@ def open_attempt(db: Session, student: Student, quiz: Quiz) -> tuple[Attempt, li
         flagged=[],
         option_orders={},
         shuffle_options=bool(getattr(quiz, "shuffle_options", False)),
+        question_ids=dealt,
     )
     db.add(attempt)
     db.flush()
@@ -357,7 +388,9 @@ def record_answer(
         raise ExamError("Time is up — submit your paper to see the result.")
 
     question = db.get(Question, question_id)
-    if not question or question.quiz_id != attempt.quiz_id:
+    dealt = [int(qid) for qid in (getattr(attempt, "question_ids", None) or [])]
+    part_of_paper = (question_id in dealt) if dealt else (question is not None and question.quiz_id == attempt.quiz_id)
+    if not question or not part_of_paper:
         raise ExamError("That question is not part of this examination.")
 
     # Per-question clock: refuse answers sent after this question's budget plus
@@ -440,7 +473,7 @@ def record_answer(
                 "quiz_id": attempt.quiz_id,
                 "student_id": attempt.student_id,
                 "answered": int(answered or 0),
-                "total": len(attempt.quiz.questions),
+                "total": attempt_total(db, attempt),
                 "time_remaining": time_remaining(attempt),
             },
         )

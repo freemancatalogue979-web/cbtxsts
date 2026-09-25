@@ -94,6 +94,8 @@ def material_public(material: Material, *, sections: list[MaterialSection] | Non
         "course_id": material.course_id,
         "quiz_id": material.quiz_id,
         "title": material.title,
+        "kind": getattr(material, "kind", "material") or "material",
+        "link_url": getattr(material, "link_url", "") or "",
         "topic": material.topic,
         "subtopic": material.subtopic,
         "description": material.description,
@@ -427,7 +429,7 @@ def material_questions(db: Session, material: Material, *, section_id: int | Non
         return rows
     # Fall back to the topic (then the course) so a fresh material still has
     # something to test, and finally to the wider bank as revision.
-    base = select(Question).where(Question.status == "approved")
+    base = select(Question).where(Question.status == "approved", Question.source_id.is_(None), Question.exam_only.is_(False))
     if material.topic:
         rows = list(db.scalars(base.where(func.lower(Question.topic) == material.topic.lower()).limit(60)).all())
         if rows:

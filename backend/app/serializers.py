@@ -228,6 +228,37 @@ def course_public(
     return payload
 
 
+def _question_numbers(quiz: Quiz) -> dict[str, Any]:
+    """The three numbers that must never be confused, kept apart on the wire.
+
+    * ``question_count``      — questions ONE player is served (the exam length)
+    * ``exam_question_count`` — questions the exam owns itself (exam-specific set)
+    * ``bank_size``           — questions in the course bank (random-draw exams)
+    """
+    from sqlalchemy.orm import object_session
+
+    from .services.course_bank import COURSE_RANDOM, EXAM_SPECIFIC, bank_count, is_random
+
+    owned = len([q for q in quiz.questions if getattr(q, "visible", True)])
+    draw = int(getattr(quiz, "draw_count", 0) or 0)
+    source = getattr(quiz, "question_source", EXAM_SPECIFIC) or EXAM_SPECIFIC
+    payload: dict[str, Any] = {
+        "question_source": COURSE_RANDOM if is_random(quiz) else EXAM_SPECIFIC,
+        "draw_count": draw,
+        "draw_difficulty": dict(getattr(quiz, "draw_difficulty", {}) or {}),
+        "exam_question_count": owned,
+    }
+    if source == COURSE_RANDOM and not quiz.is_bank:
+        payload["question_count"] = draw
+        db = object_session(quiz)
+        if db is not None and quiz.course_id:
+            payload["bank_size"] = bank_count(db, quiz.course_id)
+            payload["bank_eligible"] = bank_count(db, quiz.course_id, eligible_only=True, topics=quiz.draw_topics or [])
+    else:
+        payload["question_count"] = min(draw, owned) if draw > 0 else owned
+    return payload
+
+
 def quiz_public(
     quiz: Quiz,
     *,
@@ -259,7 +290,7 @@ def quiz_public(
         "is_bank": bool(getattr(quiz, "is_bank", False)),
         "pass_score": int(getattr(quiz, "pass_score", 50) or 0),
         "draw_topics": list(getattr(quiz, "draw_topics", []) or []),
-        "question_count": len([q for q in quiz.questions if getattr(q, "visible", True)]),
+        **_question_numbers(quiz),
         "created_at": iso(quiz.created_at),
         "course": course_public(quiz.course) if quiz.course else None,
     }

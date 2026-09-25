@@ -47,7 +47,7 @@ def _case_or_404(db: Session, case_id: int, *, published_only: bool) -> MysteryC
 
 
 def _pool(db: Session, case: MysteryCase) -> list[Question]:
-    stmt = select(Question).where(Question.status == "approved", Question.visible.is_(True))
+    stmt = select(Question).where(Question.status == "approved", Question.visible.is_(True), Question.source_id.is_(None), Question.exam_only.is_(False))
     if case.course_id:
         stmt = stmt.where(Question.course_id == case.course_id)
     if case.topic.strip():

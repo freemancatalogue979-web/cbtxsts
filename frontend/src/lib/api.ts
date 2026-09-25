@@ -5,6 +5,10 @@
  * every path here is relative — no CORS, no hard-coded host, works in preview.
  */
 import type {
+  CourseBankStats,
+  CourseDiscussionPost,
+  CourseOverview,
+  CourseTopicRow,
   ActivityItem,
   DuelMode,
   AdminOverview,
@@ -659,7 +663,18 @@ export const api = {
         {method: 'POST', body},
       ),
     /* ---- staff authoring ---- */
-    adminList: (params: {status?: string; course_id?: number | null; limit?: number; offset?: number} = {}) =>
+    adminList: (
+      params: {
+        status?: string;
+        course_id?: number | null;
+        kind?: 'material' | 'note';
+        topic?: string;
+        q?: string;
+        unassigned?: boolean;
+        limit?: number;
+        offset?: number;
+      } = {},
+    ) =>
       request<{items: MaterialCard[]; stats: Record<string, number>; total: number; limit: number; offset: number}>(
         `/api/admin/materials${query(params)}`,
       ),
@@ -730,15 +745,28 @@ export const api = {
     deleteQuiz: (id: number) => request<{ok: boolean}>(`/api/admin/quizzes/${id}`, {method: 'DELETE'}),
 
     questions: (quizId: number) => request<QuestionPublic[]>(`/api/admin/quizzes/${quizId}/questions`),
-    bank: (courseId: number) =>
-      request<{course_id: number; code: string; bank: number; drawn_copies: number}>(`/api/admin/courses/${courseId}/bank`),
+    bank: (courseId: number) => request<CourseBankStats>(`/api/admin/courses/${courseId}/bank`),
+    /* Course workspace: Course → Topics → questions / notes / materials. */
+    courseOverview: (courseId: number) => request<CourseOverview>(`/api/admin/courses/${courseId}/overview`),
+    courseTopics: (courseId: number) => request<{course_id: number; topics: CourseTopicRow[]}>(`/api/admin/courses/${courseId}/topics`),
+    createCourseTopic: (courseId: number, body: {name: string; description?: string}) =>
+      request<{ok: boolean; topics: CourseTopicRow[]}>(`/api/admin/courses/${courseId}/topics`, {method: 'POST', body}),
+    updateCourseTopic: (topicId: number, body: {name?: string; description?: string; position?: number}) =>
+      request<{ok: boolean; topics: CourseTopicRow[]}>(`/api/admin/course-topics/${topicId}`, {method: 'PATCH', body}),
+    deleteCourseTopic: (topicId: number) =>
+      request<{ok: boolean; topics: CourseTopicRow[]}>(`/api/admin/course-topics/${topicId}`, {method: 'DELETE'}),
+    courseDiscussion: (courseId: number) =>
+      request<{total: number; posts: CourseDiscussionPost[]}>(`/api/admin/courses/${courseId}/discussion`),
+    deleteCourseDiscussionPost: (postId: number) => request<{ok: boolean}>(`/api/admin/course-discussion/${postId}`, {method: 'DELETE'}),
+    addQuestionToBank: (questionId: number) =>
+      request<{ok: boolean; bank_question_id: number}>(`/api/admin/questions/${questionId}/add-to-bank`, {method: 'POST', body: {}}),
     draw: (quizId: number, count: number) =>
       request<{drawn: number; requested: number; available: number; total: number; bank: number}>(
         `/api/admin/quizzes/${quizId}/draw`,
         {method: 'POST', body: {count}},
       ),
-    createQuestion: (quizId: number, body: Record<string, unknown>) =>
-      request<QuestionPublic>(`/api/admin/quizzes/${quizId}/questions`, {method: 'POST', body}),
+    createQuestion: (quizId: number, body: Record<string, unknown>, options: {addToBank?: boolean} = {}) =>
+      request<QuestionPublic>(`/api/admin/quizzes/${quizId}/questions${options.addToBank ? '?add_to_bank=true' : ''}`, {method: 'POST', body}),
     bulkQuestions: (quizId: number, questions: Record<string, unknown>[]) =>
       request<{created: number; questions: QuestionPublic[]}>(`/api/admin/quizzes/${quizId}/questions/bulk`, {
         method: 'POST',
@@ -820,6 +848,8 @@ export const api = {
         type?: string;
         flagged?: boolean;
         drawn?: boolean;
+        /** "bank" = course-bank originals, "exam" = exam-specific questions. */
+        scope?: '' | 'bank' | 'exam';
         sort?: string;
         limit?: number;
         offset?: number;

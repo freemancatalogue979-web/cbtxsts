@@ -288,7 +288,7 @@ def study_plan(db: Session = Depends(get_db), student: Student = Depends(require
         )
 
     unseen = db.scalars(
-        select(Question).where(Question.status == "approved", Question.visible.is_(True)).order_by(Question.id).limit(200)
+        select(Question).where(Question.status == "approved", Question.visible.is_(True), Question.source_id.is_(None), Question.exam_only.is_(False)).order_by(Question.id).limit(200)
     ).all()
     answered_ids = {row[1].id for row in rows}
     fresh_topics: dict[str, int] = {}

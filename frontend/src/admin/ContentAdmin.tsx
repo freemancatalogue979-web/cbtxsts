@@ -1,53 +1,26 @@
-/** Admin: courses, exams and the question bank (including bulk paste import). */
-import {
-  BarChart3,
-  BookOpen,
-  Check,
-  Copy,
-  FileText,
-  FileUp,
-  Flag,
-  History,
-  Pencil,
-  Play,
-  Plus,
-  ScrollText,
-  Shuffle,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react';
-import {AnimatePresence, motion} from 'motion/react';
-import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+/**
+ * Admin: courses, exams and questions.
+ *
+ * The model the UI mirrors (see backend services/course_bank.py):
+ *
+ *   COURSE ── owns a QUESTION BANK (can be 10,000+ questions)
+ *   EXAM   ── question source is either
+ *              · Random from course → each player gets N random bank questions
+ *              · Exam-specific      → the exam's own questions (not in the bank)
+ *
+ * Bank size, exam length and exam-specific set size are three different
+ * numbers and are always labelled separately.
+ */
+import {BookOpen, Check, ChevronRight, FileText, Library, Pencil, Play, Plus, ScrollText, Shuffle, Trash2} from 'lucide-react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
+import CourseWorkspace from './CourseWorkspace';
 import MaterialsAdmin from './MaterialsAdmin';
-import type {Course, OptionKey, QuestionPublic, Quiz} from '../lib/types';
-
-void Avatar;
-
-const ACCENTS: Course['accent'][] = ['red', 'violet', 'blue', 'amber'];
-const STATUSES: Quiz['status'][] = ['draft', 'scheduled', 'active', 'completed'];
-const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
-const LETTERS: OptionKey[] = ['A', 'B', 'C', 'D'];
-/** Question kinds the backend understands (multi-answer types accept e.g. "AC"). */
-const QUESTION_TYPES = [
-  {value: 'mcq', label: 'Multiple choice'},
-  {value: 'true_false', label: 'True / False'},
-  {value: 'multi_select', label: 'Multiple answers'},
-  {value: 'fill_blank', label: 'Fill in the blank'},
-  {value: 'short_answer', label: 'Short answer'},
-  {value: 'matching', label: 'Matching pairs'},
-  {value: 'ordering', label: 'Ordering / sequence'},
-  {value: 'image_choice', label: 'Image choice'},
-  {value: 'audio', label: 'Audio question'},
-  {value: 'scenario', label: 'Scenario / case study'},
-  {value: 'passage', label: 'Passage based'},
-  {value: 'assertion_reason', label: 'Assertion / reason'},
-] as const;
-const QUESTION_STATUSES = ['draft', 'approved', 'rejected', 'archived'] as const;
+import QuestionManager, {ACCENTS, STATUSES} from './QuestionManager';
+import type {Course, QuestionSource, Quiz} from '../lib/types';
 
 const emptyCourse = {
   code: '',
@@ -65,93 +38,64 @@ const emptyQuiz = {
   course_id: null as number | null,
   instructions: '',
   duration_minutes: 25,
-  status: 'scheduled' as Quiz['status'],
+  status: 'draft' as Quiz['status'],
   scheduled_at: '',
   end_at: '',
   shuffle_questions: true,
   allow_duel: true,
-  // Creation-time draw: the server picks exactly this many eligible
-  // questions from the course bank (optionally topic-filtered) and stores
-  // them, so the paper never re-rolls. 0 = assemble questions by hand.
-  question_count: 0,
   pass_score: 50,
+  question_source: 'course_random' as QuestionSource,
+  /** Random: questions each player gets. Exam-specific: 0 = the whole set. */
+  draw_count: 40,
+  draw_topics: [] as string[],
+  draw_difficulty: {} as Partial<Record<'easy' | 'medium' | 'hard', number>>,
 };
 
-/**
- * A blank question. ``correct`` deliberately starts EMPTY — the answer is never
- * guessed or defaulted to "A"; the editor (and the API) refuse to save without
- * an explicit choice.
- */
-const emptyQuestion = {
-  text: '',
-  option_a: '',
-  option_b: '',
-  option_c: '',
-  option_d: '',
-  correct: '' as OptionKey | '',
-  explanation: '',
-  points: 1,
-  difficulty: 'medium' as (typeof DIFFICULTIES)[number],
-  question_type: 'mcq',
-  topic: '',
-  subtopic: '',
-  objective: '',
-  tags: [] as string[],
-  source: '',
-  reference: '',
-  author: '',
-  hint: '',
-  admin_notes: '',
-  status: 'approved' as 'draft' | 'approved' | 'rejected' | 'archived',
-  visible: true,
-  flashcard_enabled: true,
-  duel_enabled: true,
-  practice_enabled: true,
-  time_limit_seconds: 0,
-  media: {} as Record<string, string>,
+type QuizDraft = typeof emptyQuiz & {id?: number};
+
+export const ACCENT_STYLE: Record<string, {bg: string; fg: string}> = {
+  red: {bg: 'rgba(244,63,94,0.14)', fg: '#ff8fa3'},
+  blue: {bg: 'rgba(59,130,246,0.14)', fg: '#93c5fd'},
+  amber: {bg: 'rgba(251,191,36,0.14)', fg: '#fde68a'},
+  violet: {bg: 'rgba(168,85,247,0.14)', fg: '#d8b4fe'},
 };
 
-type QuestionDraft = typeof emptyQuestion & {id?: number};
+export function CourseBadge({course, className = ''}: {course: Pick<Course, 'code' | 'accent'>; className?: string}) {
+  const tone = ACCENT_STYLE[course.accent] ?? ACCENT_STYLE.violet;
+  return (
+    <span
+      className={`grid min-h-10 min-w-10 max-w-[7.5rem] shrink-0 place-items-center rounded-xl px-2 py-1 text-center text-[0.7rem] leading-tight font-black [overflow-wrap:anywhere] ${className}`}
+      style={{background: tone.bg, color: tone.fg}}
+    >
+      {course.code}
+    </span>
+  );
+}
 
-/**
- * Bulk paste is parsed and validated by the SERVER
- * (`/api/admin/questions/preview-import`) — the old client-side parser here
- * defaulted a missing ``Answer:`` line to "A", which is the exact bug this wave
- * removes. Never parse or guess answers in the browser.
- */
-void 0;
+/** "Random 40 of 2,000 · LAW 411" / "Exam-specific · 12 questions". */
+export function sourceSummary(quiz: Quiz): string {
+  if (quiz.question_source === 'course_random') {
+    const bank = typeof quiz.bank_size === 'number' ? ` of ${formatNumber(quiz.bank_size)} in bank` : '';
+    return `Random ${formatNumber(quiz.draw_count ?? quiz.question_count)} per player${bank}`;
+  }
+  const own = quiz.exam_question_count ?? quiz.question_count;
+  if (quiz.draw_count && quiz.draw_count < own) return `Exam-specific · ${quiz.draw_count} of ${own} per player`;
+  return `Exam-specific · ${formatNumber(own)} question${own === 1 ? '' : 's'}`;
+}
 
-function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank: (quiz: Quiz) => void}) {
+/* ================================================================ courses */
+
+function CourseEditor({
+  editing,
+  setEditing,
+  onSaved,
+}: {
+  editing: (typeof emptyCourse & {id?: number}) | null;
+  setEditing: (next: (typeof emptyCourse & {id?: number}) | null) => void;
+  onSaved: () => void;
+}) {
   const {toast} = useSession();
-  const [courses, setCourses] = useState<Course[] | null>(null);
-  const [bankBusy, setBankBusy] = useState<number | null>(null);
-  const [editing, setEditing] = useState<(typeof emptyCourse & {id?: number}) | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const load = useCallback(() => {
-    api.admin
-      .courses()
-      .then(setCourses)
-      .catch((error: Error) => toast('error', 'Could not load courses', error.message));
-  }, [toast]);
-
-  useEffect(load, [load]);
-
-  /* Every course has a hidden question-bank quiz; this opens (creating it on
-     first use) straight into the Questions tab — course questions are managed
-     here, independent of any exam. */
-  const openBank = async (course: Course) => {
-    setBankBusy(course.id);
-    try {
-      const bank = await api.admin.ensureCourseBank(course.id);
-      onOpenBank(bank);
-    } catch (error) {
-      toast('error', 'Could not open the question bank', (error as Error).message);
-    } finally {
-      setBankBusy(null);
-    }
-  };
-
   const save = async () => {
     if (!editing) return;
     setBusy(true);
@@ -160,20 +104,95 @@ function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank:
       else await api.admin.createCourse(editing);
       toast('success', editing.id ? 'Course updated' : 'Course created', editing.title);
       setEditing(null);
-      load();
-      onChanged();
+      onSaved();
     } catch (error) {
       toast('error', 'Could not save course', (error as Error).message);
     } finally {
       setBusy(false);
     }
   };
+  return (
+    <Modal
+      open={Boolean(editing)}
+      onClose={() => setEditing(null)}
+      title={editing?.id ? 'Edit course' : 'New course'}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button onClick={save} loading={busy} icon={<Check className="size-4" />}>
+            Save course
+          </Button>
+        </>
+      }
+    >
+      {editing && (
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+          <Field label="Code">
+            <TextInput value={editing.code} maxLength={24} onChange={(event) => setEditing({...editing, code: event.target.value.toUpperCase()})} />
+          </Field>
+          <Field label="Title">
+            <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} />
+          </Field>
+          <Field label="Description" className="sm:col-span-2">
+            <TextArea rows={2} value={editing.description} onChange={(event) => setEditing({...editing, description: event.target.value})} />
+          </Field>
+          <Field label="Credit units">
+            <TextInput type="number" min={0} max={12} value={editing.credit_units} onChange={(event) => setEditing({...editing, credit_units: Number(event.target.value)})} />
+          </Field>
+          <Field label="Semester">
+            <TextInput value={editing.semester} onChange={(event) => setEditing({...editing, semester: event.target.value})} />
+          </Field>
+          <Field label="Lecturer">
+            <TextInput value={editing.lecturer} onChange={(event) => setEditing({...editing, lecturer: event.target.value})} />
+          </Field>
+          <Field label="Accent colour">
+            <Select value={editing.accent} onChange={(event) => setEditing({...editing, accent: event.target.value as Course['accent']})}>
+              {ACCENTS.map((accent) => (
+                <option key={accent} value={accent}>
+                  {accent}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <label className="flex items-center gap-3 sm:col-span-2">
+            <input type="checkbox" checked={editing.is_active} onChange={(event) => setEditing({...editing, is_active: event.target.checked})} className="size-5 accent-fuchsia-500" />
+            <span className="text-[0.86rem] font-bold text-mist-200">Visible to players</span>
+          </label>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function CoursesTab({onChanged, openCourseId, onOpenCourse}: {onChanged: () => void; openCourseId: number | null; onOpenCourse: (id: number | null) => void}) {
+  const {toast} = useSession();
+  const [courses, setCourses] = useState<Course[] | null>(null);
+  const [editing, setEditing] = useState<(typeof emptyCourse & {id?: number}) | null>(null);
+  const [query, setQuery] = useState('');
+  const [orphans, setOrphans] = useState(0);
+  const [showOrphans, setShowOrphans] = useState(false);
+
+  const load = useCallback(() => {
+    api.admin
+      .courses()
+      .then(setCourses)
+      .catch((error: Error) => toast('error', 'Could not load courses', error.message));
+    api.materials
+      .adminList({unassigned: true, limit: 1})
+      .then((payload) => setOrphans(payload.total ?? 0))
+      .catch(() => setOrphans(0));
+  }, [toast]);
+
+  useEffect(load, [load]);
 
   const remove = async (course: Course) => {
     if (!window.confirm(`Delete ${course.code}? Its exams stay but lose the course link.`)) return;
     try {
       await api.admin.deleteCourse(course.id);
       toast('info', 'Course deleted');
+      onOpenCourse(null);
       load();
       onChanged();
     } catch (error) {
@@ -181,11 +200,48 @@ function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank:
     }
   };
 
+  const open = courses?.find((course) => course.id === openCourseId) ?? null;
+  if (open) {
+    return (
+      <>
+        <CourseWorkspace
+          course={open}
+          onBack={() => {
+            onOpenCourse(null);
+            load();
+          }}
+          onEdit={() => setEditing({...emptyCourse, ...open})}
+          onDelete={() => void remove(open)}
+          onChanged={() => {
+            load();
+            onChanged();
+          }}
+        />
+        <CourseEditor editing={editing} setEditing={setEditing} onSaved={() => { load(); onChanged(); }} />
+      </>
+    );
+  }
+
+  if (showOrphans) {
+    return (
+      <div className="min-w-0 space-y-3">
+        <Button size="sm" variant="ghost" onClick={() => { setShowOrphans(false); load(); }}>
+          ← Courses
+        </Button>
+        <p className="text-[0.8rem] font-semibold text-mist-400">These were saved without a course. Open each one and choose its course.</p>
+        <MaterialsAdmin onChanged={onChanged} unassigned />
+      </div>
+    );
+  }
+
+  const needle = query.trim().toLowerCase();
+  const visible = (courses ?? []).filter((course) => !needle || `${course.code} ${course.title}`.toLowerCase().includes(needle));
+
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-3">
       <SectionHeading
         title="Courses"
-        subtitle="Group exams under a course code."
+        subtitle="Each course owns its question bank, topics, notes, materials and discussion."
         icon={<BookOpen className="size-4" />}
         action={
           <Button size="sm" onClick={() => setEditing({...emptyCourse})} icon={<Plus className="size-4" />}>
@@ -193,157 +249,411 @@ function CoursesTab({onChanged, onOpenBank}: {onChanged: () => void; onOpenBank:
           </Button>
         }
       />
+      {orphans > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowOrphans(true)}
+          className="w-full rounded-2xl border border-gold-500/30 bg-gold-500/10 p-3 text-left text-[0.8rem] font-bold text-gold-200"
+        >
+          {orphans} material{orphans === 1 ? '' : 's'} not linked to any course — tap to assign
+        </button>
+      )}
+      {(courses?.length ?? 0) > 6 && (
+        <TextInput placeholder="Find a course…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Find a course" />
+      )}
 
       {!courses ? (
         <Skeleton className="h-40" />
       ) : courses.length === 0 ? (
-        <EmptyState icon={<BookOpen className="size-6" />} title="No courses yet" />
+        <EmptyState icon={<BookOpen className="size-6" />} title="No courses yet" detail="Create a course, then fill its question bank." />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {courses.map((course) => (
-            <li key={course.id}>
-              <Card className="flex items-start gap-3 p-4">
-                <span
-                  className="mt-0.5 grid min-h-11 min-w-11 max-w-[9rem] shrink-0 place-items-center rounded-2xl px-2.5 py-1.5 text-center text-[0.72rem] leading-tight font-black [overflow-wrap:anywhere]"
-                  style={{
-                    background:
-                      course.accent === 'red'
-                        ? 'rgba(244,63,94,0.16)'
-                        : course.accent === 'blue'
-                          ? 'rgba(59,130,246,0.16)'
-                          : course.accent === 'amber'
-                            ? 'rgba(251,191,36,0.16)'
-                            : 'rgba(168,85,247,0.16)',
-                    color:
-                      course.accent === 'red'
-                        ? '#ff8fa3'
-                        : course.accent === 'blue'
-                          ? '#93c5fd'
-                          : course.accent === 'amber'
-                            ? '#fde68a'
-                            : '#d8b4fe',
-                  }}
-                >
-                  {course.code}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.92rem] font-extrabold text-mist-50">{course.title}</p>
-                  <p className="mt-0.5 truncate text-[0.78rem] font-semibold text-mist-500">
-                    {course.credit_units} units · {course.semester}
-                    {course.lecturer ? ` · ${course.lecturer}` : ''}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Chip className={course.is_active ? 'border-mint-500/30 bg-mint-500/12 text-mint-300' : 'border-white/12 bg-white/6 text-mist-500'}>
-                      {course.is_active ? 'Active' : 'Hidden'}
-                    </Chip>
-                    {!!course.quiz_count && <Chip>{course.quiz_count} exams</Chip>}
-                    {!!course.topic_count && <Chip>{course.topic_count} topics</Chip>}
-                    {!!course.question_count && <Chip>{course.question_count} questions</Chip>}
-                    {!!course.material_count && <Chip>{course.material_count} materials</Chip>}
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button size="sm" variant="ghost" loading={bankBusy === course.id} onClick={() => void openBank(course)} icon={<ScrollText className="size-3.5" />}>
-                    Question bank
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditing({...course})} icon={<Pencil className="size-3.5" />}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => remove(course)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
-                </div>
+        <ul className="grid min-w-0 gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {visible.map((course) => (
+            <li key={course.id} className="min-w-0">
+              <Card className="min-w-0 p-0">
+                <button type="button" onClick={() => onOpenCourse(course.id)} className="flex w-full min-w-0 items-center gap-3 p-3 text-left touch-manipulation">
+                  <CourseBadge course={course} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[0.9rem] font-extrabold text-mist-50">{course.title}</span>
+                    <span className="mt-0.5 block truncate text-[0.74rem] font-semibold text-mist-500">
+                      {formatNumber(course.question_count ?? 0)} in bank · {course.quiz_count ?? 0} exams · {course.material_count ?? 0} materials
+                    </span>
+                    {!course.is_active && <span className="mt-1 inline-block text-[0.68rem] font-black text-mist-500 uppercase">Hidden</span>}
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-mist-500" />
+                </button>
               </Card>
             </li>
           ))}
         </ul>
       )}
 
-      <Modal
-        open={Boolean(editing)}
-        onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit course' : 'New course'}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
-            </Button>
-            <Button onClick={save} loading={busy} icon={<Check className="size-4" />}>
-              Save course
-            </Button>
-          </>
-        }
-      >
-        {editing && (
-          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-            <Field label="Code">
-              <TextInput value={editing.code} maxLength={24} onChange={(event) => setEditing({...editing, code: event.target.value.toUpperCase()})} />
-            </Field>
-            <Field label="Title">
-              <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} />
-            </Field>
-            <Field label="Description" className="sm:col-span-2">
-              <TextArea rows={2} value={editing.description} onChange={(event) => setEditing({...editing, description: event.target.value})} />
-            </Field>
-            <Field label="Credit units">
-              <TextInput
-                type="number"
-                min={0}
-                max={12}
-                value={editing.credit_units}
-                onChange={(event) => setEditing({...editing, credit_units: Number(event.target.value)})}
-              />
-            </Field>
-            <Field label="Semester">
-              <TextInput value={editing.semester} onChange={(event) => setEditing({...editing, semester: event.target.value})} />
-            </Field>
-            <Field label="Lecturer">
-              <TextInput value={editing.lecturer} onChange={(event) => setEditing({...editing, lecturer: event.target.value})} />
-            </Field>
-            <Field label="Accent colour">
-              <Select value={editing.accent} onChange={(event) => setEditing({...editing, accent: event.target.value as Course['accent']})}>
-                {ACCENTS.map((accent) => (
-                  <option key={accent} value={accent}>
-                    {accent}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <label className="flex items-center gap-3 sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={editing.is_active}
-                onChange={(event) => setEditing({...editing, is_active: event.target.checked})}
-                className="size-5 accent-fuchsia-500"
-              />
-              <span className="text-[0.86rem] font-bold text-mist-200">Visible to players</span>
-            </label>
-          </div>
-        )}
-      </Modal>
+      <CourseEditor editing={editing} setEditing={setEditing} onSaved={() => { load(); onChanged(); }} />
     </div>
   );
 }
 
-function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onManageQuestions: (quiz: Quiz) => void}) {
-  const {toast} = useSession();
-  const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [editing, setEditing] = useState<(typeof emptyQuiz & {id?: number}) | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [quizTopics, setQuizTopics] = useState<{topic: string; count: number}[]>([]);
-  const [pickedTopics, setPickedTopics] = useState<string[]>([]);
+/* ================================================================== exams */
 
-  // Topics follow the course so the picker is never stale.
+function SourceOption({
+  active,
+  onClick,
+  icon,
+  title,
+  detail,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex min-w-0 items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors touch-manipulation ${
+        active ? 'border-nova-400/60 bg-nova-500/12' : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+      }`}
+    >
+      <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl ${active ? 'bg-nova-500/25 text-nova-200' : 'bg-white/6 text-mist-400'}`}>{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[0.86rem] font-extrabold text-mist-50">{title}</span>
+        <span className="mt-0.5 block text-[0.74rem] leading-snug font-semibold text-mist-400">{detail}</span>
+      </span>
+    </button>
+  );
+}
+
+function ExamEditor({
+  editing,
+  setEditing,
+  courses,
+  onSaved,
+}: {
+  editing: QuizDraft | null;
+  setEditing: (next: QuizDraft | null) => void;
+  courses: Course[];
+  onSaved: () => void;
+}) {
+  const {toast} = useSession();
+  const [busy, setBusy] = useState(false);
+  const [topics, setTopics] = useState<{topic: string; count: number}[]>([]);
+  const [bankSize, setBankSize] = useState<{bank: number; eligible: number} | null>(null);
+  const [mixOn, setMixOn] = useState(false);
+
+  const courseId = editing?.course_id ?? null;
+  const random = editing?.question_source === 'course_random';
+
   useEffect(() => {
-    const courseId = editing?.course_id ?? null;
     if (!courseId) {
-      setQuizTopics([]);
+      setTopics([]);
+      setBankSize(null);
       return;
     }
     api.admin.studio
       .topics(courseId)
-      .then((data) => setQuizTopics(((data.topics as {topic: string; count: number}[]) ?? []).slice(0, 40)))
-      .catch(() => setQuizTopics([]));
-  }, [editing?.course_id]);
+      .then((data) => setTopics(((data.topics as {topic: string; count: number}[]) ?? []).slice(0, 60)))
+      .catch(() => setTopics([]));
+    api.admin
+      .bank(courseId)
+      .then((row) => setBankSize({bank: row.bank, eligible: row.eligible}))
+      .catch(() => setBankSize(null));
+  }, [courseId]);
+
+  useEffect(() => {
+    setMixOn(Boolean(editing && Object.values(editing.draw_difficulty ?? {}).some((value) => Number(value) > 0)));
+    // only when a different exam opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id, editing === null]);
+
+  if (!editing) return <Modal open={false} onClose={() => setEditing(null)}>{null}</Modal>;
+
+  const course = courses.find((row) => row.id === editing.course_id) ?? null;
+  const pickedTopics = editing.draw_topics ?? [];
+  const eligible = pickedTopics.length
+    ? topics.filter((row) => pickedTopics.includes(row.topic)).reduce((sum, row) => sum + row.count, 0)
+    : (bankSize?.eligible ?? null);
+  const mixTotal = (['easy', 'medium', 'hard'] as const).reduce((sum, level) => sum + (Number(editing.draw_difficulty?.[level]) || 0), 0);
+  const tooMany = random && eligible !== null && editing.draw_count > eligible;
+
+  const save = async () => {
+    if (!editing.title.trim()) {
+      toast('error', 'Give the exam a title');
+      return;
+    }
+    if (random) {
+      if (!editing.course_id) {
+        toast('error', 'Choose a course', 'Random questions are drawn from that course’s question bank.');
+        return;
+      }
+      if (editing.draw_count < 1) {
+        toast('error', 'How many questions per player?', 'Set the number each player should get, for example 40.');
+        return;
+      }
+      if (mixOn && mixTotal !== editing.draw_count) {
+        toast('error', 'Difficulty mix does not add up', `The mix totals ${mixTotal} but each player gets ${editing.draw_count}.`);
+        return;
+      }
+    }
+    setBusy(true);
+    const payload: Record<string, unknown> = {
+      title: editing.title,
+      course_id: editing.course_id,
+      instructions: editing.instructions,
+      duration_minutes: editing.duration_minutes,
+      status: editing.status,
+      shuffle_questions: editing.shuffle_questions,
+      allow_duel: editing.allow_duel,
+      pass_score: editing.pass_score,
+      question_source: editing.question_source,
+      draw_count: editing.draw_count,
+      draw_difficulty: random && mixOn ? editing.draw_difficulty : {},
+      scheduled_at: editing.scheduled_at ? new Date(editing.scheduled_at).toISOString().slice(0, 19) : null,
+      end_at: editing.end_at ? new Date(editing.end_at).toISOString().slice(0, 19) : null,
+    };
+    if (editing.id) payload.draw_topics = random ? pickedTopics : [];
+    else payload.topics = random ? pickedTopics : [];
+    try {
+      if (editing.id) await api.admin.updateQuiz(editing.id, payload);
+      else await api.admin.createQuiz(payload);
+      toast('success', editing.id ? 'Exam updated' : 'Exam created', editing.title);
+      setEditing(null);
+      onSaved();
+    } catch (error) {
+      toast('error', 'Could not save exam', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={() => setEditing(null)}
+      title={editing.id ? 'Edit exam' : 'New exam'}
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button onClick={save} loading={busy} disabled={Boolean(tooMany)} icon={<Check className="size-4" />}>
+            Save exam
+          </Button>
+        </>
+      }
+    >
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
+        <Field label="Title" className="sm:col-span-2">
+          <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} placeholder="LAW 411 Mid-semester test" />
+        </Field>
+
+        {/* ------------------------------------------------ QUESTION SOURCE */}
+        <div className="min-w-0 sm:col-span-2">
+          <p className="mb-1.5 text-[0.72rem] font-black tracking-[0.12em] text-mist-400 uppercase">Question source</p>
+          <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+            <SourceOption
+              active={random}
+              onClick={() => setEditing({...editing, question_source: 'course_random', draw_count: editing.draw_count || 40})}
+              icon={<Shuffle className="size-4" />}
+              title="Random from course"
+              detail="Every player gets their own random selection from the course question bank."
+            />
+            <SourceOption
+              active={!random}
+              onClick={() => setEditing({...editing, question_source: 'exam_specific', draw_count: 0, draw_topics: [], draw_difficulty: {}})}
+              icon={<ScrollText className="size-4" />}
+              title="Exam-specific questions"
+              detail="Questions written or imported only for this exam. They are not added to the course bank."
+            />
+          </div>
+        </div>
+
+        <Field label={random ? 'Course (required)' : 'Course (optional)'}>
+          <Select value={editing.course_id ?? ''} onChange={(event) => setEditing({...editing, course_id: event.target.value ? Number(event.target.value) : null, draw_topics: []})}>
+            <option value="">{random ? 'Choose a course…' : 'No course'}</option>
+            {courses.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.code} — {row.title}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {random ? (
+          <Field label="Questions per player" hint="Each player is dealt this many random questions when they start.">
+            <TextInput
+              type="number"
+              inputMode="numeric"
+              value={String(editing.draw_count)}
+              onChange={(event) => {
+                const n = Math.floor(Number(event.target.value || 0));
+                setEditing({...editing, draw_count: Number.isFinite(n) ? Math.max(0, Math.min(500, n)) : 0});
+              }}
+            />
+          </Field>
+        ) : (
+          <Field label="Questions per player" hint="0 = every exam-specific question. A smaller number gives each player a random subset.">
+            <TextInput
+              type="number"
+              inputMode="numeric"
+              value={String(editing.draw_count)}
+              onChange={(event) => {
+                const n = Math.floor(Number(event.target.value || 0));
+                setEditing({...editing, draw_count: Number.isFinite(n) ? Math.max(0, Math.min(500, n)) : 0});
+              }}
+            />
+          </Field>
+        )}
+
+        {random && (
+          <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:col-span-2">
+            {course ? (
+              <>
+                <div className="grid min-w-0 grid-cols-3 gap-2 text-center">
+                  <div className="min-w-0">
+                    <p className="text-[1.05rem] font-black text-mist-50 tabular">{bankSize ? formatNumber(bankSize.bank) : '…'}</p>
+                    <p className="text-[0.66rem] font-bold text-mist-500">in {course.code} bank</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[1.05rem] font-black text-mist-50 tabular">{eligible === null ? '…' : formatNumber(eligible)}</p>
+                    <p className="text-[0.66rem] font-bold text-mist-500">{pickedTopics.length ? 'in picked topics' : 'ready to draw'}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-[1.05rem] font-black tabular ${tooMany ? 'text-flare-300' : 'text-nova-200'}`}>{formatNumber(editing.draw_count)}</p>
+                    <p className="text-[0.66rem] font-bold text-mist-500">per player</p>
+                  </div>
+                </div>
+                <p className={`mt-2 text-[0.74rem] leading-snug font-semibold ${tooMany ? 'text-flare-300' : 'text-mist-400'}`}>
+                  {tooMany
+                    ? `Only ${formatNumber(eligible ?? 0)} questions are available — add questions to the bank or lower the number.`
+                    : `The bank stays at its full size. Each player who starts gets ${editing.draw_count} questions picked at random, so two players see different papers.`}
+                </p>
+
+                {topics.length > 0 && (
+                  <div className="mt-3 min-w-0">
+                    <p className="mb-1.5 text-[0.7rem] font-black tracking-wide text-mist-400 uppercase">
+                      Topics {pickedTopics.length ? `· ${pickedTopics.length} picked` : '· whole course'}
+                    </p>
+                    <div className="flex max-h-32 min-w-0 flex-wrap gap-1.5 overflow-y-auto">
+                      {topics.map((row) => {
+                        const on = pickedTopics.includes(row.topic);
+                        return (
+                          <button
+                            key={row.topic}
+                            type="button"
+                            onClick={() => setEditing({...editing, draw_topics: on ? pickedTopics.filter((t) => t !== row.topic) : [...pickedTopics, row.topic]})}
+                            className={`max-w-full truncate rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${
+                              on ? 'border-nova-400/50 bg-nova-500/18 text-nova-100' : 'border-white/10 text-mist-400 hover:border-white/25'
+                            }`}
+                          >
+                            {row.topic} <span className="opacity-60">{row.count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <label className="mt-3 flex items-center gap-2 text-[0.78rem] font-bold text-mist-300">
+                  <input type="checkbox" checked={mixOn} onChange={(event) => setMixOn(event.target.checked)} className="size-4 accent-fuchsia-500" />
+                  Control the difficulty mix
+                </label>
+                {mixOn && (
+                  <div className="mt-2 grid min-w-0 grid-cols-3 gap-2">
+                    {(['easy', 'medium', 'hard'] as const).map((level) => (
+                      <Field key={level} label={level}>
+                        <TextInput
+                          type="number"
+                          inputMode="numeric"
+                          value={String(editing.draw_difficulty?.[level] ?? 0)}
+                          onChange={(event) =>
+                            setEditing({...editing, draw_difficulty: {...editing.draw_difficulty, [level]: Math.max(0, Math.floor(Number(event.target.value) || 0))}})
+                          }
+                        />
+                      </Field>
+                    ))}
+                    <p className={`col-span-3 text-[0.72rem] font-bold ${mixTotal === editing.draw_count ? 'text-mist-500' : 'text-gold-300'}`}>
+                      Mix total {mixTotal} / {editing.draw_count}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-[0.78rem] font-semibold text-mist-400">Choose a course to see its question bank.</p>
+            )}
+          </div>
+        )}
+
+        {!random && (
+          <p className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-[0.76rem] leading-snug font-semibold text-mist-400 sm:col-span-2">
+            {editing.id
+              ? 'Manage this exam’s own questions from the exam list → Questions.'
+              : 'After saving, add or import this exam’s questions from the exam list → Questions. They stay out of the course bank unless you choose “Add to bank”.'}
+          </p>
+        )}
+
+        <Field label="Status">
+          <Select value={editing.status} onChange={(event) => setEditing({...editing, status: event.target.value as Quiz['status']})}>
+            {STATUSES.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Duration (minutes)">
+          <TextInput type="number" min={1} max={300} value={editing.duration_minutes} onChange={(event) => setEditing({...editing, duration_minutes: Number(event.target.value)})} />
+        </Field>
+        <Field label="Opens at" hint="Optional — blank = available immediately.">
+          <TextInput type="datetime-local" value={editing.scheduled_at} onChange={(event) => setEditing({...editing, scheduled_at: event.target.value})} />
+        </Field>
+        <Field label="Closes at" hint="Optional hard deadline.">
+          <TextInput type="datetime-local" value={editing.end_at} onChange={(event) => setEditing({...editing, end_at: event.target.value})} />
+        </Field>
+        <Field label="Passing score (%)">
+          <TextInput
+            type="number"
+            min={0}
+            max={100}
+            value={editing.pass_score}
+            onChange={(event) => setEditing({...editing, pass_score: Math.max(0, Math.min(100, Number(event.target.value) || 0))})}
+          />
+        </Field>
+        <div className="flex min-w-0 flex-col justify-end gap-2">
+          <label className="flex items-center gap-2.5">
+            <input type="checkbox" checked={editing.shuffle_questions} onChange={(event) => setEditing({...editing, shuffle_questions: event.target.checked})} className="size-5 accent-fuchsia-500" />
+            <span className="text-[0.84rem] font-bold text-mist-200">Shuffle question order</span>
+          </label>
+          <label className="flex items-center gap-2.5">
+            <input type="checkbox" checked={editing.allow_duel} onChange={(event) => setEditing({...editing, allow_duel: event.target.checked})} className="size-5 accent-fuchsia-500" />
+            <span className="text-[0.84rem] font-bold text-mist-200">Usable in duels</span>
+          </label>
+        </div>
+        <Field label="Instructions" className="sm:col-span-2">
+          <TextArea rows={3} value={editing.instructions} onChange={(event) => setEditing({...editing, instructions: event.target.value})} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function statusChip(status: string): string {
+  return status === 'active'
+    ? 'border-mint-500/32 bg-mint-500/14 text-mint-300'
+    : status === 'scheduled'
+      ? 'border-pulse-500/32 bg-pulse-500/14 text-pulse-300'
+      : 'border-white/12 bg-white/6 text-mist-500';
+}
+
+function QuizzesTab({onChanged, onManageQuestions, onOpenBank}: {onChanged: () => void; onManageQuestions: (quiz: Quiz) => void; onOpenBank: (courseId: number) => void}) {
+  const {toast} = useSession();
+  const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [editing, setEditing] = useState<QuizDraft | null>(null);
+  const [courseFilter, setCourseFilter] = useState<number | ''>('');
 
   const load = useCallback(() => {
     api.admin
@@ -357,38 +667,6 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
   }, [toast]);
 
   useEffect(load, [load]);
-
-  const save = async () => {
-    if (!editing) return;
-    if (editing.question_count < 0 || editing.question_count > 200) {
-      toast('error', 'Too many questions', 'A paper can hold up to 200 drawn questions.');
-      return;
-    }
-    if (!editing.id && editing.question_count > 0 && editing.question_count < 3) {
-      toast('error', 'Pick a real question count', 'Type 0 to build the paper by hand, or 3 or more for the server to draw.');
-      return;
-    }
-    setBusy(true);
-    const payload: Record<string, unknown> = {
-      ...editing,
-      scheduled_at: editing.scheduled_at ? new Date(editing.scheduled_at).toISOString().slice(0, 19) : null,
-      end_at: editing.end_at ? new Date(editing.end_at).toISOString().slice(0, 19) : null,
-    };
-    if (!editing.id && pickedTopics.length) payload.topics = pickedTopics;
-    try {
-      if (editing.id) await api.admin.updateQuiz(editing.id, payload);
-      else await api.admin.createQuiz(payload);
-      toast('success', editing.id ? 'Exam updated' : 'Exam created', editing.title);
-      setPickedTopics([]);
-      setEditing(null);
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Could not save exam', (error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const setStatus = async (quiz: Quiz, status: Quiz['status']) => {
     try {
@@ -413,1367 +691,269 @@ function QuizzesTab({onChanged, onManageQuestions}: {onChanged: () => void; onMa
     }
   };
 
+  const edit = (quiz: Quiz) =>
+    setEditing({
+      id: quiz.id,
+      title: quiz.title,
+      course_id: quiz.course?.id ?? null,
+      instructions: quiz.instructions,
+      duration_minutes: quiz.duration_minutes,
+      status: quiz.status,
+      scheduled_at: quiz.scheduled_at ? quiz.scheduled_at.slice(0, 16) : '',
+      end_at: quiz.end_at ? String(quiz.end_at).slice(0, 16) : '',
+      shuffle_questions: quiz.shuffle_questions,
+      allow_duel: quiz.allow_duel,
+      pass_score: quiz.pass_score ?? 50,
+      question_source: quiz.question_source ?? 'exam_specific',
+      draw_count: quiz.draw_count ?? 0,
+      draw_topics: quiz.draw_topics ?? [],
+      draw_difficulty: quiz.draw_difficulty ?? {},
+    });
+
+  const shown = (quizzes ?? []).filter((quiz) => !courseFilter || quiz.course?.id === courseFilter);
+
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-3">
       <SectionHeading
         title="Exams"
-        subtitle="Publish, schedule and close arena exams."
+        subtitle="Choose where each exam’s questions come from, then schedule it."
         icon={<FileText className="size-4" />}
         action={
-          <Button size="sm" onClick={() => setEditing({...emptyQuiz})} icon={<Plus className="size-4" />}>
+          <Button size="sm" onClick={() => setEditing({...emptyQuiz, course_id: courseFilter || null})} icon={<Plus className="size-4" />}>
             New exam
           </Button>
         }
       />
+      {courses.length > 1 && (
+        <Select value={courseFilter} onChange={(event) => setCourseFilter(event.target.value ? Number(event.target.value) : '')} aria-label="Filter exams by course" className="sm:max-w-xs">
+          <option value="">All courses</option>
+          {courses.map((course) => (
+            <option key={course.id} value={course.id}>
+              {course.code} — {course.title}
+            </option>
+          ))}
+        </Select>
+      )}
 
       {!quizzes ? (
         <div className="space-y-2">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
         </div>
-      ) : quizzes.length === 0 ? (
-        <EmptyState icon={<FileText className="size-6" />} title="No exams yet" detail="Create your first arena exam." />
+      ) : shown.length === 0 ? (
+        <EmptyState icon={<FileText className="size-6" />} title="No exams yet" detail="Create an exam and pick its question source." />
       ) : (
-        <ul className="space-y-2">
-          {quizzes.map((quiz) => (
-            <li key={quiz.id}>
-              <Card className="flex flex-wrap items-center gap-2.5 p-3.5 sm:gap-3 sm:p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.94rem] font-extrabold text-mist-50">{quiz.title}</p>
-                  <p className="mt-0.5 truncate text-[0.78rem] font-semibold text-mist-500">
-                    {quiz.course?.code ?? 'No course'} · {quiz.question_count} questions · {quiz.duration_minutes} min
-                    {quiz.submission_count ? ` · ${formatNumber(quiz.submission_count)} submissions` : ''}
-                    {quiz.scheduled_at ? ` · opens ${formatDate(quiz.scheduled_at, true)}` : ''}
-                  </p>
-                </div>
-
-                <Chip
-                  className={
-                    quiz.status === 'active'
-                      ? 'border-mint-500/32 bg-mint-500/14 text-mint-300'
-                      : quiz.status === 'scheduled'
-                        ? 'border-pulse-500/32 bg-pulse-500/14 text-pulse-300'
-                        : 'border-white/12 bg-white/6 text-mist-500'
-                  }
-                >
-                  {quiz.status}
-                </Chip>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {quiz.status !== 'active' && (
-                    <Button size="sm" variant="mint" onClick={() => setStatus(quiz, 'active')} icon={<Play className="size-3.5" />}>
-                      Go live
+        <ul className="min-w-0 space-y-1.5">
+          {shown.map((quiz) => {
+            const random = quiz.question_source === 'course_random';
+            return (
+              <li key={quiz.id} className="min-w-0">
+                <Card className="min-w-0 p-3">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.9rem] font-extrabold text-mist-50">{quiz.title}</p>
+                      <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[0.74rem] font-semibold text-mist-500">
+                        <span className="inline-flex items-center gap-1 text-mist-300">
+                          {random ? <Shuffle className="size-3" /> : <ScrollText className="size-3" />}
+                          {sourceSummary(quiz)}
+                        </span>
+                        <span>· {quiz.course?.code ?? 'No course'}</span>
+                        <span>· {quiz.duration_minutes} min</span>
+                        {quiz.submission_count ? <span>· {formatNumber(quiz.submission_count)} submitted</span> : null}
+                        {quiz.scheduled_at ? <span>· opens {formatDate(quiz.scheduled_at, true)}</span> : null}
+                      </p>
+                    </div>
+                    <Chip className={`shrink-0 ${statusChip(quiz.status)}`}>{quiz.status}</Chip>
+                  </div>
+                  <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+                    {quiz.status !== 'active' ? (
+                      <Button size="sm" variant="mint" onClick={() => setStatus(quiz, 'active')} icon={<Play className="size-3.5" />}>
+                        Go live
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setStatus(quiz, 'completed')}>
+                        Close
+                      </Button>
+                    )}
+                    {random ? (
+                      quiz.course && (
+                        <Button size="sm" variant="outline" onClick={() => onOpenBank(quiz.course!.id)} icon={<Library className="size-3.5" />}>
+                          Course bank
+                        </Button>
+                      )
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => onManageQuestions(quiz)} icon={<ScrollText className="size-3.5" />}>
+                        Questions
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => edit(quiz)} icon={<Pencil className="size-3.5" />}>
+                      Edit
                     </Button>
-                  )}
-                  {quiz.status === 'active' && (
-                    <Button size="sm" variant="outline" onClick={() => setStatus(quiz, 'completed')}>
-                      Close
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => onManageQuestions(quiz)} icon={<ScrollText className="size-3.5" />}>
-                    Questions
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setEditing({
-                        id: quiz.id,
-                        title: quiz.title,
-                        course_id: quiz.course?.id ?? null,
-                        instructions: quiz.instructions,
-                        duration_minutes: quiz.duration_minutes,
-                        status: quiz.status,
-                        scheduled_at: quiz.scheduled_at ? quiz.scheduled_at.slice(0, 16) : '',
-                        end_at: (quiz as {end_at?: string | null}).end_at ? String((quiz as {end_at?: string}).end_at).slice(0, 16) : '',
-                        shuffle_questions: quiz.shuffle_questions,
-                        allow_duel: quiz.allow_duel,
-                        question_count: 0,
-                        pass_score: (quiz as {pass_score?: number}).pass_score ?? 50,
-                      })
-                    }
-                    icon={<Pencil className="size-3.5" />}
-                  >
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => remove(quiz)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
-                </div>
-              </Card>
-            </li>
-          ))}
+                    <Button size="sm" variant="ghost" title="Delete exam" onClick={() => remove(quiz)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
+                  </div>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <Modal
-        open={Boolean(editing)}
-        onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit exam' : 'New exam'}
-        size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
-            </Button>
-            <Button onClick={save} loading={busy} icon={<Check className="size-4" />}>
-              Save exam
-            </Button>
-          </>
-        }
-      >
-        {editing && (
-          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-            <Field label="Title" className="sm:col-span-2">
-              <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} />
-            </Field>
-            <Field label="Course">
-              <Select
-                value={editing.course_id ?? ''}
-                onChange={(event) => setEditing({...editing, course_id: event.target.value ? Number(event.target.value) : null})}
-              >
-                <option value="">No course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.code} — {course.title}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Status">
-              <Select value={editing.status} onChange={(event) => setEditing({...editing, status: event.target.value as Quiz['status']})}>
-                {STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Duration (minutes)">
-              <TextInput
-                type="number"
-                min={1}
-                max={300}
-                value={editing.duration_minutes}
-                onChange={(event) => setEditing({...editing, duration_minutes: Number(event.target.value)})}
-              />
-            </Field>
-            <Field label="Opens at" hint="Optional — leave blank for immediately available.">
-              <TextInput
-                type="datetime-local"
-                value={editing.scheduled_at}
-                onChange={(event) => setEditing({...editing, scheduled_at: event.target.value})}
-              />
-            </Field>
-            <Field label="Closes at" hint="Optional — hard deadline the auto-submitter enforces.">
-              <TextInput type="datetime-local" value={editing.end_at} onChange={(event) => setEditing({...editing, end_at: event.target.value})} />
-            </Field>
-            <Field
-              label="Number of questions"
-              hint={
-                editing.id
-                  ? 'Edit papers use the Questions tab — creation-time draws only run on new exams.'
-                  : '0 = build the paper by hand. The server draws exactly this many eligible questions from the course bank and stores them.'
-              }
-            >
-              <TextInput
-                type="number"
-                value={String(editing.question_count)}
-                onChange={(event) => {
-                  // Free typing — the field never snaps mid-edit; `save` validates.
-                  const raw = event.target.value.trim();
-                  const n = raw === '' ? 0 : Math.floor(Number(raw));
-                  setEditing({...editing, question_count: Number.isFinite(n) ? Math.max(0, Math.min(999, n)) : 0});
-                }}
-              />
-            </Field>
-            <Field label="Passing score (%)" hint="Used on result screens and for pass/fail reporting.">
-              <TextInput
-                type="number"
-                min={0}
-                max={100}
-                value={editing.pass_score}
-                onChange={(event) => setEditing({...editing, pass_score: Math.max(0, Math.min(100, Number(event.target.value) || 0))})}
-              />
-            </Field>
-            {!editing.id && editing.course_id && quizTopics.length > 0 && (
-              <div className="sm:col-span-2">
-                <p className="mb-1.5 text-[0.72rem] font-black tracking-wide text-mist-400 uppercase">
-                  Draw from topics {pickedTopics.length ? `· ${pickedTopics.length} picked` : '· whole course'}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {quizTopics.map((row) => {
-                    const on = pickedTopics.includes(row.topic);
-                    return (
-                      <button
-                        key={row.topic}
-                        type="button"
-                        onClick={() => setPickedTopics((current) => (on ? current.filter((t) => t !== row.topic) : [...current, row.topic]))}
-                        className={
-                          on
-                            ? 'rounded-full border border-nova-400/50 bg-nova-500/18 px-2.5 py-1 text-[0.72rem] font-black text-nova-200'
-                            : 'rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[0.72rem] font-bold text-mist-400 hover:border-white/25'
-                        }
-                      >
-                        {row.topic} <span className="opacity-70">{row.count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {editing.question_count > 0 && (
-                  <p className="mt-1.5 text-[0.72rem] font-bold text-mist-500">
-                    Eligible now:{' '}
-                    {pickedTopics.length
-                      ? quizTopics.filter((t) => pickedTopics.includes(t.topic)).reduce((sum, t) => sum + t.count, 0)
-                      : (courses.find((c) => c.id === editing.course_id)?.question_count ?? '?')}{' '}
-                    · the server re-validates against the bank when you save.
-                  </p>
-                )}
-              </div>
-            )}
-            <Field label="Instructions" className="sm:col-span-2">
-              <TextArea rows={3} value={editing.instructions} onChange={(event) => setEditing({...editing, instructions: event.target.value})} />
-            </Field>
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={editing.shuffle_questions}
-                onChange={(event) => setEditing({...editing, shuffle_questions: event.target.checked})}
-                className="size-5 accent-fuchsia-500"
-              />
-              <span className="text-[0.86rem] font-bold text-mist-200">Shuffle questions per player</span>
-            </label>
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={editing.allow_duel}
-                onChange={(event) => setEditing({...editing, allow_duel: event.target.checked})}
-                className="size-5 accent-fuchsia-500"
-              />
-              <span className="text-[0.86rem] font-bold text-mist-200">Usable in duels</span>
-            </label>
-          </div>
-        )}
-      </Modal>
+      <ExamEditor
+        editing={editing}
+        setEditing={setEditing}
+        courses={courses}
+        onSaved={() => {
+          load();
+          onChanged();
+        }}
+      />
     </div>
   );
 }
 
-function QuestionsTab({quiz, onChanged}: {quiz: Quiz; onChanged: () => void}) {
+/* ============================================================== questions */
+
+/**
+ * Questions, organised by COURSE: pick a course, then either its question bank
+ * or one of its exams' exam-specific sets. No cross-course lists, no importing
+ * questions "from an exam".
+ */
+function QuestionsHub({
+  onChanged,
+  target,
+  setTarget,
+}: {
+  onChanged: () => void;
+  target: {courseId: number | null; examId: number | null};
+  setTarget: (next: {courseId: number | null; examId: number | null}) => void;
+}) {
   const {toast} = useSession();
-  const [questions, setQuestions] = useState<QuestionPublic[] | null>(null);
-  const [editing, setEditing] = useState<(typeof emptyQuestion & {id?: number}) | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkText, setBulkText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [drawOpen, setDrawOpen] = useState(false);
-  const [drawCount, setDrawCount] = useState(20);
-  const [drawBusy, setDrawBusy] = useState(false);
-  const [bank, setBank] = useState<{course_id: number; code: string; bank: number; drawn_copies: number} | null>(null);
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [sortKey, setSortKey] = useState('position');
-  // Page-based bank browsing: 20 at a time, "X–Y of Z" — never one endless
-  // scroll of thousands of questions.
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const limit = 20;
-  const [historyFor, setHistoryFor] = useState<QuestionPublic | null>(null);
-  const [versions, setVersions] = useState<{version: number; created_at: string; note?: string; author?: string}[] | null>(null);
-  const [statsFor, setStatsFor] = useState<{question_id: number; stats: {answered: number; correct: number; accuracy: number; avg_ms: number}; most_wrong: string[]} | null>(null);
+  const [courses, setCourses] = useState<Course[] | null>(null);
+  const [exams, setExams] = useState<Quiz[]>([]);
+  const [active, setActive] = useState<Quiz | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!drawOpen || !quiz.course) return;
     api.admin
-      .bank(quiz.course.id)
-      .then(setBank)
-      .catch(() => setBank(null));
-  }, [drawOpen, quiz.course]);
-
-  const filtering = Boolean(query.trim() || statusFilter || flaggedOnly || sortKey !== 'position');
-
-  const load = useCallback(() => {
-    api.admin.studio
-      .search({
-        quiz_id: quiz.id,
-        q: query.trim() || undefined,
-        status: statusFilter || undefined,
-        flagged: flaggedOnly || undefined,
-        sort: sortKey,
-        limit,
-        offset,
+      .courses()
+      .then((rows) => {
+        setCourses(rows);
+        if (!target.courseId && !target.examId && rows[0]) setTarget({courseId: rows[0].id, examId: null});
       })
-      .then((payload) => {
-        const data = payload as {rows?: QuestionPublic[]; total?: number};
-        setQuestions((data.rows ?? []) as QuestionPublic[]);
-        setTotal(data.total ?? 0);
-      })
-      .catch((error: Error) => toast('error', 'Could not load questions', error.message));
-  }, [quiz.id, toast, query, statusFilter, flaggedOnly, sortKey, offset]);
+      .catch((error: Error) => toast('error', 'Could not load courses', error.message));
+    api.admin
+      .quizzes()
+      .then(setExams)
+      .catch(() => setExams([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
+
+  const specificExams = useMemo(
+    () => exams.filter((quiz) => quiz.question_source !== 'course_random' && (target.courseId ? quiz.course?.id === target.courseId : !quiz.course)),
+    [exams, target.courseId],
+  );
 
   useEffect(() => {
-    const handle = window.setTimeout(load, filtering ? 280 : 0);
-    return () => window.clearTimeout(handle);
-  }, [load, filtering]);
-
-  const openHistory = async (question: QuestionPublic) => {
-    setHistoryFor(question);
-    setVersions(null);
-    try {
-      const payload = await api.admin.studio.versions(question.id);
-      setVersions((payload ?? []) as never);
-    } catch (error) {
-      toast('error', 'Could not load versions', (error as Error).message);
-      setVersions([]);
-    }
-  };
-
-  const restore = async (question: QuestionPublic, version: number) => {
-    try {
-      await api.admin.studio.restoreVersion(question.id, version);
-      toast('success', `Restored version ${version}`, 'The current answer and text were snapshotted first.');
-      setHistoryFor(null);
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Restore failed', (error as Error).message);
-    }
-  };
-
-  const duplicate = async (question: QuestionPublic) => {
-    try {
-      await api.admin.studio.duplicateQuestion(question.id, {quiz_id: quiz.id});
-      toast('success', 'Question duplicated', 'The copy keeps the original source link and answer.');
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Could not duplicate', (error as Error).message);
-    }
-  };
-
-  const flag = async (question: QuestionPublic) => {
-    const reason = window.prompt('Why is this question being flagged?', question.flag_reason ?? '');
-    if (reason === null) return;
-    try {
-      await api.admin.studio.flag(question.id, {reason});
-      toast('info', 'Flagged for review');
-      load();
-    } catch (error) {
-      toast('error', 'Could not flag', (error as Error).message);
-    }
-  };
-
-  const unflag = async (question: QuestionPublic) => {
-    try {
-      await api.admin.studio.unflag(question.id);
-      toast('success', 'Flag cleared');
-      load();
-    } catch (error) {
-      toast('error', 'Could not unflag', (error as Error).message);
-    }
-  };
-
-  const showStats = async (question: QuestionPublic) => {
-    try {
-      const payload = (await api.admin.studio.analytics(question.id)) as {
-        question_id: number;
-        stats: {answered: number; correct: number; accuracy: number; avg_ms: number};
-        most_wrong: string[];
-      };
-      setStatsFor(payload);
-    } catch (error) {
-      toast('error', 'No analytics yet', (error as Error).message);
-    }
-  };
-
-  // The server parses and validates the paste — it is the only code allowed to
-  // decide what a valid answer looks like. Invalid rows come back with reasons
-  // instead of being quietly turned into "A".
-  const [preview, setPreview] = useState<{
-    valid?: number;
-    rejected?: number;
-    duplicates?: number;
-    preview?: Record<string, unknown>[];
-    errors?: {index: number; number?: number; text: string; answer?: string | null; reasons: string[]}[];
-    warnings?: {text?: string; reason?: string}[];
-    file?: {filename: string; kind: string; bytes: number; pages?: number | null; rows_detected?: number | null; notes: string[]};
-  } | null>(null);
-
-  /* Device uploads: the same preview/report pipeline, fed by a real file. */
-  const [paperFile, setPaperFile] = useState<File | null>(null);
-  const [paperBusy, setPaperBusy] = useState(false);
-  const [dragging, setDragging] = useState(false);
-
-  const readPaper = async (file: File) => {
-    setPaperFile(file);
-    setPreview(null);
-    setPaperBusy(true);
-    try {
-      const report = (await api.admin.studio.previewImportFile(file, {
-        quiz_id: quiz.id,
-        course_id: quiz.course?.id ?? null,
-      })) as never;
-      setPreview(report);
-    } catch (error) {
-      setPaperFile(null);
-      toast('error', 'Could not read that file', (error as Error).message);
-    } finally {
-      setPaperBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!bulkOpen || paperFile) return undefined;
-    const handle = window.setTimeout(() => {
-      if (bulkText.trim().length < 8) {
-        setPreview(null);
-        return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      try {
+        if (target.examId) {
+          const quiz = exams.find((row) => row.id === target.examId) ?? (await api.admin.quiz(target.examId));
+          if (!cancelled) setActive(quiz);
+        } else if (target.courseId) {
+          const bank = await api.admin.ensureCourseBank(target.courseId);
+          if (!cancelled) setActive(bank);
+        } else if (!cancelled) setActive(null);
+      } catch (error) {
+        if (!cancelled) toast('error', 'Could not open questions', (error as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      api.admin.studio
-        .previewImport({raw: bulkText, quiz_id: quiz.id, course_id: quiz.course?.id ?? null})
-        .then((payload) => setPreview(payload as never))
-        .catch(() => setPreview(null));
-    }, 350);
-    return () => window.clearTimeout(handle);
-  }, [bulkText, bulkOpen, paperFile, quiz.id, quiz.course?.id]);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [target.courseId, target.examId, exams, toast]);
 
-  const save = async () => {
-    if (!editing) return;
-    if (!editing.correct) {
-      toast('error', 'Choose the correct answer', 'Every question needs an explicit A–D answer — it is never assumed.');
-      return;
-    }
-    const filled = ['a', 'b'].every((letter) => String(editing[`option_${letter}` as keyof QuestionDraft] ?? '').trim().length > 0);
-    if (!filled) {
-      toast('error', 'Options A and B are required');
-      return;
-    }
-    setBusy(true);
-    try {
-      if (editing.id) await api.admin.updateQuestion(editing.id, editing);
-      else await api.admin.createQuestion(quiz.id, editing);
-      toast('success', editing.id ? 'Question updated' : 'Question added');
-      setEditing(null);
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Could not save question', (error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const bulkSave = async () => {
-    setBusy(true);
-    try {
-      const result = (paperFile
-        ? await api.admin.studio.importFile(paperFile, {
-            quiz_id: quiz.id,
-            course_id: quiz.course?.id ?? null,
-            mode: 'append',
-            skip_duplicates: true,
-          })
-        : await api.admin.studio.importQuestions({
-            raw: bulkText,
-            quiz_id: quiz.id,
-            course_id: quiz.course?.id ?? null,
-            mode: 'append',
-            skip_duplicates: true,
-          })) as {created?: number; rejected?: number; skipped?: number; errors?: {text: string}[]};
-      toast(
-        result.created ? 'success' : 'info',
-        `${result.created ?? 0} question${result.created === 1 ? '' : 's'} imported`,
-        `${result.rejected ?? 0} rejected · ${result.skipped ?? 0} duplicates skipped`,
-      );
-      if (!result.rejected) {
-        setBulkOpen(false);
-        setBulkText('');
-        setPaperFile(null);
-      }
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Import failed', (error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runDraw = async () => {
-    setDrawBusy(true);
-    try {
-      const result = await api.admin.draw(quiz.id, drawCount);
-      toast(
-        'success',
-        `Drew ${result.drawn} question${result.drawn === 1 ? '' : 's'}`,
-        `${result.total} in this exam now · ${result.available} still available in the bank`,
-      );
-      setDrawOpen(false);
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Draw failed', (error as Error).message);
-    } finally {
-      setDrawBusy(false);
-    }
-  };
-
-  const remove = async (question: QuestionPublic) => {
-    if (!window.confirm('Delete this question?')) return;
-    try {
-      await api.admin.deleteQuestion(question.id);
-      toast('info', 'Question deleted');
-      load();
-      onChanged();
-    } catch (error) {
-      toast('error', 'Could not delete', (error as Error).message);
-    }
-  };
+  if (!courses) return <Skeleton className="h-40" />;
 
   return (
-    <div className="space-y-4">
-      <SectionHeading
-        title={quiz.title}
-        subtitle={
-          quiz.is_bank
-            ? 'Course question bank — approved originals here are what every exam draws from. Not an exam itself.'
-            : `${total > 0 ? `${formatNumber(total)}` : questions?.length ?? quiz.question_count} questions in the bank`
-        }
-        icon={<ScrollText className="size-4" />}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            {!quiz.is_bank && (
-              <Button size="sm" variant="outline" onClick={() => setDrawOpen(true)} icon={<Shuffle className="size-3.5" />}>
-                Draw from bank
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} icon={<Upload className="size-3.5" />}>
-              Import questions
-            </Button>
-            <Button size="sm" onClick={() => setEditing({...emptyQuestion})} icon={<Plus className="size-4" />}>
-              Add question
-            </Button>
-          </div>
-        }
-      />
-
-      <Card className="min-w-0 p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_9rem_9rem_auto]">
-          <TextInput
-            placeholder="Search text, topic, tags…"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setOffset(0);
-            }}
-            aria-label="Search the question bank"
-          />
-          <Select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value);
-              setOffset(0);
-            }}
-            aria-label="Filter by review status"
-          >
-            <option value="">Any status</option>
-            {QUESTION_STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={sortKey}
-            onChange={(event) => {
-              setSortKey(event.target.value);
-              setOffset(0);
-            }}
-            aria-label="Sort questions"
-          >
-            <option value="position">Exam order</option>
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="hardest">Most missed</option>
-            <option value="easiest">Most mastered</option>
-            <option value="most_used">Most used</option>
-            <option value="least_used">Least used</option>
-            <option value="az">A → Z</option>
-            <option value="topic">Group by topic</option>
-          </Select>
-          <button
-            type="button"
-            onClick={() => {
-              setFlaggedOnly((value) => !value);
-              setOffset(0);
-            }}
-            aria-pressed={flaggedOnly}
- className={`min-h-10 shrink-0 rounded-2xl border px-3 text-[0.76rem] font-black tracking-wide transition-colors touch-manipulation ${
-              flaggedOnly ? 'border-flare-500/50 bg-flare-500/16 text-flare-200' : 'border-white/10 bg-white/4 text-mist-500'
-            }`}
-          >
-            Flagged
-          </button>
+    <div className="min-w-0 space-y-3">
+      <Card className="min-w-0 p-2.5 sm:p-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+          <Field label="Course">
+            <Select value={target.courseId ?? ''} onChange={(event) => setTarget({courseId: event.target.value ? Number(event.target.value) : null, examId: null})}>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.code} — {course.title}
+                </option>
+              ))}
+              <option value="">Exams without a course</option>
+            </Select>
+          </Field>
+          <Field label="Questions in">
+            <Select value={target.examId ?? ''} onChange={(event) => setTarget({...target, examId: event.target.value ? Number(event.target.value) : null})}>
+              {target.courseId && <option value="">Course question bank</option>}
+              {!target.courseId && <option value="">Choose an exam…</option>}
+              {specificExams.map((quiz) => (
+                <option key={quiz.id} value={quiz.id}>
+                  Exam-specific: {quiz.title}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </Card>
 
-      {!questions ? (
-        <div className="space-y-2">
-          {[0, 1, 2].map((key) => (
-            <Skeleton key={key} className="h-28" />
-          ))}
-        </div>
-      ) : questions.length === 0 ? (
-        <EmptyState
-          icon={<ScrollText className="size-6" />}
-          title="No questions yet"
-          detail="Add them one by one or paste a whole paper with the bulk importer."
-          action={
-            <Button size="sm" onClick={() => setBulkOpen(true)} icon={<Upload className="size-4" />}>
-              Import questions
-            </Button>
-          }
-        />
+      {loading && !active ? (
+        <Skeleton className="h-40" />
+      ) : active ? (
+        <QuestionManager key={active.id} quiz={active} onChanged={onChanged} />
       ) : (
-        <ul className="space-y-2">
-          {questions.map((question, position) => (
-            <li key={question.id}>
-              {sortKey === 'topic' && (position === 0 || questions[position - 1]?.topic !== question.topic) && (
-                <div className="flex items-center gap-2 px-1 pt-1 pb-2">
-                  <p className="text-[0.72rem] font-black tracking-[0.1em] text-nova-300 uppercase">{question.topic?.trim() || 'No topic yet'}</p>
-                  <span aria-hidden className="h-px min-w-4 flex-1 bg-gradient-to-r from-nova-400/40 to-transparent" />
-                </div>
-              )}
-              <Card className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/6 text-[0.78rem] font-black tabular text-mist-400">
-                    {offset + position + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[0.9rem] font-bold text-mist-100">{question.text}</p>
-                    {question.drawn && (
-                      <Chip className="mt-1.5 border-pulse-500/30 bg-pulse-500/12 text-pulse-200">Drawn from bank</Chip>
-                    )}
-                    <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-                      {LETTERS.filter((letter) => question.options[letter]).map((letter) => (
-                        <li
-                          key={letter}
-                          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[0.8rem] font-semibold ${
-                            question.correct === letter
-                              ? 'border-mint-500/40 bg-mint-500/12 text-mint-200'
-                              : 'border-white/8 bg-white/[0.02] text-mist-400'
-                          }`}
-                        >
-                          <span className="font-black">{letter}</span>
-                          <span className="min-w-0 flex-1 truncate">{question.options[letter]}</span>
-                          {question.correct === letter && <Check className="size-3.5 shrink-0" />}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Chip>{question.points} pts</Chip>
-                      <Chip className="capitalize">{question.difficulty}</Chip>
-                      {question.topic && (
-                        <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">
-                          {question.topic}
-                          {question.subtopic ? ` · ${question.subtopic}` : ''}
-                        </Chip>
-                      )}
-                      {question.question_type && question.question_type !== 'mcq' && (
-                        <Chip className="border-pulse-500/25 bg-pulse-500/10 text-pulse-200">
-                          {QUESTION_TYPES.find((type) => type.value === question.question_type)?.label ?? question.question_type}
-                        </Chip>
-                      )}
-                      {typeof question.usage_count === 'number' && question.usage_count > 0 && (
-                        <Chip className="tabular">
-                          {question.usage_count} answers · {Math.round(question.accuracy ?? 0)}% right
-                        </Chip>
-                      )}
-                      {question.status && question.status !== 'approved' && (
-                        <Chip className="capitalize border-gold-500/30 bg-gold-500/12 text-gold-200">{question.status}</Chip>
-                      )}
-                      {question.visible === false && <Chip className="border-white/14 bg-white/6 text-mist-400">Hidden</Chip>}
-                      {question.explanation && <Chip className="border-pulse-500/25 bg-pulse-500/10 text-pulse-300">Has explanation</Chip>}
-                      {question.flag_reason && <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-200">Flagged</Chip>}
-                      {(question.tags ?? []).slice(0, 3).map((tag) => (
-                        <Chip key={tag} className="text-mist-400">
-                          #{tag}
-                        </Chip>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Version history"
-                      onClick={() => void openHistory(question)}
-                      icon={<History className="size-3.5" />}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Usage analytics"
-                      onClick={() => void showStats(question)}
-                      icon={<BarChart3 className="size-3.5" />}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Duplicate"
-                      onClick={() => void duplicate(question)}
-                      icon={<Copy className="size-3.5" />}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title={question.flag_reason ? 'Clear flag' : 'Flag for review'}
-                      onClick={() => void (question.flag_reason ? unflag(question) : flag(question))}
-                      icon={<Flag className={`size-3.5 ${question.flag_reason ? 'text-flare-400' : ''}`} />}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setEditing({
-                          id: question.id,
-                          text: question.text,
-                          option_a: question.options.A ?? '',
-                          option_b: question.options.B ?? '',
-                          option_c: question.options.C ?? '',
-                          option_d: question.options.D ?? '',
-                          correct: (question.correct ?? '') as OptionKey | '',
-                          explanation: question.explanation ?? '',
-                          points: question.points,
-                          difficulty: (question.difficulty as (typeof DIFFICULTIES)[number]) ?? 'medium',
-                          question_type: question.question_type ?? 'mcq',
-                          topic: question.topic ?? '',
-                          subtopic: question.subtopic ?? '',
-                          objective: question.objective ?? '',
-                          tags: question.tags ?? [],
-                          source: question.source ?? '',
-                          reference: question.reference ?? '',
-                          author: question.author ?? '',
-                          hint: question.hint ?? '',
-                          admin_notes: question.admin_notes ?? '',
-                          status: (question.status as QuestionDraft['status']) ?? 'approved',
-                          visible: question.visible ?? true,
-                          flashcard_enabled: question.flashcard_enabled ?? true,
-                          duel_enabled: question.duel_enabled ?? true,
-                          practice_enabled: question.practice_enabled ?? true,
-                          time_limit_seconds: question.time_limit_seconds ?? 0,
-                          media: (question.media ?? {}) as Record<string, string>,
-                        })
-                      }
-                      icon={<Pencil className="size-3.5" />}
-                    />
-                    <Button size="sm" variant="ghost" onClick={() => remove(question)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
-                  </div>
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
+        <EmptyState icon={<ScrollText className="size-6" />} title="Pick where to work" detail="Choose a course bank or an exam-specific set above." />
       )}
-
-      {questions && questions.length > 0 && (
-        <div className="flex items-center justify-between gap-3">
-          <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-            Previous
-          </Button>
-          <span className="text-center text-[0.78rem] font-bold text-mist-500">
-            {total === 0 ? 0 : offset + 1}–{Math.min(offset + limit, total)} of {formatNumber(total)}
-          </span>
-          <Button size="sm" variant="outline" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>
-            Next
-          </Button>
-        </div>
-      )}
-
-      <Modal
-        open={Boolean(editing)}
-        onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit question' : 'New question'}
-        size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
-            </Button>
-            <Button onClick={save} loading={busy} icon={<Check className="size-4" />}>
-              Save question
-            </Button>
-          </>
-        }
-      >
-        {editing && (
-          <div className="space-y-4">
-            <Field label="Question">
-              <TextArea rows={3} value={editing.text} onChange={(event) => setEditing({...editing, text: event.target.value})} />
-            </Field>
-
-            {/* Option rows: the letter badge IS the selector, so the answer is
-                always a deliberate choice — never inferred from order. */}
-            <div className="grid gap-3">
-              {LETTERS.map((letter) => {
-                const key = `option_${letter.toLowerCase()}` as keyof typeof editing;
-                const isCorrect = editing.correct === letter;
-                return (
-                  <div
-                    key={letter}
-                    className={`flex items-center gap-2 rounded-2xl border p-2 transition-colors ${
-                      isCorrect ? 'border-mint-500/45 bg-mint-500/10' : 'border-white/10 bg-white/[0.02]'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setEditing({...editing, correct: letter})}
-                      aria-pressed={isCorrect}
-                      aria-label={`Mark option ${letter} as the correct answer`}
-                      className={`grid size-11 shrink-0 place-items-center rounded-xl border font-display text-[0.9rem] font-black transition-colors touch-manipulation ${
-                        isCorrect ? 'border-mint-500/60 bg-mint-500/25 text-mint-100' : 'border-white/12 bg-white/6 text-mist-300 hover:border-white/30'
-                      }`}
-                    >
-                      {letter}
-                    </button>
-                    <TextInput
-                      value={String(editing[key] ?? '')}
-                      placeholder={`Option ${letter} text`}
-                      onChange={(event) => setEditing({...editing, [key]: event.target.value})}
-                      className="min-w-0 flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEditing({...editing, correct: isCorrect ? ('' as OptionKey) : letter})}
- className={`hidden shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[0.7rem] font-black tracking-wide transition-colors sm:flex ${
-                        isCorrect ? 'border-mint-500/50 bg-mint-500/16 text-mint-200' : 'border-white/10 bg-white/4 text-mist-500 hover:text-mist-200'
-                      }`}
-                    >
-                      <Check className="size-3.5" />
-                      {isCorrect ? 'Correct' : 'Select'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field
-                label="Correct answer"
-                hint={editing.correct ? `Saved as ${editing.correct}` : 'Required — no default is ever assumed'}
-              >
-                <Select
-                  value={editing.correct}
-                  onChange={(event) => setEditing({...editing, correct: event.target.value as OptionKey})}
-                  className={editing.correct ? '' : 'border-flare-500/45'}
-                >
-                  <option value="">Select the correct answer…</option>
-                  {LETTERS.map((letter) => (
-                    <option key={letter} value={letter}>
-                      {letter}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Points">
-                <TextInput
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={editing.points}
-                  onChange={(event) => setEditing({...editing, points: Number(event.target.value)})}
-                />
-              </Field>
-              <Field label="Difficulty">
-                <Select
-                  value={editing.difficulty}
-                  onChange={(event) => setEditing({...editing, difficulty: event.target.value as (typeof DIFFICULTIES)[number]})}
-                >
-                  {DIFFICULTIES.map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-
-            <Field label="Explanation" hint="Shown to players in the post-exam review and flashcards.">
-              <TextArea rows={2} value={editing.explanation} onChange={(event) => setEditing({...editing, explanation: event.target.value})} />
-            </Field>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Question type">
-                <Select value={editing.question_type} onChange={(event) => setEditing({...editing, question_type: event.target.value})}>
-                  {QUESTION_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Review status">
-                <Select value={editing.status} onChange={(event) => setEditing({...editing, status: event.target.value as QuestionDraft['status']})}>
-                  {QUESTION_STATUSES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Topic">
-                <TextInput value={editing.topic} onChange={(event) => setEditing({...editing, topic: event.target.value})} placeholder="e.g. Constitutional Law" />
-              </Field>
-              <Field label="Subtopic">
-                <TextInput value={editing.subtopic} onChange={(event) => setEditing({...editing, subtopic: event.target.value})} />
-              </Field>
-              <Field label="Learning objective" className="sm:col-span-2">
-                <TextInput value={editing.objective} onChange={(event) => setEditing({...editing, objective: event.target.value})} />
-              </Field>
-              <Field label="Tags" hint="Comma separated — used for filtering and decks." className="sm:col-span-2">
-                <TextInput
-                  value={editing.tags.join(', ')}
-                  onChange={(event) =>
-                    setEditing({
-                      ...editing,
-                      tags: event.target.value
-                        .split(',')
-                        .map((tag) => tag.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Source">
-                <TextInput value={editing.source} onChange={(event) => setEditing({...editing, source: event.target.value})} placeholder="Past paper, textbook…" />
-              </Field>
-              <Field label="Reference">
-                <TextInput value={editing.reference} onChange={(event) => setEditing({...editing, reference: event.target.value})} />
-              </Field>
-              <Field label="Author">
-                <TextInput value={editing.author} onChange={(event) => setEditing({...editing, author: event.target.value})} />
-              </Field>
-              <Field label="Time limit (seconds)" hint="0 = use the exam clock">
-                <TextInput
-                  type="number"
-                  min={0}
-                  max={3600}
-                  value={editing.time_limit_seconds}
-                  onChange={(event) => setEditing({...editing, time_limit_seconds: Math.max(0, Number(event.target.value) || 0)})}
-                />
-              </Field>
-              <Field label="Hint" hint="Offered by the hint power-up and practice mode." className="sm:col-span-2">
-                <TextInput value={editing.hint} onChange={(event) => setEditing({...editing, hint: event.target.value})} />
-              </Field>
-              <Field label="Image URL" className="sm:col-span-2">
-                <TextInput
-                  value={editing.media.image ?? ''}
-                  onChange={(event) => setEditing({...editing, media: {...editing.media, image: event.target.value}})}
-                  placeholder="https://…"
-                />
-              </Field>
-              <Field label="Admin notes" className="sm:col-span-2">
-                <TextArea rows={2} value={editing.admin_notes} onChange={(event) => setEditing({...editing, admin_notes: event.target.value})} />
-              </Field>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {[
-                {key: 'visible' as const, label: 'Visible to players'},
-                {key: 'flashcard_enabled' as const, label: 'Usable in flashcards'},
-                {key: 'duel_enabled' as const, label: 'Usable in duels'},
-                {key: 'practice_enabled' as const, label: 'Usable in practice / boss'},
-              ].map((row) => (
-                <label key={row.key} className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(editing[row.key])}
-                    onChange={(event) => setEditing({...editing, [row.key]: event.target.checked})}
-                    className="size-5 accent-fuchsia-500"
-                  />
-                  <span className="text-[0.84rem] font-bold text-mist-200">{row.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        open={bulkOpen}
-        onClose={() => {
-          setBulkOpen(false);
-          setPaperFile(null);
-        }}
-        title="Import questions"
-        subtitle="Paste a paper or load a file from your device — the answer letter is always taken exactly as written."
-        size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setBulkOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={bulkSave} loading={busy} disabled={!preview || (preview.valid ?? 0) === 0} icon={<Upload className="size-4" />}>
-              Import {preview?.valid ? `${preview.valid}` : ''} questions
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <p className="rounded-2xl border border-nova-500/25 bg-nova-500/8 px-3.5 py-2.5 text-[0.78rem] font-bold text-nova-100">
-            Importing into <span className="font-extrabold text-nova-500">{quiz.title}</span>
-            {quiz.course ? ` · ${quiz.course.code}` : ' · no course attached yet'}
-          </p>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 font-mono text-[0.74rem] leading-relaxed text-mist-400">
- <p className="font-sans text-[0.72rem] font-black tracking-[0.16em] text-mist-500">Format</p>
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{`1. Which court has original jurisdiction over presidential elections?
-A. Supreme Court
-B. Court of Appeal
-C. Federal High Court
-D. National Industrial Court
-Answer: Court of Appeal
-Explanation: Section 246(1)(a) of the 1999 Constitution.
-
-2. Next question...`}</pre>
-            <p className="mt-2 font-sans text-[0.7rem] font-semibold text-mist-500">
-              The answer may be a letter (B) or the exact option text — text is resolved to the option's stable key, so shuffled options can never move it.
-            </p>
-          </div>
-
-          <div>
- <p className="text-[0.72rem] font-black tracking-[0.16em] text-mist-500">From your device</p>
-            <label
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                const file = event.dataTransfer.files?.[0];
-                if (file) void readPaper(file);
-              }}
-              className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors touch-manipulation ${
-                dragging ? 'border-nova-400/60 bg-nova-500/10' : 'border-white/14 bg-white/[0.02] hover:border-white/25'
-              }`}
-            >
-              <input
-                type="file"
-                accept=".txt,.csv,.tsv,.pdf,.json,text/plain,text/csv,application/pdf,application/json"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void readPaper(file);
-                  event.target.value = '';
-                }}
-              />
-              <FileUp className={`size-5 ${paperBusy ? 'animate-pulse text-nova-300' : 'text-mist-400'}`} />
-              <span className="text-[0.82rem] font-bold text-mist-200">
-                {paperBusy ? 'Reading the file…' : 'Drop a .txt, .csv or .pdf here'}
-              </span>
-              <span className="text-[0.72rem] font-semibold text-mist-500">
-                or tap to browse · answers are read exactly as written and never guessed
-              </span>
-            </label>
-
-            {paperFile && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
-                <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200">
-                  {preview?.file?.kind ? preview.file.kind : 'File'}
-                </Chip>
-                <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-mist-100">{paperFile.name}</span>
-                <span className="shrink-0 text-[0.72rem] font-semibold text-mist-500 tabular">
-                  {(paperFile.size / 1024).toFixed(1)} KB
-                  {preview?.file?.rows_detected ? ` · ${preview.file.rows_detected} rows` : ''}
-                  {preview?.file?.pages ? ` · ${preview.file.pages} pages` : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPaperFile(null);
-                    setPreview(null);
-                  }}
-                  className="shrink-0 rounded-lg px-2 py-1 text-[0.72rem] font-black text-mist-500 transition-colors hover:text-flare-300"
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-
-            {Boolean(preview?.file?.notes?.length) && (
-              <ul className="mt-2 space-y-1">
-                {(preview?.file?.notes ?? []).map((note, index) => (
-                  <li key={index} className="text-[0.74rem] font-semibold text-mist-400">
-                    · {note}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <Field
-            label={paperFile ? 'Or paste text instead' : 'Questions'}
-            hint={
-              preview
-                ? `${preview.valid ?? 0} ready · ${preview.rejected ?? 0} rejected · ${preview.duplicates ?? 0} duplicates`
-                : 'Waiting for input…'
-            }
-          >
-            <TextArea rows={12} value={bulkText} onChange={(event) => setBulkText(event.target.value)} placeholder="Paste your questions here…" />
-          </Field>
-
-          <AnimatePresence>
-            {preview && ((preview.valid ?? 0) + (preview.rejected ?? 0) > 0) && (
-              <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="space-y-2">
-                {(preview.rejected ?? 0) > 0 && (
-                  <ul className="space-y-1.5">
-                    {(preview.errors ?? []).slice(0, 6).map((row, index) => (
-                      <li key={index} className="rounded-2xl border border-flare-500/35 bg-flare-500/10 px-3.5 py-2.5">
-                        <p className="text-[0.78rem] font-black text-flare-200">
-                          {row.number ? `Question ${row.number}` : `Row ${index + 1}`}: {row.reasons.join(', ')}
-                        </p>
-                        <p className="mt-0.5 line-clamp-2 text-[0.72rem] font-semibold text-mist-400">{row.text}</p>
-                        {row.answer && (
-                          <p className="mt-0.5 font-mono text-[0.7rem] text-mist-500">
-                            answer found: “{row.answer}” — fix it to A, B, C or D (AC for multi-select) before importing.
-                          </p>
-                        )}
-                      </li>
-                    ))}
-                    {(preview.errors ?? []).length > 6 && (
-                      <li className="px-2 text-[0.74rem] font-semibold text-mist-500">+ {(preview.errors ?? []).length - 6} more rejected rows…</li>
-                    )}
-                  </ul>
-                )}
-                {(preview.valid ?? 0) > 0 && (
-                  <p className="rounded-2xl border border-mint-500/30 bg-mint-500/10 px-3.5 py-2.5 text-[0.78rem] font-bold text-mint-200">
-                    {preview.valid} question{preview.valid === 1 ? '' : 's'} will import with the exact answer letter given.
-                    Rejected rows are never imported as “A”.
-                  </p>
-                )}
-                {(preview.duplicates ?? 0) > 0 && (
-                  <p className="text-[0.74rem] font-semibold text-mist-500">{preview.duplicates} duplicate rows will be skipped.</p>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </Modal>
-
-      <Modal
-        open={drawOpen}
-        onClose={() => setDrawOpen(false)}
-        title="Draw from Question Bank"
-        subtitle={quiz.course ? `${quiz.course.code} · ${quiz.course.title}` : 'No course on this exam yet'}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDrawOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={runDraw} loading={drawBusy} disabled={!quiz.course} icon={<Shuffle className="size-4" />}>
-              Draw {drawCount} questions
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          {quiz.course ? (
-            <>
-              <p className="text-[0.84rem] leading-relaxed font-semibold text-mist-400">
-                Every question belongs to its course's single bank. This pulls{' '}
-                <span className="font-black text-mist-100">{drawCount}</span> random questions from the{' '}
-                <span className="font-black text-nova-200">{quiz.course.code}</span> bank only — anything already in
-                this exam is skipped, so a question can never repeat.
-              </p>
-              {bank && (
-                <div className="flex flex-wrap gap-2">
-                  <Chip className="border-mint-500/28 bg-mint-500/12 text-mint-300">{bank.bank} originals in bank</Chip>
-                  <Chip>{bank.drawn_copies} already drawn into exams</Chip>
-                  {drawCount > bank.bank && (
-                    <Chip className="border-gold-400/30 bg-gold-500/12 text-gold-300">
-                      Only {bank.bank} available — all of them will be drawn
-                    </Chip>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[10, 20, 50, 70].map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => setDrawCount(value)}
-                    className={`min-h-11 rounded-xl border py-2 text-[0.82rem] font-black tabular transition-colors touch-manipulation ${
-                      drawCount === value ? 'border-nova-400/50 bg-nova-500/16 text-nova-200' : 'border-white/10 bg-white/4 text-mist-400'
-                    }`}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-              <Field label="Exact number to draw">
-                <TextInput
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={String(drawCount)}
-                  onChange={(event) => setDrawCount(Math.max(1, Math.min(200, Number(event.target.value) || 1)))}
-                />
-              </Field>
-            </>
-          ) : (
-            <p className="text-[0.84rem] font-semibold text-mist-400">
-              Edit this exam and choose a course first — draws always come from that course's bank only.
-            </p>
-          )}
-        </div>
-      </Modal>
-
-      <Modal
-        open={Boolean(historyFor)}
-        onClose={() => setHistoryFor(null)}
-        title={`Version history${historyFor ? ` · Q${historyFor.id}` : ''}`}
-        subtitle="Every save snapshots the previous text, options and answer. Restoring keeps the current state in history first."
-        size="lg"
-      >
-        {!versions ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((key) => (
-              <Skeleton key={key} className="h-14" />
-            ))}
-          </div>
-        ) : versions.length === 0 ? (
-          <EmptyState icon={<History className="size-6" />} title="No earlier versions" detail="The first saved edit creates version 1." />
-        ) : (
-          <ul className="space-y-2">
-            {versions.map((row) => (
-              <li key={row.version} className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3.5 py-2.5">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/6 font-display text-[0.78rem] font-black text-mist-300">
-                  v{row.version}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.84rem] font-bold text-mist-100">{row.note || 'Question updated'}</p>
-                  <p className="truncate text-[0.7rem] font-semibold text-mist-500">
-                    {row.author ? `${row.author} · ` : ''}
-                    {row.created_at ? new Date(row.created_at).toLocaleString() : ''}
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => historyFor && void restore(historyFor, row.version)}>
-                  Restore
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Modal>
-
-      <Modal
-        open={Boolean(statsFor)}
-        onClose={() => setStatsFor(null)}
-        title="Question analytics"
-        subtitle="Live usage straight from graded answers — exams, duels, practice and flashcards."
-      >
-        {statsFor && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                {label: 'Answers', value: statsFor.stats.answered},
-                {label: 'Correct', value: statsFor.stats.correct},
-                {label: 'Accuracy', value: `${Math.round(statsFor.stats.accuracy)}%`},
-                {label: 'Avg time', value: `${Math.round((statsFor.stats.avg_ms ?? 0) / 100) / 10}s`},
-              ].map((tile) => (
-                <div key={tile.label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
- <p className="text-[0.6rem] font-black tracking-[0.14em] text-mist-500">{tile.label}</p>
-                  <p className="mt-1 font-display text-lg font-black tabular text-mist-50">{tile.value}</p>
-                </div>
-              ))}
-            </div>
-            {statsFor.most_wrong.length > 0 && (
-              <div className="rounded-2xl border border-flare-500/25 bg-flare-500/8 px-3.5 py-3">
- <p className="text-[0.68rem] font-black tracking-[0.16em] text-flare-200">Most-chosen wrong answers</p>
-                <p className="mt-1 font-mono text-[0.78rem] font-bold text-mist-300">{statsFor.most_wrong.join(' · ')}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
 
+/* =================================================================== root */
+
+type Tab = 'courses' | 'exams' | 'questions';
+
 export default function ContentAdmin({onChanged}: {onChanged: () => void}) {
-  const [tab, setTab] = useState<'courses' | 'exams' | 'questions' | 'materials'>('exams');
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const {toast} = useSession();
-
-  useEffect(() => {
-    if (tab === 'questions' && !quiz) {
-      api.admin
-        .quizzes()
-        .then((rows) => setQuiz(rows[0] ?? null))
-        .catch((error: Error) => toast('error', 'Could not load exams', error.message));
-    }
-  }, [tab, quiz, toast]);
-
-  if (tab === 'questions' && !quiz) {
-    return (
-      <div className="space-y-4">
-        <Segmented
-          value={tab}
-          options={[
-            {value: 'courses', label: 'Courses', icon: BookOpen},
-            {value: 'exams', label: 'Exams', icon: FileText},
-            {value: 'questions', label: 'Questions', icon: ScrollText},
-            {value: 'materials', label: 'Materials', icon: BookOpen},
-          ]}
-          onChange={setTab}
-        />
-        <EmptyState
-          icon={<X className="size-6" />}
-          title="Pick an exam first"
-          detail="Create an exam, then open its question bank."
-          action={
-            <Button size="sm" onClick={() => setTab('exams')}>
-              Go to exams
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
+  const [tab, setTab] = useState<Tab>('courses');
+  const [openCourse, setOpenCourse] = useState<number | null>(null);
+  const [target, setTarget] = useState<{courseId: number | null; examId: number | null}>({courseId: null, examId: null});
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="min-w-0 space-y-4">
       <Segmented
         value={tab}
         options={[
           {value: 'courses', label: 'Courses', icon: BookOpen},
           {value: 'exams', label: 'Exams', icon: FileText},
           {value: 'questions', label: 'Questions', icon: ScrollText},
-          {value: 'materials', label: 'Materials', icon: BookOpen},
         ]}
         onChange={setTab}
       />
 
-      {tab === 'courses' && (
-        <CoursesTab
-          onChanged={onChanged}
-          onOpenBank={(bankQuiz) => {
-            setQuiz(bankQuiz);
-            setTab('questions');
-          }}
-        />
-      )}
+      {tab === 'courses' && <CoursesTab onChanged={onChanged} openCourseId={openCourse} onOpenCourse={setOpenCourse} />}
       {tab === 'exams' && (
         <QuizzesTab
           onChanged={onChanged}
-          onManageQuestions={(target) => {
-            setQuiz(target);
+          onManageQuestions={(quiz) => {
+            setTarget({courseId: quiz.course?.id ?? null, examId: quiz.id});
+            setTab('questions');
+          }}
+          onOpenBank={(courseId) => {
+            setTarget({courseId, examId: null});
             setTab('questions');
           }}
         />
       )}
-      {tab === 'questions' && quiz && <QuestionsTab quiz={quiz} onChanged={onChanged} />}
-      {tab === 'materials' && <MaterialsAdmin onChanged={onChanged} />}
+      {tab === 'questions' && <QuestionsHub onChanged={onChanged} target={target} setTarget={setTarget} />}
     </div>
   );
 }

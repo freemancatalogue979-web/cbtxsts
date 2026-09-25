@@ -49,10 +49,10 @@ async def start_exam(quiz_id: int, db: Session = Depends(get_db), student: Stude
     if attempt.status == "submitted":
         await dispatch(events)
         rank = exam_service.rank_for(db, attempt)
-        questions = exam_service.question_order(db, quiz, student)
+        questions = exam_service.question_order(db, quiz, student, attempt)
         return attempt_state(db, attempt, questions=questions, reveal=True, rank=rank, time_remaining=0)
 
-    questions = exam_service.question_order(db, quiz, student)
+    questions = exam_service.question_order(db, quiz, student, attempt)
     exam_service.ensure_question_times(attempt, questions)
     db.commit()
     return attempt_state(
@@ -70,7 +70,7 @@ async def read_attempt(attempt_id: int, db: Session = Depends(get_db), student: 
     events = await _expire_if_needed(db, attempt)
     if events:
         await dispatch(events)
-    questions = exam_service.question_order(db, attempt.quiz, student)
+    questions = exam_service.question_order(db, attempt.quiz, student, attempt)
     if attempt.status == "in_progress":
         exam_service.ensure_question_times(attempt, questions)
         db.commit()
@@ -116,7 +116,7 @@ async def save_answer(
         "ok": True,
         "question_id": payload.question_id,
         "answered": len([a for a in attempt.answers if a.selected]),
-        "total": len(attempt.quiz.questions),
+        "total": exam_service.attempt_total(db, attempt),
         "time_remaining": exam_service.time_remaining(attempt),
     }
 
@@ -130,7 +130,7 @@ async def submit_exam(
 ) -> dict:
     attempt = _owned_attempt(db, attempt_id, student)
     if attempt.status == "submitted":
-        questions = exam_service.question_order(db, attempt.quiz, student)
+        questions = exam_service.question_order(db, attempt.quiz, student, attempt)
         return attempt_state(db, attempt, questions=questions, reveal=True, rank=exam_service.rank_for(db, attempt))
 
     try:
@@ -141,7 +141,7 @@ async def submit_exam(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
     await dispatch(events)
-    questions = exam_service.question_order(db, attempt.quiz, student)
+    questions = exam_service.question_order(db, attempt.quiz, student, attempt)
     result = attempt_state(
         db,
         attempt,
@@ -160,7 +160,7 @@ def review_attempt(attempt_id: int, db: Session = Depends(get_db), student: Stud
     attempt = _owned_attempt(db, attempt_id, student)
     if attempt.status != "submitted":
         raise HTTPException(status.HTTP_409_CONFLICT, "Submit the paper before reviewing answers.")
-    questions = exam_service.question_order(db, attempt.quiz, student)
+    questions = exam_service.question_order(db, attempt.quiz, student, attempt)
     result = attempt_state(db, attempt, questions=questions, reveal=True, rank=exam_service.rank_for(db, attempt))
     result["leaderboard"] = exam_service.quiz_leaderboard(db, attempt.quiz_id)
     return result
@@ -187,7 +187,7 @@ def my_results(db: Session = Depends(get_db), student: Student = Depends(require
             "title": attempt.quiz.title,
             "course": attempt.quiz.course.code if attempt.quiz.course else "",
             "course_title": attempt.quiz.course.title if attempt.quiz.course else "",
-            "total_questions": len(attempt.quiz.questions),
+            "total_questions": exam_service.attempt_total(db, attempt),
         }
         payload.append(row)
     return payload

@@ -30,14 +30,13 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) music.warm();
 });
 
-// Browsers only allow audio after a gesture — arm the synth on the first tap.
+// Browsers only allow audio after a gesture — start the chosen track on the first tap.
 for (const gesture of ['pointerdown', 'keydown'] as const) {
   window.addEventListener(
     gesture,
     () => {
       sfx.unlock();
       music.unlock();
-      // Build the synth graph now so the first bar is instant.
       music.warm();
     },
     {once: true, capture: true},
