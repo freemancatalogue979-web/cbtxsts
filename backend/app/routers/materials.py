@@ -46,6 +46,7 @@ from ..schemas import (
     MaterialHighlightIn,
     MaterialIn,
     MaterialNoteIn,
+    MaterialNoteUpdate,
     MaterialPostIn,
     MaterialLinkQuestionsIn,
     MaterialProgressIn,
@@ -387,9 +388,11 @@ def read_material(
         ).all()
     ]
     notes = [
-        {"id": row.id, "section_id": row.section_id, "body": row.body, "quote": row.quote}
+        _note_public(row)
         for row in db.scalars(
-            select(MaterialNote).where(MaterialNote.student_id == student.id, MaterialNote.material_id == material_id)
+            select(MaterialNote)
+            .where(MaterialNote.student_id == student.id, MaterialNote.material_id == material_id)
+            .order_by(MaterialNote.updated_at.desc(), MaterialNote.id.desc())
         ).all()
     ]
     bookmarks = [
@@ -597,6 +600,66 @@ def remove_highlight(
 
 
 # ----------------------------------------------------------------------- notes
+# A player's own notes on a material (the reader's "My notes" tab): create,
+# list, read, edit, delete. Undo is done by the client replaying the inverse.
+def _note_public(row: MaterialNote) -> dict:
+    return {
+        "id": row.id,
+        "section_id": row.section_id,
+        "title": row.title or "",
+        "body": row.body,
+        "quote": row.quote,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": (row.updated_at or row.created_at).isoformat() if (row.updated_at or row.created_at) else None,
+    }
+
+
+def _my_note_or_404(db: Session, material_id: int, note_id: int, student: Student) -> MaterialNote:
+    row = db.get(MaterialNote, note_id)
+    if row is None or row.student_id != student.id or row.material_id != material_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Note not found.")
+    return row
+
+
+@router.get("/{material_id}/notes")
+def list_notes(material_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
+    _material_or_404(db, material_id)
+    rows = db.scalars(
+        select(MaterialNote)
+        .where(MaterialNote.student_id == student.id, MaterialNote.material_id == material_id)
+        .order_by(MaterialNote.updated_at.desc(), MaterialNote.id.desc())
+    ).all()
+    return {"notes": [_note_public(row) for row in rows]}
+
+
+@router.get("/{material_id}/notes/{note_id}")
+def read_note(material_id: int, note_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
+    return _note_public(_my_note_or_404(db, material_id, note_id, student))
+
+
+@router.patch("/{material_id}/notes/{note_id}")
+def edit_note(
+    material_id: int,
+    note_id: int,
+    payload: MaterialNoteUpdate,
+    db: Session = Depends(get_db),
+    student: Student = Depends(require_student),
+) -> dict:
+    row = _my_note_or_404(db, material_id, note_id, student)
+    if payload.body is not None:
+        body = engine.clean_text(payload.body, 20000)
+        if not body:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A note can't be empty — delete it instead.")
+        row.body = body
+    if payload.title is not None:
+        row.title = engine.clean_text(payload.title, 200)
+    if "section_id" in payload.model_fields_set:
+        row.section_id = payload.section_id
+    row.updated_at = utcnow()
+    db.commit()
+    return _note_public(row)
+
+
 @router.post("/{material_id}/notes")
 def add_note(
     material_id: int,
@@ -605,28 +668,30 @@ def add_note(
     student: Student = Depends(require_student),
 ) -> dict:
     _material_or_404(db, material_id)
-    body = engine.clean_text(payload.body, 4000)
+    body = engine.clean_text(payload.body, 20000)
     if not body:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Write something in your note first.")
+    now = utcnow()
     row = MaterialNote(
         material_id=material_id,
         section_id=payload.section_id,
         student_id=student.id,
+        title=engine.clean_text(payload.title, 200),
         body=body,
         quote=engine.clean_text(payload.quote, 600),
+        created_at=now,
+        updated_at=now,
     )
     db.add(row)
     db.commit()
-    return {"id": row.id, "body": row.body, "quote": row.quote, "section_id": row.section_id}
+    return _note_public(row)
 
 
 @router.delete("/{material_id}/notes/{note_id}")
 def delete_note(
     material_id: int, note_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)
 ) -> dict:
-    row = db.get(MaterialNote, note_id)
-    if row is None or row.student_id != student.id or row.material_id != material_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Note not found.")
+    row = _my_note_or_404(db, material_id, note_id, student)
     db.delete(row)
     db.commit()
     return {"ok": True}

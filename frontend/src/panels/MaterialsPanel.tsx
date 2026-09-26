@@ -39,6 +39,11 @@ import {
   Trophy,
   Video,
   XCircle,
+  Eye,
+  Pencil,
+  Plus,
+  Undo2,
+  X,
   Zap,
   ExternalLink,
 } from 'lucide-react';
@@ -50,7 +55,7 @@ import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
 import {api} from '../lib/api';
 import {OPEN_MATERIAL_EVENT} from '../lib/palette';
-import {formatNumber} from '../lib/format';
+import {formatDate, formatNumber} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {studyRewards} from '../lib/rewards';
 import {sfx} from '../lib/sfx';
@@ -59,6 +64,7 @@ import type {
   MaterialBlock,
   MaterialCard,
   MaterialDetail,
+  MaterialNote,
   MaterialPost,
   MyLearning,
   PlaytimeBank,
@@ -313,6 +319,300 @@ function BankStrip({bank, streak}: {bank: PlaytimeBank | null; streak?: {current
 
 /* --------------------------------------------------------------- reader */
 
+/* ------------------------------------------------------------- my notes tab */
+
+type NoteForm = {id?: number; title: string; body: string; section_id: number | null; quote?: string};
+type NoteUndo = {label: string; run: () => Promise<void>};
+
+/** The reader's Notes tab: the player's own notes on what they learned from
+ *  this material — write, open and read, edit, delete, and undo the last step. */
+function MyNotesTab({
+  materialId,
+  sections,
+  notes,
+  setNotes,
+  activeSectionId,
+  quote,
+  onToast,
+}: {
+  materialId: number;
+  sections: MaterialDetail['sections'];
+  notes: MaterialNote[];
+  setNotes: (update: (current: MaterialNote[]) => MaterialNote[]) => void;
+  activeSectionId: number | null;
+  quote: string;
+  onToast: (tone: 'success' | 'error', title: string, detail?: string) => void;
+}) {
+  const [form, setForm] = useState<NoteForm | null>(null);
+  const [reading, setReading] = useState<MaterialNote | null>(null);
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [undo, setUndo] = useState<NoteUndo | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const sectionTitle = (id: number | null) => (id ? sections.find((row) => row.id === id)?.title : '') || '';
+  const titleOf = (note: MaterialNote) => note.title?.trim() || note.body.split('\n')[0].slice(0, 80) || 'Untitled note';
+
+  // Always show the freshest copy (older reader payloads may lack titles / dates).
+  useEffect(() => {
+    api.materials
+      .notes(materialId)
+      .then((payload) => setNotes(() => payload.notes ?? []))
+      .catch(() => undefined);
+  }, [materialId, setNotes]);
+
+  const shown = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return notes;
+    return notes.filter((note) => `${note.title ?? ''} ${note.body} ${sectionTitle(note.section_id)}`.toLowerCase().includes(term));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, query]);
+
+  const startNew = () => setForm({title: '', body: '', section_id: activeSectionId, quote: quote || undefined});
+
+  const save = async () => {
+    if (!form || !form.body.trim()) {
+      onToast('error', 'Write something first', 'A note needs at least a line of text.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (form.id) {
+        const before = notes.find((row) => row.id === form.id);
+        const row = await api.materials.editNote(materialId, form.id, {title: form.title.trim(), body: form.body.trim(), section_id: form.section_id});
+        setNotes((current) => [row, ...current.filter((item) => item.id !== row.id)]);
+        if (before) {
+          setUndo({
+            label: `Edited “${titleOf(row)}”`,
+            run: async () => {
+              const back = await api.materials.editNote(materialId, before.id, {title: before.title ?? '', body: before.body, section_id: before.section_id});
+              setNotes((current) => current.map((item) => (item.id === back.id ? back : item)));
+            },
+          });
+        }
+        onToast('success', 'Note saved');
+      } else {
+        const row = await api.materials.note(materialId, {title: form.title.trim(), body: form.body.trim(), section_id: form.section_id, quote: form.quote ?? ''});
+        setNotes((current) => [row, ...current]);
+        setUndo({
+          label: `Added “${titleOf(row)}”`,
+          run: async () => {
+            await api.materials.removeNote(materialId, row.id);
+            setNotes((current) => current.filter((item) => item.id !== row.id));
+          },
+        });
+        onToast('success', 'Note added');
+      }
+      sfx.play('tap');
+      setForm(null);
+    } catch (error) {
+      onToast('error', 'Could not save the note', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (note: MaterialNote) => {
+    if (!window.confirm(`Delete “${titleOf(note)}”? You can undo this straight after.`)) return;
+    try {
+      await api.materials.removeNote(materialId, note.id);
+      setNotes((current) => current.filter((item) => item.id !== note.id));
+      setReading(null);
+      setUndo({
+        label: `Deleted “${titleOf(note)}”`,
+        run: async () => {
+          const row = await api.materials.note(materialId, {title: note.title ?? '', body: note.body, section_id: note.section_id, quote: note.quote ?? ''});
+          setNotes((current) => [row, ...current]);
+        },
+      });
+    } catch (error) {
+      onToast('error', 'Could not delete the note', (error as Error).message);
+    }
+  };
+
+  const runUndo = async () => {
+    if (!undo) return;
+    setUndoing(true);
+    try {
+      await undo.run();
+      onToast('success', 'Undone');
+      setUndo(null);
+    } catch (error) {
+      onToast('error', 'Could not undo', (error as Error).message);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const edit = (note: MaterialNote) => {
+    setReading(null);
+    setForm({id: note.id, title: note.title ?? '', body: note.body, section_id: note.section_id, quote: note.quote});
+  };
+
+  return (
+    <div className="min-w-0 space-y-3">
+      {undo ? (
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-nova-500/30 bg-nova-500/10 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-nova-100">{undo.label}</span>
+          <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} loading={undoing} onClick={() => void runUndo()}>
+            Undo
+          </Button>
+          <button type="button" aria-label="Dismiss" className="grid size-7 shrink-0 place-items-center rounded-lg text-mist-400 hover:bg-white/5" onClick={() => setUndo(null)}>
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex min-w-0 items-center gap-2">
+        <p className="min-w-0 flex-1 text-[0.8rem] font-semibold text-mist-400">
+          {notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'} · only you can see them` : 'Only you can see your notes'}
+        </p>
+        <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={startNew}>
+          New note
+        </Button>
+      </div>
+
+      {notes.length > 4 ? (
+        <div className="relative min-w-0">
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-mist-500" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search my notes…"
+            aria-label="Search my notes"
+            className="h-10 w-full min-w-0 rounded-xl border border-white/12 bg-ink-950/60 pr-3 pl-9 text-[0.86rem] text-mist-100 outline-none placeholder:text-mist-600 focus:border-nova-400/50"
+          />
+        </div>
+      ) : null}
+
+      {!notes.length ? (
+        <EmptyState
+          icon={<NotebookPen className="size-5" />}
+          title="No notes yet"
+          detail="Write down what you learned from this material — key points, formulas, things to revise before the exam."
+          action={
+            <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={startNew}>
+              Write your first note
+            </Button>
+          }
+        />
+      ) : !shown.length ? (
+        <p className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[0.82rem] text-mist-400">No notes match “{query}”.</p>
+      ) : (
+        <ul className="grid min-w-0 gap-2 sm:grid-cols-2">
+          {shown.map((note) => (
+            <li key={note.id} className="min-w-0">
+              <div className="card flex h-full min-w-0 flex-col p-3">
+                <button type="button" onClick={() => setReading(note)} className="min-w-0 text-left">
+                  <p className="line-clamp-2 text-[0.9rem] font-extrabold text-mist-50 [overflow-wrap:anywhere]">{titleOf(note)}</p>
+                  <p className="mt-1 line-clamp-3 text-[0.8rem] leading-snug whitespace-pre-line text-mist-400 [overflow-wrap:anywhere]">{note.body}</p>
+                </button>
+                <p className="mt-2 truncate text-[0.68rem] font-bold text-mist-500">
+                  {sectionTitle(note.section_id) ? `${sectionTitle(note.section_id)} · ` : ''}
+                  {note.updated_at ? formatDate(note.updated_at) : 'Just now'}
+                </p>
+                <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
+                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => setReading(note)}>
+                    Open
+                  </Button>
+                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => edit(note)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" aria-label={`Delete ${titleOf(note)}`} title="Delete" icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(note)} />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* read one note */}
+      <Modal
+        open={Boolean(reading)}
+        onClose={() => setReading(null)}
+        title={reading ? titleOf(reading) : ''}
+        subtitle={reading ? `${sectionTitle(reading.section_id) || 'Whole material'}${reading.updated_at ? ` · ${formatDate(reading.updated_at, true)}` : ''}` : ''}
+        footer={
+          reading ? (
+            <>
+              <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => void remove(reading)}>
+                Delete
+              </Button>
+              <Button icon={<Pencil className="size-4" />} onClick={() => edit(reading)}>
+                Edit
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {reading ? (
+          <div className="min-w-0 space-y-3">
+            {reading.quote ? (
+              <blockquote className="rounded-xl border-l-4 border-nova-400/50 bg-white/[0.04] px-3 py-2 text-[0.82rem] text-mist-300 italic [overflow-wrap:anywhere]">{reading.quote}</blockquote>
+            ) : null}
+            <p className="text-[0.92rem] leading-relaxed whitespace-pre-line text-mist-100 [overflow-wrap:anywhere]">{reading.body}</p>
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* write / edit */}
+      <Modal
+        open={Boolean(form)}
+        onClose={() => setForm(null)}
+        title={form?.id ? 'Edit note' : 'New note'}
+        subtitle="Only you can see this."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setForm(null)}>
+              Cancel
+            </Button>
+            <Button icon={<NotebookPen className="size-4" />} loading={busy} disabled={!form?.body.trim()} onClick={() => void save()}>
+              Save note
+            </Button>
+          </>
+        }
+      >
+        {form ? (
+          <div className="min-w-0 space-y-3">
+            <input
+              value={form.title}
+              onChange={(event) => setForm({...form, title: event.target.value})}
+              maxLength={200}
+              placeholder="Title (optional) — e.g. Key points"
+              aria-label="Note title"
+              className="h-11 w-full min-w-0 rounded-xl border border-white/12 bg-ink-950/60 px-3 text-[0.9rem] font-bold text-mist-50 outline-none placeholder:font-normal placeholder:text-mist-600 focus:border-nova-400/50"
+            />
+            <textarea
+              value={form.body}
+              onChange={(event) => setForm({...form, body: event.target.value})}
+              rows={8}
+              autoFocus
+              placeholder="What did you learn?"
+              aria-label="Note text"
+              className="w-full min-w-0 resize-y rounded-xl border border-white/12 bg-ink-950/60 p-3 text-[0.9rem] leading-relaxed text-mist-100 outline-none placeholder:text-mist-600 focus:border-nova-400/50"
+            />
+            <label className="block min-w-0 text-[0.74rem] font-bold text-mist-400">
+              About
+              <select
+                value={form.section_id ?? ''}
+                onChange={(event) => setForm({...form, section_id: event.target.value ? Number(event.target.value) : null})}
+                className="mt-1 h-10 w-full min-w-0 rounded-xl border border-white/12 bg-ink-950/60 px-3 text-[0.86rem] text-mist-100 outline-none focus:border-nova-400/50"
+              >
+                <option value="">The whole material</option>
+                {sections.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.position}. {section.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {form.quote ? <p className="truncate text-[0.72rem] text-mist-500">Quoting: “{form.quote}”</p> : null}
+          </div>
+        ) : null}
+      </Modal>
+    </div>
+  );
+}
+
 function Reader({
   material,
   onBack,
@@ -342,7 +642,8 @@ function Reader({
   const [busy, setBusy] = useState(false);
   const sectionsRef = useRef<Record<number, HTMLElement | null>>({});
   // Notes the lecturer attached to this material (separate from the player's own marks).
-  const [view, setView] = useState<'read' | 'staff'>('read');
+  const [view, setView] = useState<'read' | 'notes' | 'staff'>('read');
+  const setMyNotes = useCallback((update: (current: MaterialNote[]) => MaterialNote[]) => setMarks((current) => ({...current, notes: update(current.notes)})), []);
   const [staffNotes, setStaffNotes] = useState<MaterialDetail[] | null>(null);
   useEffect(() => {
     let live = true;
@@ -439,6 +740,7 @@ function Reader({
       setMarks((current) => ({...current, notes: [row, ...current.notes]}));
       setNoteDraft('');
       sfx.play('tap');
+      onToast('success', 'Note saved', 'Open, edit or delete it in the Notes tab.');
     } catch (error) {
       onToast('error', 'Could not save the note', (error as Error).message);
     }
@@ -621,14 +923,41 @@ function Reader({
 
       <BankStrip bank={bank} streak={detail.streak} />
 
-      {staffNotes?.length ? (
-        <Segmented
-          value={view}
-          onChange={setView}
-          options={[
-            {value: 'read', label: 'Reading', icon: BookOpen},
-            {value: 'staff', label: `Lecturer notes (${staffNotes.length})`, icon: NotebookPen},
-          ]}
+      <div role="tablist" aria-label="Material views" className={`grid min-w-0 gap-1 rounded-xl border border-white/10 bg-ink-950/80 p-1 ${staffNotes?.length ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        {[
+          {value: 'read' as const, label: 'Reading', icon: BookOpen},
+          {value: 'notes' as const, label: marks.notes.length ? `Notes (${marks.notes.length})` : 'Notes', icon: NotebookPen},
+          ...(staffNotes?.length ? [{value: 'staff' as const, label: 'Lecturer', icon: GraduationCap}] : []),
+        ].map((option) => {
+          const Icon = option.icon;
+          const active = view === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setView(option.value)}
+              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[0.78rem] font-bold transition-colors ${
+                active ? 'brand-gradient text-white' : 'text-mist-400 hover:bg-white/5 hover:text-mist-100'
+              }`}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              <span className="truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {view === 'notes' ? (
+        <MyNotesTab
+          materialId={detail.id}
+          sections={detail.sections}
+          notes={marks.notes}
+          setNotes={setMyNotes}
+          activeSectionId={activeSection?.id ?? null}
+          quote={highlightTarget}
+          onToast={onToast}
         />
       ) : null}
 
@@ -751,6 +1080,7 @@ function Reader({
         </>
       )}
 
+      {view === 'read' ? (
       <Card className="min-w-0 p-4">
         <SectionHeading
           title="Highlights & notes"
@@ -806,19 +1136,24 @@ function Reader({
         </div>
 
         {marks.notes.length ? (
-          <ul className="mt-3 min-w-0 space-y-1.5">
-            {marks.notes.slice(0, 4).map((note) => (
-              <li key={note.id} className="flex min-w-0 items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
-                <NotebookPen className="mt-0.5 size-3.5 shrink-0 text-gold-300" />
-                <span className="min-w-0 flex-1 text-[0.82rem] leading-snug text-mist-300">{note.body}</span>
-                <button onClick={() => void api.materials.removeNote(detail.id, note.id).then(() => setMarks((c) => ({...c, notes: c.notes.filter((row) => row.id !== note.id)})))} className="shrink-0 text-mist-600 hover:text-flare-400">
-                  <Trash2 className="size-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
+          <button
+            type="button"
+            onClick={() => {
+              setView('notes');
+              window.scrollTo({top: 0, behavior: 'smooth'});
+            }}
+            className="mt-3 flex w-full min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-left text-[0.82rem] font-bold text-mist-200 hover:bg-white/[0.06]"
+          >
+            <NotebookPen className="size-4 shrink-0 text-gold-300" />
+            <span className="min-w-0 flex-1 truncate">
+              You have {marks.notes.length} note{marks.notes.length === 1 ? '' : 's'} on this material
+            </span>
+            <span className="shrink-0 text-nova-300">Open Notes</span>
+            <ChevronRight className="size-4 shrink-0 text-nova-300" />
+          </button>
         ) : null}
       </Card>
+      ) : null}
 
       {!feedbackSent ? (
         <Card className="min-w-0 p-4">

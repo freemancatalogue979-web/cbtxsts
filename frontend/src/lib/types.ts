@@ -1101,11 +1101,15 @@ export interface MaterialHighlight {
   note?: string;
 }
 
+/** A player's own note on a material (the reader's Notes tab). */
 export interface MaterialNote {
   id: number;
   section_id: number | null;
+  title?: string;
   body: string;
   quote?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface MaterialBookmark {

@@ -147,6 +147,13 @@ be undone straight from a banner. The notes also appear in the course's Notes ta
 *in &lt;material&gt;*, and players get a **Lecturer notes** tab in the reader. Deleting a material keeps
 its notes in the course. API: `parent_id` on create/update, `GET /api/admin/materials?parent_id=`,
 `POST /api/admin/materials/{id}/versions/{version_id}/restore`, `GET /api/materials/{id}/staff-notes`.
+**Players' own notes (reader → Notes tab).** While reading a material, players switch between
+**Reading · Notes · Lecturer** (Lecturer appears when staff attached notes). In **Notes** a player
+writes notes on what they learned (optional title, the text, and which section it is about),
+opens and reads them, edits and deletes them, and can **Undo** the last add, edit or delete from
+a banner. Notes are private to that player. The quick note box under the reading saves into the
+same list. API (player token): `GET /api/materials/{id}/notes`, `POST …/notes`,
+`GET|PATCH|DELETE …/notes/{note_id}`; a PATCH changes only the fields it is sent.
 Updating a material without sending `status` or `course_id` now leaves them unchanged (previously
 such a partial update fell back to *draft* and *no course*).
 The correct answer may be given as a letter (**B**) *or as the option's actual
@@ -301,6 +308,10 @@ cd backend && ./.venv/bin/python scripts/verify_material_import.py
 #          partial updates keep status and course, version restore and undo-last-save,
 #          delete keeps notes in the course, player "lecturer notes" shows published ones only
 cd backend && ./.venv/bin/python scripts/verify_material_notes.py
+
+# Backend: players' own notes — create / list / open / edit / delete, undo of each step,
+#          empty notes refused, and notes stay private to the player who wrote them
+cd backend && ./.venv/bin/python scripts/verify_player_notes.py
 
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder

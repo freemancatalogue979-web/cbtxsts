@@ -801,9 +801,18 @@ class MaterialHighlightIn(BaseModel):
 
 
 class MaterialNoteIn(BaseModel):
-    body: str = Field(min_length=1, max_length=4000)
+    body: str = Field(min_length=1, max_length=20000)
+    title: str = Field(default="", max_length=200)
     section_id: int | None = None
     quote: str = Field(default="", max_length=600)
+
+
+class MaterialNoteUpdate(BaseModel):
+    """A player editing their own note; fields left out stay as they are."""
+
+    title: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=20000)
+    section_id: int | None = None
 
 
 class MaterialBookmarkIn(BaseModel):

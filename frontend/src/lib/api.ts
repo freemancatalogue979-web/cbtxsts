@@ -56,6 +56,7 @@ import type {
   MaterialLibrary,
   MyLearning,
   MaterialCard,
+  MaterialNote,
   MaterialDetail,
   MaterialImportPreview,
   MaterialProgressResult,
@@ -639,8 +640,13 @@ export const api = {
       request<{id: number; text: string; colour: string; section_id: number | null}>(`/api/materials/${id}/highlights`, {method: 'POST', body}),
     removeHighlight: (id: number, highlightId: number) =>
       request<{ok: boolean}>(`/api/materials/${id}/highlights/${highlightId}`, {method: 'DELETE'}),
-    note: (id: number, body: {body: string; section_id?: number | null; quote?: string}) =>
-      request<{id: number; body: string; section_id: number | null; quote?: string}>(`/api/materials/${id}/notes`, {method: 'POST', body}),
+    note: (id: number, body: {body: string; title?: string; section_id?: number | null; quote?: string}) =>
+      request<MaterialNote>(`/api/materials/${id}/notes`, {method: 'POST', body}),
+    /** The player's own notes on this material, newest first. */
+    notes: (id: number) => request<{notes: MaterialNote[]}>(`/api/materials/${id}/notes`),
+    /** Edit one of my notes — fields left out stay as they are. */
+    editNote: (id: number, noteId: number, body: {title?: string; body?: string; section_id?: number | null}) =>
+      request<MaterialNote>(`/api/materials/${id}/notes/${noteId}`, {method: 'PATCH', body}),
     removeNote: (id: number, noteId: number) => request<{ok: boolean}>(`/api/materials/${id}/notes/${noteId}`, {method: 'DELETE'}),
     bookmark: (id: number, body: {section_id?: number | null; label?: string; snippet?: string; position?: string}) =>
       request<{id: number; label: string; section_id: number | null}>(`/api/materials/${id}/bookmarks`, {method: 'POST', body}),
