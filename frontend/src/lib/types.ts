@@ -1059,6 +1059,11 @@ export interface MaterialCard {
   title: string;
   /** "material" = sectioned reading, "note" = a short course note. */
   kind?: 'material' | 'note';
+  /** Notes only: the material this note belongs to (its Notes tab). */
+  parent_id?: number | null;
+  parent_title?: string;
+  /** Materials only (admin list): how many notes it holds. */
+  note_count?: number;
   /** Optional external file / link (PDF, slides, video…). */
   link_url?: string;
   course_id?: number | null;

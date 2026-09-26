@@ -629,6 +629,8 @@ export const api = {
     search: (q: string) => request<{results: MaterialCard[]; query: string}>(`/api/materials/search${query({q})}`),
     glossary: (topic = '') => request<{terms: {term: string; meaning: string; material_id: number; material_title: string}[]}>(`/api/materials/glossary${query({topic})}`),
     read: (id: number) => request<MaterialDetail>(`/api/materials/${id}`),
+    /** Published notes staff attached to a material (its Notes tab in the reader). */
+    staffNotes: (id: number) => request<{notes: MaterialDetail[]}>(`/api/materials/${id}/staff-notes`),
     progress: (id: number, body: {section_id?: number | null; seconds?: number}) =>
       request<MaterialProgressResult>(`/api/materials/${id}/progress`, {method: 'POST', body}),
     feedback: (id: number, body: {verdict: 'yes' | 'somewhat' | 'no'; comment?: string}) =>
@@ -672,6 +674,7 @@ export const api = {
         topic?: string;
         q?: string;
         unassigned?: boolean;
+        parent_id?: number;
         limit?: number;
         offset?: number;
       } = {},
@@ -692,7 +695,7 @@ export const api = {
     },
     importFile: (
       file: File,
-      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean},
+      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean; parent_id?: number},
     ) => {
       const form = new FormData();
       form.append('file', file, file.name);
@@ -703,6 +706,7 @@ export const api = {
       form.append('kind', params.kind ?? 'material');
       form.append('status', params.status ?? 'draft');
       form.append('keep_file', String(params.keep_file ?? true));
+      if (params.parent_id) form.append('parent_id', String(params.parent_id));
       return request<MaterialDetail>('/api/admin/materials/import', {method: 'POST', body: form});
     },
     duplicate: (id: number) => request<MaterialDetail>(`/api/admin/materials/${id}/duplicate`, {method: 'POST', body: {}}),
@@ -712,6 +716,9 @@ export const api = {
       request<{material_id: number; current_version: number; versions: {id: number; version: number; note: string; author: string; created_at: string}[]}>(
         `/api/admin/materials/${id}/versions`,
       ),
+    /** Undo: restore an earlier snapshot (the restore is saved as a new version). */
+    restoreVersion: (id: number, versionId: number) =>
+      request<MaterialDetail>(`/api/admin/materials/${id}/versions/${versionId}/restore`, {method: 'POST'}),
     linkQuestions: (id: number, questionIds: number[], sectionId?: number | null) =>
       request<{added: number; material_id: number}>(`/api/admin/materials/${id}/link-questions`, {method: 'POST', body: {question_ids: questionIds, section_id: sectionId ?? null}}),
     analytics: (id: number) => request<MaterialAnalytics>(`/api/admin/materials/${id}/analytics`),

@@ -350,6 +350,21 @@ def glossary(topic: str = Query(""), db: Session = Depends(get_db), student: Stu
     return {"terms": terms[:400]}
 
 
+@router.get("/{material_id}/staff-notes")
+def material_staff_notes(
+    material_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)
+) -> dict:
+    """Published notes staff attached to this material (its Notes tab)."""
+    _material_or_404(db, material_id)
+    notes = db.scalars(
+        select(Material)
+        .where(Material.parent_id == material_id, Material.status == "published")
+        .order_by(Material.updated_at.desc())
+        .limit(100)
+    ).all()
+    return {"notes": [engine.material_public(row, sections=_sections(db, row.id), full=True) for row in notes]}
+
+
 @router.get("/{material_id}")
 def read_material(
     material_id: int,
@@ -973,6 +988,7 @@ def admin_list(
     topic: str = Query(""),
     q: str = Query(""),
     unassigned: bool = Query(False),
+    parent_id: int | None = Query(None),
     limit: int = Query(40, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -985,6 +1001,8 @@ def admin_list(
         conds.append(Material.course_id == course_id)
     if kind:
         conds.append(Material.kind == kind)
+    if parent_id:
+        conds.append(Material.parent_id == parent_id)
     if unassigned:
         # Materials saved before course scoping existed (course_id was never sent).
         conds.append(Material.course_id.is_(None))
@@ -1022,10 +1040,26 @@ def admin_list(
         db.scalar(select(func.count(ContentReport.id)).where(ContentReport.kind == "material", ContentReport.status == "open")) or 0
     )
     confusions = int(db.scalar(select(func.count(MaterialConfusion.id))) or 0)
+    parent_ids = {row.parent_id for row in rows if row.parent_id}
+    parent_titles = (
+        dict(db.execute(select(Material.id, Material.title).where(Material.id.in_(parent_ids))).all()) if parent_ids else {}
+    )
+    child_ids = [row.id for row in rows if (row.kind or "material") != "note"]
+    note_counts = (
+        dict(
+            db.execute(
+                select(Material.parent_id, func.count(Material.id)).where(Material.parent_id.in_(child_ids)).group_by(Material.parent_id)
+            ).all()
+        )
+        if child_ids
+        else {}
+    )
     return {
         "items": [
             {
                 **engine.material_public(row, sections=_sections(db, row.id), full=False),
+                "parent_title": parent_titles.get(row.parent_id, "") if row.parent_id else "",
+                "note_count": int(note_counts.get(row.id, 0)),
                 "course_title": _course_name(db, row.course_id),
                 "linked_questions": int(
                     db.scalar(select(func.count(MaterialQuestion.id)).where(MaterialQuestion.material_id == row.id)) or 0
@@ -1101,9 +1135,32 @@ def admin_read(material_id: int, db: Session = Depends(get_db), admin: Admin = D
     return payload
 
 
-def _apply_material(row: Material, payload: MaterialIn) -> None:
+def _apply_parent(db: Session, row: Material, parent_id: int) -> None:
+    """Attach a note to one material of the same course (0 detaches it)."""
+    if not parent_id:
+        row.parent_id = None
+        return
+    parent = db.get(Material, parent_id)
+    if parent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "The material this note belongs to was not found.")
+    if (parent.kind or "material") == "note":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Notes can only belong to a material, not to another note.")
+    if row.id and parent.id == row.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A material cannot contain itself.")
+    if row.course_id and parent.course_id and row.course_id != parent.course_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A note must belong to a material of the same course.")
+    row.kind = "note"
+    row.course_id = parent.course_id or row.course_id
+    row.parent_id = parent.id
+
+
+def _apply_material(row: Material, payload: MaterialIn, *, partial: bool = False) -> None:
+    """Copy a MaterialIn onto a row. ``partial`` (updates): course and status are
+    only touched when the request actually sent them, so an update that omits
+    them can never silently move or unpublish a material."""
     row.title = engine.clean_text(payload.title, 200)
-    row.course_id = payload.course_id
+    if not partial or "course_id" in payload.model_fields_set:
+        row.course_id = payload.course_id
     row.quiz_id = payload.quiz_id
     row.topic = engine.clean_text(payload.topic, 120)
     row.subtopic = engine.clean_text(payload.subtopic, 120)
@@ -1134,6 +1191,8 @@ def admin_create(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Give the material a title.")
     row = Material(status="draft")
     _apply_material(row, payload)
+    if payload.parent_id:
+        _apply_parent(db, row, payload.parent_id)
     if payload.status in {"draft", "published", "archived"}:
         row.status = payload.status
         if row.status == "published":
@@ -1223,6 +1282,7 @@ async def admin_import(
     kind: str = Form("material"),
     status_value: str = Form("draft", alias="status"),
     keep_file: bool = Form(True),
+    parent_id: int | None = Form(None),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
@@ -1242,7 +1302,8 @@ async def admin_import(
     payload = MaterialIn(
         title=(title.strip() or draft["title"])[:200],
         course_id=course_id,
-        kind=kind,
+        kind="note" if parent_id else kind,
+        parent_id=parent_id or None,
         link_url=link,
         topic=topic.strip()[:120],
         description=(description.strip() or draft["description"])[:500],
@@ -1284,8 +1345,14 @@ def admin_update(
     row = _material_or_404(db, material_id, published_only=False)
     previous_status = row.status
     was_published = row.status == "published"
-    _apply_material(row, payload)
-    if payload.status in {"draft", "published", "archived"}:
+    _apply_material(row, payload, partial=True)
+    if payload.parent_id is not None:
+        _apply_parent(db, row, payload.parent_id)
+    elif row.parent_id:
+        parent = db.get(Material, row.parent_id)
+        if parent is not None and parent.course_id and row.course_id != parent.course_id:
+            row.course_id = parent.course_id  # a note always lives in its material's course
+    if "status" in payload.model_fields_set and payload.status in {"draft", "published", "archived"}:
         row.status = payload.status
     if payload.sections is not None:
         existing = {section.id: section for section in _sections(db, material_id)}
@@ -1330,9 +1397,14 @@ def admin_update(
 @admin_router.delete("/{material_id}")
 def admin_delete(material_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
     row = _material_or_404(db, material_id, published_only=False)
+    # A material's notes are kept (they stay in the course's Notes tab) — only detached.
+    detached = 0
+    for child in db.scalars(select(Material).where(Material.parent_id == row.id)).all():
+        child.parent_id = None
+        detached += 1
     db.delete(row)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "detached_notes": detached}
 
 
 @admin_router.post("/{material_id}/duplicate")
@@ -1419,6 +1491,60 @@ def admin_versions(
             for row in rows
         ],
     }
+
+
+@admin_router.post("/{material_id}/versions/{version_id}/restore")
+def admin_restore_version(
+    material_id: int, version_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)
+) -> dict:
+    """Undo: bring back the content of an earlier snapshot. The restore itself is
+    saved as a new version, so it can be undone too. Status stays as it is."""
+    row = _material_or_404(db, material_id, published_only=False)
+    version = db.get(MaterialVersion, version_id)
+    if version is None or version.material_id != material_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Version not found.")
+    try:
+        snap = json.loads(version.snapshot or "{}")
+    except ValueError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That version is too large to restore.") from error
+    if not isinstance(snap, dict) or "sections" not in snap:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That version has no content to restore.")
+    row.title = engine.clean_text(snap.get("title"), 200) or row.title
+    for field, limit in (("topic", 120), ("subtopic", 120), ("description", 500), ("author", 120), ("link_url", 600)):
+        if field in snap:
+            setattr(row, field, str(snap.get(field) or "")[:limit])
+    if snap.get("difficulty") in {"beginner", "intermediate", "advanced"}:
+        row.difficulty = snap["difficulty"]
+    if snap.get("estimated_minutes"):
+        row.estimated_minutes = max(1, min(600, int(snap["estimated_minutes"])))
+    if isinstance(snap.get("tags"), list):
+        row.tags = json.dumps(snap["tags"][:24])
+    if isinstance(snap.get("summary"), list):
+        row.summary = json.dumps(snap["summary"][:12])
+    # Sections: reuse existing rows by position so reader progress keeps pointing somewhere sensible.
+    existing = _sections(db, material_id)
+    wanted = [item for item in snap.get("sections") or [] if isinstance(item, dict)]
+    for index, item in enumerate(wanted, start=1):
+        body = json.dumps(engine.sanitise_blocks(item.get("blocks") or []))
+        title = engine.clean_text(item.get("title"), 200) or f"Section {index}"
+        minutes = max(1, min(120, int(item.get("estimated_minutes") or 3)))
+        if index <= len(existing):
+            section = existing[index - 1]
+            section.title, section.body, section.position = title, body, index
+            section.estimated_minutes, section.check_enabled = minutes, bool(item.get("check_enabled"))
+            section.updated_at = utcnow()
+        else:
+            db.add(MaterialSection(material_id=row.id, position=index, title=title, body=body, estimated_minutes=minutes,
+                                   check_enabled=bool(item.get("check_enabled"))))
+    for section in existing[len(wanted):]:
+        db.delete(section)
+    if row.status == "published":
+        row.version = (row.version or 1) + 1
+    row.updated_at = utcnow()
+    stamp = version.created_at.strftime("%d %b %H:%M") if version.created_at else f"#{version.id}"
+    engine.record_version(db, row, note=f"Restored the version from {stamp}", author=admin.email)
+    db.commit()
+    return admin_read(row.id, db, admin)
 
 
 @admin_router.post("/{material_id}/link-questions")

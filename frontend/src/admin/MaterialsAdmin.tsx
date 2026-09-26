@@ -28,8 +28,13 @@ import {
   Pencil,
   Search,
   FileUp,
+  Undo2,
+  Redo2,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
@@ -155,12 +160,20 @@ function BlockEditor({
   );
 }
 
+type EditorTab = 'read' | 'content' | 'notes' | 'details' | 'history' | 'insights';
+type VersionRow = {id: number; version: number; note: string; author: string; created_at: string};
+
+/** Everything a staff member can do with one material, split into sub-tabs
+ *  so nothing is buried at the bottom of a long page:
+ *  Read · Content · Notes · Details · History · Insights. */
 function MaterialEditor({
   materialId,
   onBack,
   onSaved,
   course,
   kind = 'material',
+  parentId = null,
+  parentTitle = '',
 }: {
   materialId: number | 'new';
   onBack: () => void;
@@ -168,8 +181,15 @@ function MaterialEditor({
   /** When set, the material belongs to this course (the course workspace). */
   course?: Course | null;
   kind?: 'material' | 'note';
+  /** Notes only: the material this note sits inside. */
+  parentId?: number | null;
+  parentTitle?: string;
 }) {
   const {toast} = useSession();
+  const isNew = materialId === 'new';
+  const isNote = kind === 'note';
+  const noun = isNote ? 'note' : 'material';
+  const [tab, setTab] = useState<EditorTab>(isNew ? 'details' : 'read');
   const [courses, setCourses] = useState<Course[]>([]);
   const [topicNames, setTopicNames] = useState<string[]>([]);
   const [linkUrl, setLinkUrl] = useState('');
@@ -189,6 +209,55 @@ function MaterialEditor({
     quiz_id: null as number | null,
     allow_discussion: true,
   });
+  const [sections, setSections] = useState<SectionDraft[]>([blankSection(1)]);
+  const [loading, setLoading] = useState(!isNew);
+  const [saving, setSaving] = useState(false);
+  const [versions, setVersions] = useState<VersionRow[]>([]);
+  const [analytics, setAnalytics] = useState<MaterialAnalytics | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkIds, setLinkIds] = useState('');
+  const [linked, setLinked] = useState<number[]>([]);
+  const [noteCount, setNoteCount] = useState<number | null>(null);
+  const [owner, setOwner] = useState<{id: number | null; title: string}>({id: parentId, title: parentTitle});
+
+  /* ---- undo / redo for content edits (grouped: one step per pause in typing) */
+  const [past, setPast] = useState<SectionDraft[][]>([]);
+  const [future, setFuture] = useState<SectionDraft[][]>([]);
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const lastEdit = useRef(0);
+  const updateSections = (next: SectionDraft[]) => {
+    const now = Date.now();
+    if (now - lastEdit.current > 800) {
+      setPast((stack) => [...stack.slice(-59), sectionsRef.current]);
+      setFuture([]);
+    }
+    lastEdit.current = now;
+    setSections(next);
+  };
+  const undoEdit = () => {
+    if (!past.length) return;
+    setFuture((stack) => [sectionsRef.current, ...stack].slice(0, 60));
+    setSections(past[past.length - 1]);
+    setPast((stack) => stack.slice(0, -1));
+    lastEdit.current = 0;
+  };
+  const redoEdit = () => {
+    if (!future.length) return;
+    setPast((stack) => [...stack, sectionsRef.current]);
+    setSections(future[0]);
+    setFuture((stack) => stack.slice(1));
+    lastEdit.current = 0;
+  };
+
+  /* ---- unsaved-changes tracking */
+  const [savedKey, setSavedKey] = useState('');
+  const currentKey = JSON.stringify({draft, sections, linkUrl});
+  const dirty = savedKey !== '' && savedKey !== currentKey;
+  useEffect(() => {
+    if (isNew) setSavedKey(JSON.stringify({draft, sections, linkUrl}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (course) return;
@@ -208,22 +277,13 @@ function MaterialEditor({
       .then((payload) => setTopicNames(payload.topics.map((row) => row.name)))
       .catch(() => setTopicNames([]));
   }, [draft.course_id]);
-  const [sections, setSections] = useState<SectionDraft[]>([blankSection(1)]);
-  const [loading, setLoading] = useState(materialId !== 'new');
-  const [saving, setSaving] = useState(false);
-  const [versions, setVersions] = useState<{version: number; note: string; author: string; created_at: string}[]>([]);
-  const [analytics, setAnalytics] = useState<MaterialAnalytics | null>(null);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [linkIds, setLinkIds] = useState('');
-  const [linked, setLinked] = useState<number[]>([]);
-  const [preview, setPreview] = useState<MaterialDetail | null>(null);
 
   const load = useCallback(async () => {
     if (materialId === 'new') return;
     setLoading(true);
     try {
       const row = await api.materials.adminRead(materialId);
-      setDraft({
+      const nextDraft = {
         title: row.title,
         topic: row.topic,
         subtopic: row.subtopic,
@@ -238,38 +298,54 @@ function MaterialEditor({
         course_id: row.course_id ?? course?.id ?? null,
         quiz_id: row.quiz_id ?? null,
         allow_discussion: row.allow_discussion,
-      });
-      setLinkUrl(row.link_url ?? '');
-      setSections(
-        (row.sections ?? []).map((section) => ({
-          id: section.id,
-          title: section.title,
-          estimated_minutes: section.estimated_minutes ?? 3,
-          check_enabled: Boolean(section.check_enabled),
-          blocks: section.blocks ?? [],
-        })),
-      );
+      };
+      const nextSections = (row.sections ?? []).map((section) => ({
+        id: section.id,
+        title: section.title,
+        estimated_minutes: section.estimated_minutes ?? 3,
+        check_enabled: Boolean(section.check_enabled),
+        blocks: section.blocks ?? [],
+      }));
+      const nextLink = row.link_url ?? '';
+      setDraft(nextDraft);
+      setSections(nextSections);
+      setLinkUrl(nextLink);
+      setSavedKey(JSON.stringify({draft: nextDraft, sections: nextSections, linkUrl: nextLink}));
       setLinked(row.linked_question_ids ?? []);
-      setVersions((await api.materials.versions(materialId)).versions ?? []);
+      if (row.parent_id) setOwner((current) => ({id: row.parent_id ?? null, title: current.title}));
+      setVersions(((await api.materials.versions(materialId)).versions ?? []) as VersionRow[]);
       setAnalytics(await api.materials.analytics(materialId).catch(() => null));
+      if ((row.kind ?? 'material') !== 'note') {
+        api.materials
+          .adminList({parent_id: materialId, limit: 1})
+          .then((payload) => setNoteCount(payload.total ?? 0))
+          .catch(() => setNoteCount(null));
+      }
     } catch (error) {
-      toast('error', 'Could not open the material', (error as Error).message);
+      toast('error', `Could not open the ${noun}`, (error as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [materialId, toast, course?.id]);
+  }, [materialId, toast, course?.id, noun]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const leave = () => {
+    if (dirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+    onBack();
+  };
+
   const save = async (status?: 'draft' | 'published' | 'archived') => {
     if (!draft.title.trim()) {
-      toast('error', 'Give the material a title');
+      toast('error', `Give the ${noun} a title`);
+      setTab('details');
       return;
     }
-    if (!draft.course_id) {
-      toast('error', 'Choose a course', 'Every material belongs to one course.');
+    if (!draft.course_id && !owner.id) {
+      toast('error', 'Choose a course', `Every ${noun} belongs to one course.`);
+      setTab('details');
       return;
     }
     setSaving(true);
@@ -290,6 +366,7 @@ function MaterialEditor({
       kind,
       link_url: linkUrl.trim(),
       allow_discussion: draft.allow_discussion,
+      ...(isNew && owner.id ? {parent_id: owner.id} : {}),
       sections: sections.map((section) => ({
         id: section.id ?? null,
         title: section.title,
@@ -302,14 +379,16 @@ function MaterialEditor({
     };
     try {
       if (materialId === 'new') {
-        const created = await api.materials.create(body);
-        toast('success', 'Material created', status === 'published' ? 'It is live for players now.' : 'Saved as a draft.');
+        await api.materials.create(body);
+        toast('success', `${isNote ? 'Note' : 'Material'} created`, status === 'published' ? 'It is live for players now.' : 'Saved as a draft.');
         onSaved();
-        if (created?.id) onBack();
+        onBack();
       } else {
         await api.materials.update(materialId, body);
-        toast('success', 'Material saved', status === 'published' ? 'Published to players.' : 'Changes stored + versioned.');
+        toast('success', 'Saved', status === 'published' ? 'Published to players.' : 'A version was kept — you can undo it in History.');
         onSaved();
+        setPast([]);
+        setFuture([]);
         void load();
       }
     } catch (error) {
@@ -319,23 +398,59 @@ function MaterialEditor({
     }
   };
 
+  const restore = async (row: VersionRow, label = 'Version restored') => {
+    if (materialId === 'new') return;
+    if (dirty && !window.confirm('Discard your unsaved changes and restore this version?')) return;
+    try {
+      await api.materials.restoreVersion(materialId, row.id);
+      toast('success', label, 'The restore is saved as a new version, so you can undo it too.');
+      onSaved();
+      setPast([]);
+      setFuture([]);
+      await load();
+    } catch (error) {
+      toast('error', 'Could not restore', (error as Error).message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-16 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
     );
   }
 
+  const tabs: {value: EditorTab; label: string; icon: typeof BookOpen}[] = isNew
+    ? [
+        {value: 'details', label: 'Details', icon: SlidersHorizontal},
+        {value: 'content', label: 'Content', icon: Pencil},
+      ]
+    : [
+        {value: 'read', label: 'Read', icon: Eye},
+        {value: 'content', label: 'Content', icon: Pencil},
+        ...(isNote ? [] : [{value: 'notes' as EditorTab, label: noteCount ? `Notes (${noteCount})` : 'Notes', icon: NotebookPen}]),
+        {value: 'details', label: 'Details', icon: SlidersHorizontal},
+        {value: 'history', label: 'History', icon: History},
+        ...(isNote ? [] : [{value: 'insights' as EditorTab, label: 'Insights', icon: BarChart3}]),
+      ];
+
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={onBack}>
-          {course ? `${course.code} materials` : 'Materials'}
-        </Button>
-        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5">
-          <Chip className={draft.status === 'published' ? 'border-mint-500/25 bg-mint-500/12 text-mint-300' : 'border-white/10 bg-white/4 text-mist-400'}>{draft.status}</Chip>
+    <div className="min-w-0 space-y-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={leave} aria-label="Back" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[0.68rem] font-black tracking-[0.12em] text-mist-500 uppercase">
+            {owner.id ? `Note in ${owner.title || 'a material'}` : `${course ? `${course.code} · ` : ''}${isNote ? 'Note' : 'Material'}`}
+          </p>
+          <h2 className="truncate text-[1rem] font-extrabold text-mist-50 sm:text-[1.1rem]">{draft.title || (isNew ? `New ${noun}` : 'Untitled')}</h2>
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <Chip className={statusTone(draft.status)}>{draft.status}</Chip>
+        {dirty && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">Unsaved changes</Chip>}
+        <div className="ml-auto flex gap-1.5">
           <Button size="sm" variant="outline" icon={<Save className="size-4" />} loading={saving} onClick={() => void save('draft')}>
             Save draft
           </Button>
@@ -345,136 +460,144 @@ function MaterialEditor({
         </div>
       </div>
 
-      <Card className="min-w-0 p-4">
-        <SectionHeading title="Material details" subtitle={materialId === 'new' ? 'New material — starts as a draft.' : `Editing material #${materialId}`} />
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <Field label="Title">
-            <TextInput value={draft.title} onChange={(event) => setDraft({...draft, title: event.target.value})} placeholder="Cell transport in plants" />
-          </Field>
-          {!course && (
-            <Field label="Course">
-              <Select value={draft.course_id ?? ''} onChange={(event) => setDraft({...draft, course_id: event.target.value ? Number(event.target.value) : null})}>
-                <option value="">Choose a course…</option>
-                {courses.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.code} — {row.title}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-          <Field label="Topic">
-            <TextInput list="material-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Cell Biology" />
-            <datalist id="material-topics">
-              {topicNames.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-          </Field>
-          <Field label="Sub-topic">
-            <TextInput value={draft.subtopic} onChange={(event) => setDraft({...draft, subtopic: event.target.value})} placeholder="Osmosis" />
-          </Field>
-          <Field label="Difficulty">
-            <Select value={draft.difficulty} onChange={(event) => setDraft({...draft, difficulty: event.target.value as typeof draft.difficulty})}>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </Select>
-          </Field>
-          <Field label="Estimated minutes">
-            <TextInput
-              type="number"
-              min={1}
-              max={600}
-              value={String(draft.estimated_minutes)}
-              onChange={(event) => setDraft({...draft, estimated_minutes: Number(event.target.value)})}
-            />
-          </Field>
-          <Field label="Accent">
-            <Select value={draft.accent} onChange={(event) => setDraft({...draft, accent: event.target.value})}>
-              {['violet', 'gold', 'mint', 'flare'].map((accent) => (
-                <option key={accent} value={accent}>
-                  {accent}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Author shown to players">
-            <TextInput value={draft.author} onChange={(event) => setDraft({...draft, author: event.target.value})} placeholder="Dr Okafor" />
-          </Field>
-          <Field label="Tags (comma separated)">
-            <TextInput value={draft.tags} onChange={(event) => setDraft({...draft, tags: event.target.value})} placeholder="osmosis, membranes" />
-          </Field>
-          <Field label="File or link (optional)" hint="PDF, slides, video or any https:// resource." className="sm:col-span-2">
-            <TextInput value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://…" inputMode="url" />
-          </Field>
-          <Field label="Short description" className="sm:col-span-2">
-            <TextArea rows={2} value={draft.description} onChange={(event) => setDraft({...draft, description: event.target.value})} />
-          </Field>
-          <Field label="Summary points (one per line)" className="sm:col-span-2">
-            <TextArea rows={3} value={draft.summary} onChange={(event) => setDraft({...draft, summary: event.target.value})} />
-          </Field>
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-[0.82rem] font-bold text-mist-300">
-          <input type="checkbox" checked={draft.allow_discussion} onChange={(event) => setDraft({...draft, allow_discussion: event.target.checked})} />
-          Let players discuss this material
-        </label>
-      </Card>
+      <div role="tablist" aria-label={`${isNote ? 'Note' : 'Material'} sections`} className="grid min-w-0 grid-cols-3 gap-1 rounded-xl border border-white/10 bg-ink-950/80 p-1 sm:flex">
+        {tabs.map((option) => {
+          const Icon = option.icon;
+          const active = option.value === tab;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(option.value)}
+              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[0.76rem] font-bold transition-colors sm:flex-1 ${
+                active ? 'brand-gradient text-white' : 'text-mist-400 hover:bg-white/5 hover:text-mist-100'
+              }`}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              <span className="truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      <Card className="min-w-0 p-4">
-        <SectionHeading
-          title="Sections & blocks"
-          subtitle="HTML is stripped on save — the reader renders plain, typed blocks only."
-          action={
-            <Button size="sm" variant="soft" icon={<Plus className="size-4" />} onClick={() => setSections([...sections, blankSection(sections.length + 1)])}>
+      {/* ------------------------------------------------------------ read */}
+      {tab === 'read' && (
+        <Card className="min-w-0 p-4">
+          {dirty && (
+            <p className="mb-3 rounded-xl border border-gold-500/25 bg-gold-500/10 px-3 py-2 text-[0.76rem] font-bold text-gold-200">
+              Showing your unsaved edits — save to make them live.
+            </p>
+          )}
+          <h1 className="text-[1.15rem] leading-tight font-black text-mist-50 [overflow-wrap:anywhere] sm:text-[1.3rem]">{draft.title || 'Untitled'}</h1>
+          <p className="mt-1 text-[0.74rem] font-bold text-mist-500">
+            {draft.topic || 'No topic'} · {sections.length} section{sections.length === 1 ? '' : 's'} · {draft.estimated_minutes} min · {draft.difficulty}
+          </p>
+          {draft.description && <p className="mt-2 text-[0.86rem] leading-relaxed text-mist-300 [overflow-wrap:anywhere]">{draft.description}</p>}
+          {draft.summary.trim() && (
+            <ul className="mt-3 list-disc space-y-1 rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pr-3 pl-7 text-[0.82rem] text-mist-300">
+              {draft.summary
+                .split('\n')
+                .filter((line) => line.trim())
+                .map((line, index) => (
+                  <li key={index}>{line}</li>
+                ))}
+            </ul>
+          )}
+          {linkUrl && (
+            <a href={linkUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[0.82rem] font-bold text-nova-200">
+              <ExternalLink className="size-4" /> {linkUrl.startsWith('/api/material-files/') ? 'Open the original file' : 'Open attached link'}
+            </a>
+          )}
+          <div className="mt-4 min-w-0 space-y-4">
+            {sections.map((section, index) => (
+              <section key={section.id ?? `s-${index}`} className="min-w-0 space-y-2 border-t border-white/8 pt-3">
+                <h3 className="text-[0.95rem] font-extrabold text-mist-50 [overflow-wrap:anywhere]">
+                  {index + 1}. {section.title || `Section ${index + 1}`}
+                </h3>
+                {section.blocks.map((block, blockIndex) => (
+                  <PlainBlock key={blockIndex} block={block} />
+                ))}
+              </section>
+            ))}
+            {!sections.length && (
+              <EmptyState
+                icon={<FileText className="size-5" />}
+                title="Nothing to read yet"
+                detail="Write the content first."
+                action={
+                  <Button size="sm" onClick={() => setTab('content')} icon={<Pencil className="size-4" />}>
+                    Write content
+                  </Button>
+                }
+              />
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* --------------------------------------------------------- content */}
+      {tab === 'content' && (
+        <div className="min-w-0 space-y-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} disabled={!past.length} onClick={undoEdit}>
+              Undo
+            </Button>
+            <Button size="sm" variant="ghost" icon={<Redo2 className="size-4" />} disabled={!future.length} onClick={redoEdit}>
+              Redo
+            </Button>
+            <span className="min-w-0 flex-1 truncate text-[0.72rem] font-semibold text-mist-500">
+              {past.length ? `${past.length} change${past.length === 1 ? '' : 's'} you can undo` : 'Edits here can be undone until you save'}
+            </span>
+            <Button size="sm" variant="soft" icon={<Plus className="size-4" />} onClick={() => updateSections([...sections, blankSection(sections.length + 1)])}>
               Add section
             </Button>
-          }
-        />
-        <div className="min-w-0 space-y-3">
+          </div>
           {sections.map((section, sectionIndex) => (
             <div key={section.id ?? `new-${sectionIndex}`} className="min-w-0 rounded-2xl border-2 border-white/12 bg-white/[0.03] p-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/8 text-[0.72rem] font-black text-mist-300 tabular">
-                  {sectionIndex + 1}
-                </span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/8 text-[0.72rem] font-black text-mist-300 tabular">{sectionIndex + 1}</span>
                 <TextInput
                   className="min-w-0 flex-1"
                   value={section.title}
-                  onChange={(event) =>
-                    setSections(sections.map((row, index) => (index === sectionIndex ? {...row, title: event.target.value} : row)))
-                  }
+                  onChange={(event) => updateSections(sections.map((row, index) => (index === sectionIndex ? {...row, title: event.target.value} : row)))}
                   placeholder="Section title"
-                />
-                <TextInput
-                  type="number"
-                  min={1}
-                  max={120}
-                  value={String(section.estimated_minutes)}
-                  onChange={(event) =>
-                    setSections(sections.map((row, index) => (index === sectionIndex ? {...row, estimated_minutes: Number(event.target.value)} : row)))
-                  }
-                  className="w-20 shrink-0"
+                  aria-label="Section title"
                 />
                 <Button
                   size="sm"
                   variant="ghost"
                   icon={<Trash2 className="size-4" />}
-                  onClick={() => setSections(sections.filter((_, index) => index !== sectionIndex))}
+                  onClick={() => updateSections(sections.filter((_, index) => index !== sectionIndex))}
                   aria-label="Remove section"
                 />
               </div>
-              <label className="mt-2 flex items-center gap-2 text-[0.76rem] font-bold text-mist-400">
-                <input
-                  type="checkbox"
-                  checked={section.check_enabled}
-                  onChange={(event) =>
-                    setSections(sections.map((row, index) => (index === sectionIndex ? {...row, check_enabled: event.target.checked} : row)))
-                  }
-                />
-                Ask a quick check question after this section
-              </label>
-
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+                <label className="flex items-center gap-2 text-[0.76rem] font-bold text-mist-400">
+                  Minutes
+                  <TextInput
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={String(section.estimated_minutes)}
+                    onChange={(event) =>
+                      updateSections(sections.map((row, index) => (index === sectionIndex ? {...row, estimated_minutes: Number(event.target.value)} : row)))
+                    }
+                    className="w-20"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-[0.76rem] font-bold text-mist-400">
+                  <input
+                    type="checkbox"
+                    checked={section.check_enabled}
+                    onChange={(event) =>
+                      updateSections(sections.map((row, index) => (index === sectionIndex ? {...row, check_enabled: event.target.checked} : row)))
+                    }
+                  />
+                  Quick check question after this section
+                </label>
+              </div>
               <div className="mt-2.5 min-w-0 space-y-2">
                 {section.blocks.map((block, blockIndex) => (
                   <BlockEditor
@@ -482,14 +605,9 @@ function MaterialEditor({
                     block={block}
                     index={blockIndex}
                     onChange={(next) =>
-                      setSections(
+                      updateSections(
                         sections.map((row, index) =>
-                          index === sectionIndex
-                            ? {
-                                ...row,
-                                blocks: row.blocks.map((current, currentIndex) => (currentIndex === blockIndex ? next : current)),
-                              }
-                            : row,
+                          index === sectionIndex ? {...row, blocks: row.blocks.map((current, currentIndex) => (currentIndex === blockIndex ? next : current))} : row,
                         ),
                       )
                     }
@@ -498,15 +616,15 @@ function MaterialEditor({
                       if (target < 0 || target >= section.blocks.length) return;
                       const next = [...section.blocks];
                       [next[blockIndex], next[target]] = [next[target], next[blockIndex]];
-                      setSections(sections.map((row, index) => (index === sectionIndex ? {...row, blocks: next} : row)));
+                      lastEdit.current = 0;
+                      updateSections(sections.map((row, index) => (index === sectionIndex ? {...row, blocks: next} : row)));
                     }}
-                    onRemove={() =>
-                      setSections(
-                        sections.map((row, index) =>
-                          index === sectionIndex ? {...row, blocks: row.blocks.filter((_, currentIndex) => currentIndex !== blockIndex)} : row,
-                        ),
-                      )
-                    }
+                    onRemove={() => {
+                      lastEdit.current = 0;
+                      updateSections(
+                        sections.map((row, index) => (index === sectionIndex ? {...row, blocks: row.blocks.filter((_, currentIndex) => currentIndex !== blockIndex)} : row)),
+                      );
+                    }}
                   />
                 ))}
               </div>
@@ -515,9 +633,7 @@ function MaterialEditor({
                 size="sm"
                 variant="ghost"
                 icon={<Plus className="size-4" />}
-                onClick={() =>
-                  setSections(sections.map((row, index) => (index === sectionIndex ? {...row, blocks: [...row.blocks, blankBlock()]} : row)))
-                }
+                onClick={() => updateSections(sections.map((row, index) => (index === sectionIndex ? {...row, blocks: [...row.blocks, blankBlock()]} : row)))}
               >
                 Add block
               </Button>
@@ -525,9 +641,173 @@ function MaterialEditor({
           ))}
           {!sections.length ? <EmptyState icon={<FileText className="size-5" />} title="No sections" detail="Add one to start writing." /> : null}
         </div>
-      </Card>
+      )}
 
-      {materialId !== 'new' ? (
+      {/* ----------------------------------------------------------- notes */}
+      {tab === 'notes' && materialId !== 'new' && (
+        <MaterialNotes
+          material={{id: materialId, title: draft.title, course_id: draft.course_id}}
+          course={course}
+          onCount={setNoteCount}
+          onChanged={onSaved}
+        />
+      )}
+
+      {/* --------------------------------------------------------- details */}
+      {tab === 'details' && (
+        <div className="min-w-0 space-y-3">
+          <Card className="min-w-0 p-4">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <Field label="Title" className="sm:col-span-2">
+                <TextInput value={draft.title} onChange={(event) => setDraft({...draft, title: event.target.value})} placeholder={isNote ? 'Exam tips' : 'Cell transport in plants'} />
+              </Field>
+              {!course && !owner.id && (
+                <Field label="Course">
+                  <Select value={draft.course_id ?? ''} onChange={(event) => setDraft({...draft, course_id: event.target.value ? Number(event.target.value) : null})}>
+                    <option value="">Choose a course…</option>
+                    {courses.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.code} — {row.title}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+              <Field label="Topic">
+                <TextInput list="material-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Cell Biology" />
+                <datalist id="material-topics">
+                  {topicNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Sub-topic">
+                <TextInput value={draft.subtopic} onChange={(event) => setDraft({...draft, subtopic: event.target.value})} placeholder="Osmosis" />
+              </Field>
+              <Field label="Difficulty">
+                <Select value={draft.difficulty} onChange={(event) => setDraft({...draft, difficulty: event.target.value as typeof draft.difficulty})}>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </Select>
+              </Field>
+              <Field label="Estimated minutes">
+                <TextInput type="number" min={1} max={600} value={String(draft.estimated_minutes)} onChange={(event) => setDraft({...draft, estimated_minutes: Number(event.target.value)})} />
+              </Field>
+              <Field label="Author shown to players">
+                <TextInput value={draft.author} onChange={(event) => setDraft({...draft, author: event.target.value})} placeholder="Dr Okafor" />
+              </Field>
+              <Field label="Accent">
+                <Select value={draft.accent} onChange={(event) => setDraft({...draft, accent: event.target.value})}>
+                  {['violet', 'gold', 'mint', 'flare'].map((accent) => (
+                    <option key={accent} value={accent}>
+                      {accent}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Tags (comma separated)" className="sm:col-span-2">
+                <TextInput value={draft.tags} onChange={(event) => setDraft({...draft, tags: event.target.value})} placeholder="osmosis, membranes" />
+              </Field>
+              <Field label="File or link (optional)" hint="PDF, slides, video or any https:// resource." className="sm:col-span-2">
+                <TextInput value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://…" inputMode="url" />
+              </Field>
+              <Field label="Short description" className="sm:col-span-2">
+                <TextArea rows={2} value={draft.description} onChange={(event) => setDraft({...draft, description: event.target.value})} />
+              </Field>
+              <Field label="Summary points (one per line)" className="sm:col-span-2">
+                <TextArea rows={3} value={draft.summary} onChange={(event) => setDraft({...draft, summary: event.target.value})} />
+              </Field>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-[0.82rem] font-bold text-mist-300">
+              <input type="checkbox" checked={draft.allow_discussion} onChange={(event) => setDraft({...draft, allow_discussion: event.target.checked})} />
+              Let players discuss this {noun}
+            </label>
+          </Card>
+          {materialId !== 'new' && (
+            <Card className="min-w-0 p-3">
+              <div className="flex min-w-0 flex-wrap gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Copy className="size-4" />}
+                  onClick={async () => {
+                    try {
+                      const copy = await api.materials.duplicate(materialId);
+                      toast('success', 'Duplicated', `Copy #${copy.id} is waiting as a draft.`);
+                      onSaved();
+                    } catch (error) {
+                      toast('error', 'Could not duplicate', (error as Error).message);
+                    }
+                  }}
+                >
+                  Duplicate
+                </Button>
+                <Button size="sm" variant="ghost" icon={<Upload className="size-4" />} onClick={() => void save('archived')}>
+                  Archive
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={<Trash2 className="size-4" />}
+                  onClick={async () => {
+                    const extra = noteCount ? ` Its ${noteCount} note${noteCount === 1 ? '' : 's'} will stay in the course's Notes tab.` : '';
+                    if (!window.confirm(`Delete this ${noun} for good?${extra}`)) return;
+                    try {
+                      await api.materials.remove(materialId);
+                      toast('success', `${isNote ? 'Note' : 'Material'} deleted`);
+                      onSaved();
+                      onBack();
+                    } catch (error) {
+                      toast('error', 'Could not delete', (error as Error).message);
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* --------------------------------------------------------- history */}
+      {tab === 'history' && (
+        <Card className="min-w-0 p-3.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 text-[0.8rem] font-semibold text-mist-400">Every save keeps a copy. Restore any of them — restoring is saved too, so it can be undone.</p>
+            {versions.length > 1 && (
+              <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} onClick={() => void restore(versions[1], 'Last save undone')}>
+                Undo last save
+              </Button>
+            )}
+          </div>
+          <ul className="mt-3 min-w-0 divide-y divide-white/6 rounded-2xl border border-white/8">
+            {versions.map((row, index) => (
+              <li key={row.id} className="flex min-w-0 items-center gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[0.82rem] font-bold text-mist-100">
+                    {row.note || 'Saved'} {index === 0 && <span className="text-mint-300">· current</span>}
+                  </p>
+                  <p className="truncate text-[0.7rem] font-semibold text-mist-500">
+                    {formatDate(row.created_at, true)}
+                    {row.author ? ` · ${row.author}` : ''}
+                  </p>
+                </div>
+                {index > 0 && (
+                  <Button size="sm" variant="ghost" icon={<RotateCcw className="size-3.5" />} onClick={() => void restore(row)} aria-label="Restore this version">
+                    <span className="hidden sm:inline">Restore</span>
+                  </Button>
+                )}
+              </li>
+            ))}
+            {!versions.length && <li className="px-3 py-3 text-[0.8rem] text-mist-500">No versions yet — they appear after the first save.</li>}
+          </ul>
+        </Card>
+      )}
+
+      {/* -------------------------------------------------------- insights */}
+      {tab === 'insights' && (
         <div className="grid min-w-0 gap-3 lg:grid-cols-2">
           <Card className="min-w-0 p-4">
             <SectionHeading
@@ -551,7 +831,6 @@ function MaterialEditor({
               )}
             </div>
           </Card>
-
           <Card className="min-w-0 p-4">
             <SectionHeading title="Analytics" subtitle="Where readers stop, what confuses them." action={<BarChart3 className="size-4 text-nova-300" />} />
             {analytics ? (
@@ -566,7 +845,7 @@ function MaterialEditor({
                 ].map((tile) => (
                   <div key={tile.label} className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
                     <p className="text-[0.95rem] font-black text-mist-50 tabular">{formatNumber(Number(tile.value) || 0)}</p>
- <p className="text-[0.64rem] font-bold tracking-wide text-mist-500">{tile.label}</p>
+                    <p className="text-[0.64rem] font-bold tracking-wide text-mist-500">{tile.label}</p>
                   </div>
                 ))}
               </div>
@@ -585,89 +864,8 @@ function MaterialEditor({
               </ul>
             ) : null}
           </Card>
-
-          <Card className="min-w-0 p-4 lg:col-span-2">
-            <SectionHeading title="Version history" subtitle="Every save keeps a snapshot." action={<History className="size-4 text-nova-300" />} />
-            <ul className="mt-2 min-w-0 space-y-1.5">
-              {versions.slice(0, 6).map((row) => (
-                <li key={`${row.version}-${row.created_at}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/8 text-[0.68rem] font-black text-mist-200 tabular">v{row.version}</span>
-                  <span className="min-w-0 flex-1 truncate text-[0.8rem] text-mist-300">{row.note}</span>
-                  <span className="shrink-0 text-[0.68rem] font-bold text-mist-600">{formatDate(row.created_at)}</span>
-                </li>
-              ))}
-              {!versions.length ? <p className="text-[0.8rem] text-mist-500">No versions recorded yet.</p> : null}
-            </ul>
-          </Card>
-
-          <Card className="min-w-0 p-4 lg:col-span-2">
-            <SectionHeading
-              title="Actions"
-              subtitle="Duplicate for a new topic, archive when it retires, or preview exactly what a player sees."
-              action={
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    icon={<Copy className="size-4" />}
-                    onClick={async () => {
-                      try {
-                        const copy = await api.materials.duplicate(materialId);
-                        toast('success', 'Duplicated', `Copy #${copy.id} is waiting as a draft.`);
-                        onSaved();
-                      } catch (error) {
-                        toast('error', 'Could not duplicate', (error as Error).message);
-                      }
-                    }}
-                  >
-                    Duplicate
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Eye className="size-4" />}
-                    onClick={async () => {
-                      try {
-                        setPreview(await api.materials.adminRead(materialId));
-                      } catch (error) {
-                        toast('error', 'Preview failed', (error as Error).message);
-                      }
-                    }}
-                  >
-                    Preview as player
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Upload className="size-4" />}
-                    onClick={() => void save('archived')}
-                  >
-                    Archive
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    icon={<Trash2 className="size-4" />}
-                    onClick={async () => {
-                      if (!window.confirm('Delete this material for good?')) return;
-                      try {
-                        await api.materials.remove(materialId);
-                        toast('success', 'Material deleted');
-                        onSaved();
-                        onBack();
-                      } catch (error) {
-                        toast('error', 'Could not delete', (error as Error).message);
-                      }
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              }
-            />
-          </Card>
         </div>
-      ) : null}
+      )}
 
       <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title="Link questions" subtitle="Paste question IDs from the bank — the self-test draws from these first.">
         <div className="min-w-0 space-y-3">
@@ -700,33 +898,387 @@ function MaterialEditor({
           </Button>
         </div>
       </Modal>
+    </div>
+  );
+}
 
-      <Modal open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview as player" subtitle="Exactly the reader view — questions stay hidden." size="lg">
-        {preview ? (
-          <div className="min-w-0 space-y-3">
-            <div className="min-w-0">
-              <p className="text-[1.05rem] font-black text-mist-50">{preview.title}</p>
-              <p className="text-[0.8rem] text-mist-500">
-                {preview.topic || 'General'} · {preview.section_count} sections · {preview.estimated_minutes} min
-              </p>
+/* ------------------------------------------------------- a material's notes */
+
+type UndoAction = {label: string; run: () => Promise<void>};
+
+/** The Notes tab inside one material: add, import, read, edit, delete — and
+ *  undo the last of those. Older edits are restored from each note's history. */
+function MaterialNotes({
+  material,
+  course,
+  onCount,
+  onChanged,
+}: {
+  material: {id: number; title: string; course_id: number | null};
+  course?: Course | null;
+  onCount: (count: number) => void;
+  onChanged: () => void;
+}) {
+  const {toast} = useSession();
+  const [items, setItems] = useState<MaterialCard[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [topics, setTopics] = useState<string[]>([]);
+  const [noteDraft, setNoteDraft] = useState<NoteDraft | null>(null);
+  const [reading, setReading] = useState<MaterialDetail | null>(null);
+  const [fullEdit, setFullEdit] = useState<number | 'new' | null>(null);
+  const [history, setHistory] = useState<{note: MaterialCard; rows: VersionRow[]} | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [undo, setUndo] = useState<UndoAction | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  // NoteEditor / MaterialImport need a course; inside a material it is the material's course.
+  const noteCourse: Course | null = course ?? (material.course_id ? ({id: material.course_id, code: '', title: material.title} as Course) : null);
+
+  const load = useCallback(() => {
+    api.materials
+      .adminList({parent_id: material.id, limit: 100, ...(query.trim() ? {q: query.trim()} : {})})
+      .then((payload) => {
+        setItems(payload.items ?? []);
+        if (!query.trim()) onCount(payload.total ?? 0);
+      })
+      .catch((error: Error) => toast('error', 'Could not load notes', error.message));
+  }, [material.id, query, toast, onCount]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(load, query ? 250 : 0);
+    return () => window.clearTimeout(handle);
+  }, [load, query]);
+
+  useEffect(() => {
+    if (!material.course_id) return;
+    api.admin
+      .courseTopics(material.course_id)
+      .then((payload) => setTopics(payload.topics.map((row) => row.name)))
+      .catch(() => setTopics([]));
+  }, [material.course_id]);
+
+  const changed = () => {
+    load();
+    onChanged();
+  };
+
+  const runUndo = async () => {
+    if (!undo) return;
+    setUndoing(true);
+    try {
+      await undo.run();
+      toast('success', 'Undone');
+      setUndo(null);
+      changed();
+    } catch (error) {
+      toast('error', 'Could not undo', (error as Error).message);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const openNote = async (row: MaterialCard, mode: 'read' | 'edit') => {
+    try {
+      const detail = await api.materials.adminRead(row.id);
+      if (mode === 'read') {
+        setReading(detail);
+        return;
+      }
+      const structured =
+        (detail.sections?.length ?? 0) > 1 || (detail.sections ?? []).some((section) => (section.blocks ?? []).some((block) => block.type !== 'paragraph'));
+      if (structured) setFullEdit(detail.id); // keep headings, lists and tables intact
+      else
+        setNoteDraft({
+          id: detail.id,
+          title: detail.title,
+          topic: detail.topic,
+          description: detail.description,
+          body: noteBody(detail),
+          link_url: detail.link_url ?? '',
+          status: detail.status,
+        });
+    } catch (error) {
+      toast('error', 'Could not open the note', (error as Error).message);
+    }
+  };
+
+  const remove = async (row: MaterialCard) => {
+    if (!window.confirm(`Delete “${row.title}”? You can undo this straight after.`)) return;
+    try {
+      const snapshot = await api.materials.adminRead(row.id);
+      await api.materials.remove(row.id);
+      toast('info', 'Note deleted');
+      setUndo({
+        label: `Deleted “${row.title}”`,
+        run: async () => {
+          await api.materials.create({
+            title: snapshot.title,
+            topic: snapshot.topic,
+            subtopic: snapshot.subtopic,
+            description: snapshot.description,
+            difficulty: snapshot.difficulty,
+            estimated_minutes: snapshot.estimated_minutes,
+            tags: snapshot.tags,
+            summary: snapshot.summary,
+            author: snapshot.author,
+            status: snapshot.status,
+            link_url: snapshot.link_url ?? '',
+            kind: 'note',
+            course_id: snapshot.course_id ?? material.course_id,
+            parent_id: material.id,
+            allow_discussion: snapshot.allow_discussion,
+            sections: (snapshot.sections ?? []).map((section) => ({
+              title: section.title,
+              estimated_minutes: section.estimated_minutes ?? 3,
+              check_enabled: Boolean(section.check_enabled),
+              blocks: section.blocks ?? [],
+            })),
+          });
+        },
+      });
+      changed();
+    } catch (error) {
+      toast('error', 'Could not delete', (error as Error).message);
+    }
+  };
+
+  const openHistory = async (row: MaterialCard) => {
+    try {
+      const payload = await api.materials.versions(row.id);
+      setHistory({note: row, rows: (payload.versions ?? []) as VersionRow[]});
+    } catch (error) {
+      toast('error', 'Could not load history', (error as Error).message);
+    }
+  };
+
+  if (fullEdit !== null) {
+    return (
+      <MaterialEditor
+        materialId={fullEdit}
+        course={course}
+        kind="note"
+        parentId={material.id}
+        parentTitle={material.title}
+        onBack={() => {
+          setFullEdit(null);
+          changed();
+        }}
+        onSaved={changed}
+      />
+    );
+  }
+
+  const newNote = () => setNoteDraft({title: '', topic: '', description: '', body: '', link_url: '', status: 'published'});
+
+  return (
+    <div className="min-w-0 space-y-3">
+      {undo && (
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-nova-500/30 bg-nova-500/10 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-nova-100">{undo.label}</span>
+          <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} loading={undoing} onClick={() => void runUndo()}>
+            Undo
+          </Button>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            className="grid size-7 shrink-0 place-items-center rounded-lg text-mist-400 hover:bg-white/5"
+            onClick={() => setUndo(null)}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <p className="min-w-0 flex-1 basis-full text-[0.8rem] font-semibold text-mist-400 sm:basis-auto">
+          Notes that belong to this material{items ? ` · ${items.length}` : ''}
+        </p>
+        <div className="flex shrink-0 gap-1.5">
+          <Button size="sm" variant="outline" icon={<FileUp className="size-4" />} onClick={() => setImporting(true)} disabled={!noteCourse}>
+            Import
+          </Button>
+          <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={newNote} disabled={!noteCourse}>
+            New note
+          </Button>
+        </div>
+      </div>
+
+      {(items?.length ?? 0) > 4 || query ? (
+        <div className="relative min-w-0">
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-mist-500" />
+          <TextInput className="pl-9" placeholder="Search these notes…" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search notes" />
+        </div>
+      ) : null}
+
+      {!items ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+        </div>
+      ) : !items.length ? (
+        <EmptyState
+          icon={<NotebookPen className="size-5" />}
+          title={query ? 'No notes match' : 'No notes in this material yet'}
+          detail="Add short notes, tips or summaries that go with this material — players see them in its Notes tab."
+          action={
+            <div className="flex flex-wrap justify-center gap-1.5">
+              <Button size="sm" variant="outline" icon={<FileUp className="size-4" />} onClick={() => setImporting(true)} disabled={!noteCourse}>
+                Import from file
+              </Button>
+              <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={newNote} disabled={!noteCourse}>
+                New note
+              </Button>
             </div>
-            {(preview.sections ?? []).map((section) => (
-              <div key={section.id} className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <p className="text-[0.86rem] font-black text-mist-100">
-                  {section.position}. {section.title}
-                </p>
-                <div className="mt-1.5 space-y-1.5">
-                  {(section.blocks ?? []).map((block, index) => (
-                    <p key={index} className="text-[0.8rem] leading-snug text-mist-300">
- <span className="mr-1.5 rounded bg-white/8 px-1.5 py-0.5 text-[0.62rem] font-black tracking-wide text-mist-400">{block.type}</span>
-                      {block.text || block.term || block.caption || block.url || (block.items ?? []).join(' · ')}
-                    </p>
-                  ))}
+          }
+        />
+      ) : (
+        <ul className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((row) => (
+            <li key={row.id} className="min-w-0">
+              <Card className="flex h-full min-w-0 flex-col p-3">
+                <div className="flex min-w-0 items-start gap-2">
+                  <p className="line-clamp-2 min-w-0 flex-1 text-[0.9rem] font-extrabold text-mist-50">{row.title}</p>
+                  <Chip className={`shrink-0 ${statusTone(row.status)}`}>{row.status}</Chip>
                 </div>
-              </div>
+                {row.description && <p className="mt-1 line-clamp-3 text-[0.78rem] leading-snug text-mist-400 [overflow-wrap:anywhere]">{row.description}</p>}
+                <p className="mt-2 truncate text-[0.7rem] font-bold text-mist-500">
+                  {row.topic || 'No topic'} · updated {formatDate(row.updated_at)}
+                </p>
+                <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
+                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')}>
+                    Read
+                  </Button>
+                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" title="History & undo" aria-label={`History of ${row.title}`} icon={<History className="size-3.5" />} onClick={() => void openHistory(row)} />
+                  <Button size="sm" variant="ghost" title="Delete note" aria-label={`Delete ${row.title}`} icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(row)} />
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {noteCourse && (
+        <NoteEditor
+          draft={noteDraft}
+          setDraft={setNoteDraft}
+          course={noteCourse}
+          parentId={material.id}
+          subtitle={`Note in “${material.title}”`}
+          topics={topics}
+          onSaved={({id, created, title}) => {
+            setUndo(
+              created
+                ? {label: `Added “${title}”`, run: async () => void (await api.materials.remove(id))}
+                : {
+                    label: `Saved “${title}”`,
+                    run: async () => {
+                      const payload = await api.materials.versions(id);
+                      const previous = payload.versions?.[1];
+                      if (!previous) throw new Error('There is no earlier version to go back to.');
+                      await api.materials.restoreVersion(id, previous.id);
+                    },
+                  },
+            );
+            changed();
+          }}
+        />
+      )}
+
+      {noteCourse && (
+        <MaterialImport
+          open={importing}
+          onClose={() => setImporting(false)}
+          course={noteCourse}
+          kind="note"
+          parentId={material.id}
+          parentTitle={material.title}
+          topics={topics}
+          onImported={changed}
+        />
+      )}
+
+      <Modal
+        open={Boolean(reading)}
+        onClose={() => setReading(null)}
+        title={reading?.title}
+        subtitle={reading ? `${reading.topic || 'No topic'} · updated ${formatDate(reading.updated_at)}` : ''}
+        size="lg"
+        footer={
+          reading ? (
+            <>
+              <Button variant="ghost" onClick={() => setReading(null)}>
+                Close
+              </Button>
+              <Button
+                icon={<Pencil className="size-4" />}
+                onClick={() => {
+                  const row = items?.find((item) => item.id === reading.id);
+                  setReading(null);
+                  if (row) void openNote(row, 'edit');
+                }}
+              >
+                Edit
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {reading && (
+          <div className="min-w-0 space-y-3">
+            {(reading.sections ?? []).map((section) => (
+              <section key={section.id} className="min-w-0 space-y-2">
+                {(reading.sections?.length ?? 0) > 1 && <h3 className="text-[0.95rem] font-extrabold text-mist-50">{section.title}</h3>}
+                {(section.blocks ?? []).map((block, index) => (
+                  <PlainBlock key={index} block={block} />
+                ))}
+              </section>
             ))}
+            {reading.link_url && (
+              <a href={reading.link_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[0.82rem] font-bold text-nova-200">
+                <ExternalLink className="size-4" /> {reading.link_url.startsWith('/api/material-files/') ? 'Open the original file' : 'Open attached link'}
+              </a>
+            )}
           </div>
-        ) : null}
+        )}
+      </Modal>
+
+      <Modal open={Boolean(history)} onClose={() => setHistory(null)} title={history ? `History · ${history.note.title}` : 'History'} subtitle="Restore any earlier version — restoring is saved too, so it can be undone.">
+        {history && (
+          <ul className="min-w-0 divide-y divide-white/6 rounded-2xl border border-white/8">
+            {history.rows.map((row, index) => (
+              <li key={row.id} className="flex min-w-0 items-center gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[0.82rem] font-bold text-mist-100">
+                    {row.note || 'Saved'} {index === 0 && <span className="text-mint-300">· current</span>}
+                  </p>
+                  <p className="truncate text-[0.7rem] font-semibold text-mist-500">{formatDate(row.created_at, true)}</p>
+                </div>
+                {index > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<RotateCcw className="size-3.5" />}
+                    onClick={async () => {
+                      try {
+                        await api.materials.restoreVersion(history.note.id, row.id);
+                        toast('success', 'Version restored');
+                        setHistory(null);
+                        changed();
+                      } catch (error) {
+                        toast('error', 'Could not restore', (error as Error).message);
+                      }
+                    }}
+                  >
+                    Restore
+                  </Button>
+                )}
+              </li>
+            ))}
+            {!history.rows.length && <li className="px-3 py-3 text-[0.8rem] text-mist-500">No versions yet.</li>}
+          </ul>
+        )}
       </Modal>
     </div>
   );
@@ -753,12 +1305,17 @@ function NoteEditor({
   course,
   topics,
   onSaved,
+  parentId,
+  subtitle,
 }: {
   draft: NoteDraft | null;
   setDraft: (next: NoteDraft | null) => void;
   course: Course;
   topics: string[];
-  onSaved: () => void;
+  onSaved: (result: {id: number; created: boolean; title: string}) => void;
+  /** Set when the note lives inside a material (that material's Notes tab). */
+  parentId?: number;
+  subtitle?: string;
 }) {
   const {toast} = useSession();
   const [busy, setBusy] = useState(false);
@@ -783,7 +1340,9 @@ function NoteEditor({
       status: draft.status,
       estimated_minutes: Math.max(1, Math.round(draft.body.split(/\s+/).length / 200)),
       sections: [{title: draft.title, estimated_minutes: 3, check_enabled: false, blocks: paragraphs.map((text) => ({type: 'paragraph', text}))}],
+      ...(parentId && !draft.id ? {parent_id: parentId} : {}),
     };
+    let savedId = draft.id ?? 0;
     try {
       if (draft.id) {
         // keep the existing section id so the reader's progress survives an edit
@@ -797,11 +1356,11 @@ function NoteEditor({
           sections: [{...body.sections[0], id: sectionId}],
         });
       } else {
-        await api.materials.create(body);
+        savedId = (await api.materials.create(body)).id;
       }
       toast('success', draft.id ? 'Note saved' : 'Note created', draft.status === 'published' ? 'Visible to players.' : 'Saved as a draft.');
       setDraft(null);
-      onSaved();
+      onSaved({id: savedId, created: !draft.id, title: draft.title});
     } catch (error) {
       toast('error', 'Could not save note', (error as Error).message);
     } finally {
@@ -813,7 +1372,7 @@ function NoteEditor({
       open={Boolean(draft)}
       onClose={() => setDraft(null)}
       title={draft?.id ? 'Edit note' : 'New note'}
-      subtitle={`${course.code} · ${course.title}`}
+      subtitle={subtitle ?? `${course.code} · ${course.title}`}
       size="lg"
       footer={
         <>
@@ -907,7 +1466,42 @@ function PlainBlock({block}: {block: MaterialBlock}) {
     );
   }
   if (block.type === 'divider') return <hr className="border-white/10" />;
-  return block.text ? <p className={`${text} whitespace-pre-line`}>{block.text}</p> : null;
+  if (block.type === 'keyterm' || block.type === 'definition') {
+    const term = block.term || block.title;
+    const meaning = block.meaning || block.text;
+    if (!term && !meaning) return null;
+    return (
+      <p className={`${text} rounded-xl border border-nova-500/20 bg-nova-500/8 px-3 py-2`}>
+        {term && <b className="text-mist-50">{term}</b>}
+        {term && meaning ? ' — ' : ''}
+        {meaning}
+      </p>
+    );
+  }
+  if (block.type === 'image' && block.url) {
+    return (
+      <figure className="min-w-0">
+        <img src={block.url} alt={block.caption || block.text || ''} className="max-h-80 max-w-full rounded-xl border border-white/10 object-contain" loading="lazy" />
+        {block.caption && <figcaption className="mt-1 text-[0.72rem] text-mist-500">{block.caption}</figcaption>}
+      </figure>
+    );
+  }
+  if ((block.type === 'video' || block.type === 'attachment' || block.type === 'reference') && block.url) {
+    return (
+      <a href={block.url} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1.5 text-[0.82rem] font-bold text-nova-200 [overflow-wrap:anywhere]">
+        <ExternalLink className="size-4 shrink-0" /> {block.title || block.text || block.caption || block.url}
+      </a>
+    );
+  }
+  if (['note', 'tip', 'example', 'summary', 'quote'].includes(block.type) && block.text) {
+    return (
+      <div className={`${text} rounded-xl border-l-4 border-white/20 bg-white/[0.04] px-3 py-2 whitespace-pre-line`}>
+        <span className="mr-1 text-[0.66rem] font-black tracking-[0.12em] text-mist-400 uppercase">{block.title || block.type}</span> {block.text}
+      </div>
+    );
+  }
+  return block.text
+ ? <p className={`${text} whitespace-pre-line`}>{block.text}</p> : null;
 }
 
 function statusTone(status: string): string {
@@ -1028,6 +1622,7 @@ function MaterialsTab({
         materialId={editing}
         course={course}
         kind={kind}
+        parentTitle={editing === 'new' ? '' : (items?.find((row) => row.id === editing)?.parent_title ?? '')}
         onBack={() => setEditing(null)}
         onSaved={() => {
           onChanged();
@@ -1137,6 +1732,12 @@ function MaterialsTab({
                   <Chip className={`shrink-0 ${statusTone(row.status)}`}>{row.status}</Chip>
                 </div>
                 {row.description && <p className="mt-1 line-clamp-3 text-[0.78rem] leading-snug text-mist-400 [overflow-wrap:anywhere]">{row.description}</p>}
+                {row.parent_title && (
+                  <p className="mt-1.5 flex min-w-0 items-center gap-1 text-[0.7rem] font-bold text-nova-200">
+                    <BookOpen className="size-3 shrink-0" />
+                    <span className="truncate">in {row.parent_title}</span>
+                  </p>
+                )}
                 <p className="mt-2 truncate text-[0.7rem] font-bold text-mist-500">
                   {row.topic || 'No topic'} · updated {formatDate(row.updated_at)}
                 </p>
@@ -1173,8 +1774,13 @@ function MaterialsTab({
                 </div>
                 <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
                   <Button size="sm" variant="outline" icon={<FileText className="size-3.5" />} onClick={() => setEditing(row.id)}>
-                    Edit
+                    Open
                   </Button>
+                  {row.note_count ? (
+                    <Chip className="self-center border-nova-500/25 bg-nova-500/10 text-nova-200">
+                      <NotebookPen className="size-3" /> {row.note_count} note{row.note_count === 1 ? '' : 's'}
+                    </Chip>
+                  ) : null}
                   {row.link_url && (
                     <a
                       href={row.link_url}

@@ -1536,6 +1536,8 @@ class Material(Base):
     title: Mapped[str] = mapped_column(String(200), default="")
     # "material" = long-form sectioned reading, "note" = a short course note.
     kind: Mapped[str] = mapped_column(String(16), default="material", index=True)
+    # A note can belong to one material (shown in that material's Notes tab).
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id", ondelete="SET NULL"), nullable=True, index=True)
     topic: Mapped[str] = mapped_column(String(120), default="", index=True)
     subtopic: Mapped[str] = mapped_column(String(120), default="")
     description: Mapped[str] = mapped_column(String(500), default="")

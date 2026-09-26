@@ -341,6 +341,19 @@ function Reader({
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const sectionsRef = useRef<Record<number, HTMLElement | null>>({});
+  // Notes the lecturer attached to this material (separate from the player's own marks).
+  const [view, setView] = useState<'read' | 'staff'>('read');
+  const [staffNotes, setStaffNotes] = useState<MaterialDetail[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.materials
+      .staffNotes(material.id)
+      .then((payload) => live && setStaffNotes(payload.notes ?? []))
+      .catch(() => live && setStaffNotes([]));
+    return () => {
+      live = false;
+    };
+  }, [material.id]);
   const activeSection = detail.sections.find((section) => section.id === activeId) ?? detail.sections[0] ?? null;
 
   const visited = useMemo(() => new Set(detail.progress?.visited ?? []), [detail.progress]);
@@ -608,6 +621,59 @@ function Reader({
 
       <BankStrip bank={bank} streak={detail.streak} />
 
+      {staffNotes?.length ? (
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            {value: 'read', label: 'Reading', icon: BookOpen},
+            {value: 'staff', label: `Lecturer notes (${staffNotes.length})`, icon: NotebookPen},
+          ]}
+        />
+      ) : null}
+
+      {view === 'staff' && staffNotes ? (
+        <div className="min-w-0 space-y-3">
+          {staffNotes.map((note) => (
+            <Card key={note.id} className="min-w-0 p-4">
+              <div className="flex min-w-0 items-start gap-2">
+                <NotebookPen className="mt-0.5 size-4 shrink-0 text-nova-300" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="break-words text-[0.98rem] font-black text-mist-50">{note.title}</h2>
+                  <p className="text-[0.7rem] font-bold text-mist-500">
+                    {note.topic || detail.topic || 'General'}
+                    {note.author ? ` · ${note.author}` : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 min-w-0 space-y-3">
+                {(note.sections ?? []).map((section) => (
+                  <div key={section.id} className="min-w-0 space-y-3">
+                    {(note.sections?.length ?? 0) > 1 ? <h3 className="text-[0.9rem] font-extrabold text-mist-100">{section.title}</h3> : null}
+                    {(section.blocks ?? []).map((block, index) => (
+                      <Block key={index} block={block} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {note.link_url ? (
+                <a
+                  href={note.link_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-xl border border-nova-500/30 bg-nova-500/10 px-3 text-[0.8rem] font-bold text-nova-100"
+                >
+                  <ExternalLink className="size-4 shrink-0" />
+                  <span className="truncate">{note.link_url.startsWith('/api/material-files/') ? 'Open the original document' : 'Open attached resource'}</span>
+                </a>
+              ) : null}
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
+      {view === 'read' && (
+        <>
       {/* section tabs */}
       <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {detail.sections.map((section) => (
@@ -682,6 +748,8 @@ function Reader({
           </section>
         ))}
       </div>
+        </>
+      )}
 
       <Card className="min-w-0 p-4">
         <SectionHeading

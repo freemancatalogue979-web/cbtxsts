@@ -95,6 +95,7 @@ def material_public(material: Material, *, sections: list[MaterialSection] | Non
         "quiz_id": material.quiz_id,
         "title": material.title,
         "kind": getattr(material, "kind", "material") or "material",
+        "parent_id": getattr(material, "parent_id", None),
         "link_url": getattr(material, "link_url", "") or "",
         "topic": material.topic,
         "subtopic": material.subtopic,
@@ -227,11 +228,17 @@ def sanitise_blocks(raw: Any) -> list[dict]:
 
 
 def record_version(db: Session, material: Material, *, note: str, author: str) -> MaterialVersion:
-    snapshot = material_public(material, full=True)
+    # Read sections fresh from the session: the relationship collection can be
+    # stale right after an edit, and a stale snapshot would make "restore" lie.
+    db.flush()
+    fresh = list(
+        db.scalars(select(MaterialSection).where(MaterialSection.material_id == material.id).order_by(MaterialSection.position)).all()
+    )
+    snapshot = material_public(material, sections=fresh, full=True)
     row = MaterialVersion(
         material_id=material.id,
         version=material.version,
-        snapshot=_dumps(snapshot)[:400_000],
+        snapshot=_dumps(snapshot)[:4_000_000],
         note=note[:200],
         author=author[:120],
     )

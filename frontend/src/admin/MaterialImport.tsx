@@ -49,6 +49,8 @@ export default function MaterialImport({
   course = null,
   kind = 'material',
   topics = [],
+  parentId,
+  parentTitle = '',
 }: {
   open: boolean;
   onClose: () => void;
@@ -57,6 +59,9 @@ export default function MaterialImport({
   course?: Course | null;
   kind?: 'material' | 'note';
   topics?: string[];
+  /** Import as notes inside this material. */
+  parentId?: number;
+  parentTitle?: string;
 }) {
   const {toast} = useSession();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +134,7 @@ export default function MaterialImport({
           kind,
           status: publish ? 'published' : 'draft',
           keep_file: keepFile,
+          ...(parentId ? {parent_id: parentId} : {}),
         });
         patch(row.key, {state: 'done'});
         imported += 1;
@@ -149,7 +155,7 @@ export default function MaterialImport({
       open={open}
       onClose={busy ? () => undefined : onClose}
       title={`Import ${noun}s from files`}
-      subtitle={course ? `${course.code} · ${course.title}` : 'Word, PDF, text, slides — the document becomes the content.'}
+      subtitle={parentId ? `Notes in “${parentTitle || 'this material'}”` : course ? `${course.code} · ${course.title}` : 'Word, PDF, text, slides — the document becomes the content.'}
       size="lg"
       footer={
         <>

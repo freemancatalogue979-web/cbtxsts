@@ -134,6 +134,21 @@ it from the reader. Old `.doc`/`.ppt` files, scanned PDFs with no text and unsup
 refused with a reason (for example *"In Word choose File → Save As → .docx"*). The reader lives in
 `backend/app/services/material_import.py` (standard library + `pypdf`, no extra dependencies);
 uploaded originals are stored in `backend/data/material_files/` (git-ignored).
+
+**Inside a material: sub-tabs, notes, undo.** Opening a material shows sub-tabs instead of one
+long page: **Read** (what players see, including unsaved edits) · **Content** (sections and
+blocks, with **Undo / Redo** of edits until you save) · **Notes** · **Details** (course, topic,
+link, duplicate / archive / delete) · **History** (every save is a version: **Restore** any of
+them, or **Undo last save**; a restore is saved as a new version, so it can be undone too) ·
+**Insights** (linked questions and analytics). On phones the tabs wrap into a 3×2 grid. The
+**Notes** tab lists notes that belong to that material (`materials.parent_id`) as compact cards
+with Read, Edit, History and Delete, plus New note and Import; the last add, edit or delete can
+be undone straight from a banner. The notes also appear in the course's Notes tab, marked
+*in &lt;material&gt;*, and players get a **Lecturer notes** tab in the reader. Deleting a material keeps
+its notes in the course. API: `parent_id` on create/update, `GET /api/admin/materials?parent_id=`,
+`POST /api/admin/materials/{id}/versions/{version_id}/restore`, `GET /api/materials/{id}/staff-notes`.
+Updating a material without sending `status` or `course_id` now leaves them unchanged (previously
+such a partial update fell back to *draft* and *no course*).
 The correct answer may be given as a letter (**B**) *or as the option's actual
 text* (**Savigny**) — the text is resolved to the option's canonical key on upload, so it
 stays correct however options are later shuffled; an ambiguous or unknown answer is
@@ -281,6 +296,11 @@ cd backend && ./.venv/bin/python scripts/verify_course_bank.py
 #          splitting, preview-saves-nothing, course scoping, original-file download,
 #          player reading and every refusal (old .doc, unknown course, non-staff)
 cd backend && ./.venv/bin/python scripts/verify_material_import.py
+
+# Backend: notes inside a material — attach / list / detach, same-course and no-nesting rules,
+#          partial updates keep status and course, version restore and undo-last-save,
+#          delete keeps notes in the course, player "lecturer notes" shows published ones only
+cd backend && ./.venv/bin/python scripts/verify_material_notes.py
 
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder

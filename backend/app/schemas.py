@@ -770,6 +770,8 @@ class MaterialIn(BaseModel):
     # None = leave unchanged on update (older clients don't send these).
     kind: Literal["material", "note"] | None = None
     link_url: str | None = Field(default=None, max_length=600)
+    # Notes only: the material this note belongs to. None = unchanged, 0 = detach.
+    parent_id: int | None = None
     quiz_id: int | None = None
     topic: str = Field(default="", max_length=120)
     subtopic: str = Field(default="", max_length=120)
