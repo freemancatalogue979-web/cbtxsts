@@ -25,6 +25,11 @@ router = APIRouter(prefix="/tutor", tags=["ai-tutor"])
 admin_router = APIRouter(prefix="/admin/tutor", tags=["ai-tutor-staff"], dependencies=[Depends(require_admin)])
 
 SAVED_KINDS = {"flashcards", "practice", "material", "notes", "plan"}
+SUMMARY_LENGTHS = {
+    "quick": "Make it a QUICK summary: 4-6 bullet points, nothing else.",
+    "detailed": "Make it a DETAILED summary: go section by section with headings and the important details.",
+    "revision": "Make it REVISION NOTES: exam-focused — key facts, definitions, lists to memorise, common traps.",
+}
 PROGRESS_WORDS = re.compile(r"\b(weak|wrong|mistake|progress|score|getting|struggl|study next|improve|revise|revision|plan)\w*", re.I)
 
 
@@ -189,7 +194,11 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
         conv.title = tutor.title_from(visible)
     db.flush()
 
-    system = tutor.SYSTEM + ("\n\nTASK FOR THIS REPLY:\n" + tutor.MODES[mode] if tutor.MODES.get(mode) else "") + ("\n\nCONTEXT:\n" + context_text if context_text else "")
+    task = tutor.MODES.get(mode) or ""
+    length = context.get("summary_length")
+    if mode == "SUMMARY" and length in SUMMARY_LENGTHS:
+        task += " " + SUMMARY_LENGTHS[length]
+    system = tutor.SYSTEM + ("\n\nTASK FOR THIS REPLY:\n" + task if task else "") + ("\n\nCONTEXT:\n" + context_text if context_text else "")
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *tutor.history_messages(conv, exclude_id=user_msg.id)]
     messages.append({"role": "user", "content": [{"type": "text", "text": visible}, {"type": "image_url", "image_url": {"url": image}}]} if image else {"role": "user", "content": visible})
 
@@ -214,6 +223,7 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
 
     def events():
         text, usage, finish = "", None, None
+        settled = False
         try:
             yield _sse("meta", {"conversation_id": conv_id, "user_message_id": user_msg_id, "title": conv_title, "model": model, "context": meta})
             for kind, value in tutor.iter_stream(upstream):
@@ -238,6 +248,7 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
                 message_id = msg.id
                 lim_now = tutor.limits(s)
                 counts = tutor.usage_counts(s, student_id)
+            settled = True
             yield _sse("done", {"message_id": message_id, "finish": finish, "usage": cost, "remaining_today": max(0, min(lim_now["daily"] - counts["today"], lim_now["monthly"] - counts["month"]))})
             # memory upkeep after the student already has the answer
             with session_scope() as s:
@@ -245,18 +256,32 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
                 if convo is not None:
                     tutor.summarise_if_needed(s, convo)
         except tutor.TutorError as error:
+            settled = True
             with session_scope() as s:
                 tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=str(error), conversation_id=conv_id, request_id=request_id)
                 if text.strip():  # keep what arrived so the student doesn't lose it
                     s.add(AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text + "\n\n_(answer cut off)_", message_type="chat", meta={"mode": mode, "partial": True}))
             yield _sse("error", {"detail": str(error), "status": error.status, "partial": bool(text.strip())})
         except Exception:  # noqa: BLE001
+            settled = True
             import logging
 
             logging.getLogger("arena").exception("tutor stream failed")
             yield _sse("error", {"detail": "Something went wrong while answering. Try again.", "status": 500, "partial": bool(text.strip())})
         finally:
             slot.__exit__(None, None, None)
+            if not settled and text.strip():
+                # the student pressed Stop / left: keep what they saw and count the tokens used
+                try:
+                    with session_scope() as s:
+                        s.add(AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text + "\n\n_(stopped)_", message_type=tutor.MESSAGE_TYPE.get(mode, "chat"), meta={"mode": mode, "partial": True}))
+                        tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage or {"prompt_tokens": sum(len(str(m.get("content"))) for m in messages) // 4, "completion_tokens": len(text) // 4}, latency_ms=int((time.monotonic() - started) * 1000), conversation_id=conv_id, request_id=request_id)
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
+                    upstream.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 

@@ -30,6 +30,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 
 import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile, ComboMeter, Hearts} from '../components/GameQuestion';
 import {Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, SectionHeading, Segmented, Select, Skeleton} from '../components/ui';
+import AskTutorButton from '../components/tutor/AskTutorButton';
 import {api} from '../lib/api';
 import {HAPTICS} from '../lib/haptics';
 import {sfx} from '../lib/sfx';
@@ -351,6 +352,7 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
                 combo={combo}
                 note={feedback.explanation || undefined}
               />
+              <AskTutorButton className="mt-2" questionId={question.id} correct={feedback.correct} chosenText={picked ? question.options[picked] ?? picked : null} label="Practice question" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -1059,6 +1061,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
                   </>
                 }
               />
+              <AskTutorButton className="mt-2" questionId={question.id} correct={feedback.correct} chosenText={feedback.chosen ? question.options[feedback.chosen] ?? feedback.chosen : null} label="Practice question" />
             </motion.div>
           )}
         </AnimatePresence>

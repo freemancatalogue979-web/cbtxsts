@@ -1,5 +1,5 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {Activity, Award, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
+import {Activity, Award, Bot, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
@@ -12,13 +12,14 @@ import StudioAdmin from '../admin/StudioAdmin';
 import GroupsAdmin from '../admin/GroupsAdmin';
 import SupportAdmin from '../admin/SupportAdmin';
 import MysteryAdmin from '../admin/MysteryAdmin';
+import TutorAdmin from '../admin/TutorAdmin';
 import {api} from '../lib/api';
 import {formatCompact, formatNumber, formatRelative} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
 import type {AdminOverview, Config, Notice} from '../lib/types';
 
-type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'support' | 'settings';
+type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'support' | 'tutor' | 'settings';
 
 const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[] = [
   {id: 'overview', label: 'Overview', icon: Gauge, group: 'Arena'},
@@ -33,6 +34,7 @@ const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[
   {id: 'claims', label: 'Prize claims', icon: PackageCheck, group: 'People'},
   {id: 'groups', label: 'Study groups', icon: GraduationCap, group: 'People'},
   {id: 'support', label: 'Customer support', icon: LifeBuoy, group: 'People'},
+  {id: 'tutor', label: 'AI Tutor', icon: Bot, group: 'System'},
   {id: 'settings', label: 'Settings', icon: Settings, group: 'System'},
 ];
 
@@ -648,6 +650,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
               {section === 'groups' && <GroupsAdmin key={`groups-${bump}`} />}
               {section === 'support' && <SupportAdmin key={`support-${bump}`} />}
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}
+              {section === 'tutor' && <TutorAdmin key={`tutor-${bump}`} />}
               {section === 'settings' && <SettingsPanel key={`settings-${bump}`} />}
             </motion.div>
           </AnimatePresence>

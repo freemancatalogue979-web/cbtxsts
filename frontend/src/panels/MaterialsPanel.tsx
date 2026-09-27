@@ -60,6 +60,7 @@ import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
 import {api} from '../lib/api';
 import {OPEN_MATERIAL_EVENT} from '../lib/palette';
+import {askTutor} from '../lib/tutor';
 import {formatDate, formatNumber} from '../lib/format';
 import {RichText, TermsContext, materialTerms, stripMarks} from '../lib/richText';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -879,6 +880,21 @@ function Reader({
           Library
         </Button>
         <div className="min-w-0 flex-1" />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Sparkles className="size-4" />}
+          onClick={() =>
+            askTutor({
+              context: {material_id: detail.id, course_id: detail.course_id ?? undefined, ...(activeSection ? {section_id: activeSection.id} : {}), topic: detail.topic || undefined},
+              label: activeSection ? `${detail.title} · ${activeSection.title}` : detail.title,
+              prompt: activeSection ? `Explain "${activeSection.title}" to me.` : undefined,
+            })
+          }
+          aria-label="Ask AI Tutor about this material"
+        >
+          <span className="hidden sm:inline">Ask AI</span>
+        </Button>
         <Button variant="soft" size="sm" icon={<Maximize2 className="size-4" />} onClick={() => setFocus(true)} aria-label="Read in full screen">
           Focus
         </Button>
@@ -1145,9 +1161,27 @@ function Reader({
             </button>
           ))}
           {highlightTarget ? (
-            <Button size="sm" variant="ghost" icon={<XCircle className="size-4" />} onClick={() => setHighlightTarget('')}>
-              Clear selection
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="soft"
+                icon={<Sparkles className="size-4" />}
+                onClick={() =>
+                  askTutor({
+                    prompt: 'Explain this passage to me.',
+                    mode: 'EXPLAIN',
+                    context: {material_id: detail.id, course_id: detail.course_id ?? undefined, ...(activeSection ? {section_id: activeSection.id} : {}), selected_text: highlightTarget.slice(0, 4000), topic: detail.topic || undefined},
+                    label: `"${highlightTarget.slice(0, 40)}${highlightTarget.length > 40 ? '…' : ''}"`,
+                    autoSend: true,
+                  })
+                }
+              >
+                Explain this
+              </Button>
+              <Button size="sm" variant="ghost" icon={<XCircle className="size-4" />} onClick={() => setHighlightTarget('')}>
+                Clear selection
+              </Button>
+            </>
           ) : null}
         </div>
 

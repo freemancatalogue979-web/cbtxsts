@@ -9,6 +9,7 @@ import {CelebrationLayer, Toasts} from './components/Overlays';
 import {Button, Chip} from './components/ui';
 import {applyFxProfile} from './lib/fx';
 import {jumpToMaterial} from './lib/palette';
+import {ASK_TUTOR_EVENT} from './lib/tutor';
 import {TABS} from './lib/nav';
 import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
@@ -223,6 +224,16 @@ export default function App() {
   useEffect(() => {
     if (ready) setStarted(true);
   }, [ready]);
+
+  /* "Ask AI Tutor" from any screen (result, practice, reader…): switch to the
+     tutor tab; the panel picks the attached context up when it mounts. */
+  useEffect(() => {
+    const onAsk = () => {
+      if (routeRef.current.view !== 'dashboard' || routeRef.current.tab !== 'tutor') navigate({view: 'dashboard', tab: 'tutor'});
+    };
+    window.addEventListener(ASK_TUTOR_EVENT, onAsk);
+    return () => window.removeEventListener(ASK_TUTOR_EVENT, onAsk);
+  }, [navigate]);
 
   /* Game layer: measure the device once and stamp data-fx on <html>. */
   useEffect(() => {

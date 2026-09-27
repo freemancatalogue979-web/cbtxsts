@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Skeleton} from '../components/ui';
+import AskTutorButton from '../components/tutor/AskTutorButton';
 import {api} from '../lib/api';
 import {sfx} from '../lib/sfx';
 import {useSession} from '../store/session';
@@ -718,11 +719,13 @@ function RunPlayer({
   toast: (kind: 'info' | 'success' | 'error', title: string, detail?: string) => void;
 }) {
   const [feedback, setFeedback] = useState<AnswerResult | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const startedRef = useRef(Date.now());
 
   const answer = async (label: string) => {
     if (!run.question || busy) return;
+    setPicked(label);
     setBusy(true);
     try {
       const result = (await api.studyRunAnswer(run.run.id, {
@@ -838,9 +841,12 @@ function RunPlayer({
               <p className="mt-1.5 text-[0.7rem] font-black tracking-wide text-mist-500 uppercase">
                 Concept tested: {feedback.concept || `${feedback.topic} · ${question.difficulty}`}
               </p>
-              <Button size="sm" className="mt-2.5" variant="mint" onClick={() => setFeedback(null)}>
-                Next question
-              </Button>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="mint" onClick={() => setFeedback(null)}>
+                  Next question
+                </Button>
+                <AskTutorButton questionId={question.id} correct={feedback.correct} chosenText={picked ? question.options[picked] ?? picked : null} label="Study Lab question" />
+              </div>
             </div>
           )}
         </Card>

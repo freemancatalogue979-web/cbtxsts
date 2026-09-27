@@ -16,6 +16,7 @@ import EventsPanel from '../panels/EventsPanel';
 import MysteryPanel from '../panels/MysteryPanel';
 import SupportPanel from '../panels/SupportPanel';
 import WorldMapPanel from '../panels/WorldMapPanel';
+import TutorPanel from '../panels/TutorPanel';
 import type {Tab} from '../lib/nav';
 import type {Duel, GroupSection, Quiz} from '../lib/types';
 
@@ -54,6 +55,7 @@ export default function Dashboard({
           <WorldMapPanel onStartExam={onStartExam} onOpenDuels={onOpenDuels} onOpenMaterial={onOpenMaterial} />
         )}
         {tab === 'study' && <StudyPanel />}
+        {tab === 'tutor' && <TutorPanel />}
         {tab === 'materials' && <MaterialsPanel />}
         {tab === 'arena' && <GameArenaPanel />}
         {tab === 'ranked' && <RankedPanel />}

@@ -11,6 +11,7 @@ import {
   Medal,
   Printer,
   ScrollText,
+  Sparkles,
   Target,
   Trophy,
   X,
@@ -21,6 +22,7 @@ import {useEffect, useMemo, useState} from 'react';
 import Character from '../components/Character';
 import {Button, Card, Chip, ProgressRing, SectionHeading, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
+import {askTutor} from '../lib/tutor';
 import {sfx} from '../lib/sfx';
 import {celebrate} from '../lib/confetti';
 import {formatDate, formatNumber, GRADE_STYLES} from '../lib/format';
@@ -323,6 +325,21 @@ export default function Result({
                               {row.explanation}
                             </p>
                           )}
+                          <button
+                            onClick={() =>
+                              askTutor({
+                                prompt: row.is_correct ? 'Why is this answer correct?' : row.selected ? 'Why is my answer wrong?' : 'Explain this question and its answer.',
+                                mode: row.is_correct || !row.selected ? 'QUESTION_HELP' : 'WHY_WRONG',
+                                context: {question_id: row.question_id, selected: row.selected ?? null},
+                                label: `Question ${position + 1}`,
+                                autoSend: true,
+                              })
+                            }
+                            className="print-hide mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-nova-400/35 bg-nova-500/10 px-3 py-1.5 text-[0.76rem] font-bold text-nova-200 hover:bg-nova-500/20"
+                          >
+                            <Sparkles className="size-3.5" />
+                            {row.is_correct ? 'Ask AI Tutor' : 'Why was I wrong? Ask AI Tutor'}
+                          </button>
                         </div>
                       </motion.div>
                     )}
