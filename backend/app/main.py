@@ -45,6 +45,7 @@ from .routers import (
     mystery,
     support,
     ranked_teams,
+    tutor,
 )
 from .seed import seed_all
 from .services.duel import expire_duels
@@ -233,6 +234,8 @@ app.include_router(mystery.admin_router, prefix=API_PREFIX)
 app.include_router(support.router, prefix=API_PREFIX)
 app.include_router(support.admin_router, prefix=API_PREFIX)
 app.include_router(ranked_teams.router, prefix=API_PREFIX)
+app.include_router(tutor.router, prefix=API_PREFIX)
+app.include_router(tutor.admin_router, prefix=API_PREFIX)
 app.include_router(live.router)  # websocket routes stay unprefixed: /ws/live, /ws/duel/{id}, /ws/room/{id}
 
 

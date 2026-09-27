@@ -873,6 +873,16 @@ class Config(Base):
     grading_scale: Mapped[list] = mapped_column(JSON, default=list)
     duels_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     exams_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # --- AI Tutor limits (the backend enforces these; the app only shows them) ---
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_daily_limit: Mapped[int] = mapped_column(Integer, default=20)
+    ai_monthly_limit: Mapped[int] = mapped_column(Integer, default=400)
+    ai_per_minute: Mapped[int] = mapped_column(Integer, default=10)
+    ai_max_concurrent: Mapped[int] = mapped_column(Integer, default=2)
+    ai_max_message_chars: Mapped[int] = mapped_column(Integer, default=4000)
+    ai_max_response_tokens: Mapped[int] = mapped_column(Integer, default=1800)
+    ai_max_conversations: Mapped[int] = mapped_column(Integer, default=200)
+    ai_exam_safe: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -2193,3 +2203,131 @@ class TeamMatchPlayer(Base):
     coins_awarded: Mapped[int] = mapped_column(Integer, default=0)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     answers: Mapped[dict] = mapped_column(JSON, default=dict)  # {qid: {selected, correct, points}} — per-round reveals survive refreshes
+
+
+# ---------------------------------------------------------------------------
+# AI Tutor — conversations, usage, saved items, topic progress
+# ---------------------------------------------------------------------------
+class AIConversation(Base):
+    """One tutor chat owned by one student. Soft-deleted via ``deleted_at``."""
+
+    __tablename__ = "ai_conversations"
+    __table_args__ = (Index("ix_ai_conv_user_recent", "user_id", "last_message_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160), default="New chat")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")  # free-text topic when no topic row matches
+    # Compact memory of older turns (recent turns are sent verbatim).
+    summary: Mapped[str] = mapped_column(Text, default="")
+    summarized_until: Mapped[int] = mapped_column(Integer, default=0)  # last message id folded into summary
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    last_message_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    messages: Mapped[list["AIMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="AIMessage.id")
+
+
+class AIMessage(Base):
+    __tablename__ = "ai_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("ai_conversations.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(12), default="user")  # user|assistant|system|tool
+    content: Mapped[str] = mapped_column(Text, default="")
+    # chat|question_explanation|material_summary|flashcard_generation|practice_generation|
+    # study_plan|quiz_help|image_analysis|general
+    message_type: Mapped[str] = mapped_column(String(32), default="chat")
+    meta: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    token_input: Mapped[int] = mapped_column(Integer, default=0)
+    token_output: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    conversation: Mapped[AIConversation] = relationship(back_populates="messages")
+
+
+class AIUsage(Base):
+    """Per student per day totals — quotas are counted from here."""
+
+    __tablename__ = "ai_usage"
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_ai_usage_day"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column("date", Date, index=True)
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    rate_limited: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms_total: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AIUsageEvent(Base):
+    """Every AI request (ok, failed or refused) — powers the per-minute limit and audits."""
+
+    __tablename__ = "ai_usage_events"
+    __table_args__ = (Index("ix_ai_events_user_time", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(40), default="")
+    kind: Mapped[str] = mapped_column(String(24), default="CHAT")
+    provider: Mapped[str] = mapped_column(String(24), default="deepseek")
+    model: Mapped[str] = mapped_column(String(60), default="")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_hit_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_miss_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error|rate_limited|refused
+    error: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class AISavedItem(Base):
+    """Something the student chose to keep: a flashcard deck, practice set,
+    study material, notes or a study plan. Nothing is saved automatically."""
+
+    __tablename__ = "ai_saved_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # flashcards|practice|material|notes|plan
+    title: Mapped[str] = mapped_column(String(200), default="")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class StudentTopicProgress(Base):
+    """Accuracy per topic, rebuilt from the student's real answers (never guessed)."""
+
+    __tablename__ = "student_topic_progress"
+    __table_args__ = (UniqueConstraint("user_id", "course_id", "topic", name="uq_topic_progress"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    attempted: Mapped[int] = mapped_column(Integer, default=0)
+    correct: Mapped[int] = mapped_column(Integer, default=0)
+    incorrect: Mapped[int] = mapped_column(Integer, default=0)
+    accuracy: Mapped[float] = mapped_column(Float, default=0.0)
+    last_attempted: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
