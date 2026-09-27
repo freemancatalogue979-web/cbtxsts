@@ -1156,6 +1156,12 @@ def read_document(filename: str, data: bytes) -> dict[str, Any]:
 
     fallback = title_from_filename(filename)
     doc_title, sections = build_sections(outline, fallback_title=fallback)
+    # Numbering written into the text ("a When… b Vagueness…") becomes real points
+    # here too, so the preview and the description read the way the material will.
+    from .materials import regroup_points
+
+    for section in sections:
+        section["blocks"] = regroup_points(section["blocks"])
     words = sum(section["words"] for section in sections)
     if words < 5:
         raise DocumentError("No readable text was found in that file.", 422)
