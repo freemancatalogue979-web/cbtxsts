@@ -152,6 +152,7 @@ export default function TutorPanel() {
   };
 
   useEffect(() => {
+    if (!messages.length) return;
     scrollRef.current?.scrollTo({top: scrollRef.current.scrollHeight, behavior: streaming ? 'auto' : 'smooth'});
   }, [messages, streaming]);
 
@@ -413,10 +414,10 @@ export default function TutorPanel() {
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="card hidden h-[calc(100dvh-11rem)] min-h-[28rem] flex-col p-2.5 lg:flex">{chatList}</aside>
 
-        <section className="card flex h-[calc(100dvh-12.5rem)] min-h-[26rem] flex-col p-2.5 sm:p-3 lg:h-[calc(100dvh-11rem)]">
+        <section className="card flex min-w-0 h-[calc(100dvh-12.5rem)] min-h-[26rem] flex-col p-2.5 sm:p-3 lg:h-[calc(100dvh-11rem)]">
           {library ? (
             <LibraryView
               uploads={uploads}
@@ -474,9 +475,9 @@ export default function TutorPanel() {
                     <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Bot className="size-6" /></span>
                     <h2 className="mt-3 text-[1.08rem] font-extrabold text-mist-50 sm:text-xl">Ask anything about what you're learning.</h2>
                     <p className="mt-1 max-w-md text-[0.8rem] text-mist-500">Pick a course or topic above for sharper answers — or attach a document or photo of a question.</p>
-                    <div className="mt-4 grid w-full grid-cols-1 gap-1.5 min-[420px]:grid-cols-2">
+                    <div className="mt-4 grid w-full grid-cols-2 gap-1.5">
                       {EXAMPLES.map((row) => (
-                        <button key={row.label} disabled={!!locked || !!unavailable} onClick={() => runExample(row)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-[0.8rem] font-bold text-mist-200 transition-colors enabled:hover:border-nova-400/40 enabled:hover:bg-nova-500/10 disabled:opacity-40">
+                        <button key={row.label} disabled={!!locked || !!unavailable} onClick={() => runExample(row)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-[0.74rem] leading-tight font-bold sm:px-3 sm:py-2.5 sm:text-[0.8rem] text-mist-200 transition-colors enabled:hover:border-nova-400/40 enabled:hover:bg-nova-500/10 disabled:opacity-40">
                           <row.icon className="size-4 shrink-0 text-nova-300" />
                           <span className="min-w-0">{row.label}</span>
                         </button>

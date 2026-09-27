@@ -201,6 +201,39 @@ the same section.
   balance and set `DEEPSEEK_API_KEY=sk-...` in `backend/.env` (the start scripts detect `sk-` keys).
   When that key is set DeepSeek is used; `AI_PROVIDER=gemini|deepseek` forces one.
 
+### AI Tutor
+
+Players get an **AI Tutor** tab ("Ask anything about what you're learning.") powered by DeepSeek
+(`deepseek-flash`). The browser only talks to our API (`/api/tutor/*`); the key stays in
+`backend/.env` (`DEEPSEEK_API_KEY=sk-...`) and only signed-in players can use it.
+
+* **Streaming chats with memory** — answers stream in (server-sent events). Every chat is saved
+  (`ai_conversations`, `ai_messages`); recent turns are sent verbatim and older ones are folded into
+  a rolling summary, so long chats stay cheap and on-topic.
+* **Context from where you came from** — "Ask AI Tutor" on the exam result review, practice and
+  Study Lab feedback, and "Ask AI" / "Explain this" (selected text) in the material reader. The
+  server loads the question, answer and explanation itself; only relevant material passages are
+  attached (keyword retrieval, "chapter 4" → section 4). It never invents content that isn't there.
+* **Quick actions** — explain, teach me (mini lesson), explain simply, example, notes, glossary,
+  summarize (quick / detailed / revision), study plan, "what should I study?". "Why is my answer
+  wrong?" answers in a fixed structure: what's tested → why yours fails → why the key fits →
+  remember this → example.
+* **Create with AI** — flashcards (5–50), practice questions (MCQ, true/false, short answer,
+  calculation, scenario) played as a one-at-a-time AI Quiz with score and weak areas, and
+  structured study material. Output is validated JSON; nothing is saved until the player taps
+  Save (then edit, study, download, regenerate or delete from *My library*).
+* **Uploads and photos** — players can upload their own PDF/DOCX/TXT notes (private, text only) and
+  ask about them, or attach a photo of a question (PNG/JPG/WEBP/GIF, ≤ 4 MB; not stored).
+* **Progress-aware** — study plans and "what am I getting wrong?" use real answer data
+  (`student_topic_progress`, rebuilt from exam, practice and Study Lab answers) — never guesses.
+* **Limits (staff → AI Tutor)** — enforced by the API, shown by the app: per-day (default 20),
+  per-month (400), per-minute (10), answers at once (2), message length, answer length and chats per
+  player. Usage and estimated cost are tracked in `ai_usage` / `ai_usage_events` and shown to staff.
+* **Exam-safe mode** (on by default) — the tutor pauses while a player has an exam in progress and
+  never reveals answers of exam-only questions from an exam the player can still sit.
+* The tutor has no tools that touch SQL, files or the shell — context is gathered by fixed,
+  permission-checked server code.
+
 ---
 
 ## Architecture
@@ -355,6 +388,11 @@ cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
 #          fallback, thinking retry, key / balance / rate / busy errors, time limit
 cd backend && ./.venv/bin/python scripts/verify_deepseek.py
 
+# Backend: AI Tutor end to end (58 checks) — starts its own API on :3995 with a throw-away DB and a
+#          mock DeepSeek on :3996: streaming, memory + summaries, question/material/upload context,
+#          exam-safe mode, images, JSON generators, saved items, limits and staff usage
+cd backend && ./.venv/bin/python scripts/verify_ai_tutor.py
+
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder
 cd frontend && node scripts/render-check.mjs
@@ -447,6 +485,10 @@ cd frontend && npm run typecheck && npm run build
 | `DEEPSEEK_API_KEY` | unset | DeepSeek key for the rewrite; used instead of Gemini when set |
 | `DEEPSEEK_MODEL` | `deepseek-flash` | DeepSeek model to try first (falls back to `deepseek-v4-flash`, `deepseek-chat`) |
 | `AI_PROVIDER` | `auto` | `gemini` or `deepseek` to force a provider |
+| `TUTOR_MODEL` | DeepSeek model | Model the AI Tutor uses |
+| `TUTOR_STREAM_TIMEOUT` | `45` s | Longest wait for the tutor's answer to start / continue |
+| `TUTOR_MAX_UPLOAD_MB` | `10` | Largest document a player may upload to the tutor |
+| `TUTOR_PRICE_INPUT` / `_CACHED` / `_OUTPUT` | `0.14` / `0.028` / `0.28` | USD per million tokens, for the cost estimate |
 | `GEMINI_BUDGET` / `GEMINI_TIMEOUT` | `75` / `60` s | Most time one rewrite request may take in total / per Gemini call (keeps under proxy limits) |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model to try first (falls back to other Flash models) |
 | `VITE_API_TARGET` | `http://127.0.0.1:3000` | Where the dev server proxies |

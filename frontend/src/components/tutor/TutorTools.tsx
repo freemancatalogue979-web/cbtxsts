@@ -482,9 +482,9 @@ export function QuizView({data, savedId, meta, onBack, onSaved, onRegenerate, re
                 {q.options.map((option, i) => {
                   const done = answers[index];
                   const isRight = norm(option) === norm(q.correct_answer);
-                  const state = !done ? '' : isRight ? 'border-mint-400/70 bg-mint-500/15 text-mint-100' : done.picked === option ? 'border-flare-400/70 bg-flare-500/15 text-flare-100' : 'opacity-60';
+                  const state = !done ? 'border-white/10 bg-white/[0.03] text-mist-100' : isRight ? 'border-mint-400/70 bg-mint-500/15 text-mint-100' : done.picked === option ? 'border-flare-400/70 bg-flare-500/15 text-flare-100' : 'border-white/10 bg-white/[0.03] text-mist-100 opacity-60';
                   return (
-                    <button key={i} disabled={!!done} onClick={() => pick(option)} className={`flex w-full items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-[0.88rem] text-mist-100 transition-colors enabled:hover:bg-white/[0.07] ${state}`}>
+                    <button key={i} disabled={!!done} onClick={() => pick(option)} className={`flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[0.88rem] transition-colors enabled:hover:bg-white/[0.07] ${state}`}>
                       <span className="grid size-6 shrink-0 place-items-center rounded-md bg-white/10 text-[0.72rem] font-extrabold">{'ABCDEF'[i]}</span>
                       <span className="min-w-0 flex-1">{option}</span>
                     </button>

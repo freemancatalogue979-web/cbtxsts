@@ -790,7 +790,7 @@ export function AppShell({
         )}
       </Modal>
 
-      {profile && role === 'student' && (
+      {profile && role === 'student' && tab !== 'tutor' && (
         <div className="print-hide fixed right-4 bottom-24 z-40 hidden items-center gap-1.5 rounded-full border border-mint-500/25 bg-ink-900/85 px-3 py-1.5 text-[0.7rem] font-bold text-mint-300 backdrop-blur lg:flex">
           <Radio className="size-3.5 animate-pulse" />
           Live sync on
