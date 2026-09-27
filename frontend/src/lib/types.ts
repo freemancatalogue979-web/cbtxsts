@@ -1101,6 +1101,36 @@ export interface MaterialHighlight {
   note?: string;
 }
 
+/** Writing help: one spelling / typo fix staff can accept. */
+export interface SpellingChange {
+  id: number;
+  path: string;
+  from: string;
+  to: string;
+  reason: string;
+  confidence: 'sure' | 'maybe';
+  before: string;
+  after: string;
+}
+
+export interface SpellingDoc {
+  title: string;
+  description: string;
+  summary: string[];
+  topic?: string;
+  course_id?: number | null;
+  sections: {title: string; blocks: MaterialBlock[]}[];
+}
+
+/** Writing help: one section rewritten by the AI, for review. */
+export interface RewriteSection {
+  index: number;
+  title: string;
+  blocks: MaterialBlock[];
+  warnings: string[];
+  changed: boolean;
+}
+
 /** A player's own note on a material (the reader's Notes tab). */
 export interface MaterialNote {
   id: number;

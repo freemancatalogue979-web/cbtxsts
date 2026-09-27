@@ -71,6 +71,7 @@ export default function MaterialImport({
   const [topic, setTopic] = useState('');
   const [publish, setPublish] = useState(true);
   const [keepFile, setKeepFile] = useState(true);
+  const [fixSpelling, setFixSpelling] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const noun = kind === 'note' ? 'note' : 'material';
@@ -134,6 +135,7 @@ export default function MaterialImport({
           kind,
           status: publish ? 'published' : 'draft',
           keep_file: keepFile,
+          fix_spelling: fixSpelling,
           ...(parentId ? {parent_id: parentId} : {}),
         });
         patch(row.key, {state: 'done'});
@@ -295,6 +297,10 @@ export default function MaterialImport({
         <label className="flex min-w-0 cursor-pointer items-start gap-2.5 text-[0.8rem] font-semibold text-mist-300">
           <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-nova-500" checked={keepFile} onChange={(event) => setKeepFile(event.target.checked)} />
           <span className="min-w-0">Keep the original file so players can open or download it too</span>
+        </label>
+        <label className="flex min-w-0 cursor-pointer items-start gap-2.5 text-[0.8rem] font-semibold text-mist-300">
+          <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-nova-500" checked={fixSpelling} onChange={(event) => setFixSpelling(event.target.checked)} />
+          <span className="min-w-0">Fix obvious spelling mistakes while importing (names, British spelling and course terms are kept)</span>
         </label>
       </div>
     </Modal>

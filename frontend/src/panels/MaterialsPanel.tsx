@@ -56,6 +56,7 @@ import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
 import {api} from '../lib/api';
 import {OPEN_MATERIAL_EVENT} from '../lib/palette';
 import {formatDate, formatNumber} from '../lib/format';
+import {RichText, TermsContext, materialTerms, stripMarks} from '../lib/richText';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {studyRewards} from '../lib/rewards';
 import {sfx} from '../lib/sfx';
@@ -98,7 +99,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
         onDoubleClick={() => onHighlight?.(text)}
         title="Double-tap or select to highlight"
       >
-        {text}
+        <RichText text={text} />
       </span>
     ) : null;
 
@@ -127,7 +128,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
                 <tr className="bg-white/6">
                   {block.head.map((cell, index) => (
                     <th key={index} className="px-2.5 py-2 font-extrabold text-mist-100">
-                      {cell}
+                      {stripMarks(cell)}
                     </th>
                   ))}
                 </tr>
@@ -138,7 +139,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
                 <tr key={rowIndex} className="border-t border-white/8 odd:bg-white/[0.02]">
                   {row.map((cell, cellIndex) => (
                     <td key={cellIndex} className="break-words px-2.5 py-2 align-top text-mist-300">
-                      {cell}
+                      <RichText text={cell} />
                     </td>
                   ))}
                 </tr>
@@ -151,15 +152,17 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
       return (
         <div className="rounded-xl border border-nova-500/25 bg-nova-500/8 p-3">
  <p className="flex items-center gap-1.5 text-[0.72rem] font-black tracking-wide text-nova-300">
-            <Star className="size-3.5" /> {block.term}
+            <Star className="size-3.5" /> {stripMarks(block.term)}
           </p>
-          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">{block.meaning}</p>
+          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">
+            <RichText text={block.meaning} />
+          </p>
         </div>
       );
     case 'definition':
       return (
         <div className="rounded-xl border-l-2 border-nova-400/60 bg-white/[0.03] p-3">
-          {block.title ? <p className="text-[0.8rem] font-black text-mist-100">{block.title}</p> : null}
+          {block.title ? <p className="text-[0.8rem] font-black text-mist-100">{stripMarks(block.title)}</p> : null}
           <p className="text-[0.9rem] leading-relaxed text-mist-300">{selectable(block.text)}</p>
         </div>
       );
@@ -169,8 +172,8 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
         <div className="flex gap-2.5 rounded-xl border border-mint-500/25 bg-mint-500/8 p-3">
           <Lightbulb className="mt-0.5 size-4 shrink-0 text-mint-300" />
           <p className="min-w-0 text-[0.9rem] leading-relaxed text-mint-100/90">
-            {block.title ? <span className="font-black">{block.title}: </span> : null}
-            {block.text}
+            {block.title ? <span className="font-black">{stripMarks(block.title)}: </span> : null}
+            <RichText text={block.text} />
           </p>
         </div>
       );
@@ -178,28 +181,36 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
       return (
         <div className="rounded-xl border border-gold-500/25 bg-gold-500/8 p-3">
  <p className="text-[0.72rem] font-black tracking-wide text-gold-300">Example</p>
-          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">{block.text}</p>
+          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">
+            <RichText text={block.text} />
+          </p>
         </div>
       );
     case 'summary':
       return (
         <div className="rounded-xl border border-white/12 bg-white/[0.04] p-3">
  <p className="text-[0.72rem] font-black tracking-wide text-mist-400">Summary</p>
-          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">{block.text}</p>
+          <p className="mt-1 text-[0.9rem] leading-relaxed text-mist-200">
+            <RichText text={block.text} />
+          </p>
         </div>
       );
     case 'quote':
       return (
         <blockquote className="flex gap-2.5 border-l-2 border-nova-400/50 pl-3 text-[0.92rem] leading-relaxed text-mist-300 italic">
           <Quote className="mt-0.5 size-4 shrink-0 text-nova-400/70" />
-          <span className="min-w-0 break-words">{block.text}</span>
+          <span className="min-w-0 break-words">
+            <RichText text={block.text} />
+          </span>
         </blockquote>
       );
     case 'reference':
       return (
         <p className="flex items-start gap-2 text-[0.82rem] leading-relaxed text-mist-400">
           <Link2 className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 break-words">{block.text}</span>
+          <span className="min-w-0 break-words">
+            <RichText text={block.text} />
+          </span>
         </p>
       );
     case 'image':
@@ -655,6 +666,7 @@ function Reader({
       live = false;
     };
   }, [material.id]);
+  const terms = useMemo(() => materialTerms(detail.sections), [detail.sections]);
   const activeSection = detail.sections.find((section) => section.id === activeId) ?? detail.sections[0] ?? null;
 
   const visited = useMemo(() => new Set(detail.progress?.visited ?? []), [detail.progress]);
@@ -834,6 +846,7 @@ function Reader({
   };
 
   return (
+    <TermsContext.Provider value={terms}>
     <div className="mx-auto w-full min-w-0 max-w-3xl space-y-3.5">
       <div className="flex min-w-0 items-center gap-2">
         <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={onBack}>
@@ -1017,7 +1030,7 @@ function Reader({
             }`}
           >
             {visited.has(section.id) ? <Star className="size-3 text-mint-300" /> : <span className="tabular">{section.position}</span>}
-            <span className="max-w-[9rem] truncate">{section.title}</span>
+            <span className="max-w-[9rem] truncate">{stripMarks(section.title)}</span>
           </button>
         ))}
       </div>
@@ -1038,7 +1051,7 @@ function Reader({
               <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-white/12 bg-white/6 text-[0.72rem] font-black text-mist-200 tabular">
                 {section.position}
               </span>
-              <h2 className="min-w-0 flex-1 truncate text-[0.98rem] font-black text-mist-50">{section.title}</h2>
+              <h2 className="min-w-0 flex-1 truncate text-[0.98rem] font-black text-mist-50">{stripMarks(section.title)}</h2>
               <span className="shrink-0 text-[0.68rem] font-bold text-mist-500">{section.estimated_minutes ?? 3} min</span>
             </div>
 
@@ -1280,6 +1293,7 @@ function Reader({
         </div>
       </Modal>
     </div>
+    </TermsContext.Provider>
   );
 }
 

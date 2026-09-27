@@ -23,6 +23,7 @@ from ..models import (
     Admin,
     ContentReport,
     Course,
+    CourseTopic,
     Material,
     MaterialBookmark,
     MaterialConfusion,
@@ -54,6 +55,7 @@ from ..schemas import (
     SelfTestAnswerIn,
 )
 from ..serializers import question_public
+from ..services import ai_rewrite, spelling
 from ..services import materials as engine
 
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -1319,6 +1321,62 @@ def _read_upload(filename: str, data: bytes) -> dict:
         raise HTTPException(error.status_code, error.message) from error
 
 
+# --------------------------------------------------------- writing assist
+# Registered before the /{material_id} routes so "assist" is never read as an id.
+def _assist_extra_words(db: Session, course_id: int | None, topic: str) -> list[str]:
+    words = [topic or ""]
+    if course_id:
+        course = db.get(Course, course_id)
+        if course is not None:
+            words += [course.code or "", course.title or ""]
+        words += [row.name for row in db.scalars(select(CourseTopic).where(CourseTopic.course_id == course_id)).all()]
+    return words
+
+
+@admin_router.get("/assist/status")
+def assist_status(_: Any = Depends(require_admin)) -> dict:
+    """Is AI writing help set up? (never reveals the key)."""
+    return {"ai": ai_rewrite.status(), "spelling": {"available": True}}
+
+
+@admin_router.post("/assist/spelling")
+def assist_spelling(payload: dict, db: Session = Depends(get_db), _: Any = Depends(require_admin)) -> dict:
+    """Find spelling / typo fixes in the editor's current (unsaved) content.
+
+    Send ``accept: [ids]`` to get the corrected document back with only those
+    fixes applied. Nothing is saved — the editor applies it (and can undo it).
+    """
+    doc = {
+        "title": str(payload.get("title") or ""),
+        "description": str(payload.get("description") or ""),
+        "summary": [str(line) for line in (payload.get("summary") or []) if isinstance(line, (str, int, float))],
+        "sections": [
+            {"title": str(row.get("title") or ""), "blocks": [dict(block) for block in (row.get("blocks") or []) if isinstance(block, dict)]}
+            for row in (payload.get("sections") or [])[:300]
+            if isinstance(row, dict)
+        ],
+    }
+    course_id = payload.get("course_id") if isinstance(payload.get("course_id"), int) else None
+    extra = _assist_extra_words(db, course_id, str(payload.get("topic") or ""))
+    changes = spelling.find_changes(doc, extra)
+    result: dict[str, Any] = {"changes": spelling.public(changes), "count": len(changes)}
+    accept = payload.get("accept")
+    if isinstance(accept, list):
+        fixed, applied = spelling.apply_changes(doc, [int(value) for value in accept if str(value).isdigit()], extra)
+        result.update({"document": fixed, "applied": applied})
+    return result
+
+
+@admin_router.post("/assist/rewrite")
+def assist_rewrite(payload: dict, _: Any = Depends(require_admin)) -> dict:
+    """Rewrite sections with Gemini for staff to review (nothing is saved)."""
+    sections = [row for row in (payload.get("sections") or []) if isinstance(row, dict)]
+    try:
+        return ai_rewrite.rewrite(str(payload.get("title") or ""), sections, str(payload.get("style") or "easy"))
+    except ai_rewrite.AIError as error:
+        raise HTTPException(error.status, str(error)) from error
+
+
 @admin_router.post("/import/preview")
 async def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
     """Read a document and show what would be created — nothing is saved."""
@@ -1348,6 +1406,7 @@ async def admin_import(
     status_value: str = Form("draft", alias="status"),
     keep_file: bool = Form(True),
     parent_id: int | None = Form(None),
+    fix_spelling: bool = Form(True),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin),
 ) -> dict:
@@ -1364,6 +1423,18 @@ async def admin_import(
     kind = kind if kind in {"material", "note"} else "material"
     publish = status_value if status_value in {"draft", "published", "archived"} else "draft"
     link = _store_original(filename, data) if keep_file else ""
+    spelling_fixed = 0
+    if fix_spelling:
+        # Only "sure" fixes (well-known misspellings, clear one-letter typos);
+        # anything uncertain is left for staff to review with Fix spelling.
+        doc = {"title": "" if title.strip() else draft["title"], "description": "", "summary": [], "sections": draft["sections"]}
+        extra = _assist_extra_words(db, course_id, topic)
+        sure = [row["id"] for row in spelling.find_changes(doc, extra) if row["confidence"] == "sure"]
+        if sure:
+            doc, spelling_fixed = spelling.apply_changes(doc, sure, extra)
+            draft["sections"] = doc["sections"]
+            if doc["title"]:
+                draft["title"] = doc["title"]
     payload = MaterialIn(
         title=(title.strip() or draft["title"])[:200],
         course_id=course_id,
@@ -1389,7 +1460,7 @@ async def admin_import(
         detail={"file": filename[:200], "format": draft["format"], "words": draft["words"], "sections": len(draft["sections"])},
     )
     db.commit()
-    return {**created, "import": {key: draft[key] for key in ("filename", "format", "pages", "words", "notes")}}
+    return {**created, "import": {**{key: draft[key] for key in ("filename", "format", "pages", "words", "notes")}, "spelling_fixed": spelling_fixed}}
 
 
 @files_router.get("/{name}")

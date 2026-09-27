@@ -169,6 +169,24 @@ duration / timed per question / untimed), entry requirement, visibility, the rew
 (XP, coins, diamonds, winner's badge) and the join/leave/leaderboard rules — with edit for
 anything not finished and delete for anything not live.
 
+### Writing help for materials
+
+- **Bold key facts:** the reader automatically bolds numbers (dates, %, ranges, units, ₦ amounts),
+  references (*Section 36(1)*, *Figure 2*), acronyms and the material's own key terms. Staff can
+  bold anything else with `**double stars**`. Nothing is stored; it's done when the page is shown.
+- **Fix spelling:** an offline checker (pyspellchecker plus a common-misspellings list). It keeps
+  names, British spelling, course and topic words, codes and Latin phrases (*audi alteram partem*).
+  "Sure" fixes come pre-ticked and the rest are for staff to check. Imports apply the sure fixes
+  automatically (a checkbox turns this off). Every fix can be undone.
+- **Make it easy to read:** Google Gemini rewrites the chosen sections in one of three styles
+  (*Easy to read*, *Fun to learn*, *Exam-ready*). Staff compare New and Original for each section,
+  see warnings if a number or key term went missing, and pick which sections to use. Nothing
+  reaches players until the material is saved.
+  **Setup:** create a free key at <https://aistudio.google.com> (*Get API key*), put
+  `GEMINI_API_KEY=...` in `backend/.env` and restart the API. Without a key the button explains the
+  setup and everything else keeps working. On the free tier Google may use submitted text to
+  improve its models, so don't send private student data.
+
 ---
 
 ## Architecture
@@ -313,6 +331,12 @@ cd backend && ./.venv/bin/python scripts/verify_material_notes.py
 #          empty notes refused, and notes stay private to the player who wrote them
 cd backend && ./.venv/bin/python scripts/verify_player_notes.py
 
+# Backend: writing help — spelling fixes (names, British spelling, Latin and numbers kept),
+#          sure fixes on import, and the Gemini rewrite against a local mock (batches, kept
+#          images, fact warnings, 429 and size limits). For the rewrite checks, start the API with
+#          GEMINI_API_KEY=test-key GEMINI_API_BASE=http://127.0.0.1:3999/v1beta
+cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
+
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder
 cd frontend && node scripts/render-check.mjs
@@ -401,6 +425,8 @@ cd frontend && npm run typecheck && npm run build
 | `CBT_TOKEN_TTL_HOURS` | `168` | Session lifetime |
 | `CBT_ADMIN_EMAIL` / `CBT_ADMIN_PASSWORD` | `admin@quizarena.ng` / `arena2026` | Bootstrap staff account |
 | `CBT_CORS_ORIGINS` / `CBT_CORS_REGEX` | localhost + `*.e2b.app` | Allowed browser origins |
+| `GEMINI_API_KEY` | unset | Free Google AI Studio key for *Make it easy to read* (optional) |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model to try first (falls back to other Flash models) |
 | `VITE_API_TARGET` | `http://127.0.0.1:3000` | Where the dev server proxies |
 
 See `backend/.env.example`.

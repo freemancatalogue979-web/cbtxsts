@@ -33,6 +33,8 @@ import {
   RotateCcw,
   SlidersHorizontal,
   X,
+  SpellCheck,
+  Wand2,
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
@@ -40,6 +42,8 @@ import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
 import MaterialImport from './MaterialImport';
+import {RewriteReview, SpellingReview} from './WritingAssist';
+import {RichText, materialTerms, stripMarks} from '../lib/richText';
 import type {Course, MaterialAnalytics, MaterialBlock, MaterialCard, MaterialDetail} from '../lib/types';
 
 const BLOCK_TYPES: {value: MaterialBlock['type']; label: string}[] = [
@@ -219,6 +223,8 @@ function MaterialEditor({
   const [linked, setLinked] = useState<number[]>([]);
   const [noteCount, setNoteCount] = useState<number | null>(null);
   const [owner, setOwner] = useState<{id: number | null; title: string}>({id: parentId, title: parentTitle});
+  const [spellOpen, setSpellOpen] = useState(false);
+  const [rewriteOpen, setRewriteOpen] = useState(false);
 
   /* ---- undo / redo for content edits (grouped: one step per pause in typing) */
   const [past, setPast] = useState<SectionDraft[][]>([]);
@@ -413,6 +419,19 @@ function MaterialEditor({
     }
   };
 
+  const readTerms = materialTerms(sections);
+  const writingHelp = (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-1.5">
+      <span className="px-1.5 text-[0.68rem] font-black tracking-[0.12em] text-mist-500 uppercase">Writing help</span>
+      <Button size="sm" variant="ghost" icon={<SpellCheck className="size-4" />} onClick={() => setSpellOpen(true)} disabled={!sections.length && !draft.title}>
+        Fix spelling
+      </Button>
+      <Button size="sm" variant="soft" icon={<Wand2 className="size-4" />} onClick={() => setRewriteOpen(true)} disabled={!sections.length}>
+        Make it easy to read
+      </Button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -483,6 +502,7 @@ function MaterialEditor({
       </div>
 
       {/* ------------------------------------------------------------ read */}
+      {tab === 'read' && writingHelp}
       {tab === 'read' && (
         <Card className="min-w-0 p-4">
           {dirty && (
@@ -514,10 +534,10 @@ function MaterialEditor({
             {sections.map((section, index) => (
               <section key={section.id ?? `s-${index}`} className="min-w-0 space-y-2 border-t border-white/8 pt-3">
                 <h3 className="text-[0.95rem] font-extrabold text-mist-50 [overflow-wrap:anywhere]">
-                  {index + 1}. {section.title || `Section ${index + 1}`}
+                  {index + 1}. {stripMarks(section.title) || `Section ${index + 1}`}
                 </h3>
                 {section.blocks.map((block, blockIndex) => (
-                  <PlainBlock key={blockIndex} block={block} />
+                  <PlainBlock key={blockIndex} block={block} terms={readTerms} />
                 ))}
               </section>
             ))}
@@ -540,6 +560,11 @@ function MaterialEditor({
       {/* --------------------------------------------------------- content */}
       {tab === 'content' && (
         <div className="min-w-0 space-y-3">
+          {writingHelp}
+          <p className="text-[0.72rem] leading-snug text-mist-500">
+            Numbers, law references, acronyms and key terms show in <b className="text-mist-300">bold</b> for readers automatically. To bold anything else, wrap it in
+            **double stars**.
+          </p>
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} disabled={!past.length} onClick={undoEdit}>
               Undo
@@ -866,6 +891,46 @@ function MaterialEditor({
           </Card>
         </div>
       )}
+
+      <SpellingReview
+        open={spellOpen}
+        onClose={() => setSpellOpen(false)}
+        doc={{
+          title: draft.title,
+          description: draft.description,
+          summary: draft.summary.split('\n').filter((line) => line.trim()),
+          topic: draft.topic,
+          course_id: draft.course_id,
+          sections: sections.map((section) => ({title: section.title, blocks: section.blocks})),
+        }}
+        onApply={(fixed, applied) => {
+          setDraft((current) => ({...current, title: fixed.title, description: fixed.description, summary: fixed.summary.join('\n')}));
+          lastEdit.current = 0;
+          updateSections(sections.map((section, index) => (fixed.sections[index] ? {...section, title: fixed.sections[index].title, blocks: fixed.sections[index].blocks} : section)));
+          lastEdit.current = 0;
+          toast('success', `${applied} fix${applied === 1 ? '' : 'es'} applied`, 'Save to keep them — or Undo in Content.');
+        }}
+      />
+      <RewriteReview
+        open={rewriteOpen}
+        onClose={() => setRewriteOpen(false)}
+        title={draft.title}
+        sections={sections.map((section) => ({title: section.title, blocks: section.blocks}))}
+        renderBlock={(block, key) => <PlainBlock key={key} block={block} terms={readTerms} />}
+        onUse={(chosen) => {
+          const byIndex = new Map(chosen.map((row) => [row.index, row]));
+          lastEdit.current = 0;
+          updateSections(
+            sections.map((section, index) => {
+              const row = byIndex.get(index);
+              return row ? {...section, title: stripMarks(row.title) || section.title, blocks: row.blocks} : section;
+            }),
+          );
+          lastEdit.current = 0;
+          setTab('read');
+          toast('success', `${chosen.length} section${chosen.length === 1 ? '' : 's'} rewritten`, 'Check it here, then Save — or Undo in Content.');
+        }}
+      />
 
       <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title="Link questions" subtitle="Paste question IDs from the bank — the self-test draws from these first.">
         <div className="min-w-0 space-y-3">
@@ -1421,16 +1486,17 @@ function NoteEditor({
 }
 
 /** Compact read-only rendering of one block (staff preview of a note). */
-function PlainBlock({block}: {block: MaterialBlock}) {
+function PlainBlock({block, terms = []}: {block: MaterialBlock; terms?: string[]}) {
+  const rich = (value?: string) => <RichText text={value} terms={terms} />;
   const text = 'text-[0.86rem] leading-relaxed text-mist-200 [overflow-wrap:anywhere]';
-  if (block.type === 'heading') return <h4 className="pt-1 text-[0.9rem] font-extrabold text-mist-50">{block.text}</h4>;
-  if (block.type === 'subheading') return <h5 className="text-[0.84rem] font-bold text-mist-100">{block.text}</h5>;
+  if (block.type === 'heading') return <h4 className="pt-1 text-[0.9rem] font-extrabold text-mist-50">{stripMarks(block.text)}</h4>;
+  if (block.type === 'subheading') return <h5 className="text-[0.84rem] font-bold text-mist-100">{stripMarks(block.text)}</h5>;
   if (block.type === 'list' || block.type === 'numbers') {
     const List = block.type === 'numbers' ? 'ol' : 'ul';
     return (
       <List className={`${text} space-y-0.5 pl-5 ${block.type === 'numbers' ? 'list-decimal' : 'list-disc'}`}>
         {(block.items ?? []).map((item, index) => (
-          <li key={index}>{item}</li>
+          <li key={index}>{rich(item)}</li>
         ))}
       </List>
     );
@@ -1444,7 +1510,7 @@ function PlainBlock({block}: {block: MaterialBlock}) {
               <tr>
                 {block.head.map((cell, index) => (
                   <th key={index} className="px-2.5 py-1.5">
-                    {cell}
+                    {stripMarks(cell)}
                   </th>
                 ))}
               </tr>
@@ -1455,7 +1521,7 @@ function PlainBlock({block}: {block: MaterialBlock}) {
               <tr key={index} className="border-t border-white/6">
                 {row.map((cell, cellIndex) => (
                   <td key={cellIndex} className="px-2.5 py-1.5 align-top">
-                    {cell}
+                    {rich(cell)}
                   </td>
                 ))}
               </tr>
@@ -1472,9 +1538,9 @@ function PlainBlock({block}: {block: MaterialBlock}) {
     if (!term && !meaning) return null;
     return (
       <p className={`${text} rounded-xl border border-nova-500/20 bg-nova-500/8 px-3 py-2`}>
-        {term && <b className="text-mist-50">{term}</b>}
+        {term && <b className="text-mist-50">{stripMarks(term)}</b>}
         {term && meaning ? ' — ' : ''}
-        {meaning}
+        {rich(meaning)}
       </p>
     );
   }
@@ -1496,12 +1562,12 @@ function PlainBlock({block}: {block: MaterialBlock}) {
   if (['note', 'tip', 'example', 'summary', 'quote'].includes(block.type) && block.text) {
     return (
       <div className={`${text} rounded-xl border-l-4 border-white/20 bg-white/[0.04] px-3 py-2 whitespace-pre-line`}>
-        <span className="mr-1 text-[0.66rem] font-black tracking-[0.12em] text-mist-400 uppercase">{block.title || block.type}</span> {block.text}
+        <span className="mr-1 text-[0.66rem] font-black tracking-[0.12em] text-mist-400 uppercase">{stripMarks(block.title) || block.type}</span> {rich(block.text)}
       </div>
     );
   }
   return block.text
- ? <p className={`${text} whitespace-pre-line`}>{block.text}</p> : null;
+ ? <p className={`${text} whitespace-pre-line`}>{rich(block.text)}</p> : null;
 }
 
 function statusTone(status: string): string {

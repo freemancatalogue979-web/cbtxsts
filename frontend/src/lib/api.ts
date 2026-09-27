@@ -56,7 +56,11 @@ import type {
   MaterialLibrary,
   MyLearning,
   MaterialCard,
+  MaterialBlock,
   MaterialNote,
+  RewriteSection,
+  SpellingChange,
+  SpellingDoc,
   MaterialDetail,
   MaterialImportPreview,
   MaterialProgressResult,
@@ -701,7 +705,7 @@ export const api = {
     },
     importFile: (
       file: File,
-      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean; parent_id?: number},
+      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean; parent_id?: number; fix_spelling?: boolean},
     ) => {
       const form = new FormData();
       form.append('file', file, file.name);
@@ -712,6 +716,7 @@ export const api = {
       form.append('kind', params.kind ?? 'material');
       form.append('status', params.status ?? 'draft');
       form.append('keep_file', String(params.keep_file ?? true));
+      form.append('fix_spelling', String(params.fix_spelling ?? true));
       if (params.parent_id) form.append('parent_id', String(params.parent_id));
       return request<MaterialDetail>('/api/admin/materials/import', {method: 'POST', body: form});
     },
@@ -722,6 +727,17 @@ export const api = {
       request<{material_id: number; current_version: number; versions: {id: number; version: number; note: string; author: string; created_at: string}[]}>(
         `/api/admin/materials/${id}/versions`,
       ),
+    /** Writing help: is Gemini set up? (never returns the key) */
+    assistStatus: () =>
+      request<{ai: {configured: boolean; provider: string; model: string; setup: string | null; styles: {id: string; label: string}[]}; spelling: {available: boolean}}>(
+        '/api/admin/materials/assist/status',
+      ),
+    /** Spelling + typo fixes for the editor's current content. Send `accept` to get the fixed document back. */
+    assistSpelling: (body: SpellingDoc & {accept?: number[]}) =>
+      request<{changes: SpellingChange[]; count: number; document?: SpellingDoc; applied?: number}>('/api/admin/materials/assist/spelling', {method: 'POST', body}),
+    /** Rewrite sections with Gemini for staff review (nothing is saved). */
+    assistRewrite: (body: {title: string; style: string; sections: {index: number; title: string; blocks: MaterialBlock[]}[]}) =>
+      request<{style: string; model: string; sections: RewriteSection[]}>('/api/admin/materials/assist/rewrite', {method: 'POST', body}),
     /** Undo: restore an earlier snapshot (the restore is saved as a new version). */
     restoreVersion: (id: number, versionId: number) =>
       request<MaterialDetail>(`/api/admin/materials/${id}/versions/${versionId}/restore`, {method: 'POST'}),

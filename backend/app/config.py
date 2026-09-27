@@ -9,6 +9,24 @@ REPO_ROOT = BACKEND_ROOT.parent
 DATA_DIR = BACKEND_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _load_dotenv(path: Path) -> None:
+    """Read ``backend/.env`` (KEY=value lines) without overriding real env vars."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv(BACKEND_ROOT / ".env")
+
 # ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
@@ -53,3 +71,22 @@ MIN_MATCHMAKING_POOL = 2         # online players needed before quick-duel match
 
 APP_NAME = "Quiz Arena"
 APP_TAGLINE = "Compete. Conquer. Climb."
+
+
+# ---------------------------------------------------------------------------
+# AI writing help (Google Gemini, free tier) — "Make it easy to read"
+# ---------------------------------------------------------------------------
+# Create a free key at https://aistudio.google.com (Get API key) and put
+# GEMINI_API_KEY=... in backend/.env (or the process environment), then
+# restart the API. Without a key everything else works; the editor explains
+# how to set it up.
+def gemini_settings() -> dict:
+    return {
+        "key": os.getenv("GEMINI_API_KEY", "").strip(),
+        # Model names change often; "gemini-flash-latest" follows Google's current
+        # free Flash model. Fallbacks are tried if the chosen one is unavailable.
+        "model": os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip(),
+        "fallbacks": [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-flash-lite-latest").split(",") if m.strip()],
+        "base": os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta").rstrip("/"),
+        "timeout": float(os.getenv("GEMINI_TIMEOUT", "90")),
+    }
