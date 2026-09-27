@@ -17,6 +17,8 @@ Guard rails:
 from __future__ import annotations
 
 import json
+import time
+import socket
 import re
 import urllib.error
 import urllib.request
@@ -92,11 +94,19 @@ def status() -> dict:
 
 
 # ------------------------------------------------------------------- gemini
-def _call(model: str, prompt: str, settings: dict) -> str:
+class _ThinkingUnsupported(Exception):
+    """The model rejected thinkingConfig; retry once without it."""
+
+
+def _call(model: str, prompt: str, settings: dict, timeout: float | None = None, think: bool = False) -> str:
+    config: dict = {"temperature": 0.4, "responseMimeType": "application/json"}
+    if not think:
+        # Rewriting needs no "thinking" pass; skipping it makes answers several times faster.
+        config["thinkingConfig"] = {"thinkingBudget": 0}
     body = {
         "systemInstruction": {"parts": [{"text": SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"},
+        "generationConfig": config,
     }
     request = urllib.request.Request(
         f"{settings['base']}/models/{model}:generateContent",
@@ -105,7 +115,7 @@ def _call(model: str, prompt: str, settings: dict) -> str:
         headers={"Content-Type": "application/json", "x-goog-api-key": settings["key"]},
     )
     try:
-        with urllib.request.urlopen(request, timeout=settings["timeout"]) as response:
+        with urllib.request.urlopen(request, timeout=timeout or settings["timeout"]) as response:
             payload = json.loads(response.read() or b"{}")
     except urllib.error.HTTPError as error:
         detail = ""
@@ -115,12 +125,18 @@ def _call(model: str, prompt: str, settings: dict) -> str:
             pass
         if error.code == 404:
             raise LookupError(detail or f"model {model} not found") from error
+        if error.code == 400 and not think and "think" in detail.lower():
+            raise _ThinkingUnsupported(detail) from error
         if error.code == 429:
             raise AIError("Gemini's free limit was reached. Wait a minute and try again (fewer sections at a time helps).", 429) from error
         if error.code in (400, 401, 403) and ("key" in detail.lower() or error.code in (401, 403)):
             raise AIError("Gemini refused the API key. Check GEMINI_API_KEY in backend/.env.", 502) from error
         raise AIError(f"Gemini returned an error ({error.code}). {detail[:200]}", 502) from error
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
+    except (TimeoutError, socket.timeout) as error:
+        raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504) from error
+    except (urllib.error.URLError, OSError) as error:
+        if isinstance(getattr(error, "reason", None), (TimeoutError, socket.timeout)):
+            raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504) from error
         raise AIError("Could not reach Gemini. Check the server's internet connection and try again.", 504) from error
 
     candidates = payload.get("candidates") or []
@@ -139,9 +155,21 @@ def _generate(prompt: str) -> tuple[str, str]:
     if not settings["key"]:
         raise AIError(status()["setup"] or "AI is not set up.", 503)
     tried: list[str] = []
+    # One overall budget for the whole request (fallbacks included), so the API
+    # always answers before a proxy's 100-120 s read timeout cuts it off.
+    deadline = time.monotonic() + settings["budget"]
     for model in [settings["model"], *[m for m in settings["fallbacks"] if m != settings["model"]]]:
+        left = deadline - time.monotonic()
+        if tried and left < 5:  # not worth starting another model this late
+            raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504)
         try:
-            return _call(model, prompt, settings), model
+            try:
+                return _call(model, prompt, settings, timeout=min(settings["timeout"], left)), model
+            except _ThinkingUnsupported:
+                left = deadline - time.monotonic()
+                if left < 2:
+                    raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504) from None
+                return _call(model, prompt, settings, timeout=min(settings["timeout"], left), think=True), model
         except LookupError:
             tried.append(model)
             continue

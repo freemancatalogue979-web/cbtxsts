@@ -437,6 +437,7 @@ cd frontend && npm run typecheck && npm run build
 | `CBT_ADMIN_EMAIL` / `CBT_ADMIN_PASSWORD` | `admin@quizarena.ng` / `arena2026` | Bootstrap staff account |
 | `CBT_CORS_ORIGINS` / `CBT_CORS_REGEX` | localhost + `*.e2b.app` | Allowed browser origins |
 | `GEMINI_API_KEY` | unset | Free Google AI Studio key for *Make it easy to read* (optional) |
+| `GEMINI_BUDGET` / `GEMINI_TIMEOUT` | `75` / `60` s | Most time one rewrite request may take in total / per Gemini call (keeps under proxy limits) |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model to try first (falls back to other Flash models) |
 | `VITE_API_TARGET` | `http://127.0.0.1:3000` | Where the dev server proxies |
 

@@ -208,14 +208,15 @@ export function RewriteReview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /** Small batches: progress for staff and friendlier to the free rate limit. */
+  /** Small batches: progress for staff, friendlier to the free rate limit, and
+   * each request answers well inside proxy time limits (~100-120 s). */
   const batches = (indexes: number[]) => {
     const out: number[][] = [];
     let current: number[] = [];
     let size = 0;
     for (const index of indexes) {
       const weight = JSON.stringify(sections[index]).length;
-      if (current.length && (current.length >= 3 || size + weight > 9000)) {
+      if (current.length && (current.length >= 2 || size + weight > 5000)) {
         out.push(current);
         current = [];
         size = 0;

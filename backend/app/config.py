@@ -88,5 +88,8 @@ def gemini_settings() -> dict:
         "model": os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip(),
         "fallbacks": [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash,gemini-flash-lite-latest").split(",") if m.strip()],
         "base": os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta").rstrip("/"),
-        "timeout": float(os.getenv("GEMINI_TIMEOUT", "90")),
+        # Per call, and a total budget per request (fallbacks included) that stays
+        # under typical proxy limits (Cloudflare 100 s, preview proxies 120 s).
+        "timeout": float(os.getenv("GEMINI_TIMEOUT", "60")),
+        "budget": float(os.getenv("GEMINI_BUDGET", "75")),
     }
