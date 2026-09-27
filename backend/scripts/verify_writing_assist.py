@@ -222,6 +222,12 @@ def main() -> int:
         server = start_mock()
         try:
             status, answer = call("POST", "/admin/materials/assist/rewrite", {"title": "Cells", "style": "fun", "sections": sections}, admin)
+            if not SEEN:
+                # The API has a real key (backend/.env) rather than the mock settings.
+                check("a real key that can't be reached gives a clear message", status in (502, 503, 504) and "detail" in answer, answer)
+                print("\n(the API uses a real Gemini key, so the mock rewrite checks were skipped: start it with GEMINI_API_KEY=test-key GEMINI_API_BASE=http://127.0.0.1:3999/v1beta to run them)")
+                print(f"\nverify_writing_assist: {PASSED} passed, {FAILED} failed")
+                return 1 if FAILED else 0
             check("rewrite answers", status == 200 and len(answer.get("sections", [])) == 3, answer)
             check("falls back when the default model is unavailable", answer.get("model") == "gemini-2.5-flash" and SEEN[0]["model"] == "gemini-flash-latest", [row["model"] for row in SEEN])
             check("the key is sent in the header, not the URL", SEEN[-1]["key"] == "test-key")

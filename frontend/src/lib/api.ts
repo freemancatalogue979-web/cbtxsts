@@ -196,15 +196,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const text = await response.text();
-  const payload = raw ? text : text ? (JSON.parse(text) as unknown) : null;
+  let payload: unknown = null;
+  let readable = true;
+  if (raw) payload = text;
+  else if (text) {
+    try {
+      payload = JSON.parse(text) as unknown;
+    } catch {
+      // A proxy / crash page ("Internal Server Error", an HTML gateway page…), not our API's JSON.
+      readable = false;
+    }
+  }
 
   if (!response.ok) {
     const detail =
       payload && typeof payload === 'object' && 'detail' in payload
         ? String((payload as {detail: unknown}).detail)
-        : `Request failed (${response.status})`;
+        : response.status >= 500
+          ? `The server had a problem (${response.status}). It may be restarting — wait a moment and try again.`
+          : `Request failed (${response.status})`;
     throw new ApiError(detail, response.status);
   }
+  if (!readable) throw new ApiError('The server sent an unexpected reply. Refresh the page and try again.', response.status);
   return payload as T;
 }
 

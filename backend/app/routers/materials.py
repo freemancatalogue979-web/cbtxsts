@@ -1375,6 +1375,13 @@ def assist_rewrite(payload: dict, _: Any = Depends(require_admin)) -> dict:
         return ai_rewrite.rewrite(str(payload.get("title") or ""), sections, str(payload.get("style") or "easy"))
     except ai_rewrite.AIError as error:
         raise HTTPException(error.status, str(error)) from error
+    except Exception as error:  # noqa: BLE001 - never leak a bare 500 to the editor
+        import logging
+
+        logging.getLogger("arena").exception("gemini rewrite failed")
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Gemini rewrite failed ({type(error).__name__}). Please try again in a minute."
+        ) from error
 
 
 @admin_router.post("/import/preview")

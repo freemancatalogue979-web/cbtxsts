@@ -181,6 +181,14 @@ async def group_exception_handler(request: Request, exc: GroupError) -> JSONResp
     return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
 
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Any crash still answers in JSON, so the app shows a readable message
+    instead of choking on a plain-text "Internal Server Error" page."""
+    logging.getLogger("arena").exception("unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Something went wrong on the server. Please try again; if it keeps happening, restart the API and check its log."})
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     first = exc.errors()[0] if exc.errors() else {}
