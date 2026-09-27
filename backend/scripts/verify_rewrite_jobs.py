@@ -184,6 +184,21 @@ def main() -> int:
     check("bare page numbers removed", not any(page.rstrip().endswith("\n5") for page in cleaned))
     check("real headings kept (Rule 3 … Rule 24)", all(f"Rule {n * 3}: Duty" in joined for n in range(1, 9)))
     check("body text kept", joined.count("a legal practitioner shall not mislead") == 8 * 14, joined.count("a legal practitioner shall not mislead"))
+    aligned = []
+    for n in range(1, 9):  # one rule per page: "Rule n" tracks the page number but is a heading
+        body = "\n".join(f"Text {k} about rule {n} and the court's duty in detail." for k in range(10))
+        aligned.append(f"Companion header\nRULE {n}: DUTY OF COUNSEL\n{body}\n{n}")
+    kept = "\n".join(_strip_page_furniture(aligned))
+    check("rule headings that line up with page numbers are kept", all(f"RULE {n}: DUTY" in kept for n in range(1, 9)), kept[:200])
+    from app.services.material_import import build_sections
+    outline = []
+    for n in range(1, 151):
+        outline += [("heading", 1, f"Rule {n}: Duty {n}"), ("para", "A practitioner shall not mislead the court. " * 30)]
+    _, merged = build_sections(outline, fallback_title="RPC")
+    check("150 rules are merged, not refused", 1 < len(merged) <= 80, len(merged))
+    check("merged titles read 'Rules 1–2'", merged[0]["title"] == "Rules 1–2", merged[0]["title"])
+    subs = [b["text"] for s in merged for b in s["blocks"] if b["type"] == "subheading"]
+    check("every rule keeps its own subheading", len(subs) == 150 and subs[0] == "Rule 1: Duty 1", (len(subs), subs[:2]))
     short = _strip_page_furniture(["Title\nOne line", "Title\nTwo"])
     check("short documents untouched", short == ["Title\nOne line", "Title\nTwo"], short)
 

@@ -562,8 +562,17 @@ def _furniture_key(line: str) -> str:
     return re.sub(r"\d+", "#", _exact_key(line))
 
 
+_PROTECTED = re.compile(r"^\W*(?:rule|section|article|chapter|part|order|regulation|schedule|clause|unit|lecture|topic|week|module)\s*\d", re.I)
+
+
 def _has_page_number(line: str, page_no: int) -> bool:
-    return any(abs(int(value) - page_no) <= 3 for value in re.findall(r"\d{1,4}", line))
+    """A number that tracks the page, at the very start or end of the line
+    ("12 | RPC Companion", "RPC Companion · 12", "Page 12 of 40")."""
+    stripped = line.strip()
+    if _PROTECTED.match(stripped):
+        return False  # "Rule 2: Duty to the court" is a heading, never furniture
+    edges = re.findall(r"^\W*(?:page\s*)?(\d{1,4})\b|\b(\d{1,4})(?:\s*(?:of|/)\s*\d{1,4})?\W*$", stripped, re.I)
+    return any(abs(int(value) - page_no) <= 3 for pair in edges for value in pair if value)
 
 
 def _strip_page_furniture(pages: list[str]) -> list[str]:
@@ -597,7 +606,7 @@ def _strip_page_furniture(pages: list[str]) -> list[str]:
         kept = []
         for i, line in enumerate(lines):
             stripped = line.strip()
-            if i in near and stripped and (
+            if i in near and stripped and not _PROTECTED.match(stripped) and (
                 _exact_key(stripped) in rep_exact
                 or (len(stripped) <= 60 and _furniture_key(stripped) in rep_numbered and _has_page_number(stripped, page_no))
                 or _PAGE_NUMBER.match(stripped)
@@ -659,6 +668,46 @@ def _block_words(block: dict[str, Any]) -> int:
     return len(str(text).split())
 
 
+def _range_title(first: str, last: str) -> str:
+    """"Rule 1: Duty…" + "Rule 2: Fees…" → "Rules 1–2"; otherwise "First – Last"."""
+    base = lambda text: re.sub(r" \(cont\. ?\d*\)$", "", text).strip()
+    if base(first) == base(last):
+        return base(first)[:200]
+    label = lambda text: text.split(":", 1)[0].strip() if ":" in text and len(text.split(":", 1)[0]) <= 30 else text.strip()
+    a, b = label(base(first)), label(base(last))
+    ma, mb = re.fullmatch(r"(\w+)\s+(\d+\w*)", a), re.fullmatch(r"(\w+)\s+(\d+\w*)", b)
+    if ma and mb and ma.group(1).lower() == mb.group(1).lower():
+        word = ma.group(1)
+        return f"{word}{'' if word.endswith('s') else 's'} {ma.group(2)}–{mb.group(2)}"
+    return f"{a} – {b}"[:200]
+
+
+def _merge_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Too many sections (e.g. a rule-by-rule companion with 150 rules): merge
+    neighbours into bigger sections instead of refusing the file. Each merged
+    part keeps its own title as a subheading, so nothing is lost."""
+    total = sum(section["words"] for section in sections)
+    target = max(1, -(-total // (MAX_SECTIONS - 4)))  # words per merged section
+    merged: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for section in sections:
+        blocks = [{"type": "subheading", "text": section["title"][:300]}, *section["blocks"]]
+        fits = current is not None and current["words"] < target and len(current["blocks"]) + len(blocks) <= SECTION_BLOCKS
+        if not fits:
+            current = {"title": section["title"], "first": section["title"], "last": section["title"], "blocks": [], "words": 0}
+            merged.append(current)
+        current["blocks"].extend(blocks)
+        current["words"] += section["words"]
+        current["last"] = section["title"]
+    for part in merged:
+        first, last = part.pop("first"), part.pop("last")
+        if first != last:
+            part["title"] = _range_title(first, last)
+        if part["blocks"] and part["blocks"][0].get("text") == part["title"]:
+            part["blocks"] = part["blocks"][1:]  # the section title already says it
+    return merged
+
+
 def build_sections(outline: list[Element], *, fallback_title: str) -> tuple[str | None, list[dict[str, Any]]]:
     """Pack an outline into sections. Returns (title found in the document, sections)."""
     outline = [el for el in outline if not (el[0] in {"para", "heading"} and not el[-1])]
@@ -701,6 +750,8 @@ def build_sections(outline: list[Element], *, fallback_title: str) -> tuple[str 
     untitled = [section for section in sections if not section["title"]]
     for index, section in enumerate(untitled, start=1):
         section["title"] = f"Part {index}" if len(untitled) > 1 else (doc_title or fallback_title)
+    if len(sections) > MAX_SECTIONS:
+        sections = _merge_sections(sections)
     if len(sections) > MAX_SECTIONS:
         raise DocumentError(
             f"That document is very long ({len(sections)} sections). Split it into smaller files of under {MAX_SECTIONS} sections.",
