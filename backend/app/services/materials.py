@@ -257,6 +257,62 @@ def _roman(token: str) -> int:
 
 def parse_point(text: str, prev: dict | None = None) -> dict | None:
     """The numbering at the start of a paragraph, or None if it is ordinary prose."""
+    point = _parse_point(text, prev)
+    if point and "bare" not in point:
+        match = _POINT.match(text or "")
+        point["bare"] = bool(match and not match.group(1) and not match.group(3))
+    return point
+
+
+def _bare_letter(point: dict | None) -> bool:
+    return bool(point and point.get("bare") and point["style"] != "decimal")
+
+
+def _token(style: str, value: int) -> str:
+    """How point ``value`` is written in ``style``: 3 → "3" / "c" / "iii" / "C" / "III"."""
+    if style.endswith("alpha"):
+        out, rest = "", value
+        while rest > 0:
+            rest -= 1
+            out = chr(97 + rest % 26) + out
+            rest //= 26
+    elif style.endswith("roman"):
+        out, rest = "", value
+        for amount, letters in ((100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+            while rest >= amount:
+                out, rest = out + letters, rest - amount
+    else:
+        return str(value)
+    return out.upper() if style.startswith("upper") else out
+
+
+def _split_inline(text: str) -> list[str]:
+    """
+    "a When it is obiter (see Udoete v. Heil). b Vagueness: …" — the next point written
+    straight after a finished sentence starts its own piece. Only the exact next marker
+    in the same format counts, so ordinary prose is never cut.
+    """
+    point = parse_point(text)
+    if not point:
+        return [text]
+    pieces: list[str] = []
+    rest, value = text, point["value"]
+    opened = bool(re.match(r"^\s*\(", text))
+    closer = re.match(r"^\s*\(?\w+([.)])?", text).group(1) or ""
+    while True:
+        token = re.escape(_token(point["style"], value + 1))
+        marker = rf"\({token}\)" if opened else token + re.escape(closer)
+        found = re.search(rf"(?<=[.;:!?)\]])\s+(?={marker}\s+[A-Z(\"“‘'])", rest)
+        if not found:
+            break
+        pieces.append(rest[: found.start()].strip())
+        rest = rest[found.end():]
+        value += 1
+    pieces.append(rest.strip())
+    return [piece for piece in pieces if piece]
+
+
+def _parse_point(text: str, prev: dict | None = None) -> dict | None:
     match = _POINT.match(text or "")
     if not match:
         return None
@@ -264,13 +320,20 @@ def parse_point(text: str, prev: dict | None = None) -> dict | None:
     rest = rest.strip()
     if opened and close != ")":
         return None
-    if not close and not opened:
-        # bare number: "5 A boy" is a point; "2011 Evidence Act" / "5 boys came" are not
-        if not (token.isdigit() and 1 <= int(token) <= 99 and re.match(r"[A-Z(\"“‘']", rest)):
+    bare = not close and not opened
+    if bare:
+        # bare number: "5 A boy" is a point; "2011 Evidence Act" / "5 boys came" are not.
+        # bare letter: "b Vagueness: …" / "iv The …" — lowercase only (never the word "A"),
+        # and ``regroup_points`` still insists it sits in a real a, b, c run.
+        capital = re.match(r"[A-Z(\"“‘']", rest)
+        if token.isdigit():
+            if not (1 <= int(token) <= 99 and capital):
+                return None
+        elif not (capital and token.islower() and (len(token) == 1 or re.fullmatch(r"[ivx]{2,5}", token))):
             return None
     wrap = "paren" if opened else ("rparen" if close == ")" else "dot")
     if token.isdigit():
-        return {"style": "decimal", "wrap": wrap, "value": int(token), "text": rest}
+        return {"style": "decimal", "wrap": wrap, "value": int(token), "text": rest, "bare": bare}
     if re.match(r"^[A-Z]\.\s", rest) or not (token.islower() or token.isupper()):
         return None  # initials "A. B. Okafor", or a word
     if wrap == "dot" and len(token) == 1 and token.isupper() and not re.search(r"[.:;?!]", rest):
@@ -304,6 +367,8 @@ def _split_point_lines(text: str) -> list[str]:
         # ("…swear within / 14 Days of the order").
         follows = bool(last and point and point["style"] == last["style"] and point["wrap"] == last["wrap"] and point["value"] == last["value"] + 1)
         opens = bool(point) and bool(pieces) and (follows or re.search(r"[.:;?!)]$", pieces[-1]) or _short_title(pieces[-1]))
+        if opens and _bare_letter(point) and not follows and point["value"] != 1:
+            opens = False  # a stray "a"/"b" at a line start is a word, not a point
         if opens or not pieces:
             pieces.append(line)
             last = point if opens or (not pieces[:-1] and point) else last
@@ -336,13 +401,32 @@ def regroup_points(blocks: list[dict]) -> list[dict]:
                 expanded.append({"type": "subheading", "text": piece} if title else {**block, "text": piece})
         else:
             expanded.append(block)
+    # "…(see Udoete v. Heil). b Vagueness: …" — points run together in one paragraph
+    split: list[dict] = []
+    for block in expanded:
+        if block["type"] in _POINT_TEXT_TYPES:
+            split.extend({**block, "text": piece} for piece in _split_inline(block.get("text", "")))
+        else:
+            split.append(block)
+    expanded = split
 
     out: list[dict] = []
     stack: list[tuple] = []  # nesting of point styles in the current run
     last: dict | None = None  # the last point seen in this run
     by_family: dict[tuple, dict] = {}
-    for block in expanded:
+    for index, block in enumerate(expanded):
         point = parse_point(block.get("text", ""), last) if block["type"] in _POINT_TEXT_TYPES else None
+        if _bare_letter(point):
+            # "a"/"b" without brackets or a dot is only a point inside a real run:
+            # it follows the previous letter, or it is "a" and "b" comes next.
+            before = by_family.get((point["style"], point["wrap"]))
+            nxt = expanded[index + 1] if index + 1 < len(expanded) else None
+            after = parse_point(nxt.get("text", ""), point) if nxt and nxt["type"] in _POINT_TEXT_TYPES else None
+            in_run = bool(before and point["value"] == before["value"] + 1) or bool(
+                point["value"] == 1 and after and after["style"] == point["style"] and after["value"] == 2
+            )
+            if not in_run:
+                point = None
         if not point:
             out.append(block)
             if block["type"] == "numbers" and block.get("items"):
@@ -377,6 +461,10 @@ def regroup_points(blocks: list[dict]) -> list[dict]:
             out.append(fresh)
         last = point
         by_family[key] = point
+    # A short title line right above a list heads it: "Grounds of Appeal That Are Incompetent"
+    for index, block in enumerate(out[:-1]):
+        if block["type"] == "paragraph" and out[index + 1]["type"] == "numbers" and _short_title(block.get("text", "")) and not re.search(r"\*\*", block.get("text", "")):
+            out[index] = {"type": "subheading", "text": block["text"]}
     return out
 
 

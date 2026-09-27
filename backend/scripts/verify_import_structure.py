@@ -219,6 +219,27 @@ def main() -> int:
     _, secs = build_sections(_text_outline(open_brief()), fallback_title="x")
     kinds = [b["type"] for b in blocks_of(secs)]
     check("imported brief: 'Contents of a Brief' heads the list of 5", len(secs) == 1 and secs[0]["title"] == "Contents of a Brief" and kinds == ["numbers"] and len(blocks_of(secs)[0]["items"]) == 5, (secs[0]["title"], kinds))
+    # Bare letters "a When…", "b Vagueness…" are numbering too — inside a real run only.
+    grounds = [
+        "a When it is an obiter dictum, or does not disclose a reasonable ground (see Udoete v. Heil). b Vagueness: once a ground of appeal is vague or general in terms, it will not be permitted (Order 8 Rule 2(4), Supreme Court Rules).",
+        "c It is argumentative and narrative.",
+        "d The ground is not one mentioned in the notice of appeal.",
+    ]
+    lettered = sanitise_blocks([{"type": "paragraph", "text": t} for t in grounds])
+    check("bare a/b/c/d become an a. b. c. d. list, splitting 'b' out of paragraph a",
+          len(lettered) == 1 and lettered[0].get("style") == "lower-alpha" and len(lettered[0]["items"]) == 4
+          and lettered[0]["items"][0].endswith("(see Udoete v. Heil).") and lettered[0]["items"][1].startswith("Vagueness:"), lettered)
+    pasted = sanitise_blocks([{"type": "paragraph", "text": "\n".join(grounds)}])
+    check("the same grounds pasted as one block give the same list", pasted == lettered, pasted)
+    headed = sanitise_blocks([{"type": "paragraph", "text": "Grounds of Appeal That Are Incompetent"}] + [{"type": "paragraph", "text": t} for t in grounds])
+    check("a short title line above the list becomes its subheading", [b["type"] for b in headed] == ["subheading", "numbers"], headed)
+    words = sanitise_blocks([{"type": "paragraph", "text": t} for t in ["a Commissioner for Oaths must sign it.", "It must be sworn before\na Commissioner for Oaths.", "i Think so.", "b Vagueness alone."]])
+    check("the word 'a', a lone 'b' and 'i Think' stay prose", all(b["type"] == "paragraph" for b in words) and len(words) == 4, words)
+    romans = sanitise_blocks([{"type": "paragraph", "text": t} for t in ["The facts may be:", "i Facts within knowledge;", "ii Facts from belief;", "iii Facts from documents."]])
+    check("bare i/ii/iii become a roman list", [b["type"] for b in romans] == ["paragraph", "numbers"] and romans[1].get("style") == "lower-roman" and len(romans[1]["items"]) == 3, romans)
+    numbered_inline = sanitise_blocks([{"type": "paragraph", "text": "1 The notice must be filed. 2 It must be served. The rest is prose with 3 parts."}])
+    check("inline '. 2 It…' splits; '3 parts' mid-sentence does not",
+          len(numbered_inline) == 1 and numbered_inline[0]["items"] == ["The notice must be filed.", "It must be served. The rest is prose with 3 parts."], numbered_inline)
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 
