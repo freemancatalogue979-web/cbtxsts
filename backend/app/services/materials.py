@@ -233,7 +233,151 @@ def sanitise_blocks(raw: Any) -> list[dict]:
             if entry.get("title") and kind in {"note", "example", "tip", "summary", "definition", "reference", "quote"}:
                 block["title"] = clean_text(entry.get("title"), 160)
         blocks.append(block)
-    return blocks
+    return regroup_points(blocks)
+
+
+# ------------------------------------------------------------------ points
+# Notes pasted or saved as plain paragraphs often carry their own numbering:
+#   "1 Name of the court: …" / "2 The appeal number." / "(a) it must be …" / "(iv) …"
+# ``regroup_points`` turns runs of such paragraphs into real numbered lists (keeping
+# the style, brackets and start number), so the reader shows points, not prose.
+_POINT = re.compile(r"^\s*(\()?(\d{1,3}|[A-Za-z]|[ivxlcIVXLC]{2,6})([.)])?\s+(\S[\s\S]*)$")
+_ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100}
+_POINT_TEXT_TYPES = {"paragraph"}
+
+
+def _roman(token: str) -> int:
+    total, prev = 0, 0
+    for ch in reversed(token.lower()):
+        value = _ROMAN_VALUES.get(ch, 0)
+        total = total - value if value < prev else total + value
+        prev = max(prev, value)
+    return total
+
+
+def parse_point(text: str, prev: dict | None = None) -> dict | None:
+    """The numbering at the start of a paragraph, or None if it is ordinary prose."""
+    match = _POINT.match(text or "")
+    if not match:
+        return None
+    opened, token, close, rest = match.groups()
+    rest = rest.strip()
+    if opened and close != ")":
+        return None
+    if not close and not opened:
+        # bare number: "5 A boy" is a point; "2011 Evidence Act" / "5 boys came" are not
+        if not (token.isdigit() and 1 <= int(token) <= 99 and re.match(r"[A-Z(\"“‘']", rest)):
+            return None
+    wrap = "paren" if opened else ("rparen" if close == ")" else "dot")
+    if token.isdigit():
+        return {"style": "decimal", "wrap": wrap, "value": int(token), "text": rest}
+    if re.match(r"^[A-Z]\.\s", rest) or not (token.islower() or token.isupper()):
+        return None  # initials "A. B. Okafor", or a word
+    if wrap == "dot" and len(token) == 1 and token.isupper() and not re.search(r"[.:;?!]", rest):
+        return None  # "A. Meaning of a Brief" — a lettered heading, left alone
+    lower = token.islower()
+    alpha, roman = f"{'lower' if lower else 'upper'}-alpha", f"{'lower' if lower else 'upper'}-roman"
+    same = bool(prev and prev["wrap"] == wrap)
+    if len(token) == 1:
+        letter = ord(token.lower()) - 96
+        if same and prev["style"] == alpha and letter == prev["value"] + 1:
+            return {"style": alpha, "wrap": wrap, "value": letter, "text": rest}
+        if token.lower() in _ROMAN_VALUES and ((same and prev["style"] == roman and _roman(token) == prev["value"] + 1) or token.lower() == "i"):
+            return {"style": roman, "wrap": wrap, "value": _roman(token), "text": rest}
+        return {"style": alpha, "wrap": wrap, "value": letter, "text": rest}
+    if re.fullmatch(r"[ivxlc]+", token.lower()) and _roman(token) > 0:
+        return {"style": roman, "wrap": wrap, "value": _roman(token), "text": rest}
+    return None
+
+
+def _split_point_lines(text: str) -> list[str]:
+    """One paragraph holding "1 …\n2 …\n3 …" becomes one piece per point."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if len(lines) < 2:
+        return [text]
+    pieces: list[str] = []
+    last: dict | None = None
+    for line in lines:
+        point = parse_point(line, last)
+        # A point starts a new piece only after a finished sentence, a short title
+        # ("Contents of a Brief"), or as the next number — never mid-sentence
+        # ("…swear within / 14 Days of the order").
+        follows = bool(last and point and point["style"] == last["style"] and point["wrap"] == last["wrap"] and point["value"] == last["value"] + 1)
+        opens = bool(point) and bool(pieces) and (follows or re.search(r"[.:;?!)]$", pieces[-1]) or _short_title(pieces[-1]))
+        if opens or not pieces:
+            pieces.append(line)
+            last = point if opens or (not pieces[:-1] and point) else last
+        else:
+            pieces[-1] = f"{pieces[-1]} {line}"  # a wrapped line belongs to the piece above
+    return pieces
+
+
+def _short_title(text: str) -> bool:
+    words = re.findall(r"[A-Za-z][\w'’-]*", text)
+    if words and words[-1].lower() in _TRAILING_WORDS:
+        return False  # "…must swear within" is a sentence running on, not a title
+    return 1 <= len(words) <= 8 and len(text) <= 70 and not re.search(r"[.,;:?!]$", text) and text[:1].isupper() and not parse_point(text)
+
+
+_TRAILING_WORDS = {
+    "a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "is", "of", "on", "or", "than", "that", "the",
+    "to", "with", "within", "under", "be", "are", "was", "were", "which", "who", "not", "but", "if", "after", "before",
+}
+
+
+def regroup_points(blocks: list[dict]) -> list[dict]:
+    expanded: list[dict] = []
+    for block in blocks:
+        if block["type"] in _POINT_TEXT_TYPES and "\n" in block.get("text", ""):
+            pieces = _split_point_lines(block["text"])
+            for index, piece in enumerate(pieces):
+                # the title line in front of the points reads as a subheading
+                title = len(pieces) > 1 and index == 0 and _short_title(piece) and parse_point(pieces[1])
+                expanded.append({"type": "subheading", "text": piece} if title else {**block, "text": piece})
+        else:
+            expanded.append(block)
+
+    out: list[dict] = []
+    stack: list[tuple] = []  # nesting of point styles in the current run
+    last: dict | None = None  # the last point seen in this run
+    by_family: dict[tuple, dict] = {}
+    for block in expanded:
+        point = parse_point(block.get("text", ""), last) if block["type"] in _POINT_TEXT_TYPES else None
+        if not point:
+            out.append(block)
+            if block["type"] == "numbers" and block.get("items"):
+                key = (block.get("style", "decimal"), block.get("wrap", "dot"))
+                stack[:] = [key]
+                last = {"style": key[0], "wrap": key[1], "value": block.get("start", 1) + len(block["items"]) - 1}
+                by_family = {key: last}
+            else:
+                stack.clear()
+                last, by_family = None, {}
+            continue
+        key = (point["style"], point["wrap"])
+        prev = by_family.get(key)
+        tail = out[-1] if out else None
+        if prev and tail and tail["type"] == "numbers" and (tail.get("style", "decimal"), tail.get("wrap", "dot")) == key and point["value"] == prev["value"] + 1:
+            tail["items"].append(point["text"])  # the next point of the open list
+        else:
+            if key in stack:
+                del stack[stack.index(key) + 1 :]
+            else:
+                stack.append(key)
+            fresh: dict[str, Any] = {"type": "numbers", "items": [point["text"]]}
+            if point["style"] != "decimal":
+                fresh["style"] = point["style"]
+            if point["wrap"] != "dot":
+                fresh["wrap"] = point["wrap"]
+            if point["value"] > 1:
+                fresh["start"] = point["value"]
+            level = min(len(stack) - 1, 2)
+            if level:
+                fresh["level"] = level
+            out.append(fresh)
+        last = point
+        by_family[key] = point
+    return out
 
 
 def record_version(db: Session, material: Material, *, note: str, author: str) -> MaterialVersion:

@@ -240,12 +240,21 @@ function buildPattern(list: string[]): RegExp {
 }
 
 /** Render material text with emphasis. `terms` defaults to the reader's key terms. */
-export function RichText({text, terms, plain = false}: {text?: string | null; terms?: string[]; plain?: boolean}) {
+export function RichText({text, terms, plain = false, lead = false}: {text?: string | null; terms?: string[]; plain?: boolean; lead?: boolean}) {
   const contextTerms = useContext(TermsContext);
   const list = terms ?? contextTerms;
   const pattern = useMemo(() => buildPattern(list), [list]);
   if (!text) return null;
   if (plain) return <>{text.replace(/\*\*(.+?)\*\*/g, '$1')}</>;
+  const split = lead ? leadIn(text) : null;
+  if (split) {
+    // "Name of the court: the court in which…" — the point's label stands out.
+    return (
+      <>
+        <strong className={CLASS.strong}>{split.label}:</strong> <RichText text={split.rest} terms={terms} />
+      </>
+    );
+  }
   // 1) explicit **bold** first, 2) automatic emphasis inside the rest
   const pieces = text.split(/(\*\*[^*\n]+?\*\*)/g);
   return (
@@ -261,6 +270,20 @@ export function RichText({text, terms, plain = false}: {text?: string | null; te
       )}
     </>
   );
+}
+
+/**
+ * The label of a list point, if it has one: "Name of the court: the court in which…"
+ * → {label: "Name of the court", rest: "the court in which…"}. Short (≤ 7 words),
+ * starts with a capital, and is followed by the explanation.
+ */
+export function leadIn(text: string): {label: string; rest: string} | null {
+  const match = /^([A-Z][^:\n]{1,70}?):\s+(\S[\s\S]*)$/.exec(text.trim());
+  if (!match) return null;
+  const label = match[1].replace(/\*\*/g, '').trim();
+  const words = label.split(/\s+/).length;
+  if (words > 7 || /[.;!?(]/.test(label)) return null;
+  return {label, rest: match[2]};
 }
 
 /** Key terms a material defines (Key term / Definition blocks). */

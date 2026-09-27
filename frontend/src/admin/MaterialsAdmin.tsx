@@ -1523,7 +1523,7 @@ function NoteEditor({
 
 /** Compact read-only rendering of one block (staff preview of a note). */
 function PlainBlock({block, terms = []}: {block: MaterialBlock; terms?: string[]}) {
-  const rich = (value?: string) => <RichText text={value} terms={terms} />;
+  const rich = (value?: string, lead = false) => <RichText text={value} terms={terms} lead={lead} />;
   const text = 'text-[0.86rem] leading-relaxed text-mist-200 [overflow-wrap:anywhere]';
   if (block.type === 'heading') return <h4 className="pt-1 text-[0.9rem] font-extrabold text-mist-50">{stripMarks(block.text)}</h4>;
   if (block.type === 'subheading') return <h5 className="text-[0.84rem] font-bold text-mist-100">{stripMarks(block.text)}</h5>;
@@ -1531,7 +1531,7 @@ function PlainBlock({block, terms = []}: {block: MaterialBlock; terms?: string[]
     return (
       <ul className={`${text} space-y-0.5 pl-5 list-disc ${listIndent(block.level)}`}>
         {(block.items ?? []).map((item, index) => (
-          <li key={index}>{rich(item)}</li>
+          <li key={index}>{rich(item, true)}</li>
         ))}
       </ul>
     );
@@ -1542,7 +1542,7 @@ function PlainBlock({block, terms = []}: {block: MaterialBlock; terms?: string[]
         {(block.items ?? []).map((item, index) => (
           <li key={index} className="flex min-w-0 gap-1.5">
             <span className="min-w-[1.4rem] shrink-0 text-right font-bold text-nova-300 tabular-nums">{listMarker(block, index)}</span>
-            <span className="min-w-0 flex-1">{rich(item)}</span>
+            <span className="min-w-0 flex-1">{rich(item, true)}</span>
           </li>
         ))}
       </ol>

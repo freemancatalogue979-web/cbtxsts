@@ -96,7 +96,7 @@ const ACCENTS: Record<string, string> = {
 /* ---------------------------------------------------------------- blocks */
 
 function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighlight?: (text: string) => void; colourOf?: (text: string) => string | null}) {
-  const selectable = (text?: string) =>
+  const selectable = (text?: string, lead = false) =>
     text ? (
       <span
         className={`cursor-text rounded px-0.5 transition-colors ${
@@ -105,7 +105,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
         onDoubleClick={() => onHighlight?.(text)}
         title="Double-tap or select to highlight"
       >
-        <RichText text={text} />
+        <RichText text={text} lead={lead} />
       </span>
     ) : null;
 
@@ -119,7 +119,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
         <ul className={`space-y-1.5 pl-5 list-disc marker:text-nova-400 ${listIndent(block.level)}`}>
           {(block.items ?? []).map((item, index) => (
             <li key={index} className="break-words text-[0.92rem] leading-relaxed text-mist-300">
-              {selectable(item)}
+              {selectable(item, true)}
             </li>
           ))}
         </ul>
@@ -131,7 +131,7 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
           {(block.items ?? []).map((item, index) => (
             <li key={index} className="flex min-w-0 gap-2 break-words text-[0.92rem] leading-relaxed text-mist-300">
               <span className="min-w-[1.6rem] shrink-0 text-right font-bold text-nova-300 tabular-nums">{listMarker(block, index)}</span>
-              <span className="min-w-0 flex-1">{selectable(item)}</span>
+              <span className="min-w-0 flex-1">{selectable(item, true)}</span>
             </li>
           ))}
         </ol>

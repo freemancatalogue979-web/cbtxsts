@@ -387,8 +387,11 @@ def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) ->
             and previous_ended(i)
             and after
             and len(after) > len(stripped)
-            and after[:1].isupper()
-            and not _marker(after, None)
+            and (
+                (after[:1].isupper() and not _marker(after, None))
+                # "Contents of a Brief" on its own line, then "1 Name of the court: …"
+                or (_marker(after, None) and (i == 0 or not lines[i - 1].strip()) and len(_words(stripped)) <= 8)
+            )
         ):
             heading(6, stripped)
             continue

@@ -79,6 +79,17 @@ c) Reply brief
 """
 
 
+def open_brief() -> str:
+    return (
+        "Contents of a Brief\n\n"
+        "1 Name of the court: the court in which the appeal is to be argued, either the Supreme Court or the Court of Appeal.\n\n\n\n"
+        "2 The appeal number.\n\n\n\n"
+        "3 Title of the brief: either an appellant, respondent, or reply brief, as the case may be. (Note: parties to an appeal must have legal personalities.)\n\n\n\n"
+        "4 Introduction / Preliminary statement: the genesis of the issue before the appellate court.\n\n\n\n"
+        "5 Statement of Facts: facts that are relevant and necessary for the appeal.\n"
+    )
+
+
 def blocks_of(sections):
     return [block for section in sections for block in section["blocks"]]
 
@@ -185,6 +196,29 @@ def main() -> int:
     check("years, mid-sentence wraps and '5 boys…' stay prose", not any(b["type"] == "numbers" for b in blocks_of(secs)), blocks_of(secs))
     from app.services.material_import import point_number
     check("Word/ODT paragraph '5 A boy' shows as '5. A boy'", point_number("5 A boy") == "5. A boy" and point_number("2011 Act") == "2011 Act" and point_number("5 boys") == "5 boys")
+    # Saved materials: paragraphs carrying their own numbering become real points.
+    brief = [
+        "Contents of a Brief\n1 Name of the court: the court in which the appeal is to be argued, either the Supreme Court or the Court of Appeal.",
+        "2 The appeal number.",
+        "3 Title of the brief: either an appellant, respondent, or reply brief, as the case may be. (Note: parties to an appeal must have legal personalities.)",
+        "4 Introduction / Preliminary statement: the genesis of the issue before the appellate court.",
+        "5 Statement of Facts: facts that are relevant and necessary for the appeal.",
+    ]
+    saved = sanitise_blocks([{"type": "paragraph", "text": text} for text in brief])
+    check("saved '1 Name of the court…' paragraphs regroup into points 1-5 under a subheading",
+          [b["type"] for b in saved] == ["subheading", "numbers"] and len(saved[1]["items"]) == 5 and saved[1]["items"][1] == "The appeal number." and "start" not in saved[1], saved)
+    pasted = sanitise_blocks([{"type": "paragraph", "text": "The contents include:\n1 Name of the court.\n2 The appeal number.\n3 Title of the brief: either an appellant\nor respondent brief."}])
+    check("one pasted paragraph with 1/2/3 lines splits into a list (wrapped line joined)",
+          [b["type"] for b in pasted] == ["paragraph", "numbers"] and pasted[1]["items"][2] == "Title of the brief: either an appellant or respondent brief.", pasted)
+    nested = sanitise_blocks([{"type": "paragraph", "text": t} for t in ["1. Facts may be:", "(i) facts within knowledge;", "(ii) facts from belief;", "2. The jurat."]])
+    check("(i)/(ii) under point 1 nest, then point 2 resumes",
+          [(b.get("style", "decimal"), b.get("level", 0), b.get("start", 1)) for b in nested] == [("decimal", 0, 1), ("lower-roman", 1, 1), ("decimal", 0, 2)], nested)
+    prose = sanitise_blocks([{"type": "paragraph", "text": t} for t in ["The deponent must swear within\n14 Days of the order and\n2 Copies must be filed.", "2011 Evidence Act applies.", "5 boys came.", "A. Meaning of a Brief", "A. B. Okafor said so."]])
+    check("mid-sentence numbers, years, '5 boys', lettered headings and initials stay as they are",
+          all(b["type"] == "paragraph" for b in prose) and len(prose) == 5, prose)
+    _, secs = build_sections(_text_outline(open_brief()), fallback_title="x")
+    kinds = [b["type"] for b in blocks_of(secs)]
+    check("imported brief: 'Contents of a Brief' heads the list of 5", len(secs) == 1 and secs[0]["title"] == "Contents of a Brief" and kinds == ["numbers"] and len(blocks_of(secs)[0]["items"]) == 5, (secs[0]["title"], kinds))
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 
