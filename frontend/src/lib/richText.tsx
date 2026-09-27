@@ -42,7 +42,7 @@ const BARE = String.raw`(?<![\w.,/])(?<!\bNo\.?\s)\d{2,}(?:[.,]\d+)*(?![\w/])`;
 const PARTY = String.raw`(?:[A-Z][\w.'’&-]*|\((?:Nig\.?|Nigeria)\)|Ltd\.?|Plc\.?)(?:\s(?:[A-Z][\w.'’&-]*|of|and|the|for|&|\((?:Nig\.?|Nigeria)\)|Ltd\.?|Plc\.?)){0,6}`;
 const CASE = String.raw`${PARTY}\s(?:v\.?|vs\.?)\s${PARTY}`;
 /** Statute names: Evidence Act 2011 · Rules of Professional Conduct for Legal Practitioners 2007 · Legal Practitioners Act. */
-const STATUTE = String.raw`(?:(?:Rules|Code|Law)\sof\s(?:[A-Z][\w'’-]+(?:\s(?:of|for|and|the|in))?\s){0,6}[A-Z][\w'’-]+(?:,?\s\d{4})?\b|(?:[A-Z][\w'’-]+\s(?:(?:of|for|and|the|on|in|to)\s){0,2}){1,7}(?:Act|Law|Decree|Edict|Rules|Regulations|Constitution|Code)(?:\s\((?:Amendment|Procedure)\)|\sof\sthe\sFederation)?(?:,?\s(?:No\.?\s\d+\sof\s)?\d{4})?\b)`;
+const STATUTE = String.raw`(?:(?:Rules|Code|Law)\sof\s(?:[A-Z][\w'’-]+(?:\s(?:of|for|and|the|in))?\s){0,6}[A-Z][\w'’-]+(?:,?\s\d{4})?\b|(?:(?:1[89]|20)\d{2}\s)?(?:[A-Z][\w'’-]+\s(?:(?:of|for|and|the|on|in|to)\s){0,2}){1,7}(?:Act|Law|Decree|Edict|Rules|Regulations|Constitution|Code)(?:\s\((?:Amendment|Procedure)\)|\sof\sthe\sFederation)?(?:,?\s(?:No\.?\s\d+\sof\s)?\d{4})?\b)`;
 const ACRONYM = String.raw`\b[A-Z]{2,6}s?\b`;
 
 /** Legal Latin and terms of art worth marking (matched in any case). */
@@ -168,6 +168,13 @@ function findHits(text: string, pattern: RegExp): Hit[] {
       lead += lower;
       value = value.slice(lead.length);
       start += lead.length;
+      // "1999 Constitution and the Evidence Act 2011" is two statutes: stop at the first
+      // title word and let the scan continue from there.
+      const first = value.match(/^.*?\b(?:Act|Law|Decree|Edict|Rules|Regulations|Constitution|Code)\b(?:\s\((?:Amendment|Procedure)\)|\sof\sthe\sFederation)?(?:,?\s(?:No\.?\s\d+\sof\s)?\d{4}\b)?/);
+      if (first && first[0].length < value.length && !/^(?:Rules|Code|Law)\sof\s/.test(value)) {
+        value = first[0];
+        pattern.lastIndex = start + value.length;
+      }
       if (shouting || value.split(/\s+/).length < 2) continue;
     }
     if (kind === 'acr') {

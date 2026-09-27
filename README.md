@@ -401,6 +401,12 @@ cd backend && ./.venv/bin/python scripts/verify_player_notes.py
 #          GEMINI_API_KEY=test-key GEMINI_API_BASE=http://127.0.0.1:3999/v1beta
 cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
 
+# Backend: "Make it easy to read" as a background job (no proxy time limits: the editor polls
+#          short requests), retries on 429/5xx, stops on key/balance errors, cancel; AI bold
+#          tidying; PDF import drops running headers/footers/page numbers and merges documents
+#          with more than 80 sections (no API server or internet needed)
+cd backend && ./.venv/bin/python scripts/verify_rewrite_jobs.py
+
 # Backend: DeepSeek provider against a local mock (no internet or API server needed): model
 #          fallback, thinking retry, key / balance / rate / busy errors, time limit
 cd backend && ./.venv/bin/python scripts/verify_deepseek.py

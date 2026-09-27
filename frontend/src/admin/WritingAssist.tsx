@@ -280,7 +280,7 @@ export function RewriteReview({
     jobRef.current = null;
     setWaiting(0);
     if (job.failed.length) {
-      setError(job.error || 'Some sections could not be rewritten.');
+      setError(job.status === 'cancelled' ? 'Stopped.' : job.error || 'Some sections could not be rewritten.');
       setPending(job.failed);
     }
     setProgress(null);
