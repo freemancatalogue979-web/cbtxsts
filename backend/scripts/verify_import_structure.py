@@ -240,6 +240,39 @@ def main() -> int:
     numbered_inline = sanitise_blocks([{"type": "paragraph", "text": "1 The notice must be filed. 2 It must be served. The rest is prose with 3 parts."}])
     check("inline '. 2 It…' splits; '3 parts' mid-sentence does not",
           len(numbered_inline) == 1 and numbered_inline[0]["items"] == ["The notice must be filed.", "It must be served. The rest is prose with 3 parts."], numbered_inline)
+    # Letters wherever they open a point: after an intro sentence, after a colon, in bullets,
+    # inside a numbered point, dotted inline, starting at b, with an explanation between.
+    def kinds(blocks):
+        return [(b["type"], b.get("style", ""), len(b.get("items", []))) for b in blocks]
+    cases = {
+        "intro sentence then a/b/c": ([{"type": "paragraph", "text": "The grounds are incompetent in these cases. a When it is an obiter dictum (see Udoete v. Heil). b Vagueness: once a ground is vague it fails. c It is argumentative and narrative."}],
+                                      [("paragraph", "", 0), ("numbers", "lower-alpha", 3)]),
+        "colon then a/b/c": ([{"type": "paragraph", "text": "A ground of appeal is incompetent: a When it is an obiter dictum. b Vagueness: it fails. c It is argumentative."}],
+                             [("paragraph", "", 0), ("numbers", "lower-alpha", 3)]),
+        "explanation between a and b joins a": ([{"type": "paragraph", "text": t} for t in ["a When it is an obiter dictum.", "This is explained in Udoete v. Heil.", "b Vagueness: a vague ground fails.", "c It is argumentative."]],
+                                                [("numbers", "lower-alpha", 3)]),
+        "bullets lettered a/b/c": ([{"type": "list", "items": ["a When it is obiter.", "b Vagueness: it fails.", "c It is argumentative."]}], [("numbers", "lower-alpha", 3)]),
+        "a/b inside numbered point 1 nest": ([{"type": "numbers", "items": ["Grounds are incompetent: a When it is obiter. b Vagueness: it fails.", "The appeal number."]}],
+                                             [("numbers", "", 1), ("numbers", "lower-alpha", 2), ("numbers", "", 1)]),
+        "a. b. c. inline": ([{"type": "paragraph", "text": "Incompetent grounds: a. When it is obiter. b. Vagueness: it fails. c. It is argumentative."}],
+                            [("paragraph", "", 0), ("numbers", "lower-alpha", 3)]),
+        "run starting at b": ([{"type": "paragraph", "text": t} for t in ["Intro sentence here.", "b Vagueness: it fails.", "c It is argumentative."]],
+                              [("paragraph", "", 0), ("numbers", "lower-alpha", 2)]),
+    }
+    for name, (blocks, want) in cases.items():
+        got = sanitise_blocks(blocks)
+        check(f"letters: {name}", kinds(got) == want, got)
+    prose = [
+        "In Udoete v. Heil (1990) 1 NWLR (Pt. 12) 2 SC 44, the court held so.",
+        "See Okafor v. Nweke (2007) 10 NWLR (Pt. 1043) 521 and (2002) 2 SCNJ 1.",
+        "The court held so. A party may appeal. I think this is right.",
+        "It must be sworn before a Commissioner for Oaths. a Commissioner must sign it.",
+        "Section 5. 6 Judges sat. 7 Days passed.",
+        "It was decided in 2011. 2012 Rules now apply.",
+        "Per A. B. Okafor JSC: the appeal fails.",
+    ]
+    untouched = all(sanitise_blocks([{"type": "paragraph", "text": t}]) == [{"type": "paragraph", "text": t}] for t in prose)
+    check("citations, the words 'A'/'I'/'a', stray numbers and initials stay prose", untouched)
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 

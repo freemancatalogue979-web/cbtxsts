@@ -286,32 +286,6 @@ def _token(style: str, value: int) -> str:
     return out.upper() if style.startswith("upper") else out
 
 
-def _split_inline(text: str) -> list[str]:
-    """
-    "a When it is obiter (see Udoete v. Heil). b Vagueness: …" — the next point written
-    straight after a finished sentence starts its own piece. Only the exact next marker
-    in the same format counts, so ordinary prose is never cut.
-    """
-    point = parse_point(text)
-    if not point:
-        return [text]
-    pieces: list[str] = []
-    rest, value = text, point["value"]
-    opened = bool(re.match(r"^\s*\(", text))
-    closer = re.match(r"^\s*\(?\w+([.)])?", text).group(1) or ""
-    while True:
-        token = re.escape(_token(point["style"], value + 1))
-        marker = rf"\({token}\)" if opened else token + re.escape(closer)
-        found = re.search(rf"(?<=[.;:!?)\]])\s+(?={marker}\s+[A-Z(\"“‘'])", rest)
-        if not found:
-            break
-        pieces.append(rest[: found.start()].strip())
-        rest = rest[found.end():]
-        value += 1
-    pieces.append(rest.strip())
-    return [piece for piece in pieces if piece]
-
-
 def _parse_point(text: str, prev: dict | None = None) -> dict | None:
     match = _POINT.match(text or "")
     if not match:
@@ -390,58 +364,220 @@ _TRAILING_WORDS = {
 }
 
 
+# A marker that can open a point inside running text: at the very start, or right after
+# a finished sentence / colon — "…(see Udoete v. Heil). b Vagueness: …".
+_CANDIDATE = re.compile(
+    r"(?:^|(?<=[.;:!?])|(?<=[.;:!?][)\]”\"’']))(\s*)"
+    r"(?:\((?P<pt>\d{1,2}|[a-z]{1,5}|[A-Z]{1,5})\)|(?P<t>\d{1,2}|[a-z]{1,5}|[A-Z]{1,5})(?P<c>[.)])?)"
+    r"\s+(?=[A-Z(\"“‘'])"
+)
+
+
+def _readings(token: str, fmt: str) -> list[tuple[str, int]]:
+    """Every way a marker token can be read: "i" is letter 9 or numeral 1."""
+    if token.isdigit():
+        value = int(token)
+        return [("decimal", value)] if 1 <= value <= (99 if fmt == "bare" else 999) else []
+    if token.isupper() and fmt == "bare":
+        return []  # bare "A"/"I" are words
+    case = "lower" if token.islower() else "upper" if token.isupper() else ""
+    if not case:
+        return []
+    out: list[tuple[str, int]] = []
+    if len(token) == 1:
+        out.append((f"{case}-alpha", ord(token.lower()) - 96))
+    low = token.lower()
+    if re.fullmatch(r"[ivxlc]+", low) and _roman(low) > 0 and _token("lower-roman", _roman(low)) == low:
+        out.append((f"{case}-roman", _roman(low)))
+    return out
+
+
+def _candidates(text: str) -> list[dict]:
+    found = []
+    for match in _CANDIDATE.finditer(text):
+        begin = match.start() + len(match.group(1))
+        if begin > 0 and not match.group(1):
+            continue  # "Rules).b" — a marker needs a space before it
+        token = match.group("pt") or match.group("t")
+        fmt = "paren" if match.group("pt") else {"": "bare", ".": "dot", ")": "rparen"}[match.group("c") or ""]
+        after = text[match.end():]
+        if re.match(r"[A-Z]\.\s", after) and len(token) == 1 and not token.isdigit():
+            continue  # initials: "A. B. Okafor"
+        if fmt == "bare" and re.match(r"[A-Z]{2,}\b", after):
+            continue  # a law report, not a point: "(1990) 1 NWLR", "2 SC 44"
+        readings = _readings(token, fmt)
+        if readings:
+            found.append({"begin": begin, "end": match.end(), "fmt": fmt, "readings": readings})
+    return found
+
+
+def _find_run(text: str, context: dict | None = None) -> tuple[str, list[dict]] | None:
+    """
+    The longest run of markers counting up in one style and format — a b c, i ii iii,
+    1 2 3, (a) (b) — found at the start of ``text`` or after finished sentences.
+    Returns (lead-in text, points), or None when there is no real run.
+    """
+    cands = _candidates(text)
+    best, best_score = None, None
+    for i, cand in enumerate(cands):
+        for style, value in cand["readings"]:
+            run = [(i, value)]
+            for j in range(i + 1, len(cands)):
+                if cands[j]["fmt"] == cand["fmt"] and (style, run[-1][1] + 1) in cands[j]["readings"]:
+                    run.append((j, run[-1][1] + 1))
+            continues = bool(context and context["style"] == style and context["value"] + 1 == value)
+            if len(run) < 2 or not (value == 1 or cand["begin"] == 0 or continues):
+                continue
+            score = (len(run), cand["begin"] == 0, value == 1)
+            if best_score is None or score > best_score:
+                best, best_score = (style, cand["fmt"], run), score
+    if not best:
+        return None
+    style, fmt, run = best
+    lead = text[: cands[run[0][0]]["begin"]].strip()
+    points = []
+    for k, (j, value) in enumerate(run):
+        stop = cands[run[k + 1][0]]["begin"] if k + 1 < len(run) else len(text)
+        points.append({
+            "style": style,
+            "wrap": "dot" if fmt == "bare" else fmt,
+            "value": value,
+            "text": text[cands[j]["end"]:stop].strip(),
+            "bare": fmt == "bare",
+            "trusted": True,
+        })
+    return lead, points
+
+
+def _point_atoms(point: dict, depth: int = 0) -> list[tuple]:
+    """A point, plus the sub-points written inside it ("Grounds: a When… b Vagueness…")."""
+    atoms: list[tuple] = [("point", point)]
+    if depth < 2:
+        inner = _find_run(point["text"])
+        if inner and inner[0] and inner[1][0]["style"] != point["style"]:
+            point["text"] = inner[0]
+            for sub in inner[1]:
+                atoms.extend(_point_atoms(sub, depth + 1))
+    return atoms
+
+
+def _text_atoms(block: dict, text: str) -> list[tuple]:
+    run = _find_run(text)
+    if run:
+        lead, points = run
+        atoms: list[tuple] = [("text", {**block, "text": lead})] if lead else []
+        for point in points:
+            atoms.extend(_point_atoms(point))
+        return atoms
+    point = parse_point(text)
+    if point:
+        point["raw"] = text
+        return _point_atoms(point)
+    return [("text", {**block, "text": text})]
+
+
+def _block_atoms(block: dict) -> list[tuple]:
+    kind = block["type"]
+    if kind in _POINT_TEXT_TYPES:
+        text = block.get("text", "")
+        pieces = _split_point_lines(text) if "\n" in text else [text]
+        atoms: list[tuple] = []
+        for index, piece in enumerate(pieces):
+            # the title line in front of the points reads as a subheading
+            if len(pieces) > 1 and index == 0 and _short_title(piece) and parse_point(pieces[1]):
+                atoms.append(("text", {"type": "subheading", "text": piece}))
+            else:
+                atoms.extend(_text_atoms(block, piece))
+        return atoms
+    items = block.get("items") or []
+    if kind == "list" and len(items) >= 2:
+        # bullets that carry their own lettering: "a When…", "b Vagueness…"
+        parsed, last = [], None
+        for item in items:
+            point = parse_point(item, last)
+            if not point or (last and (point["style"], point["wrap"], point["value"]) != (last["style"], last["wrap"], last["value"] + 1)):
+                return [("text", block)]
+            parsed.append(point)
+            last = point
+        atoms = []
+        for point in parsed:
+            point["trusted"] = True
+            atoms.extend(_point_atoms(point))
+        return atoms
+    if kind == "numbers" and any(_find_run(item) for item in items):
+        # a numbered point holding its own a, b, c → nested points
+        atoms = []
+        for index, item in enumerate(items):
+            atoms.extend(_point_atoms({
+                "style": block.get("style", "decimal"), "wrap": block.get("wrap", "dot"),
+                "value": block.get("start", 1) + index, "text": item, "trusted": True,
+            }))
+        return atoms
+    return [("text", block)]
+
+
 def regroup_points(blocks: list[dict]) -> list[dict]:
-    expanded: list[dict] = []
+    atoms: list[tuple] = []
     for block in blocks:
-        if block["type"] in _POINT_TEXT_TYPES and "\n" in block.get("text", ""):
-            pieces = _split_point_lines(block["text"])
-            for index, piece in enumerate(pieces):
-                # the title line in front of the points reads as a subheading
-                title = len(pieces) > 1 and index == 0 and _short_title(piece) and parse_point(pieces[1])
-                expanded.append({"type": "subheading", "text": piece} if title else {**block, "text": piece})
-        else:
-            expanded.append(block)
-    # "…(see Udoete v. Heil). b Vagueness: …" — points run together in one paragraph
-    split: list[dict] = []
-    for block in expanded:
-        if block["type"] in _POINT_TEXT_TYPES:
-            split.extend({**block, "text": piece} for piece in _split_inline(block.get("text", "")))
-        else:
-            split.append(block)
-    expanded = split
+        atoms.extend(_block_atoms(block))
+
+    def next_point(index: int) -> dict | None:
+        """The next point after ``index``, looking past at most one plain paragraph."""
+        for kind, value in atoms[index + 1 : index + 3]:
+            if kind == "point":
+                return value
+            if value["type"] != "paragraph":
+                return None
+        return None
 
     out: list[dict] = []
     stack: list[tuple] = []  # nesting of point styles in the current run
-    last: dict | None = None  # the last point seen in this run
     by_family: dict[tuple, dict] = {}
-    for index, block in enumerate(expanded):
-        point = parse_point(block.get("text", ""), last) if block["type"] in _POINT_TEXT_TYPES else None
-        if _bare_letter(point):
-            # "a"/"b" without brackets or a dot is only a point inside a real run:
-            # it follows the previous letter, or it is "a" and "b" comes next.
-            before = by_family.get((point["style"], point["wrap"]))
-            nxt = expanded[index + 1] if index + 1 < len(expanded) else None
-            after = parse_point(nxt.get("text", ""), point) if nxt and nxt["type"] in _POINT_TEXT_TYPES else None
-            in_run = bool(before and point["value"] == before["value"] + 1) or bool(
-                point["value"] == 1 and after and after["style"] == point["style"] and after["value"] == 2
-            )
-            if not in_run:
-                point = None
-        if not point:
+    last: dict | None = None
+
+    def reset() -> None:
+        nonlocal last
+        stack.clear()
+        by_family.clear()
+        last = None
+
+    for index, (kind, value) in enumerate(atoms):
+        if kind == "point":
+            point = value
+            key = (point["style"], point["wrap"])
+            before = by_family.get(key)
+            follows = bool(before and point["value"] == before["value"] + 1)
+            if point.get("bare") and point["style"] != "decimal" and not point.get("trusted") and not follows:
+                after = next_point(index)
+                if not (after and (after["style"], after["wrap"]) == key and after["value"] == point["value"] + 1):
+                    # a stray "a"/"b" at a paragraph start is a word, not a point
+                    kind, value = "text", {"type": "paragraph", "text": point.get("raw") or point["text"]}
+        if kind == "text":
+            block = value
+            tail = out[-1] if out else None
+            after = next_point(index) if block["type"] == "paragraph" else None
+            if (
+                last and tail and tail["type"] == "numbers" and after
+                and (after["style"], after["wrap"]) == (last["style"], last["wrap"]) and after["value"] == last["value"] + 1
+            ):
+                # an explanation between point a and point b belongs to point a
+                tail["items"][-1] = f"{tail['items'][-1]} {block.get('text', '')}".strip()
+                continue
             out.append(block)
             if block["type"] == "numbers" and block.get("items"):
                 key = (block.get("style", "decimal"), block.get("wrap", "dot"))
-                stack[:] = [key]
+                reset()
+                stack.append(key)
                 last = {"style": key[0], "wrap": key[1], "value": block.get("start", 1) + len(block["items"]) - 1}
-                by_family = {key: last}
+                by_family[key] = last
             else:
-                stack.clear()
-                last, by_family = None, {}
+                reset()
             continue
+        point = value
         key = (point["style"], point["wrap"])
-        prev = by_family.get(key)
+        before = by_family.get(key)
         tail = out[-1] if out else None
-        if prev and tail and tail["type"] == "numbers" and (tail.get("style", "decimal"), tail.get("wrap", "dot")) == key and point["value"] == prev["value"] + 1:
+        if before and tail and tail["type"] == "numbers" and (tail.get("style", "decimal"), tail.get("wrap", "dot")) == key and point["value"] == before["value"] + 1:
             tail["items"].append(point["text"])  # the next point of the open list
         else:
             if key in stack:
@@ -459,13 +595,14 @@ def regroup_points(blocks: list[dict]) -> list[dict]:
             if level:
                 fresh["level"] = level
             out.append(fresh)
-        last = point
-        by_family[key] = point
+        last = {"style": point["style"], "wrap": point["wrap"], "value": point["value"]}
+        by_family[key] = last
+
     # A short title line right above a list heads it: "Grounds of Appeal That Are Incompetent"
     for index, block in enumerate(out[:-1]):
-        if block["type"] == "paragraph" and out[index + 1]["type"] == "numbers" and _short_title(block.get("text", "")) and not re.search(r"\*\*", block.get("text", "")):
+        if block["type"] == "paragraph" and out[index + 1]["type"] == "numbers" and _short_title(block.get("text", "")) and "**" not in block.get("text", ""):
             out[index] = {"type": "subheading", "text": block["text"]}
-    return out
+    return [block for block in out if block["type"] != "numbers" or block.get("items")]
 
 
 def record_version(db: Session, material: Material, *, note: str, author: str) -> MaterialVersion:
