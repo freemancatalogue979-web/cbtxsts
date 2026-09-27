@@ -46,7 +46,12 @@ import {
   X,
   Zap,
   ExternalLink,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  CheckCircle2,
 } from 'lucide-react';
+import {createPortal} from 'react-dom';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton} from '../components/ui';
@@ -654,6 +659,7 @@ function Reader({
   const sectionsRef = useRef<Record<number, HTMLElement | null>>({});
   // Notes the lecturer attached to this material (separate from the player's own marks).
   const [view, setView] = useState<'read' | 'notes' | 'staff'>('read');
+  const [focus, setFocus] = useState(false);
   const setMyNotes = useCallback((update: (current: MaterialNote[]) => MaterialNote[]) => setMarks((current) => ({...current, notes: update(current.notes)})), []);
   const [staffNotes, setStaffNotes] = useState<MaterialDetail[] | null>(null);
   useEffect(() => {
@@ -824,10 +830,11 @@ function Reader({
     else onToast('success', 'Noted', 'Use “Confused here” to ask the class about the exact bit.');
   };
 
-  const markRead = async () => {
-    if (!activeSection) return;
+  const markRead = async (sectionId?: number) => {
+    const target = detail.sections.find((section) => section.id === sectionId) ?? activeSection;
+    if (!target) return;
     setBankBusy(true);
-    const payload = await api.materials.progress(detail.id, {section_id: activeSection.id, seconds: 15}).catch(() => null);
+    const payload = await api.materials.progress(detail.id, {section_id: target.id, seconds: 15}).catch(() => null);
     setBankBusy(false);
     if (payload) {
       setDetail((current) => ({...current, progress: payload.progress}));
@@ -847,12 +854,34 @@ function Reader({
 
   return (
     <TermsContext.Provider value={terms}>
+    {focus ? (
+      <FocusReader
+        material={detail}
+        activeId={activeId}
+        visited={visited}
+        busy={bankBusy}
+        colourOf={colourOf}
+        onActive={setActiveId}
+        onHighlight={(text) => {
+          setHighlightTarget(text);
+          void addHighlight(text);
+        }}
+        onMarkRead={(sectionId) => void markRead(sectionId)}
+        onExit={() => {
+          setFocus(false);
+          if (activeId) window.setTimeout(() => sectionsRef.current[activeId]?.scrollIntoView({block: 'start'}), 60);
+        }}
+      />
+    ) : null}
     <div className="mx-auto w-full min-w-0 max-w-3xl space-y-3.5">
       <div className="flex min-w-0 items-center gap-2">
         <Button variant="ghost" size="sm" icon={<ArrowLeft className="size-4" />} onClick={onBack}>
           Library
         </Button>
         <div className="min-w-0 flex-1" />
+        <Button variant="soft" size="sm" icon={<Maximize2 className="size-4" />} onClick={() => setFocus(true)} aria-label="Read in full screen">
+          Focus
+        </Button>
         <Button variant="ghost" size="sm" icon={<BookmarkCheck className="size-4" />} onClick={() => setShowMarks(true)}>
           My marks ({marks.highlights.length + marks.notes.length})
         </Button>
@@ -1075,7 +1104,7 @@ function Reader({
                 variant={visited.has(section.id) && detail.progress.last_section_id === section.id ? 'mint' : 'outline'}
                 icon={<CheckMark />}
                 loading={bankBusy}
-                onClick={markRead}
+                onClick={() => void markRead(section.id)}
               >
                 {visited.has(section.id) ? 'Read again' : 'Mark as read'}
               </Button>
@@ -1294,6 +1323,211 @@ function Reader({
       </Modal>
     </div>
     </TermsContext.Provider>
+  );
+}
+
+const FOCUS_SIZES = [
+  {label: 'S', zoom: 0.92},
+  {label: 'M', zoom: 1.06},
+  {label: 'L', zoom: 1.2},
+  {label: 'XL', zoom: 1.36},
+];
+const FOCUS_SIZE_KEY = 'arena.focus.size';
+
+/** Distraction-free, full-screen reading: only the material, a slim auto-hiding
+ * bar (exit, section, previous/next, text size) and a thin progress line. */
+function FocusReader({
+  material,
+  activeId,
+  visited,
+  busy,
+  colourOf,
+  onActive,
+  onHighlight,
+  onMarkRead,
+  onExit,
+}: {
+  material: MaterialDetail;
+  activeId: number | null;
+  visited: Set<number>;
+  busy: boolean;
+  colourOf: (text: string) => string | null;
+  onActive: (id: number) => void;
+  onHighlight: (text: string) => void;
+  onMarkRead: (sectionId: number) => void;
+  onExit: () => void;
+}) {
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const refs = useRef<Record<number, HTMLElement | null>>({});
+  const [size, setSize] = useState(() => {
+    const raw = localStorage.getItem(FOCUS_SIZE_KEY);
+    const saved = raw === null ? NaN : Number(raw);
+    return Number.isInteger(saved) && saved >= 0 && saved < FOCUS_SIZES.length ? saved : 1;
+  });
+  const [barHidden, setBarHidden] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [current, setCurrent] = useState<number | null>(activeId);
+  const sections = material.sections;
+  const index = Math.max(0, sections.findIndex((section) => section.id === current));
+  const exitRef = useRef(onExit);
+  exitRef.current = onExit;
+
+  // Enter: lock the page behind, ask the browser for real full screen (not every
+  // phone allows it — the overlay alone still hides everything), jump to the
+  // section the reader was on.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    let native = false;
+    const root = document.documentElement;
+    if (root.requestFullscreen && !document.fullscreenElement) {
+      root.requestFullscreen({navigationUI: 'hide'}).then(() => (native = true)).catch(() => undefined);
+    }
+    const onChange = () => {
+      if (native && !document.fullscreenElement) exitRef.current(); // browser Esc / back gesture
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') exitRef.current();
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    window.addEventListener('keydown', onKey);
+    if (activeId) refs.current[activeId]?.scrollIntoView({block: 'start'});
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('fullscreenchange', onChange);
+      window.removeEventListener('keydown', onKey);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scroll: progress line, hide the bar going down / show it going up, and
+  // track which section is on screen.
+  useEffect(() => {
+    const node = scroller.current;
+    if (!node) return;
+    let last = node.scrollTop;
+    const onScroll = () => {
+      const top = node.scrollTop;
+      const room = node.scrollHeight - node.clientHeight;
+      setProgress(room > 0 ? Math.min(100, Math.round((top / room) * 100)) : 100);
+      if (Math.abs(top - last) > 6) {
+        setBarHidden(top > last && top > 80);
+        last = top;
+      }
+      const marker = top + node.clientHeight * 0.3;
+      let seen: number | null = sections[0]?.id ?? null;
+      for (const section of sections) {
+        const element = refs.current[section.id];
+        if (element && element.offsetTop <= marker) seen = section.id;
+      }
+      if (room > 0 && top >= room - 4) seen = sections[sections.length - 1]?.id ?? seen; // at the very end
+
+      setCurrent((before) => (before === seen ? before : seen));
+    };
+    onScroll();
+    node.addEventListener('scroll', onScroll, {passive: true});
+    return () => node.removeEventListener('scroll', onScroll);
+  }, [sections]);
+
+  useEffect(() => {
+    if (current) onActive(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
+
+  const go = (step: number) => {
+    const target = sections[Math.min(sections.length - 1, Math.max(0, index + step))];
+    if (!target) return;
+    setBarHidden(false);
+    refs.current[target.id]?.scrollIntoView({behavior: 'smooth', block: 'start'});
+  };
+  const cycleSize = () => {
+    const next = (size + 1) % FOCUS_SIZES.length;
+    setSize(next);
+    localStorage.setItem(FOCUS_SIZE_KEY, String(next));
+  };
+  const iconButton =
+    'grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-mist-200 transition-colors hover:bg-white/10 disabled:opacity-35 touch-manipulation';
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={`${material.title} — focus reading`} className="fixed inset-0 z-55 bg-ink-950">
+      <div ref={scroller} className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain">
+        <header
+          className={`sticky top-0 z-2 border-b border-white/8 bg-ink-950/92 pt-[env(safe-area-inset-top,0px)] backdrop-blur-md transition-transform duration-300 ${
+            barHidden ? '-translate-y-full' : 'translate-y-0'
+          }`}
+        >
+          <div className="mx-auto flex min-w-0 max-w-2xl items-center gap-2 px-3 py-2">
+            <button type="button" className={iconButton} onClick={onExit} aria-label="Exit full screen" title="Exit (Esc)">
+              <Minimize2 className="size-4" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[0.8rem] font-extrabold text-mist-50">{material.title}</p>
+              <p className="truncate text-[0.68rem] font-bold text-mist-500">
+                Section {index + 1} of {sections.length}
+                {sections[index] ? ` · ${stripMarks(sections[index].title)}` : ''}
+              </p>
+            </div>
+            <button type="button" className={iconButton} onClick={() => go(-1)} disabled={index === 0} aria-label="Previous section">
+              <ChevronLeft className="size-4" />
+            </button>
+            <button type="button" className={iconButton} onClick={() => go(1)} disabled={index >= sections.length - 1} aria-label="Next section">
+              <ChevronRight className="size-4" />
+            </button>
+            <button type="button" className={`${iconButton} w-auto px-2 text-[0.72rem] font-black`} onClick={cycleSize} aria-label={`Text size ${FOCUS_SIZES[size].label}, tap to change`}>
+              Aa<span className="ml-0.5 text-[0.6rem] text-nova-200">{FOCUS_SIZES[size].label}</span>
+            </button>
+          </div>
+          <div className="h-0.5 bg-white/5">
+            <div className="brand-gradient h-full transition-[width] duration-150" style={{width: `${progress}%`}} />
+          </div>
+        </header>
+
+        <article className="mx-auto min-w-0 max-w-2xl px-4 pt-6 pb-[max(env(safe-area-inset-bottom,0px),2.5rem)] sm:px-6" style={{zoom: FOCUS_SIZES[size].zoom}}>
+          <h1 className="text-[1.3rem] font-black leading-tight text-mist-50 sm:text-[1.55rem]">{material.title}</h1>
+          {material.description ? <p className="mt-1.5 text-[0.9rem] leading-relaxed text-mist-400">{material.description}</p> : null}
+          {sections.map((section) => (
+            <section
+              key={section.id}
+              ref={(node) => {
+                refs.current[section.id] = node;
+              }}
+              className="min-w-0 scroll-mt-16 border-t border-white/8 pt-6 mt-6 first-of-type:mt-5"
+            >
+              <p className="text-[0.66rem] font-black tracking-[0.14em] text-nova-300 uppercase">
+                Section {section.position} · {section.estimated_minutes ?? 3} min
+              </p>
+              <h2 className="mt-1 break-words text-[1.08rem] font-black leading-snug text-mist-50">{stripMarks(section.title)}</h2>
+              <div className="mt-3 min-w-0 space-y-3.5 [&_p]:leading-[1.8] [&_li]:leading-[1.75]">
+                {(section.blocks ?? []).map((block, blockIndex) => (
+                  <Block key={blockIndex} block={block} colourOf={colourOf} onHighlight={onHighlight} />
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                {visited.has(section.id) ? (
+                  <span className="inline-flex items-center gap-1.5 text-[0.74rem] font-bold text-mint-300">
+                    <CheckCircle2 className="size-4" /> Read
+                  </span>
+                ) : (
+                  <Button size="sm" variant="outline" icon={<CheckMark />} loading={busy} onClick={() => onMarkRead(section.id)}>
+                    Mark as read
+                  </Button>
+                )}
+              </div>
+            </section>
+          ))}
+          <div className="mt-8 grid place-items-center gap-2 border-t border-white/8 pt-6 text-center">
+            <p className="text-[0.82rem] font-bold text-mist-400">
+              {material.progress?.status === 'completed' ? 'You have finished this material.' : "That's the end of this material."}
+            </p>
+            <Button size="sm" variant="soft" icon={<Minimize2 className="size-4" />} onClick={onExit}>
+              Exit focus
+            </Button>
+          </div>
+        </article>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

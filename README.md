@@ -169,6 +169,15 @@ duration / timed per question / untimed), entry requirement, visibility, the rew
 (XP, coins, diamonds, winner's badge) and the join/leave/leaderboard rules — with edit for
 anything not finished and delete for anything not live.
 
+### Focus reading
+
+The **Focus** button in the material reader opens the material full screen with nothing else on
+screen: no navigation, bottom bar or music strip. The browser goes truly full screen where the
+device allows it; elsewhere the reader still covers the whole page. A slim bar (exit, "Section x of
+y", previous/next, text size S–XL) hides while you scroll down and returns when you scroll up.
+Highlighting and *Mark as read* (with its rewards) still work. Esc or the exit button returns to
+the same section.
+
 ### Writing help for materials
 
 - **Bold key facts:** the reader automatically bolds numbers (dates, %, ranges, units, ₦ amounts),
