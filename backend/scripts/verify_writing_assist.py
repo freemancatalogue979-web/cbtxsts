@@ -216,7 +216,7 @@ def main() -> int:
     ]
     if not configured:
         status, answer = call("POST", "/admin/materials/assist/rewrite", {"title": "Cells", "style": "easy", "sections": sections}, admin)
-        check("without a key the rewrite explains how to set it up", status == 503 and "GEMINI_API_KEY" in str(answer), answer)
+        check("without a key the rewrite explains how to set it up", status == 503 and ("API keys" in str(answer) or "GEMINI_API_KEY" in str(answer)), answer)
         print("\n(rewrite checks against the mock were skipped: start the API with GEMINI_API_KEY=test-key GEMINI_API_BASE=http://127.0.0.1:3999/v1beta)")
     else:
         server = start_mock()

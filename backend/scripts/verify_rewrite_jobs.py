@@ -30,6 +30,7 @@ os.environ.update(
     {
         "AI_PROVIDER": "gemini",
         "GEMINI_API_KEY": "test-key",
+        "CBT_AI_KEYS_FILE": str(Path(__import__("tempfile").gettempdir()) / f"no_saved_keys_{os.getpid()}.json"),
         "GEMINI_API_BASE": f"http://127.0.0.1:{MOCK_PORT}/v1beta",
         "GEMINI_MODEL": "mock-flash",
         "GEMINI_FALLBACK_MODELS": "",

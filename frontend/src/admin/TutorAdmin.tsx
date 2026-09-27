@@ -138,7 +138,7 @@ export default function TutorAdmin() {
           {tab === 'costs' && <CostsTab range={range} settings={settings} set={set} />}
           {tab === 'users' && <UsersTab range={range} />}
           {tab === 'conversations' && <ConversationsTab />}
-          {tab === 'models' && <ModelsTab providers={providers} settings={settings} set={set} />}
+          {tab === 'models' && <ModelsTab providers={providers} settings={settings} set={set} onProviders={setProviders} />}
           {tab === 'limits' && <LimitsTab settings={settings} set={set} />}
           {tab === 'logs' && <LogsTab range={range} />}
           {tab === 'features' && <FeaturesTab settings={settings} set={set} />}
@@ -630,7 +630,7 @@ function ConversationsTab() {
 }
 
 /* --------------------------------------------------------------- models */
-function ModelsTab({providers, settings, set}: {providers: ProviderInfo[]; settings: TutorAdminSettings; set: (p: Partial<TutorAdminSettings>) => void}) {
+function ModelsTab({providers, settings, set, onProviders}: {providers: ProviderInfo[]; settings: TutorAdminSettings; set: (p: Partial<TutorAdminSettings>) => void; onProviders: (p: ProviderInfo[]) => void}) {
   const {toast} = useSession();
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -647,9 +647,18 @@ function ModelsTab({providers, settings, set}: {providers: ProviderInfo[]; setti
           {providers.map((p) => (
             <button key={p.id} onClick={() => set({ai_provider: p.id, ai_model: ''})} className={`rounded-xl border px-3 py-2.5 text-left ${settings.ai_provider === p.id ? 'border-nova-400/70 bg-nova-500/15' : 'border-white/10 hover:bg-white/[0.05]'}`}>
               <span className="flex items-center gap-1.5 text-[0.84rem] font-bold text-mist-50">{p.name}{p.active && <Chip className="border-mint-400/40 text-mint-200">in use</Chip>}</span>
-              <span className={`block text-[0.72rem] ${p.configured ? 'text-mint-300' : 'text-flare-300'}`}>{p.configured ? 'Key set on server' : `No key — add ${p.key_env}`}</span>
+              <span className={`block text-[0.72rem] ${p.configured ? 'text-mint-300' : 'text-flare-300'}`}>{p.configured ? 'Key set' : 'No key yet — add one below'}</span>
             </button>
           ))}
+        </div>
+      </Panel>
+      <Panel title="API keys" icon={<KeyRound className="size-3.5" />}>
+        <div className="space-y-2">
+          {providers.map((p) => <KeyRow key={p.id} provider={p} onProviders={onProviders} />)}
+          <p className="text-[0.72rem] leading-relaxed text-mist-500">
+            A new key is checked with a one-word test first and used from the next AI request — no restart. A key the provider refuses is not saved, so the old one keeps working.
+            Keys are stored only on the server and are never shown again in full.
+          </p>
         </div>
       </Panel>
       <Panel title="Model">
@@ -685,6 +694,109 @@ function ModelsTab({providers, settings, set}: {providers: ProviderInfo[]; setti
           <p className="text-[0.72rem] text-mist-500">Change prices in <code className="rounded bg-white/10 px-1">backend/app/services/ai_providers.py</code> or with AI_PRICE_INPUT / AI_PRICE_CACHED / AI_PRICE_OUTPUT.</p>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+/** One provider's key: status, paste a new key (Save & test), or remove the saved one. */
+function KeyRow({provider: p, onProviders}: {provider: ProviderInfo; onProviders: (p: ProviderInfo[]) => void}) {
+  const {toast} = useSession();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState<'save' | 'remove' | null>(null);
+  const [result, setResult] = useState<{ok: boolean; message: string} | null>(null);
+  const where = p.key_source === 'admin' ? 'Saved here' : p.key_source === 'env' ? "From the server's .env" : 'No key';
+  const help = p.id === 'gemini' ? 'Free key: aistudio.google.com → Get API key' : 'Key: platform.deepseek.com → API keys (add a small balance)';
+
+  const save = async () => {
+    setBusy('save');
+    setResult(null);
+    try {
+      const r = await tutorAdminApi.saveKey(p.id, value);
+      onProviders(r.providers);
+      setResult(r.key_result ?? {ok: true, message: 'Key saved.'});
+      toast(r.key_result?.ok === false ? 'info' : 'success', r.key_result?.ok === false ? 'Key saved — check the note' : `${p.name} key saved`);
+      setValue('');
+      setOpen(false);
+    } catch (e) {
+      setResult({ok: false, message: errText(e)});
+    } finally {
+      setBusy(null);
+    }
+  };
+  const remove = async () => {
+    setBusy('remove');
+    setResult(null);
+    try {
+      const r = await tutorAdminApi.removeKey(p.id);
+      onProviders(r.providers);
+      setResult(r.key_result ?? {ok: true, message: 'Removed.'});
+    } catch (e) {
+      setResult({ok: false, message: errText(e)});
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[0.84rem] font-bold text-mist-50">{p.name}</span>
+        {p.active && <Chip className="border-mint-400/40 text-mint-200">in use</Chip>}
+        <span className={`text-[0.72rem] ${p.configured ? 'text-mint-300' : 'text-flare-300'}`}>
+          {where}
+          {p.key_hint ? <code className="ml-1 rounded bg-white/10 px-1 text-mist-200">{p.key_hint}</code> : null}
+        </span>
+        <span className="ml-auto flex gap-1.5">
+          {p.key_source === 'admin' && (
+            <Button size="sm" variant="ghost" loading={busy === 'remove'} onClick={remove}>Remove</Button>
+          )}
+          <Button size="sm" variant="soft" icon={<KeyRound className="size-4" />} onClick={() => { setOpen((o) => !o); setResult(null); }}>
+            {p.configured ? 'Change key' : 'Add key'}
+          </Button>
+        </span>
+      </div>
+      {p.key_source === 'admin' && p.key_updated_at && (
+        <p className="mt-0.5 text-[0.68rem] text-mist-500">
+          Updated {formatRelative(p.key_updated_at)}{p.key_updated_by ? ` by ${p.key_updated_by}` : ''}{p.env_key_present ? ' · overrides the .env key' : ''}
+        </p>
+      )}
+      {open && (
+        <form
+          className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (value.trim()) void save();
+          }}
+        >
+          <Field label={`New ${p.name} key`} hint={help}>
+            <div className="flex gap-1.5">
+              <TextInput
+                type={show ? 'text' : 'password'}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={p.id === 'gemini' ? 'AQ.Ab… or AIza…' : 'sk-…'}
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={400}
+                autoFocus
+              />
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShow((s) => !s)}>{show ? 'Hide' : 'Show'}</Button>
+            </div>
+          </Field>
+          <div className="flex items-end gap-1.5">
+            <Button type="submit" size="sm" icon={<Save className="size-4" />} loading={busy === 'save'} disabled={!value.trim()}>Save &amp; test</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setOpen(false); setValue(''); }}>Cancel</Button>
+          </div>
+        </form>
+      )}
+      {result && (
+        <p className={`mt-2 rounded-lg px-3 py-2 text-[0.76rem] ${result.ok ? 'bg-mint-500/10 text-mint-200' : 'bg-flare-500/10 text-flare-200'}`}>
+          {result.ok ? '✅ ' : '⚠️ '}
+          {result.message}
+        </p>
+      )}
     </div>
   );
 }

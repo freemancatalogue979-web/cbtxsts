@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -22,9 +23,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from .. import config as app_config
 from ..db import get_db, session_scope
 from ..deps import require_admin, require_student
 from ..models import (
+    Admin,
     AIConversation,
     AIFeedback,
     AIFlashcard,
@@ -989,8 +992,82 @@ def _providers_info(db: Session) -> list[dict]:
             "model": model if impl.name == active.name else impl.default_model(), "default_model": impl.default_model(),
             "fallbacks": s.get("fallbacks", []), "pricing": providers.AI_PRICING_CONFIG.get(impl.name, {}),
             "key_env": "DEEPSEEK_API_KEY" if impl.name == "deepseek" else "GEMINI_API_KEY",
+            **_key_info(impl.name),
         })
     return out
+
+
+def _key_info(provider: str) -> dict:
+    """What staff may see about a key: where it comes from and a masked hint — never the key."""
+    key, source = app_config.ai_key(provider)
+    saved = app_config.saved_ai_key(provider) or {}
+    return {
+        "key_source": source,  # "admin" | "env" | ""
+        "key_hint": app_config.mask_key(key) if key else "",
+        "key_updated_at": saved.get("updated_at") if source == "admin" else None,
+        "key_updated_by": saved.get("updated_by") if source == "admin" else None,
+        "env_key_present": bool(os.getenv(app_config.AI_KEY_ENV[provider], "").strip()),
+    }
+
+
+def _require_owner(admin: Admin) -> None:
+    if (getattr(admin, "role", "owner") or "owner") != "owner":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner account can change AI API keys.")
+
+
+_KEY_SHAPE = re.compile(r"[A-Za-z0-9._\-]{20,300}")
+
+
+@admin_router.put("/keys/{provider}")
+def staff_set_key(provider: str, payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """
+    Save a new API key for DeepSeek or Gemini. It is tried with a one-word prompt
+    first: a key the provider refuses is NOT saved (the old one keeps working). If
+    the provider can't be reached right now, the key is saved with a warning. Saved
+    keys are used from the very next AI request — no restart.
+    """
+    _require_owner(admin)
+    if provider not in providers.PROVIDERS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider must be deepseek or gemini.")
+    key = re.sub(r"\s+", "", str(payload.get("key") or ""))
+    key = key.removeprefix("Bearer").strip("\"'")
+    if not _KEY_SHAPE.fullmatch(key):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That doesn't look like an API key — paste the whole key, with no spaces.")
+    impl = providers.PROVIDERS[provider]
+    trial = type(impl)()
+    trial.settings = lambda: {**impl.settings(), "key": key}  # type: ignore[method-assign]
+    check: dict = {"ok": False}
+    started = time.monotonic()
+    try:
+        text, _usage, _finish, used = trial.complete([{"role": "user", "content": "Reply with the single word: OK"}], model=trial.default_model(), max_tokens=10)
+        check = {"ok": True, "model": used, "reply": text.strip()[:40], "latency_ms": int((time.monotonic() - started) * 1000)}
+    except providers.ProviderError as error:
+        if error.code in {"bad_key"}:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{impl.label} refused that key, so it was not saved. Check you copied all of it. ({error})") from None
+        check = {"ok": False, "code": error.code, "error": str(error)}
+    app_config.save_ai_key(provider, key, by=getattr(admin, "email", "") or "")
+    reply = staff_settings(db)
+    if check["ok"]:
+        reply["key_result"] = {"ok": True, "message": f"{impl.label} key saved and working — {check['model']} replied in {check['latency_ms']} ms. It's in use now."}
+    elif check.get("code") == "balance":
+        reply["key_result"] = {"ok": False, "message": f"{impl.label} key saved, but the account has no balance yet. Add credit and it will start working."}
+    else:
+        reply["key_result"] = {"ok": False, "message": f"{impl.label} key saved, but it couldn't be confirmed right now ({check.get('error', 'no reply')}). Use Test to try again."}
+    return reply
+
+
+@admin_router.delete("/keys/{provider}")
+def staff_remove_key(provider: str, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """Forget the panel key; the server falls back to the .env / environment key, if any."""
+    _require_owner(admin)
+    if provider not in providers.PROVIDERS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Provider must be deepseek or gemini.")
+    app_config.save_ai_key(provider, None)
+    reply = staff_settings(db)
+    label = providers.PROVIDERS[provider].label
+    fallback = "the key from the server's .env is used again" if _key_info(provider)["key_source"] == "env" else f"{label} is now off until a key is added"
+    reply["key_result"] = {"ok": True, "message": f"Saved {label} key removed — {fallback}."}
+    return reply
 
 
 @admin_router.get("/settings")

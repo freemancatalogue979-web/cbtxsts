@@ -1,7 +1,9 @@
 """Runtime configuration for the Quiz Arena backend."""
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -80,9 +82,76 @@ APP_TAGLINE = "Compete. Conquer. Climb."
 # GEMINI_API_KEY=... in backend/.env (or the process environment), then
 # restart the API. Without a key everything else works; the editor explains
 # how to set it up.
+# ---------------------------------------------------------------------------
+# API keys entered by the owner in the admin panel (AI Tutor → Models).
+# ---------------------------------------------------------------------------
+# Kept in backend/data/ai_keys.json (git-ignored, owner-only file permissions).
+# A saved key wins over GEMINI_API_KEY / DEEPSEEK_API_KEY from .env or the
+# environment, and every AI call reads settings fresh, so a new key is used from
+# the very next request — no restart. Other workers pick it up via the file's mtime.
+AI_KEYS_FILE = Path(os.getenv("CBT_AI_KEYS_FILE", "") or DATA_DIR / "ai_keys.json")
+AI_KEY_ENV = {"gemini": "GEMINI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+_saved_keys: dict = {"mtime": None, "keys": {}}
+
+
+def _read_saved_keys() -> dict:
+    try:
+        mtime = AI_KEYS_FILE.stat().st_mtime_ns
+    except FileNotFoundError:
+        _saved_keys.update(mtime=None, keys={})
+        return {}
+    if mtime != _saved_keys["mtime"]:
+        try:
+            data = json.loads(AI_KEYS_FILE.read_text("utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        keys = {name: entry for name, entry in (data.get("keys") or {}).items() if isinstance(entry, dict) and entry.get("key")}
+        _saved_keys.update(mtime=mtime, keys=keys)
+    return _saved_keys["keys"]
+
+
+def saved_ai_key(provider: str) -> dict | None:
+    """{"key", "updated_at", "updated_by"} saved from the admin panel, or None."""
+    return _read_saved_keys().get(provider)
+
+
+def save_ai_key(provider: str, key: str | None, *, by: str = "") -> None:
+    """Store (or with ``key=None`` remove) the admin-panel key for a provider."""
+    keys = dict(_read_saved_keys())
+    if key:
+        keys[provider] = {"key": key, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "updated_by": by[:120]}
+    else:
+        keys.pop(provider, None)
+    temp = AI_KEYS_FILE.with_suffix(".tmp")
+    temp.write_text(json.dumps({"keys": keys}, indent=1), "utf-8")
+    try:
+        os.chmod(temp, 0o600)
+    except OSError:
+        pass
+    os.replace(temp, AI_KEYS_FILE)
+    _saved_keys["mtime"] = None  # re-read on next use
+
+
+def ai_key(provider: str) -> tuple[str, str]:
+    """(key, source) — source is "admin" (panel), "env" (.env / environment) or ""."""
+    saved = saved_ai_key(provider)
+    if saved:
+        return str(saved["key"]).strip(), "admin"
+    value = os.getenv(AI_KEY_ENV[provider], "").strip()
+    return value, ("env" if value else "")
+
+
+def mask_key(key: str) -> str:
+    """Enough to recognise a key, never enough to use it: "AQ.A…9Q2x"."""
+    key = key.strip()
+    if len(key) <= 10:
+        return "•" * len(key)
+    return f"{key[:4]}…{key[-4:]}"
+
+
 def gemini_settings() -> dict:
     return {
-        "key": os.getenv("GEMINI_API_KEY", "").strip(),
+        "key": ai_key("gemini")[0],
         # Model names change often; "gemini-flash-latest" follows Google's current
         # free Flash model. Fallbacks are tried if the chosen one is unavailable.
         "model": os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip(),
@@ -99,7 +168,7 @@ def gemini_settings() -> dict:
 # (API keys), add a small balance, and put DEEPSEEK_API_KEY=... in backend/.env.
 def deepseek_settings() -> dict:
     return {
-        "key": os.getenv("DEEPSEEK_API_KEY", "").strip(),
+        "key": ai_key("deepseek")[0],
         # DeepSeek renames models now and then; unknown names fall through the list.
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash").strip(),
         "fallbacks": [m.strip() for m in os.getenv("DEEPSEEK_FALLBACK_MODELS", "deepseek-v4-flash,deepseek-chat").split(",") if m.strip()],

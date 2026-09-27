@@ -32,6 +32,7 @@ ENV = {
     **os.environ,
     "CBT_DATABASE_URL": f"sqlite:///{DB_FILE}",
     "DEEPSEEK_API_KEY": "ds-test-key",
+    "CBT_AI_KEYS_FILE": str(Path(tempfile.gettempdir()) / f"no_saved_keys_{os.getpid()}.json"),  # keys saved in the admin panel must not leak into the test
     "DEEPSEEK_API_BASE": f"http://127.0.0.1:{MOCK_PORT}",
     "DEEPSEEK_TIMEOUT": "5",
     "TUTOR_STREAM_TIMEOUT": "5",
@@ -41,7 +42,7 @@ ENV = {
     "TUTOR_RETRY_BASE": "0.05",
     "AI_PROVIDER": "deepseek",
 }
-os.environ.update({k: ENV[k] for k in ("CBT_DATABASE_URL", "DEEPSEEK_API_KEY", "DEEPSEEK_API_BASE")})
+os.environ.update({k: ENV[k] for k in ("CBT_DATABASE_URL", "CBT_AI_KEYS_FILE", "DEEPSEEK_API_KEY", "DEEPSEEK_API_BASE")})
 sys.path.insert(0, str(ROOT))
 
 PASSED = FAILED = 0

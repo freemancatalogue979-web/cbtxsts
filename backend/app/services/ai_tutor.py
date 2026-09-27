@@ -286,7 +286,7 @@ def check_limits(db: Session, student: Student, text_length: int = 0, *, feature
     if feature:
         require_feature(lim, feature)
     if not tutor_settings(db)["key"]:
-        raise TutorError(FRIENDLY, 503, "not_configured", technical="AI Tutor has no provider key: add DEEPSEEK_API_KEY or GEMINI_API_KEY to backend/.env and restart the API.")
+        raise TutorError(FRIENDLY, 503, "not_configured", technical="AI Tutor has no provider key: paste a DeepSeek or Gemini key in Admin → AI Tutor → Models (or set DEEPSEEK_API_KEY / GEMINI_API_KEY in backend/.env).")
     policy = exam_policy(db, student)
     if policy["active"] and policy["mode"] != "FULL_ASSISTANCE":
         if policy["mode"] == "AI_DISABLED":

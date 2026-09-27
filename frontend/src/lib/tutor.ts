@@ -325,6 +325,13 @@ export interface ProviderInfo {
   fallbacks: string[];
   pricing: Record<string, {input: number; cached: number; output: number}>;
   key_env: string;
+  /** Where the key comes from: typed in the admin panel, the server's .env, or none. */
+  key_source?: 'admin' | 'env' | '';
+  /** Masked, e.g. "AQ.A…9Q2x" — the full key never leaves the server. */
+  key_hint?: string;
+  key_updated_at?: string | null;
+  key_updated_by?: string | null;
+  env_key_present?: boolean;
 }
 export type AdminRange = {range: string; start?: string; end?: string};
 export interface TutorOverview {
@@ -369,6 +376,7 @@ type AdminSettingsReply = {
   providers: ProviderInfo[];
   exam_modes: string[];
   features: string[];
+  key_result?: {ok: boolean; message: string};
 };
 const qs = (r: AdminRange, extra: Record<string, string | number | undefined> = {}) => {
   const p = new URLSearchParams();
@@ -382,6 +390,8 @@ const qs = (r: AdminRange, extra: Record<string, string | number | undefined> = 
 export const tutorAdminApi = {
   settings: () => call<AdminSettingsReply>('/api/admin/tutor/settings'),
   update: (body: Partial<TutorAdminSettings>) => call<AdminSettingsReply>('/api/admin/tutor/settings', 'PUT', body),
+  saveKey: (provider: string, key: string) => call<AdminSettingsReply>(`/api/admin/tutor/keys/${provider}`, 'PUT', {key}),
+  removeKey: (provider: string) => call<AdminSettingsReply>(`/api/admin/tutor/keys/${provider}`, 'DELETE'),
   test: () => call<{ok: boolean; provider: string; model: string; reply?: string; latency_ms?: number; error?: string}>('/api/admin/tutor/test', 'POST'),
   overview: (r: AdminRange) => call<TutorOverview>(`/api/admin/tutor/overview?${qs(r)}`),
   users: (r: AdminRange, q = '') => call<{range: string; users: TutorAdminUser[]}>(`/api/admin/tutor/users?${qs(r, {q})}`),

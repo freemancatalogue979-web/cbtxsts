@@ -87,8 +87,8 @@ class AIError(Exception):
 
 PROVIDERS = {"gemini": "Google Gemini", "deepseek": "DeepSeek"}
 SETUP = {
-    "gemini": "Create a free key at aistudio.google.com (Get API key), add GEMINI_API_KEY=your-key to backend/.env, then restart the API.",
-    "deepseek": "Create a key at platform.deepseek.com (API keys) and add a small balance, put DEEPSEEK_API_KEY=your-key in backend/.env, then restart the API.",
+    "gemini": "Create a free key at aistudio.google.com (Get API key), then paste it in Admin → AI Tutor → Models → API keys. It works straight away.",
+    "deepseek": "Create a key at platform.deepseek.com (API keys) and add a small balance, then paste it in Admin → AI Tutor → Models → API keys. It works straight away.",
 }
 
 
@@ -146,7 +146,7 @@ def _call(model: str, prompt: str, settings: dict, timeout: float | None = None,
         if error.code == 429:
             raise AIError("Gemini's free limit was reached. Wait a minute and try again (fewer sections at a time helps).", 429) from error
         if error.code in (400, 401, 403) and ("key" in detail.lower() or error.code in (401, 403)):
-            raise AIError("Gemini refused the API key. Check GEMINI_API_KEY in backend/.env.", 502) from error
+            raise AIError("Gemini refused the API key. Update it in Admin → AI Tutor → Models → API keys.", 502) from error
         raise AIError(f"Gemini returned an error ({error.code}). {detail[:200]}", 502) from error
     except (TimeoutError, socket.timeout) as error:
         raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504) from error
@@ -229,7 +229,7 @@ def _deepseek_call(model: str, prompt: str, settings: dict, timeout: float, thin
         if error.code in (400, 422) and not think and "think" in low:
             raise _ThinkingUnsupported(detail) from error
         if error.code == 401:
-            raise AIError("DeepSeek refused the API key. Check DEEPSEEK_API_KEY in backend/.env.", 502) from error
+            raise AIError("DeepSeek refused the API key. Update it in Admin → AI Tutor → Models → API keys.", 502) from error
         if error.code == 402:
             raise AIError("Your DeepSeek balance is empty. Top up at platform.deepseek.com, then try again.", 402) from error
         if error.code == 429:

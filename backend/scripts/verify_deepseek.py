@@ -20,6 +20,7 @@ os.environ.update(
     {
         "AI_PROVIDER": "auto",
         "DEEPSEEK_API_KEY": "ds-test-key",
+        "CBT_AI_KEYS_FILE": str(Path(__import__("tempfile").gettempdir()) / f"no_saved_keys_{os.getpid()}.json"),
         "DEEPSEEK_API_BASE": f"http://127.0.0.1:{PORT}",
         "DEEPSEEK_TIMEOUT": "2",
         "DEEPSEEK_BUDGET": "3",

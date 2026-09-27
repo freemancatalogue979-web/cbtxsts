@@ -200,6 +200,12 @@ the same section.
   **DeepSeek instead:** create a key at <https://platform.deepseek.com> (*API keys*), add a small
   balance and set `DEEPSEEK_API_KEY=sk-...` in `backend/.env` (the start scripts detect `sk-` keys).
   When that key is set DeepSeek is used; `AI_PROVIDER=gemini|deepseek` forces one.
+  **Or paste keys in the admin panel:** *AI Tutor → Models → API keys* has **Add key / Change key**
+  for DeepSeek and Gemini (owner account only). Each new key is tried with a one-word test first — a key
+  the provider refuses is not saved, so the working one stays — and is used from the very next AI
+  request, **no restart**. Keys are stored only on the server in `backend/data/ai_keys.json`
+  (git-ignored, owner-only file permissions), override the `.env` key while saved, and are only ever
+  shown masked (`AQ.A…9Q2x`). **Remove** falls back to the `.env` key, if there is one.
 
 ### AI Tutor
 
@@ -411,6 +417,10 @@ cd backend && ./.venv/bin/python scripts/verify_rewrite_jobs.py
 #          "A. …", Title Case headings; no cover-page section, no "Part n"), and real numbering:
 #          1. (a) a) i. (iv) A. I. with nesting and start numbers, from PDFs, text and Word
 cd backend && ./.venv/bin/python scripts/verify_import_structure.py
+
+# Backend: API keys pasted in the admin panel — refused keys aren't saved, good keys work on the
+#          next request without a restart (DeepSeek + Gemini), masked everywhere, owner-only
+cd backend && ./.venv/bin/python scripts/verify_ai_keys.py
 
 # Backend: DeepSeek provider against a local mock (no internet or API server needed): model
 #          fallback, thinking retry, key / balance / rate / busy errors, time limit
