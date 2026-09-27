@@ -19,7 +19,7 @@ import {
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Character from '../components/Character';
-import {AnswerFeedback, AnswerTile, BossBar} from '../components/GameQuestion';
+import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
 import {Button, Card, Chip, ProgressBar} from '../components/ui';
 import {api, ApiError} from '../lib/api';
 import {HAPTICS} from '../lib/haptics';
@@ -463,13 +463,23 @@ export default function Exam({
         <ProgressBar value={percentAnswered} className="h-1.5 sm:h-2" />
       </div>
 
-      {/* The paper is the boss: every correct answer takes a bite out of it. */}
-      <BossBar
+      <ExamStatus
         className="mb-3 sm:mb-4"
-        name={state.quiz.title}
-        correct={correctCount}
+        finished={finished}
         total={total}
         answered={answeredCount}
+        flagged={flaggedCount}
+        remaining={remaining}
+        correct={correctCount}
+        grade={state.grade}
+        onNext={(test) => {
+          const qs = state.questions;
+          for (let step = 1; step <= qs.length; step++) {
+            const at = (index + step) % qs.length;
+            if (test(qs[at], answers[qs[at].id])) return go(at);
+          }
+        }}
+        onSubmit={() => setConfirmOpen(true)}
       />
 
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-[1fr_16rem]">
@@ -559,7 +569,6 @@ export default function Exam({
                   {finished && currentAnswer?.selected && (
                     <div className="mt-3.5">
                       <AnswerFeedback
-                        kind="boss"
                         cosmetics={profile?.cosmetics}
                         correct={correctLabel(current) === currentAnswer.selected}
                         chosen={currentAnswer.selected}
@@ -832,6 +841,96 @@ export default function Exam({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ exam status */
+type NextTest = (question: QuestionPublic, answer: AnswerState | undefined) => boolean;
+
+/** Exam status strip: jump to blank / flagged questions and a pace guide while
+ * sitting the paper; score and "next wrong" when reviewing. Nothing here
+ * reveals correctness before the paper is submitted. */
+function ExamStatus({
+  finished, total, answered, flagged, remaining, correct, grade, onNext, onSubmit, className = '',
+}: {
+  finished: boolean;
+  total: number;
+  answered: number;
+  flagged: number;
+  remaining: number;
+  correct: number;
+  grade?: string | null;
+  onNext: (test: NextTest) => void;
+  onSubmit: () => void;
+  className?: string;
+}) {
+  const blank = total - answered;
+  const tile = 'flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors disabled:opacity-45';
+  if (finished) {
+    const wrong = total - correct;
+    const percent = total ? Math.round((correct / total) * 100) : 0;
+    return (
+      <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${className}`}>
+        <div className={`${tile} col-span-2 border-white/10 bg-white/[0.04] sm:col-span-1`}>
+          <CheckCircle2 className="size-4 shrink-0 text-mint-300" />
+          <span className="min-w-0">
+            <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Score</span>
+            <span className="block truncate text-[0.9rem] font-black text-mist-50 tabular">{correct}/{total} · {percent}%{grade ? ` · ${grade}` : ''}</span>
+          </span>
+        </div>
+        <button className={`${tile} border-flare-500/25 bg-flare-500/[0.07] hover:bg-flare-500/12`} disabled={!wrong} onClick={() => onNext((q, a) => correctLabel(q) !== (a?.selected ?? null))}>
+          <X className="size-4 shrink-0 text-flare-300" />
+          <span className="min-w-0">
+            <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Missed</span>
+            <span className="block truncate text-[0.84rem] font-black text-mist-100">{wrong ? `${wrong} · next` : 'None'}</span>
+          </span>
+        </button>
+        <button className={`${tile} border-gold-500/25 bg-gold-500/[0.06] hover:bg-gold-500/10`} disabled={!flagged} onClick={() => onNext((_, a) => Boolean(a?.flagged))}>
+          <Flag className="size-4 shrink-0 text-gold-300" />
+          <span className="min-w-0">
+            <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Flagged</span>
+            <span className="block truncate text-[0.84rem] font-black text-mist-100">{flagged ? `${flagged} · next` : 'None'}</span>
+          </span>
+        </button>
+      </div>
+    );
+  }
+  const pace = blank > 0 ? remaining / blank : 0;
+  const paceTone = !blank ? 'text-mint-300' : pace < 30 ? 'text-flare-300' : pace < 60 ? 'text-gold-300' : 'text-mint-300';
+  return (
+    <div className={`grid grid-cols-3 gap-2 ${className}`}>
+      <button className={`${tile} border-white/10 bg-white/[0.04] hover:bg-white/[0.07]`} disabled={!blank} onClick={() => onNext((_, a) => !a?.selected)} aria-label={blank ? `Go to the next of ${blank} unanswered questions` : 'All questions answered'}>
+        <span className="grid size-5 shrink-0 place-items-center rounded-md bg-white/15 text-[0.62rem] font-black text-mist-200">{blank}</span>
+        <span className="min-w-0">
+          <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Blank</span>
+          <span className="block truncate text-[0.8rem] font-black text-mist-100">{blank ? (<>Next<span className="hidden sm:inline"> blank</span></>) : 'All done'}</span>
+        </span>
+      </button>
+      <button className={`${tile} border-gold-500/25 bg-gold-500/[0.06] hover:bg-gold-500/10`} disabled={!flagged} onClick={() => onNext((_, a) => Boolean(a?.flagged))} aria-label={flagged ? `Go to the next of ${flagged} flagged questions` : 'No flagged questions'}>
+        <Flag className="size-4 shrink-0 text-gold-300" />
+        <span className="min-w-0">
+          <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Flagged</span>
+          <span className="block truncate text-[0.8rem] font-black text-mist-100">{flagged ? `${flagged} · next` : 'None'}</span>
+        </span>
+      </button>
+      {blank ? (
+        <div className={`${tile} border-white/10 bg-white/[0.04]`} title="Time left divided by the questions you haven't answered">
+          <Clock className={`size-4 shrink-0 ${paceTone}`} />
+          <span className="min-w-0">
+            <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Pace</span>
+            <span className={`block truncate text-[0.8rem] font-black tabular ${paceTone}`}>~{formatClock(Math.floor(pace))}<span className="hidden font-bold text-mist-500 sm:inline"> / question</span></span>
+          </span>
+        </div>
+      ) : (
+        <button className={`${tile} border-mint-500/35 bg-mint-500/12 hover:bg-mint-500/20`} onClick={onSubmit}>
+          <Send className="size-4 shrink-0 text-mint-300" />
+          <span className="min-w-0">
+            <span className="block text-[0.64rem] font-bold tracking-wider text-mist-500 uppercase">Ready</span>
+            <span className="block truncate text-[0.8rem] font-black text-mint-200">Submit</span>
+          </span>
+        </button>
+      )}
     </div>
   );
 }

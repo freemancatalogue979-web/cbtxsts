@@ -1,7 +1,7 @@
 /**
  * Game question kit — the pieces that make answering a *challenge* rather than
  * filling in a form: chunky answer tiles that physically press, hearts, a combo
- * meter that heats up, a boss health bar for exams, and the CORRECT / NOT QUITE
+ * meter that heats up, and the CORRECT / NOT QUITE
  * banners with their XP float.
  *
  * Everything here is presentational. It receives a verdict and renders it; it
@@ -124,59 +124,6 @@ export function ComboMeter({combo, className = ''}: {combo: number; className?: 
       <Flame className={`size-3.5 ${hot ? 'animate-pulse' : ''}`} />x{combo}
       {hot && <span className="hidden sm:inline">On fire</span>}
     </span>
-  );
-}
-
-/* -------------------------------------------------------------------- boss bar */
-
-/**
- * Exam framing: the paper is a boss and each correct answer takes a bite out of
- * it. The bar only reflects answered/answered-correctly counts the server has
- * already recorded — it is never a place where scoring happens.
- */
-export function BossBar({
-  name,
-  correct,
-  total,
-  answered,
-  className = '',
-}: {
-  name: string;
-  correct: number;
-  total: number;
-  answered: number;
-  className?: string;
-}) {
-  const health = total > 0 ? Math.max(0, 100 - (correct / total) * 100) : 100;
-  return (
-    <div className={`card keep-dark overflow-hidden border border-nova-500/30 bg-[#0b1017] p-3 sm:p-4 ${className}`}>
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-nova-400/40 bg-nova-950/40 text-[1.1rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
-          ⚔
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
- <p className="truncate text-[0.84rem] font-black tracking-wider text-mist-50 sm:text-[0.90rem]">
-              TACTICAL BOSS ENCOUNTER · {name}
-            </p>
-            <span className="text-[0.74rem] font-mono font-black text-nova-300">
-              {health.toFixed(0)}% RESISTANCE
-            </span>
-          </div>
-          <div className="mt-1.5 h-2.5 overflow-hidden rounded-md border border-white/10 bg-black/60">
-            <motion.div
-              className="h-full rounded-sm bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500"
-              initial={false}
-              animate={{width: `${health}%`}}
-              transition={{type: 'spring', stiffness: 120, damping: 20}}
-            />
-          </div>
- <p className="mt-1 text-[0.64rem] font-bold tracking-wider text-mist-400">
-            {answered}/{total} OBJECTIVES ENGAGED · {correct} CONFIRMED HITS
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }
 

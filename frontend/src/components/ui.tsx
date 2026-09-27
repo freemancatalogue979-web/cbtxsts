@@ -181,7 +181,6 @@ export function Button({
         {/* The animated gradient ring sits inside the face so it inherits the
             chamfered clip and only its outer rim (the mask punches out the
             centre) is visible — that's the live HUD line around the tile. */}
-        <span aria-hidden className="gbtn-ring" />
         {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
         {children}
       </span>

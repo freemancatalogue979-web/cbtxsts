@@ -1261,15 +1261,16 @@
   transition: transform var(--qa-press), filter 0.2s ease;
   will-change: transform;
 }
-.gbtn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: drop-shadow(0 6px 16px rgba(91, 63, 214, 0.55))
-          drop-shadow(0 0 22px rgba(168, 85, 247, 0.45));
+/* Hover lift only on real pointers — on phones :hover "sticks" after a tap.
+   No coloured glow: some browsers paint drop-shadow filters as a smeared halo. */
+@media (hover: hover) and (pointer: fine) {
+  .gbtn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+  }
 }
 .gbtn:active:not(:disabled) {
   transform: translateY(1px);
-  filter: drop-shadow(0 2px 6px rgba(91, 63, 214, 0.7))
-          drop-shadow(0 0 14px rgba(168, 85, 247, 0.65));
 }
 .gbtn:disabled {
   filter: grayscale(0.5) brightness(0.7);
@@ -1368,10 +1369,12 @@
   transition: opacity 0.18s ease, background-position 0.7s ease;
   z-index: 3;
 }
-.gbtn:hover:not(:disabled) .gbtn-face::before {
+@media (hover: hover) and (pointer: fine) {
+  .gbtn:hover:not(:disabled) .gbtn-face::before {
   opacity: 1;
   background-position: 0 0;
   transition-delay: 0.05s;
+}
 }
 .gbtn:active:not(:disabled) .gbtn-face::before {
   /* Quicker flash on tap so the press feels mechanical. */
