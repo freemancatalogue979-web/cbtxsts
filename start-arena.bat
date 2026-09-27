@@ -20,6 +20,12 @@ echo [*] Installing backend dependencies...
 backend\.venv\Scripts\python.exe -m pip install --quiet --upgrade pip
 backend\.venv\Scripts\python.exe -m pip install --quiet -r backend\requirements.txt
 
+REM Gemini key for "Make it easy to read": asked once, saved to backend\.env
+REM (git-ignored, never pushed). Press Enter to skip.
+if not defined GEMINI_API_KEY (
+  findstr /b /r /c:"GEMINI_API_KEY=." "backend\.env" >nul 2>nul || call :askkey
+)
+
 if not exist "frontend\node_modules" (
   echo [*] Installing frontend dependencies...
   pushd frontend
@@ -45,3 +51,23 @@ echo.
 timeout /t 6 /nobreak >nul
 start "" http://localhost:5173
 endlocal
+exit /b 0
+
+:askkey
+echo [*] Paste your Gemini API key for the AI rewrite, then press Enter (or just Enter to skip):
+set "GKEY="
+set /p "GKEY=Key: "
+if not defined GKEY (
+  echo [*] Skipped - you can add GEMINI_API_KEY=... to backend\.env later.
+  exit /b 0
+)
+if exist "backend\.env" (
+  findstr /v /b /c:"GEMINI_API_KEY=" "backend\.env" > "backend\.env.tmp"
+) else (
+  type nul > "backend\.env.tmp"
+)
+>>"backend\.env.tmp" echo GEMINI_API_KEY=%GKEY%
+move /y "backend\.env.tmp" "backend\.env" >nul
+set "GKEY="
+echo [*] Saved to backend\.env (kept out of git).
+exit /b 0

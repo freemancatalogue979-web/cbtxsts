@@ -191,8 +191,10 @@ the same section.
   (*Easy to read*, *Fun to learn*, *Exam-ready*). Staff compare New and Original for each section,
   see warnings if a number or key term went missing, and pick which sections to use. Nothing
   reaches players until the material is saved.
-  **Setup:** create a free key at <https://aistudio.google.com> (*Get API key*), put
-  `GEMINI_API_KEY=...` in `backend/.env` and restart the API. Without a key the button explains the
+  **Setup:** create a free key at <https://aistudio.google.com> (*Get API key*). The first time you
+  run `start-arena.sh` / `start-arena.bat` it asks for the key once and saves it to `backend/.env`,
+  which git ignores, so the key never reaches GitHub. You can also write `GEMINI_API_KEY=...` in
+  that file yourself, or set it as an environment variable or secret on your host, then restart the API. Without a key the button explains the
   setup and everything else keeps working. On the free tier Google may use submitted text to
   improve its models, so don't send private student data.
 

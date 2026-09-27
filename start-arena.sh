@@ -27,6 +27,33 @@ setup_backend() {
   ./.venv/bin/pip install --quiet -r requirements.txt
 }
 
+# Gemini key for "Make it easy to read". Asked once, saved to backend/.env
+# (git-ignored, so it never reaches GitHub). A GEMINI_API_KEY already in the
+# environment (e.g. set by your host) is used as is.
+ensure_gemini_key() {
+  local env_file="$ROOT/backend/.env"
+  if [ -n "${GEMINI_API_KEY:-}" ]; then return; fi
+  if [ -f "$env_file" ] && grep -Eq '^GEMINI_API_KEY=.+' "$env_file"; then return; fi
+  if [ ! -t 0 ]; then
+    log "No Gemini key yet — the AI rewrite stays off (add GEMINI_API_KEY=... to backend/.env)."
+    return
+  fi
+  log "Paste your Gemini API key for the AI rewrite (typing is hidden; press Enter to skip):"
+  local key=""
+  read -rs key || true
+  echo
+  if [ -z "$key" ]; then
+    log "Skipped — you can add GEMINI_API_KEY=... to backend/.env later."
+    return
+  fi
+  ( umask 077; touch "$env_file" )
+  grep -v '^GEMINI_API_KEY=' "$env_file" > "$env_file.tmp" 2>/dev/null || true
+  printf 'GEMINI_API_KEY=%s\n' "$key" >> "$env_file.tmp"
+  mv "$env_file.tmp" "$env_file"
+  chmod 600 "$env_file"
+  log "Saved to backend/.env (kept out of git)."
+}
+
 setup_frontend() {
   cd "$ROOT/frontend"
   if [ ! -d node_modules ]; then
@@ -48,10 +75,11 @@ start_web() {
 }
 
 case "$TARGET" in
-  api) setup_backend; start_api ;;
+  api) setup_backend; ensure_gemini_key; start_api ;;
   web) setup_frontend; start_web ;;
   all)
     setup_backend
+    ensure_gemini_key
     setup_frontend
     # Start the API in the background, then hand the foreground to Vite.
     ( cd "$ROOT/backend" && ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
