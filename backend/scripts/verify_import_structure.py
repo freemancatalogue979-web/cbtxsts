@@ -164,6 +164,12 @@ def main() -> int:
     check("valid fields kept", saved[0].get("style") == "lower-roman" and saved[0].get("wrap") == "paren" and saved[0].get("start") == 4 and saved[0].get("level") == 1, saved[0])
     check("bad fields dropped", all(key not in saved[1] for key in ("style", "wrap", "start", "level")), saved[1])
 
+    # A plain .txt with a hard-wrapped, unindented item line keeps it inside the item.
+    wrapped = "Features\n\nThe features are:\n(a) it must be in writing;\n(b) it must be sworn before a notary public or a\nperson duly authorised; and\n(c) it must contain facts.\n"
+    _, secs = build_sections(_text_outline(wrapped), fallback_title="x")
+    lists = [b for b in blocks_of(secs) if b["type"] == "numbers"]
+    items = lists[0]["items"] if lists else []
+    check("wrapped .txt item line joins its item", len(items) == 3 and items[1].endswith("person duly authorised; and"), items)
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 

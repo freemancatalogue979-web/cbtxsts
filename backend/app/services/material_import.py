@@ -356,7 +356,8 @@ def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) ->
             indented = raw[:1] in (" ", "\t")
             prev_line = next((l.strip() for l in reversed(lines[:i]) if l.strip()), "")
             ran_to_margin = len(prev_line) >= wrap * 0.7  # the item's last line was wrapped, not finished
-            if (indented and not reflow) or (reflow and (stripped[:1].islower() or (ran_to_margin and not re.search(r"[.;:!?]$", last)))):
+            unfinished = not re.search(r"[.!?]$", last)  # "...a notary public or a" / "person duly authorised"
+            if (indented and not reflow) or (not reflow and stripped[:1].islower() and unfinished) or (reflow and (stripped[:1].islower() or (ran_to_margin and not re.search(r"[.;:!?]$", last)))):
                 current["items"][-1] = _tidy(f"{last} {stripped}")
                 continue
 
