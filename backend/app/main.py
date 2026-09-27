@@ -129,7 +129,9 @@ def _startup_db() -> dict:
     with session_scope() as db:
         summary = seed_all(db)
     try:  # AI Tutor upkeep: move v1 saved items into their tables, apply retention
-        from .services import ai_library, ai_tutor
+        from .services import ai_library, ai_migrations, ai_tutor
+
+        ai_migrations.ensure_indexes()
 
         with session_scope() as db:
             moved = ai_library.migrate_legacy_saved(db)
