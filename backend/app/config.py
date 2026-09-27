@@ -119,7 +119,7 @@ def save_ai_key(provider: str, key: str | None, *, by: str = "") -> None:
     """Store (or with ``key=None`` remove) the admin-panel key for a provider."""
     keys = dict(_read_saved_keys())
     if key:
-        keys[provider] = {"key": key, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "updated_by": by[:120]}
+        keys[provider] = {"key": key, "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"), "updated_by": by[:120]}
     else:
         keys.pop(provider, None)
     temp = AI_KEYS_FILE.with_suffix(".tmp")
