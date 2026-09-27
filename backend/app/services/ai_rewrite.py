@@ -64,7 +64,7 @@ Rules you must follow:
 5. Return the SAME sections (same "index" values) with blocks using ONLY these types:
    heading, subheading, paragraph, list, numbers, table, keyterm, definition, note, tip, example, summary, quote, reference, image, video, attachment, divider.
    - paragraph/heading/subheading/note/tip/example/summary/quote/reference/definition use "text" (definition may also have "title").
-   - list and numbers use "items" (array of strings).
+   - list and numbers use "items" (array of strings). Copy any "style", "wrap", "start" and "level" fields of a list unchanged — they keep the notes' own numbering such as (a), (b) or (i), (ii).
    - table uses "head" (array) and "rows" (array of arrays) — keep the same number of rows and columns; you may simplify cell wording.
    - keyterm uses "term" and "meaning".
    - image/video/attachment/divider blocks: copy them unchanged.

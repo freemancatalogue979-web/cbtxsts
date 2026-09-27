@@ -111,8 +111,106 @@ def _is_caps_heading(line: str) -> bool:
     return 3 <= len(letters) and len(stripped) <= 80 and stripped == stripped.upper() and not stripped.endswith((".", ",", ";"))
 
 
+# ------------------------------------------------------- numbering + headings
+# List markers: 1.  1)  (1)  a.  a)  (a)  A.  i.  (iv)  I.  — style + wrap are kept so
+# the reader shows exactly the numbering the notes use, with nesting levels.
+_MARKER = re.compile(r"^\s*(\()?(\d{1,3}|[A-Za-z]|[ivxlcIVXLC]{2,6})([.)])\s+(\S.*)$")
+_MULTI_NUM = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s+(\S.*)$")
+_LABEL_WORDS = r"chapter|part|unit|lecture|topic|module|week|lesson|section|rule|article|order|book|title|division"
+_LABEL = re.compile(
+    rf"^\s*({_LABEL_WORDS})\s+(\d{{1,3}}[A-Za-z]?|[ivxlcIVXLC]{{1,6}}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|[A-Za-z])\b\s*[:.\-–—]?\s*(.*)$",
+    re.I,
+)
+_ROMAN = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100}
+
+
+def _roman_value(token: str) -> int:
+    total, prev = 0, 0
+    for ch in reversed(token.lower()):
+        value = _ROMAN.get(ch, 0)
+        total = total - value if value < prev else total + value
+        prev = max(prev, value)
+    return total
+
+
+def _marker(line: str, prev: dict | None) -> dict | None:
+    """Parse a list marker at the start of ``line`` (``prev`` = last marker in this list run)."""
+    match = _MARKER.match(line)
+    if not match:
+        return None
+    opened, token, close, rest = match.groups()
+    if opened and close != ")":
+        return None
+    if re.match(r"^[A-Z]\.\s", rest) and not token.isdigit():
+        return None  # initials: "A. B. Okafor"
+    wrap = "paren" if opened else ("rparen" if close == ")" else "dot")
+    if token.isdigit():
+        return {"style": "decimal", "wrap": wrap, "value": int(token), "text": rest}
+    if not (token.islower() or token.isupper()):
+        return None
+    lower = token.islower()
+    alpha = f"{'lower' if lower else 'upper'}-alpha"
+    roman = f"{'lower' if lower else 'upper'}-roman"
+    same_wrap = bool(prev and prev["wrap"] == wrap)
+    if len(token) == 1:
+        letter = ord(token.lower()) - 96
+        # "i" after "h" is a letter; "v" after "iv" is a numeral
+        if same_wrap and prev["style"] == alpha and letter == prev["value"] + 1:
+            return {"style": alpha, "wrap": wrap, "value": letter, "text": rest}
+        if token.lower() in _ROMAN and (
+            (same_wrap and prev["style"] == roman and _roman_value(token) == prev["value"] + 1) or token.lower() == "i"
+        ):
+            return {"style": roman, "wrap": wrap, "value": _roman_value(token), "text": rest}
+        return {"style": alpha, "wrap": wrap, "value": letter, "text": rest}
+    if re.fullmatch(r"[ivxlc]+", token.lower()) and _roman_value(token) > 0:
+        return {"style": roman, "wrap": wrap, "value": _roman_value(token), "text": rest}
+    return None
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z][\w'’-]*", text)
+
+
+def _is_titleish(text: str) -> bool:
+    """Short, mostly Capitalised Words, no sentence ending — reads like a heading."""
+    stripped = text.strip()
+    if not stripped or len(stripped) > 90 or re.search(r"[.;,]$", stripped):
+        return False
+    words = _words(stripped)
+    if not 1 <= len(words) <= 12:
+        return False
+    if stripped == stripped.upper() and len(re.sub(r"[^A-Za-z]", "", stripped)) >= 3:
+        return True
+    significant = [word for word in words if word.lower() not in _SMALL_WORDS]
+    if not significant:
+        return False
+    capital = sum(1 for word in significant if word[:1].isupper())
+    return capital / len(significant) >= 0.75
+
+
+def clean_heading(text: str) -> str:
+    """Readable heading text: SHOUTED words in Title Case (numbering kept), no trailing colon."""
+    text = _tidy(text).strip(" :-–—.")
+    head = re.match(r"^((?:\(?[\dA-Za-z]{1,6}[.)]|\d{1,2}(?:\.\d{1,2})+\.?)\s+)(.*)$", text)
+    prefix, body = (head.group(1), head.group(2)) if head else ("", text)
+    letters = re.sub(r"[^A-Za-z]", "", body)
+    if letters and body == body.upper() and len(letters) > 3:
+        body = _caps_to_title(body)
+    return f"{prefix}{body}".strip()[:200]
+
+
+_WORD_NUMBERS = {w: i for i, w in enumerate("one two three four five six seven eight nine ten eleven twelve".split(), start=1)}
+
+
 def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) -> list[Element]:
-    """Plain / markdown text. ``reflow`` joins hard-wrapped lines (PDF output)."""
+    """Plain / markdown text. ``reflow`` joins hard-wrapped lines (PDF output).
+
+    Headings are recognised from: markdown #, SHOUTED lines, "Chapter 1 / Part II /
+    Unit 3: …" labels, "1.1 Meaning of …" numbering, lettered/numbered short title
+    lines ("A. Introduction", "1. Types of Affidavit") and short Title Case lines
+    that stand alone. Lists keep their numbering style — 1. (a) a) i. (iv) A. I. —
+    and nesting level; wrapped list lines are joined back to their item.
+    """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)  # words hyphen-broken across lines
     lines = text.split("\n")
@@ -121,8 +219,10 @@ def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) ->
 
     out: list[Element] = []
     para: list[str] = []
-    items: list[str] = []
-    ordered = False
+    current: dict | None = None  # open list: {"key", "level", "items", "meta"}
+    stack: list[tuple] = []  # nesting of list styles in this run
+    last_marker: dict[tuple, dict] = {}  # per (style family, wrap): last marker seen in this run
+    prev_list_item = False  # the previous non-blank line was a list item
 
     def flush_para() -> None:
         if para:
@@ -132,43 +232,154 @@ def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) ->
             para.clear()
 
     def flush_list() -> None:
-        nonlocal ordered
-        if items:
-            out.append(("list", ordered, list(items)))
-            items.clear()
+        nonlocal current
+        if current and current["items"]:
+            out.append(("list", current["meta"]["style"] != "bullet", list(current["items"]), dict(current["meta"])))
+        current = None
 
-    for raw in lines:
+    def end_run() -> None:
+        nonlocal prev_list_item
+        flush_list()
+        stack.clear()
+        last_marker.clear()
+        prev_list_item = False
+
+    def heading(level: int, value: str) -> None:
+        flush_para()
+        end_run()
+        cleaned = clean_heading(value)
+        if cleaned:
+            out.append(("heading", level, cleaned))
+
+    def next_nonblank(i: int) -> str:
+        for later in lines[i + 1 : i + 4]:
+            if later.strip():
+                return later.strip()
+        return ""
+
+    def previous_ended(i: int) -> bool:
+        """Blank line before, or the previous line finished a sentence."""
+        for earlier in reversed(lines[max(0, i - 2) : i]):
+            if not earlier.strip():
+                return True
+            return bool(_SENTENCE_END.search(earlier.strip()))
+        return True
+
+    def add_item(meta: dict, value: str) -> None:
+        nonlocal current, prev_list_item
+        key = (meta["style"], meta["wrap"])
+        if not stack or stack[-1] != key:
+            if key in stack:
+                while stack[-1] != key:
+                    stack.pop()
+            else:
+                stack.append(key)
+        level = min(len(stack) - 1, 2)
+        if not current or current["key"] != key or current["level"] != level:
+            flush_list()
+            current = {
+                "key": key,
+                "level": level,
+                "items": [],
+                "meta": {"style": meta["style"], "wrap": meta["wrap"], "start": meta.get("value", 1), "level": level},
+            }
+        current["items"].append(_tidy(value))
+        if meta["style"] != "bullet":
+            last_marker[(meta["style"].split("-")[-1], meta["wrap"])] = meta
+            last_marker["last"] = meta
+        prev_list_item = True
+
+    for i, raw in enumerate(lines):
         line = raw.rstrip()
         stripped = line.strip()
         if not stripped:
             flush_para()
-            flush_list()
             continue
         if markdown:
             match = _MD_HEADING.match(line)
             if match:
-                flush_para(); flush_list()
-                out.append(("heading", len(match.group(1)), _tidy(re.sub(r"[*_`]", "", match.group(2)))))
+                heading(len(match.group(1)), re.sub(r"[*_`]", "", match.group(2)))
                 continue
             stripped = re.sub(r"(\*\*|__|`)", "", stripped)
+
+        after = next_nonblank(i)
+
+        # "Chapter One" / "Part II: Sources of Law" / "Unit 3 – Affidavits"
+        label = None if markdown else _LABEL.match(stripped)
+        if label and len(stripped) <= 90 and not re.search(r"[.;,]$", stripped):
+            word, number, title = label.group(1), label.group(2), label.group(3)
+            is_structural = word.lower() not in {"section", "rule", "article", "order"}
+            if is_structural or not title or _is_titleish(title):
+                if not title and after and _is_titleish(after) and not _LABEL.match(after) and not _marker(after, None):
+                    title = after
+                    lines[i + 1 : i + 4] = [("" if l.strip() == after else l) for l in lines[i + 1 : i + 4]]
+                name = f"{word.capitalize()} {number.capitalize() if number.lower() in _WORD_NUMBERS else number.upper() if re.fullmatch(r'[ivxlc]+', number, re.I) else number}"
+                heading(1 if is_structural else 3, f"{name}: {clean_heading(title)}" if title else name)
+                continue
+
+        # "1.1 Meaning of Affidavit" / "2.3.1 Contents"
+        multi = None if markdown else _MULTI_NUM.match(stripped)
+        if multi and _is_titleish(multi.group(2)) and not re.search(r"[.;,:]$", stripped):
+            depth = multi.group(1).count(".") + 1
+            heading(min(4 + depth, 6), f"{multi.group(1)} {multi.group(2)}")
+            continue
+
         bullet = _BULLET.match(stripped)
-        number = None if bullet else _NUMBERED.match(stripped)
-        if bullet or (number and (items or not para)):
+        marker = None if bullet else _marker(stripped, last_marker.get("last"))
+        if marker:
+            family = (marker["style"].split("-")[-1], marker["wrap"])
+            prev = last_marker.get(family)
+            continues = bool(prev and prev["style"] == marker["style"] and marker["value"] == prev["value"] + 1)
+            # A short title line with a marker, followed by prose, is a heading ("A. Introduction").
+            titled = _is_titleish(marker["text"]) and not re.search(r"[:;,.]$", marker["text"])
+            nxt = _marker(after, marker) if after else None
+            followed_by_sibling = bool(nxt and nxt["style"] == marker["style"] and nxt["wrap"] == marker["wrap"])
+            if titled and not continues and not followed_by_sibling and not prev_list_item and previous_ended(i) and after and not _BULLET.match(after):
+                rank = {"upper-roman": 2, "upper-alpha": 3, "decimal": 5}.get(marker["style"], 6)
+                heading(rank, stripped)
+                continue
+            # After running text, only accept a marker that clearly starts an item.
+            if para and not (marker["wrap"] != "dot" or _SENTENCE_END.search(para[-1]) or continues or marker["value"] == 1):
+                para.append(stripped)
+                continue
             flush_para()
-            kind_ordered = bool(number)
-            if items and kind_ordered != ordered:
-                flush_list()
-            ordered = kind_ordered
-            items.append(_tidy((bullet or number).group(1)))
+            add_item(marker, marker["text"])
             continue
-        if items and raw[:1] in (" ", "\t") and not reflow:
-            items[-1] = _tidy(items[-1] + " " + stripped)  # wrapped list item
-            continue
-        flush_list()
-        if not markdown and _is_caps_heading(stripped):
+        if bullet:
             flush_para()
-            out.append(("heading", 1, _caps_to_title(stripped) if len(stripped) > 4 else stripped))
+            add_item({"style": "bullet", "wrap": ""}, bullet.group(1))
             continue
+
+        # a wrapped list line: join it back to its item
+        if current and current["items"] and prev_list_item:
+            last = current["items"][-1]
+            indented = raw[:1] in (" ", "\t")
+            prev_line = next((l.strip() for l in reversed(lines[:i]) if l.strip()), "")
+            ran_to_margin = len(prev_line) >= wrap * 0.7  # the item's last line was wrapped, not finished
+            if (indented and not reflow) or (reflow and (stripped[:1].islower() or (ran_to_margin and not re.search(r"[.;:!?]$", last)))):
+                current["items"][-1] = _tidy(f"{last} {stripped}")
+                continue
+
+        if not markdown and _is_caps_heading(stripped) and not _marker(stripped, None):
+            heading(4, stripped)
+            continue
+
+        # A short Title Case line standing alone before a paragraph: a subheading.
+        if (
+            not markdown
+            and not para
+            and _is_titleish(stripped)
+            and len(_words(stripped)) >= 2
+            and previous_ended(i)
+            and after
+            and len(after) > len(stripped)
+            and after[:1].isupper()
+            and not _marker(after, None)
+        ):
+            heading(6, stripped)
+            continue
+
+        end_run()
         if reflow and para:
             previous = para[-1]
             # A short line that ends a sentence closes the paragraph.
@@ -214,20 +425,37 @@ def _docx_outline(data: bytes) -> list[Element]:
     except (KeyError, ET.ParseError):
         pass
 
-    ordered_nums: set[str] = set()
+    # numId → level → {style, wrap, start}: Word's own numbering (1. / (a) / i. / A. …)
+    num_levels: dict[str, dict[int, dict]] = {}
+    fmt_style = {"decimal": "decimal", "decimalZero": "decimal", "lowerLetter": "lower-alpha", "upperLetter": "upper-alpha", "lowerRoman": "lower-roman", "upperRoman": "upper-roman"}
     try:
         numbering = ET.fromstring(archive.read("word/numbering.xml"))
-        abstract_fmt: dict[str, str] = {}
+        abstract_levels: dict[str, dict[int, dict]] = {}
         for abstract in numbering.iter(f"{W}abstractNum"):
-            lvl = abstract.find(f"{W}lvl")
-            fmt = lvl.find(f"{W}numFmt") if lvl is not None else None
-            abstract_fmt[abstract.get(f"{W}abstractNumId") or ""] = (fmt.get(f"{W}val") if fmt is not None else "bullet") or "bullet"
+            levels: dict[int, dict] = {}
+            for lvl in abstract.findall(f"{W}lvl"):
+                ilvl = int(lvl.get(f"{W}ilvl") or 0)
+                fmt = lvl.find(f"{W}numFmt")
+                text_el = lvl.find(f"{W}lvlText")
+                start_el = lvl.find(f"{W}start")
+                fmt_val = (fmt.get(f"{W}val") if fmt is not None else "bullet") or "bullet"
+                pattern = (text_el.get(f"{W}val") if text_el is not None else "") or ""
+                wrap = "paren" if pattern.startswith("(") else ("rparen" if pattern.endswith(")") else "dot")
+                start_val = start_el.get(f"{W}val") if start_el is not None else "1"
+                levels[ilvl] = {
+                    "style": fmt_style.get(fmt_val, "bullet" if fmt_val in {"bullet", "none"} else "decimal"),
+                    "wrap": wrap,
+                    "start": int(start_val) if str(start_val).isdigit() else 1,
+                }
+            abstract_levels[abstract.get(f"{W}abstractNumId") or ""] = levels
         for num in numbering.iter(f"{W}num"):
             ref = num.find(f"{W}abstractNumId")
-            if ref is not None and abstract_fmt.get(ref.get(f"{W}val") or "", "bullet") not in {"bullet", "none"}:
-                ordered_nums.add(num.get(f"{W}numId") or "")
+            if ref is not None:
+                num_levels[num.get(f"{W}numId") or ""] = abstract_levels.get(ref.get(f"{W}val") or "", {})
     except (KeyError, ET.ParseError):
         pass
+    ordered_nums = {nid for nid, levels in num_levels.items() if levels.get(0, {}).get("style", "bullet") != "bullet"}
+    counters: dict[str, dict[int, int]] = {}
 
     body = document.find(f"{W}body")
     if body is None:
@@ -235,10 +463,12 @@ def _docx_outline(data: bytes) -> list[Element]:
     out: list[Element] = []
     items: list[str] = []
     list_ordered = False
+    list_meta: dict = {}
+    list_key: tuple = ()
 
     def flush_list() -> None:
         if items:
-            out.append(("list", list_ordered, list(items)))
+            out.append(("list", list_ordered, list(items), dict(list_meta)))
             items.clear()
 
     for child in body:
@@ -266,9 +496,12 @@ def _docx_outline(data: bytes) -> list[Element]:
             if outline is not None and (outline.get(f"{W}val") or "").isdigit() and int(outline.get(f"{W}val")) < 9:
                 level = int(outline.get(f"{W}val")) + 1  # 9 means "body text"
             numpr = ppr.find(f"{W}numPr")
+            ilvl = 0
             if numpr is not None:
                 nid = numpr.find(f"{W}numId")
                 num_id = (nid.get(f"{W}val") if nid is not None else "") or ""
+                lvl_el = numpr.find(f"{W}ilvl")
+                ilvl = int(lvl_el.get(f"{W}val") or 0) if lvl_el is not None and str(lvl_el.get(f"{W}val") or "0").isdigit() else 0
         name = (style_names.get(style_id or "", style_id or "") or "").lower().replace(" ", "")
         if name in {"title"}:
             level = 0
@@ -277,15 +510,32 @@ def _docx_outline(data: bytes) -> list[Element]:
         elif name in {"subtitle"}:
             level = 2
         if not text:
-            flush_list()
-            continue
+            continue  # empty paragraphs between items don't end a list
         if level is not None and len(text) <= 200:
             flush_list()
             out.append(("heading", min(level, 6), text))
         elif num_id and num_id != "0" or "listparagraph" in name or name.startswith("listbullet") or name.startswith("listnumber"):
-            is_ordered = num_id in ordered_nums or name.startswith("listnumber")
-            if items and is_ordered != list_ordered:
+            level_info = num_levels.get(num_id, {}).get(ilvl) if num_id else None
+            if level_info:
+                is_ordered = level_info["style"] != "bullet"
+            else:
+                is_ordered = num_id in ordered_nums or name.startswith("listnumber")
+            # Word's running counters: deeper levels restart when a shallower item appears.
+            count = counters.setdefault(num_id, {})
+            for deeper in [k for k in count if k > ilvl]:
+                count.pop(deeper)
+            count[ilvl] = count.get(ilvl, (level_info or {}).get("start", 1) - 1) + 1
+            key = (num_id, ilvl)
+            if items and (key != list_key or is_ordered != list_ordered):
                 flush_list()
+            if not items:
+                list_meta = {
+                    "style": (level_info or {}).get("style", "decimal") if is_ordered else "bullet",
+                    "wrap": (level_info or {}).get("wrap", "dot"),
+                    "start": count[ilvl],
+                    "level": min(ilvl, 2),
+                }
+            list_key = key
             list_ordered = is_ordered
             items.append(text.replace("\n", " "))
         else:
@@ -652,10 +902,23 @@ def _to_blocks(element: Element, *, sub_level: int) -> list[dict[str, Any]]:
         return [{"type": "paragraph", "text": piece} for piece in _split_long(element[1])]
     if kind == "list":
         ordered, items = element[1], [item[:390] for item in element[2]]
-        return [
-            {"type": "numbers" if ordered else "list", "items": items[i : i + LIST_ITEMS]}
-            for i in range(0, len(items), LIST_ITEMS)
-        ]
+        meta = element[3] if len(element) > 3 and isinstance(element[3], dict) else {}
+        blocks = []
+        for i in range(0, len(items), LIST_ITEMS):
+            block: dict[str, Any] = {"type": "numbers" if ordered else "list", "items": items[i : i + LIST_ITEMS]}
+            if ordered:
+                style, wrap = meta.get("style") or "decimal", meta.get("wrap") or "dot"
+                start = int(meta.get("start") or 1) + i
+                if style != "decimal":
+                    block["style"] = style
+                if wrap != "dot":
+                    block["wrap"] = wrap
+                if start != 1:
+                    block["start"] = start
+            if meta.get("level"):
+                block["level"] = int(meta["level"])
+            blocks.append(block)
+        return blocks
     if kind == "table":
         rows = [[cell[:195] for cell in row[:TABLE_COLS]] for row in element[1]]
         head, body = (rows[0], rows[1:]) if len(rows) > 1 else ([], rows)
@@ -668,9 +931,13 @@ def _block_words(block: dict[str, Any]) -> int:
     return len(str(text).split())
 
 
+def _base_title(text: str) -> str:
+    return re.sub(r" \((?:cont\.|continued) ?\d*\)$", "", text or "").strip()
+
+
 def _range_title(first: str, last: str) -> str:
     """"Rule 1: Duty…" + "Rule 2: Fees…" → "Rules 1–2"; otherwise "First – Last"."""
-    base = lambda text: re.sub(r" \(cont\. ?\d*\)$", "", text).strip()
+    base = _base_title
     if base(first) == base(last):
         return base(first)[:200]
     label = lambda text: text.split(":", 1)[0].strip() if ":" in text and len(text.split(":", 1)[0]) <= 30 else text.strip()
@@ -708,6 +975,41 @@ def _merge_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return merged
 
 
+def _choose_split_level(outline: list[Element], levels: list[int]) -> int | None:
+    """Which heading level starts a new section.
+
+    The top level that actually divides the document (at least two headings at or
+    above it). If those sections would be huge (a few long chapters), go one level
+    deeper so each section is a readable size; the higher headings stay as
+    subheadings inside.
+    """
+    if not levels:
+        return None
+    total = sum(len(str(el[-1]).split()) for el in outline if el[0] == "para") or 1
+    counts = {level: sum(1 for el in outline if el[0] == "heading" and el[1] <= level) for level in levels}
+    chosen = next((level for level in levels if counts[level] >= 2), levels[-1])
+    for level in levels:
+        if level <= chosen:
+            continue
+        if total / max(1, counts[chosen]) > SECTION_WORDS * 1.3 and counts[level] <= MAX_SECTIONS:
+            chosen = level
+    return chosen
+
+
+def _first_sentence_title(section: dict[str, Any]) -> str:
+    """A name for an untitled chunk: its first subheading, or the start of its first sentence."""
+    for block in section["blocks"]:
+        if block.get("type") == "subheading" and block.get("text"):
+            return block["text"][:120]
+    for block in section["blocks"]:
+        text = block.get("text") or (block.get("items") or [""])[0]
+        if text:
+            sentence = re.split(r"(?<=[.!?:;])\s", _tidy(text), maxsplit=1)[0].strip(" .:;")
+            words = sentence.split()
+            return (" ".join(words[:8]) + ("…" if len(words) > 8 else ""))[:120]
+    return ""
+
+
 def build_sections(outline: list[Element], *, fallback_title: str) -> tuple[str | None, list[dict[str, Any]]]:
     """Pack an outline into sections. Returns (title found in the document, sections)."""
     outline = [el for el in outline if not (el[0] in {"para", "heading"} and not el[-1])]
@@ -722,34 +1024,61 @@ def build_sections(outline: list[Element], *, fallback_title: str) -> tuple[str 
             outline = outline[1:]
             heading_levels = sorted({el[1] for el in outline if el[0] == "heading"})
 
-    split_level = heading_levels[0] if heading_levels else None
+    split_level = _choose_split_level(outline, heading_levels)
     sections: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
 
+    context = ""  # the chapter / part a section sits in (headings above the split level)
+
     def start(title: str) -> dict[str, Any]:
-        section = {"title": title[:200], "blocks": [], "words": 0}
+        section = {"title": title[:200], "blocks": [], "words": 0, "context": context}
         sections.append(section)
         return section
 
     for element in outline:
         if element[0] == "heading" and split_level is not None and element[1] <= split_level:
+            if element[1] < split_level:
+                context = element[2]
             current = start(element[2])
             continue
         if current is None:
             current = start("Introduction" if split_level is not None else "")
+            current["lead"] = True  # text before the first heading, not a real "Introduction" heading
         for block in _to_blocks(element, sub_level=(split_level or 1) + 1 if split_level else 1):
             words = _block_words(block)
             if current["blocks"] and (len(current["blocks"]) >= SECTION_BLOCKS or current["words"] + words > SECTION_WORDS):
-                base = re.sub(r" \(cont\. ?\d*\)$", "", current["title"]) or ""
-                current = start(f"{base} (cont.)" if base else "")
+                base = _base_title(current["title"])
+                current = start(f"{base} (continued)" if base else "")
             current["blocks"].append(block)
             current["words"] += words
 
     sections = [section for section in sections if section["blocks"]]
-    # Untitled chunks (no headings in the document) are named "Part n".
+    # A short blurb before the first heading (cover lines, author, course code) is
+    # not worth its own "Introduction" section: it joins the first real section.
+    if len(sections) > 1 and sections[0].get("lead") and sections[0]["words"] < 60:
+        first = sections.pop(0)
+        if any(block["type"] not in {"heading", "subheading"} for block in first["blocks"]):  # headings only = cover page: drop
+            sections[0]["blocks"] = first["blocks"] + sections[0]["blocks"]
+            sections[0]["words"] += first["words"]
+    # Untitled chunks (no headings in the document) are named after what they say.
     untitled = [section for section in sections if not section["title"]]
     for index, section in enumerate(untitled, start=1):
-        section["title"] = f"Part {index}" if len(untitled) > 1 else (doc_title or fallback_title)
+        if len(untitled) == 1 and len(sections) == 1:
+            section["title"] = doc_title or fallback_title
+        else:
+            section["title"] = _first_sentence_title(section) or f"Part {index}"
+    # The same title twice ("Introduction" in every chapter): add the chapter.
+    seen: dict[str, int] = {}
+    for section in sections:
+        key = _base_title(section["title"]).lower()
+        seen[key] = seen.get(key, 0) + 1
+    for section in sections:
+        if seen[_base_title(section["title"]).lower()] > 1 and section.get("context") and section["context"] != section["title"]:
+            label = section["context"].split(":", 1)[0] if ":" in section["context"] and len(section["context"].split(":", 1)[0]) <= 20 else section["context"]
+            section["title"] = f"{section['title']} — {label}"[:200]
+    for section in sections:
+        section.pop("context", None)
+        section.pop("lead", None)
     if len(sections) > MAX_SECTIONS:
         sections = _merge_sections(sections)
     if len(sections) > MAX_SECTIONS:

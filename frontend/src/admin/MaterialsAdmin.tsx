@@ -43,7 +43,7 @@ import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
 import MaterialImport from './MaterialImport';
 import {RewriteReview, SpellingReview} from './WritingAssist';
-import {RichText, materialTerms, stripMarks} from '../lib/richText';
+import {NUMBERING_OPTIONS, RichText, listIndent, listMarker, materialTerms, numberingValue, stripMarks} from '../lib/richText';
 import type {Course, MaterialAnalytics, MaterialBlock, MaterialCard, MaterialDetail} from '../lib/types';
 
 const BLOCK_TYPES: {value: MaterialBlock['type']; label: string}[] = [
@@ -115,12 +115,48 @@ function BlockEditor({
 
       <div className="mt-2 min-w-0 space-y-2">
         {block.type === 'list' || block.type === 'numbers' ? (
-          <TextArea
-            rows={3}
-            value={(block.items ?? []).join('\n')}
-            onChange={(event) => onChange({...block, items: event.target.value.split('\n')})}
-            placeholder="One item per line"
-          />
+          <div className="min-w-0 space-y-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              {block.type === 'numbers' ? (
+                <>
+                  <Select
+                    aria-label="Numbering style"
+                    value={numberingValue(block)}
+                    onChange={(event) => {
+                      const option = NUMBERING_OPTIONS.find((row) => row.value === event.target.value);
+                      onChange({...block, style: option?.style, wrap: option?.wrap});
+                    }}
+                    className="min-w-0 flex-1"
+                  >
+                    {NUMBERING_OPTIONS.map((row) => (
+                      <option key={row.value} value={row.value}>
+                        {row.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <TextInput
+                    aria-label="Start at"
+                    type="number"
+                    min={1}
+                    value={String(block.start ?? 1)}
+                    onChange={(event) => onChange({...block, start: Math.max(1, Number(event.target.value) || 1)})}
+                    className="w-20"
+                  />
+                </>
+              ) : null}
+              <Select aria-label="Indent" value={String(block.level ?? 0)} onChange={(event) => onChange({...block, level: Number(event.target.value) || undefined})} className="w-32">
+                <option value="0">No indent</option>
+                <option value="1">Sub-list</option>
+                <option value="2">Sub-sub-list</option>
+              </Select>
+            </div>
+            <TextArea
+              rows={3}
+              value={(block.items ?? []).join('\n')}
+              onChange={(event) => onChange({...block, items: event.target.value.split('\n')})}
+              placeholder="One item per line"
+            />
+          </div>
         ) : block.type === 'table' ? (
           <div className="min-w-0 space-y-2">
             <TextInput
@@ -1491,14 +1527,25 @@ function PlainBlock({block, terms = []}: {block: MaterialBlock; terms?: string[]
   const text = 'text-[0.86rem] leading-relaxed text-mist-200 [overflow-wrap:anywhere]';
   if (block.type === 'heading') return <h4 className="pt-1 text-[0.9rem] font-extrabold text-mist-50">{stripMarks(block.text)}</h4>;
   if (block.type === 'subheading') return <h5 className="text-[0.84rem] font-bold text-mist-100">{stripMarks(block.text)}</h5>;
-  if (block.type === 'list' || block.type === 'numbers') {
-    const List = block.type === 'numbers' ? 'ol' : 'ul';
+  if (block.type === 'list') {
     return (
-      <List className={`${text} space-y-0.5 pl-5 ${block.type === 'numbers' ? 'list-decimal' : 'list-disc'}`}>
+      <ul className={`${text} space-y-0.5 pl-5 list-disc ${listIndent(block.level)}`}>
         {(block.items ?? []).map((item, index) => (
           <li key={index}>{rich(item)}</li>
         ))}
-      </List>
+      </ul>
+    );
+  }
+  if (block.type === 'numbers') {
+    return (
+      <ol className={`${text} space-y-0.5 ${listIndent(block.level)}`}>
+        {(block.items ?? []).map((item, index) => (
+          <li key={index} className="flex min-w-0 gap-1.5">
+            <span className="min-w-[1.4rem] shrink-0 text-right font-bold text-nova-300 tabular-nums">{listMarker(block, index)}</span>
+            <span className="min-w-0 flex-1">{rich(item)}</span>
+          </li>
+        ))}
+      </ol>
     );
   }
   if (block.type === 'table') {

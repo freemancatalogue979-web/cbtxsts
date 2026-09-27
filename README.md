@@ -407,6 +407,11 @@ cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
 #          with more than 80 sections (no API server or internet needed)
 cd backend && ./.venv/bin/python scripts/verify_rewrite_jobs.py
 
+# Backend: imported notes keep their structure — sensible section names (chapters, "1.1 …",
+#          "A. …", Title Case headings; no cover-page section, no "Part n"), and real numbering:
+#          1. (a) a) i. (iv) A. I. with nesting and start numbers, from PDFs, text and Word
+cd backend && ./.venv/bin/python scripts/verify_import_structure.py
+
 # Backend: DeepSeek provider against a local mock (no internet or API server needed): model
 #          fallback, thinking retry, key / balance / rate / busy errors, time limit
 cd backend && ./.venv/bin/python scripts/verify_deepseek.py

@@ -277,3 +277,58 @@ export function materialTerms(sections: {blocks?: MaterialBlock[]}[] | undefined
 
 /** Text without the ** markers (for titles, search, previews). */
 export const stripMarks = (text?: string | null) => (text ?? '').replace(/\*\*(.+?)\*\*/g, '$1');
+
+/* --------------------------------------------------------------- list numbering */
+const toRoman = (value: number) => {
+  const table: [number, string][] = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  let out = '';
+  let rest = value;
+  for (const [amount, letters] of table) {
+    while (rest >= amount) {
+      out += letters;
+      rest -= amount;
+    }
+  }
+  return out;
+};
+const toLetters = (value: number) => {
+  let out = '';
+  let rest = value;
+  while (rest > 0) {
+    rest -= 1;
+    out = String.fromCharCode(97 + (rest % 26)) + out;
+    rest = Math.floor(rest / 26);
+  }
+  return out;
+};
+
+/** The marker for item `index` of a numbered list block, as the notes wrote it: "3." "(c)" "iv)" "B." */
+export function listMarker(block: Pick<MaterialBlock, 'style' | 'wrap' | 'start'>, index: number): string {
+  const value = (block.start && block.start > 0 ? block.start : 1) + index;
+  const style = block.style ?? 'decimal';
+  let label = String(value);
+  if (style === 'lower-alpha') label = toLetters(value);
+  else if (style === 'upper-alpha') label = toLetters(value).toUpperCase();
+  else if (style === 'lower-roman') label = toRoman(value);
+  else if (style === 'upper-roman') label = toRoman(value).toUpperCase();
+  if (block.wrap === 'paren') return `(${label})`;
+  if (block.wrap === 'rparen') return `${label})`;
+  return `${label}.`;
+}
+
+/** Left indent for nested lists (level 0–2). */
+export const listIndent = (level?: number) => (level === 2 ? 'ml-10' : level === 1 ? 'ml-5' : '');
+
+export const NUMBERING_OPTIONS: {value: string; label: string; style?: MaterialBlock['style']; wrap?: MaterialBlock['wrap']}[] = [
+  {value: 'decimal-dot', label: '1. 2. 3.'},
+  {value: 'decimal-paren', label: '(1) (2) (3)', wrap: 'paren'},
+  {value: 'lower-alpha-paren', label: '(a) (b) (c)', style: 'lower-alpha', wrap: 'paren'},
+  {value: 'lower-alpha-rparen', label: 'a) b) c)', style: 'lower-alpha', wrap: 'rparen'},
+  {value: 'lower-alpha-dot', label: 'a. b. c.', style: 'lower-alpha'},
+  {value: 'upper-alpha-dot', label: 'A. B. C.', style: 'upper-alpha'},
+  {value: 'lower-roman-paren', label: '(i) (ii) (iii)', style: 'lower-roman', wrap: 'paren'},
+  {value: 'lower-roman-dot', label: 'i. ii. iii.', style: 'lower-roman'},
+  {value: 'upper-roman-dot', label: 'I. II. III.', style: 'upper-roman'},
+];
+export const numberingValue = (block: Pick<MaterialBlock, 'style' | 'wrap'>) =>
+  `${block.style ?? 'decimal'}-${block.wrap ?? 'dot'}`;

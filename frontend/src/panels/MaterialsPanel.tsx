@@ -62,7 +62,7 @@ import {api} from '../lib/api';
 import {OPEN_MATERIAL_EVENT} from '../lib/palette';
 import {askTutor} from '../lib/tutor';
 import {formatDate, formatNumber} from '../lib/format';
-import {RichText, TermsContext, materialTerms, stripMarks} from '../lib/richText';
+import {RichText, TermsContext, listIndent, listMarker, materialTerms, stripMarks} from '../lib/richText';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {studyRewards} from '../lib/rewards';
 import {sfx} from '../lib/sfx';
@@ -115,15 +115,26 @@ function Block({block, onHighlight, colourOf}: {block: MaterialBlock; onHighligh
     case 'subheading':
       return <h3 className="mt-1 break-words text-[1rem] font-extrabold text-mist-100">{selectable(block.text)}</h3>;
     case 'list':
-    case 'numbers':
       return (
-        <ul className={`space-y-1.5 pl-5 ${block.type === 'numbers' ? 'list-decimal' : 'list-disc'} marker:text-nova-400`}>
+        <ul className={`space-y-1.5 pl-5 list-disc marker:text-nova-400 ${listIndent(block.level)}`}>
           {(block.items ?? []).map((item, index) => (
             <li key={index} className="break-words text-[0.92rem] leading-relaxed text-mist-300">
               {selectable(item)}
             </li>
           ))}
         </ul>
+      );
+    case 'numbers':
+      // The notes' own numbering — (a), (ii), B. — drawn as text so it is exact on every browser.
+      return (
+        <ol className={`space-y-1.5 ${listIndent(block.level)}`}>
+          {(block.items ?? []).map((item, index) => (
+            <li key={index} className="flex min-w-0 gap-2 break-words text-[0.92rem] leading-relaxed text-mist-300">
+              <span className="min-w-[1.6rem] shrink-0 text-right font-bold text-nova-300 tabular-nums">{listMarker(block, index)}</span>
+              <span className="min-w-0 flex-1">{selectable(item)}</span>
+            </li>
+          ))}
+        </ol>
       );
     case 'table':
       return (

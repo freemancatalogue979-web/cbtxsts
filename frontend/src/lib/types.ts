@@ -1021,6 +1021,14 @@ export interface MaterialBlock {
   text?: string;
   title?: string;
   items?: string[];
+  /** Numbered lists: the notes' own numbering — 1. / a. / A. / i. / I. … */
+  style?: 'decimal' | 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman';
+  /** "dot" 1.  ·  "paren" (1)  ·  "rparen" 1) */
+  wrap?: 'dot' | 'paren' | 'rparen';
+  /** First number when a list continues after other text (e.g. starts at "(c)"). */
+  start?: number;
+  /** Nesting: 0 top level, 1 sub-list, 2 sub-sub-list. */
+  level?: number;
   head?: string[];
   rows?: string[][];
   url?: string;

@@ -204,6 +204,15 @@ def sanitise_blocks(raw: Any) -> list[dict]:
         if kind in {"list", "numbers"}:
             items = entry.get("items") or []
             block["items"] = [clean_text(item, 400) for item in items if str(item).strip()][:40]
+            # numbering as written in the notes: 1. / (a) / a) / i. / (iv) / A. / I. — and nesting
+            if kind == "numbers" and entry.get("style") in {"lower-alpha", "upper-alpha", "lower-roman", "upper-roman"}:
+                block["style"] = entry["style"]
+            if kind == "numbers" and entry.get("wrap") in {"paren", "rparen"}:
+                block["wrap"] = entry["wrap"]
+            if kind == "numbers" and str(entry.get("start", "")).isdigit() and 1 < int(entry["start"]) <= 999:
+                block["start"] = int(entry["start"])
+            if str(entry.get("level", "")).isdigit() and 0 < int(entry["level"]) <= 2:
+                block["level"] = int(entry["level"])
         elif kind == "table":
             rows = entry.get("rows") or []
             block["rows"] = [[clean_text(cell, 200) for cell in row][:8] for row in rows if isinstance(row, list)][:40]

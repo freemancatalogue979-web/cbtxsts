@@ -1,0 +1,226 @@
+"""Imported notes keep their structure: sensible section names and real numbering.
+
+No API server needed:
+
+    .venv/bin/python scripts/verify_import_structure.py
+
+Checks
+* headings: "Chapter One" + next line, "Part II: …", "1.1 Meaning of …", "A. Introduction",
+  SHOUTED lines, short Title Case lines; shouted text becomes Title Case;
+* lists keep their numbering — 1. (a) a) i. (iv) A. — with nesting level and start;
+  "i" after "h" is a letter, "v" after "iv" is a numeral; initials are not lists;
+  wrapped PDF lines join their item; "(a)" right after a sentence starts a list;
+* section names make sense: no cover-page section, untitled chunks named after their
+  first sentence, "(continued)" parts, repeated titles get their chapter;
+* Word numbering (numbering.xml: format, "(%1)" pattern, levels, running counters);
+* the numbering fields survive saving (sanitise_blocks).
+"""
+from __future__ import annotations
+
+import io
+import sys
+import zipfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.services.material_import import _marker, _text_outline, build_sections, read_document  # noqa: E402
+from app.services.materials import sanitise_blocks  # noqa: E402
+
+PASSED = FAILED = 0
+
+
+def check(name: str, condition: bool, info: object = "") -> None:
+    global PASSED, FAILED
+    if condition:
+        PASSED += 1
+        print(f"  ok   {name}")
+    else:
+        FAILED += 1
+        print(f"  FAIL {name} — {str(info)[:300]}")
+
+
+NOTES = """FACULTY OF LAW
+LAW 511
+
+CHAPTER ONE
+INTRODUCTION TO AFFIDAVITS
+
+An affidavit is a written statement of facts made on oath before a person authorised to administer oaths.
+
+1.1 Meaning of Affidavit
+The word affidavit comes from Latin. The Evidence Act 2011 governs affidavits in Nigeria.
+The essential features of an affidavit are:
+(a) it must be in writing;
+(b) it must be sworn before a Commissioner for Oaths, a notary public or a
+person duly authorised; and
+(c) it must contain facts, not arguments.
+
+1.2 Contents of an Affidavit
+The contents are regulated by Sections 115 to 120 of the Evidence Act. These include:
+1. The title of the court and the suit number.
+2. The facts deposed to, which must be within the deponent's knowledge. These facts may be:
+(i) facts within personal knowledge;
+(ii) facts from information and belief, stating the source; or
+(iii) facts from documents.
+3. The jurat.
+
+CHAPTER TWO
+BRIEF WRITING
+
+A. Meaning of a Brief
+A brief is a written argument filed before an appellate court.
+
+B. Types of Briefs
+The types of brief are the appellant's brief, the respondent's brief and the reply brief.
+a) Appellant's brief
+b) Respondent's brief
+c) Reply brief
+"""
+
+
+def blocks_of(sections):
+    return [block for section in sections for block in section["blocks"]]
+
+
+def main() -> int:
+    print("\nnumbering markers")
+    check("(a) lower-alpha in brackets", _marker("(a) text", None)["style"] == "lower-alpha" and _marker("(a) text", None)["wrap"] == "paren")
+    check("(iv) lower-roman", _marker("(iv) text", None)["style"] == "lower-roman" and _marker("(iv) text", None)["value"] == 4)
+    check("i. alone is roman", _marker("i. text", None)["style"] == "lower-roman")
+    h = _marker("(h) eighth", None)
+    check("(i) after (h) is the letter i", _marker("(i) ninth", h)["style"] == "lower-alpha" and _marker("(i) ninth", h)["value"] == 9)
+    iv = _marker("(iv) four", None)
+    check("(v) after (iv) is five", _marker("(v) five", iv)["style"] == "lower-roman" and _marker("(v) five", iv)["value"] == 5)
+    check("A. upper-alpha", _marker("A. Introduction", None)["style"] == "upper-alpha")
+    check("II. upper-roman", _marker("II. Sources", None)["style"] == "upper-roman")
+    check("3) decimal rparen", _marker("3) third", None)["wrap"] == "rparen")
+    check("initials are not a list", _marker("A. B. Okafor signed it", None) is None)
+    check("years are not a list", _marker("2011. The Act", None) is None)
+
+    print("\nheadings and section names")
+    title, sections = build_sections(_text_outline(NOTES, reflow=True), fallback_title="LAW 511")
+    names = [section["title"] for section in sections]
+    check("chapters become sections with their titles", names == ["Chapter One: Introduction to Affidavits", "Chapter Two: Brief Writing"], names)
+    check("cover lines (faculty, course code) are dropped", not any("Faculty" in (b.get("text") or "") for b in blocks_of(sections)))
+    subs = [b["text"] for b in blocks_of(sections) if b["type"] == "subheading"]
+    check("1.1 / 1.2 / A. / B. become subheadings", subs == ["1.1 Meaning of Affidavit", "1.2 Contents of an Affidavit", "A. Meaning of a Brief", "B. Types of Briefs"], subs)
+
+    print("\nlists keep their numbering")
+    lists = [b for b in blocks_of(sections) if b["type"] == "numbers"]
+    first = lists[0]
+    check("(a)(b)(c) kept", first.get("style") == "lower-alpha" and first.get("wrap") == "paren" and len(first["items"]) == 3, first)
+    check("wrapped PDF line joined to its item", "a person duly authorised; and" in first["items"][1], first["items"][1])
+    check("1. 2. list is decimal", "style" not in lists[1] and lists[1]["items"][0].startswith("The title of the court"), lists[1])
+    check("(i)(ii)(iii) nested under 2.", lists[2].get("style") == "lower-roman" and lists[2].get("level") == 1 and len(lists[2]["items"]) == 3, lists[2])
+    check("list resumes at 3. after the sub-list", lists[3].get("start") == 3 and lists[3]["items"] == ["The jurat."], lists[3])
+    check("a) b) c) kept", lists[4].get("style") == "lower-alpha" and lists[4].get("wrap") == "rparen", lists[4])
+
+    print("\nmore heading shapes")
+    text = (
+        "PART II: SOURCES OF NIGERIAN LAW\n\nThe sources of law are many and varied in Nigeria today.\n\n"
+        "Received English Law\nThis includes the common law, the doctrines of equity and statutes of general application.\n\n"
+        "UNIT 3 - JUDICIAL PRECEDENT\n\nStare decisis binds lower courts to follow the decisions of higher courts.\n"
+    )
+    _, secs = build_sections(_text_outline(text, reflow=True), fallback_title="x")
+    names = [s["title"] for s in secs]
+    check("'PART II: …' and 'UNIT 3 - …' titled cleanly", names == ["Part II: Sources of Nigerian Law", "Unit 3: Judicial Precedent"], names)
+    check("short Title Case line before prose is a subheading", any(b["type"] == "subheading" and b["text"] == "Received English Law" for s in secs for b in s["blocks"]))
+    tail = "1. Originating Summons\n2. Writ of Summons\n3. Petition\nThese are the modes of commencing an action in the High Court of a State.\n"
+    lst = [b for b in _to_blocks_all(tail) if b["type"] == "numbers"]
+    check("a list of short titles stays a list (last item not a heading)", lst and lst[0]["items"] == ["Originating Summons", "Writ of Summons", "Petition"], lst)
+    mid = "The court may order any of the following. (a) is not a list here\nbut (a) Stay of execution;\n(b) Injunction.\n"
+    got = _to_blocks_all("The court may make these orders:\n(a) stay of execution;\n(b) injunction.\n")
+    check("(a) straight after a sentence starts a list", any(b["type"] == "numbers" and b.get("style") == "lower-alpha" for b in got), got)
+    check("a wrapped line starting with a number joins the sentence", all(b["type"] == "paragraph" for b in _to_blocks_all("The fee is payable within\n30 days of filing the process in court.\n")))
+    del mid
+
+    print("\nuntitled and repeated sections")
+    plain = ("An affidavit must be sworn. " * 400 + "\n\n") + ("A brief must be concise and clear. " * 300 + "\n\n")
+    _, secs = build_sections(_text_outline(plain, reflow=True), fallback_title="Notes")
+    check("untitled chunks named after their first sentence, not 'Part n'", all(not s["title"].startswith("Part ") for s in secs) and secs[0]["title"].startswith("An affidavit must be sworn"), [s["title"] for s in secs])
+    repeated = "CHAPTER ONE\nAFFIDAVITS\n\nIntroduction\nAffidavits are sworn written statements of fact made by deponents.\n\n" \
+        "CHAPTER TWO\nBRIEFS\n\nIntroduction\nBriefs are written arguments used on appeal before appellate courts.\n"
+    outline = _text_outline(repeated, reflow=True)
+    big = []
+    for el in outline:  # make chapters big enough that sections split at "Introduction"
+        big.append(el if el[0] != "para" else ("para", el[1] + (" More detail about this point." * 450)))
+    _, secs = build_sections(big, fallback_title="x")
+    names = [s["title"] for s in secs]
+    check("repeated 'Introduction' titles get their chapter", len(set(names)) == len(names) and any("Chapter One" in n for n in names), names)
+    check("long parts are named '(continued)'", any(n.endswith("(continued)") for n in names), names)
+
+    print("\nWord numbering")
+    doc = read_document("affidavit.docx", make_numbered_docx())
+    blocks = blocks_of(doc["sections"])
+    nums = [b for b in blocks if b["type"] == "numbers"]
+    check("Word (a)(b) list", nums and nums[0].get("style") == "lower-alpha" and nums[0].get("wrap") == "paren" and len(nums[0]["items"]) == 2, nums[:1])
+    check("Word level-1 (i)(ii) sub-list", len(nums) > 1 and nums[1].get("style") == "lower-roman" and nums[1].get("level") == 1, nums[1:2])
+    check("Word list resumes at (c)", len(nums) > 2 and nums[2].get("style") == "lower-alpha" and nums[2].get("start") == 3, nums[2:3])
+    check("sub-list restarts at (i) under the next item", len(nums) > 3 and nums[3].get("style") == "lower-roman" and "start" not in nums[3], nums[3:4])
+
+    print("\nnumbering survives saving")
+    saved = sanitise_blocks([{"type": "numbers", "items": ["x"], "style": "lower-roman", "wrap": "paren", "start": 4, "level": 1}, {"type": "numbers", "items": ["y"], "style": "evil", "wrap": "<b>", "start": "9999", "level": 7}])
+    check("valid fields kept", saved[0].get("style") == "lower-roman" and saved[0].get("wrap") == "paren" and saved[0].get("start") == 4 and saved[0].get("level") == 1, saved[0])
+    check("bad fields dropped", all(key not in saved[1] for key in ("style", "wrap", "start", "level")), saved[1])
+
+    print(f"\n{PASSED} passed, {FAILED} failed")
+    return 1 if FAILED else 0
+
+
+def _to_blocks_all(text: str) -> list[dict]:
+    _, secs = build_sections(_text_outline(text, reflow=True), fallback_title="x")
+    return blocks_of(secs)
+
+
+W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+
+def _para(text: str, style: str = "", num: int | None = None, ilvl: int = 0) -> str:
+    ppr = ""
+    if style or num is not None:
+        ppr = "<w:pPr>" + (f'<w:pStyle w:val="{style}"/>' if style else "")
+        if num is not None:
+            ppr += f'<w:numPr><w:ilvl w:val="{ilvl}"/><w:numId w:val="{num}"/></w:numPr>'
+        ppr += "</w:pPr>"
+    return f"<w:p>{ppr}<w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r></w:p>"
+
+
+def make_numbered_docx() -> bytes:
+    body = [
+        _para("Affidavit Practice", "Title"),
+        _para("Essentials", "Heading1"),
+        _para("An affidavit must satisfy the following requirements:"),
+        _para("it must be in writing;", num=5),
+        _para("it must be sworn, and the oath may be taken:", num=5),
+        _para("before a Commissioner for Oaths;", num=5, ilvl=1),
+        _para("before a notary public;", num=5, ilvl=1),
+        _para("it must contain facts only, including:", num=5),
+        _para("facts within knowledge;", num=5, ilvl=1),
+        _para("Defects", "Heading1"),
+        _para("A defective affidavit may be struck out by the court."),
+    ]
+    styles = (
+        f"<w:styles {W_NS}>"
+        '<w:style w:styleId="Title"><w:name w:val="Title"/></w:style>'
+        '<w:style w:styleId="Heading1"><w:name w:val="heading 1"/></w:style></w:styles>'
+    )
+    numbering = (
+        f"<w:numbering {W_NS}>"
+        '<w:abstractNum w:abstractNumId="30">'
+        '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="(%1)"/></w:lvl>'
+        '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="(%2)"/></w:lvl>'
+        "</w:abstractNum>"
+        '<w:num w:numId="5"><w:abstractNumId w:val="30"/></w:num>'
+        "</w:numbering>"
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", f"<w:document {W_NS}><w:body>{''.join(body)}</w:body></w:document>")
+        archive.writestr("word/styles.xml", styles)
+        archive.writestr("word/numbering.xml", numbering)
+    return buffer.getvalue()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
