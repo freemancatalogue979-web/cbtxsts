@@ -115,6 +115,9 @@ def _is_caps_heading(line: str) -> bool:
 # List markers: 1.  1)  (1)  a.  a)  (a)  A.  i.  (iv)  I.  — style + wrap are kept so
 # the reader shows exactly the numbering the notes use, with nesting levels.
 _MARKER = re.compile(r"^\s*(\()?(\d{1,3}|[A-Za-z]|[ivxlcIVXLC]{2,6})([.)])\s+(\S.*)$")
+# "5 A boy" — a bare number opening a line is a point ("5. A boy"). 1–2 digits only (no
+# years), and the text must start with a capital so "5 boys came" stays a sentence.
+_BARE_NUM = re.compile(r"^\s*(\d{1,2})\s+([A-Z(\"“‘'].*)$")
 _MULTI_NUM = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s+(\S.*)$")
 _LABEL_WORDS = r"chapter|part|unit|lecture|topic|module|week|lesson|section|rule|article|order|book|title|division"
 _LABEL = re.compile(
@@ -137,6 +140,9 @@ def _marker(line: str, prev: dict | None) -> dict | None:
     """Parse a list marker at the start of ``line`` (``prev`` = last marker in this list run)."""
     match = _MARKER.match(line)
     if not match:
+        bare = _BARE_NUM.match(line)
+        if bare and int(bare.group(1)) >= 1:
+            return {"style": "decimal", "wrap": "dot", "value": int(bare.group(1)), "text": bare.group(2), "bare": True}
         return None
     opened, token, close, rest = match.groups()
     if opened and close != ")":
@@ -330,6 +336,13 @@ def _text_outline(text: str, *, markdown: bool = False, reflow: bool = False) ->
             family = (marker["style"].split("-")[-1], marker["wrap"])
             prev = last_marker.get(family)
             continues = bool(prev and prev["style"] == marker["style"] and marker["value"] == prev["value"] + 1)
+        if marker and marker.get("bare"):
+            # Only a point when it opens a fresh line of thought — not "...within\n14 Days".
+            if continues or previous_ended(i):
+                stripped = f"{marker['value']}. {marker['text']}"
+            else:
+                marker = None
+        if marker:
             # A short title line with a marker, followed by prose, is a heading ("A. Introduction").
             titled = _is_titleish(marker["text"]) and not re.search(r"[:;,.]$", marker["text"])
             nxt = _marker(after, marker) if after else None
@@ -543,9 +556,15 @@ def _docx_outline(data: bytes) -> list[Element]:
             flush_list()
             for piece in text.split("\n"):
                 if piece.strip():
-                    out.append(("para", _tidy(piece)))
+                    out.append(("para", point_number(_tidy(piece))))
     flush_list()
     return out
+
+
+def point_number(text: str) -> str:
+    """A paragraph opening with a bare number is a point: "5 A boy" → "5. A boy"."""
+    bare = _BARE_NUM.match(text)
+    return f"{bare.group(1)}. {bare.group(2)}" if bare else text
 
 
 # ------------------------------------------------------------------- ODT
@@ -592,7 +611,7 @@ def _odt_outline(data: bytes) -> list[Element]:
             elif child.tag == f"{ODF_TEXT}p":
                 text = _tidy(_odf_text(child))
                 if text:
-                    out.append(("para", text))
+                    out.append(("para", point_number(text)))
             elif child.tag == f"{ODF_TEXT}list":
                 items = [_tidy(" ".join(_odf_text(p) for p in item.iter(f"{ODF_TEXT}p"))) for item in child.findall(f"{ODF_TEXT}list-item")]
                 items = [item for item in items if item]
@@ -674,7 +693,7 @@ class _HtmlOutline(HTMLParser):
     def _flush_para(self) -> None:
         text = self._take()
         if text and self.table is None:
-            self.out.append(("para", text))
+            self.out.append(("para", point_number(text)))
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in self.SKIP:

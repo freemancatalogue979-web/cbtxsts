@@ -170,6 +170,21 @@ def main() -> int:
     lists = [b for b in blocks_of(secs) if b["type"] == "numbers"]
     items = lists[0]["items"] if lists else []
     check("wrapped .txt item line joins its item", len(items) == 3 and items[1].endswith("person duly authorised; and"), items)
+    # A bare number opening a line is a point: "5 A boy" -> "5. A boy".
+    bare = "Grounds\n\nThe grounds are these.\n4 A boy may sue through a next friend.\n5 A girl may do the same.\n6 The court may appoint a guardian.\n"
+    _, secs = build_sections(_text_outline(bare), fallback_title="x")
+    nums = [b for b in blocks_of(secs) if b["type"] == "numbers"]
+    check("bare '4 A boy' lines become a numbered list starting at 4",
+          len(nums) == 1 and nums[0]["items"][0] == "A boy may sue through a next friend." and nums[0].get("start") == 4 and nums[0].get("wrap", "dot") == "dot", nums)
+    alone = "Notes\n\nSome facts here.\n\n5 A boy\n"
+    _, secs = build_sections(_text_outline(alone), fallback_title="x")
+    text = " ".join(b.get("text", "") + " ".join(b.get("items", [])) for b in blocks_of(secs))
+    check("a single '5 A boy' reads as point 5", any(b["type"] == "numbers" and b.get("start") == 5 for b in blocks_of(secs)) or "5. A boy" in text, blocks_of(secs))
+    not_points = "Notes\n\nThe Evidence Act came into force in\n2011 Evidence Act rules apply here and the deponent must swear within\n14 Days of the order.\n5 boys came to court.\n"
+    _, secs = build_sections(_text_outline(not_points, reflow=True), fallback_title="x")
+    check("years, mid-sentence wraps and '5 boys…' stay prose", not any(b["type"] == "numbers" for b in blocks_of(secs)), blocks_of(secs))
+    from app.services.material_import import point_number
+    check("Word/ODT paragraph '5 A boy' shows as '5. A boy'", point_number("5 A boy") == "5. A boy" and point_number("2011 Act") == "2011 Act" and point_number("5 boys") == "5 boys")
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
 
