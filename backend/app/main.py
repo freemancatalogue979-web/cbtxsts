@@ -127,7 +127,18 @@ def _startup_db() -> dict:
     """Schema + seed on a worker thread so the loop is free from the start."""
     init_db()
     with session_scope() as db:
-        return seed_all(db)
+        summary = seed_all(db)
+    try:  # AI Tutor upkeep: move v1 saved items into their tables, apply retention
+        from .services import ai_library, ai_tutor
+
+        with session_scope() as db:
+            moved = ai_library.migrate_legacy_saved(db)
+            removed = ai_tutor.cleanup(db)
+        if moved or any(removed.values()):
+            logger.info("ai tutor upkeep | moved %s saved items, cleanup %s", moved, removed)
+    except Exception as error:  # pragma: no cover - never block start-up
+        logger.warning("ai tutor upkeep skipped: %s", error)
+    return summary
 
 
 @asynccontextmanager
@@ -235,6 +246,7 @@ app.include_router(support.router, prefix=API_PREFIX)
 app.include_router(support.admin_router, prefix=API_PREFIX)
 app.include_router(ranked_teams.router, prefix=API_PREFIX)
 app.include_router(tutor.router, prefix=API_PREFIX)
+app.include_router(tutor.alias_router, prefix=API_PREFIX)
 app.include_router(tutor.admin_router, prefix=API_PREFIX)
 app.include_router(live.router)  # websocket routes stay unprefixed: /ws/live, /ws/duel/{id}, /ws/room/{id}
 

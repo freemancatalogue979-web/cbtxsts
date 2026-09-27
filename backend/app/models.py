@@ -21,6 +21,21 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
 
+def _env_default(name: str, fallback):
+    """Column default taken from an env var (read once at start-up)."""
+    import os
+
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return fallback
+    try:
+        if isinstance(fallback, bool):
+            return raw.lower() in {"1", "true", "yes", "on"}
+        return type(fallback)(raw)
+    except ValueError:
+        return fallback
+
+
 def utcnow() -> datetime:
     """Naive UTC timestamp.
 
@@ -874,15 +889,36 @@ class Config(Base):
     duels_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     exams_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # --- AI Tutor limits (the backend enforces these; the app only shows them) ---
-    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    ai_daily_limit: Mapped[int] = mapped_column(Integer, default=20)
-    ai_monthly_limit: Mapped[int] = mapped_column(Integer, default=400)
+    # defaults come from AI_* env vars (backend/.env) the first time; staff edit them in the app
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=_env_default("AI_ENABLED", True))
+    ai_daily_limit: Mapped[int] = mapped_column(Integer, default=_env_default("AI_DAILY_LIMIT", 20))
+    ai_monthly_limit: Mapped[int] = mapped_column(Integer, default=_env_default("AI_MONTHLY_LIMIT", 400))
     ai_per_minute: Mapped[int] = mapped_column(Integer, default=10)
     ai_max_concurrent: Mapped[int] = mapped_column(Integer, default=2)
-    ai_max_message_chars: Mapped[int] = mapped_column(Integer, default=4000)
-    ai_max_response_tokens: Mapped[int] = mapped_column(Integer, default=1800)
+    ai_max_message_chars: Mapped[int] = mapped_column(Integer, default=_env_default("AI_MAX_MESSAGE_LENGTH", 4000))
+    ai_max_response_tokens: Mapped[int] = mapped_column(Integer, default=_env_default("AI_MAX_RESPONSE_TOKENS", 1800))
     ai_max_conversations: Mapped[int] = mapped_column(Integer, default=200)
     ai_exam_safe: Mapped[bool] = mapped_column(Boolean, default=True)
+    # provider/model chosen by staff ("" = server default from AI_PROVIDER / AI_MODEL)
+    ai_provider: Mapped[str] = mapped_column(String(24), default="")
+    ai_model: Mapped[str] = mapped_column(String(60), default="")
+    # what the tutor may do while a student has a protected exam running:
+    # AI_DISABLED | CONCEPT_ONLY | HINT_ONLY | FULL_ASSISTANCE
+    ai_exam_mode: Mapped[str] = mapped_column(String(20), default="CONCEPT_ONLY")
+    # stop all AI requests once this month's estimated cost reaches this (0 = no cap)
+    ai_monthly_budget_usd: Mapped[float] = mapped_column(Float, default=_env_default("AI_MONTHLY_BUDGET_USD", 0.0))
+    ai_feat_images: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_materials: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_flashcards: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_practice: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_study_plans: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_quiz: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_saving: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_feat_uploads: Mapped[bool] = mapped_column(Boolean, default=True)
+    # cleanup (days): soft-deleted chats, usage logs, unsaved generated content
+    ai_retention_deleted_days: Mapped[int] = mapped_column(Integer, default=30)
+    ai_retention_logs_days: Mapped[int] = mapped_column(Integer, default=180)
+    ai_retention_unsaved_days: Mapped[int] = mapped_column(Integer, default=7)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -2227,7 +2263,12 @@ class AIConversation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     last_message_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # general|course|topic|question|material|exam|study_plan
+    context_type: Mapped[str] = mapped_column(String(20), default="general")
+    # title came from the AI (or the student) rather than the first message
+    title_final: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     messages: Mapped[list["AIMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="AIMessage.id")
 
@@ -2291,7 +2332,9 @@ class AIUsageEvent(Base):
     cache_miss_tokens: Mapped[int] = mapped_column(Integer, default=0)
     estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error|rate_limited|refused
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    output_chars: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|error|rate_limited|refused|invalid_json|cancelled
     error: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
@@ -2330,4 +2373,195 @@ class StudentTopicProgress(Base):
     incorrect: Mapped[int] = mapped_column(Integer, default=0)
     accuracy: Mapped[float] = mapped_column(Float, default=0.0)
     last_attempted: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AIUserSetting(Base):
+    """Staff overrides for one student: AI on/off, custom quotas, quota resets."""
+
+    __tablename__ = "ai_user_settings"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    daily_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    monthly_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reset_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reset_count: Mapped[int] = mapped_column(Integer, default=0)  # requests forgiven on reset_day
+    note: Mapped[str] = mapped_column(String(200), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AILearningProfile(Base):
+    """How the student likes to be taught (never inferred sensitive traits)."""
+
+    __tablename__ = "ai_learning_profiles"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    explanation_style: Mapped[str] = mapped_column(String(20), default="balanced")  # simple|balanced|detailed|socratic
+    difficulty: Mapped[str] = mapped_column(String(12), default="medium")
+    language: Mapped[str] = mapped_column(String(40), default="English")
+    goals: Mapped[str] = mapped_column(String(400), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AIFeedback(Base):
+    __tablename__ = "ai_feedback"
+    __table_args__ = (UniqueConstraint("user_id", "message_id", name="uq_ai_feedback_msg"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("ai_messages.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer, default=0)  # 1 = up, -1 = down
+    reason: Mapped[str] = mapped_column(String(20), default="")  # incorrect|confusing|too_long|no_answer|other
+    comment: Mapped[str] = mapped_column(String(500), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class AIFlashcardDeck(Base):
+    __tablename__ = "ai_flashcard_decks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(String(500), default="")
+    source_type: Mapped[str] = mapped_column(String(20), default="custom")  # topic|material|conversation|question|upload|text|custom
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    cards: Mapped[list["AIFlashcard"]] = relationship(cascade="all, delete-orphan", order_by="AIFlashcard.position")
+
+
+class AIFlashcard(Base):
+    __tablename__ = "ai_flashcards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    deck_id: Mapped[int] = mapped_column(ForeignKey("ai_flashcard_decks.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    front: Mapped[str] = mapped_column(Text, default="")
+    back: Mapped[str] = mapped_column(Text, default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    difficulty: Mapped[str] = mapped_column(String(12), default="medium")
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    interval_days: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AIFlashcardReview(Base):
+    __tablename__ = "ai_flashcard_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    card_id: Mapped[int] = mapped_column(ForeignKey("ai_flashcards.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[str] = mapped_column(String(12), default="know")  # know|dont_know
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AIPracticeSet(Base):
+    """A generated practice set / AI quiz. Stored when generated (so results
+    count), listed in the library only once the student saves it."""
+
+    __tablename__ = "ai_practice_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    source_type: Mapped[str] = mapped_column(String(20), default="custom")
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    saved: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    best_score: Mapped[int] = mapped_column(Integer, default=0)
+    last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    questions: Mapped[list["AIGeneratedQuestion"]] = relationship(cascade="all, delete-orphan", order_by="AIGeneratedQuestion.position")
+
+
+class AIGeneratedQuestion(Base):
+    """AI-written practice question. Never part of the official question bank."""
+
+    __tablename__ = "ai_generated_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    set_id: Mapped[int | None] = mapped_column(ForeignKey("ai_practice_sets.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    source_material_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    question_type: Mapped[str] = mapped_column(String(20), default="mcq")
+    question: Mapped[str] = mapped_column(Text, default="")
+    options: Mapped[list] = mapped_column(JSON, default=list)
+    correct_answer: Mapped[str] = mapped_column(Text, default="")
+    explanation: Mapped[str] = mapped_column(Text, default="")
+    difficulty: Mapped[str] = mapped_column(String(12), default="medium")
+    times_answered: Mapped[int] = mapped_column(Integer, default=0)
+    times_correct: Mapped[int] = mapped_column(Integer, default=0)
+    last_answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AIGeneratedMaterial(Base):
+    __tablename__ = "ai_generated_materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(20), default="custom")  # topic|material|conversation|question|custom
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    material_type: Mapped[str] = mapped_column(String(20), default="study_material")  # study_material|notes
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AIStudyPlan(Base):
+    __tablename__ = "ai_study_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    exam_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    minutes_per_day: Mapped[int] = mapped_column(Integer, default=60)
+    content: Mapped[dict] = mapped_column(JSON, default=dict)  # overview, tips
+    saved: Mapped[bool] = mapped_column(Boolean, default=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    items: Mapped[list["AIStudyPlanItem"]] = relationship(cascade="all, delete-orphan", order_by="[AIStudyPlanItem.date, AIStudyPlanItem.position]")
+
+
+class AIStudyPlanItem(Base):
+    __tablename__ = "ai_study_plan_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("ai_study_plans.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("course_topics.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    duration: Mapped[int] = mapped_column(Integer, default=30)  # minutes
+    activity: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|completed|skipped
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

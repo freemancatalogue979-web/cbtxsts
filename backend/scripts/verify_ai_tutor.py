@@ -1,4 +1,4 @@
-"""AI Tutor end-to-end check against a mock DeepSeek (no internet needed).
+"""AI Tutor end-to-end check against mock DeepSeek + Gemini (no internet needed).
 
 Starts its own API on :3995 with a throw-away database and a fake DeepSeek on
 :3996, then drives the real HTTP endpoints (streaming included):
@@ -9,6 +9,10 @@ Starts its own API on :3995 with a throw-away database and a fake DeepSeek on
 from __future__ import annotations
 
 import json
+import re
+import struct
+import zlib
+from datetime import date, timedelta
 import os
 import subprocess
 import sys
@@ -31,12 +35,18 @@ ENV = {
     "DEEPSEEK_API_BASE": f"http://127.0.0.1:{MOCK_PORT}",
     "DEEPSEEK_TIMEOUT": "5",
     "TUTOR_STREAM_TIMEOUT": "5",
+    "GEMINI_API_KEY": "gm-test-key",
+    "GEMINI_API_BASE": f"http://127.0.0.1:{MOCK_PORT}/v1beta",
+    "GEMINI_TIMEOUT": "5",
+    "TUTOR_RETRY_BASE": "0.05",
+    "AI_PROVIDER": "deepseek",
 }
 os.environ.update({k: ENV[k] for k in ("CBT_DATABASE_URL", "DEEPSEEK_API_KEY", "DEEPSEEK_API_BASE")})
 sys.path.insert(0, str(ROOT))
 
 PASSED = FAILED = 0
 MODE = {"value": "ok"}
+COUNT = {"json": 0, "stream": 0}
 SEEN: list[dict] = []
 BASE = f"http://127.0.0.1:{API_PORT}/api"
 
@@ -74,28 +84,48 @@ class MockDeepSeek(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        SEEN.append({"auth": self.headers.get("Authorization"), "body": body})
+        gemini = "/models/" in self.path
+        if gemini:  # translate a Gemini request into the OpenAI shape the checks read
+            sys_text = " ".join(p.get("text", "") for p in (body.get("systemInstruction") or {}).get("parts", []))
+            msgs = ([{"role": "system", "content": sys_text}] if sys_text else []) + [
+                {"role": "assistant" if c["role"] == "model" else "user", "content": " ".join(p.get("text", "") for p in c["parts"])} for c in body.get("contents", [])
+            ]
+            body = {**body, "messages": msgs, "stream": "streamGenerateContent" in self.path, "_gemini": True, "_path": self.path}
+        SEEN.append({"auth": self.headers.get("Authorization"), "goog": self.headers.get("x-goog-api-key"), "body": body})
         mode = MODE["value"]
         if mode in {"402", "503"}:
-            return self.reply(int(mode), {"error": {"message": "nope"}})
-        system = body["messages"][0]["content"]
+            return self.reply(int(mode), {"error": {"message": "nope upstream detail"}})
+        system = body["messages"][0]["content"] if body["messages"] and body["messages"][0]["role"] == "system" else ""
         if not body.get("stream"):
+            COUNT["json"] += 1
             if "compress tutoring" in system:
                 text = "SUMMARY: the student studied the topic and asked many questions."
-            elif "flashcards" in system:
-                n = int(system.split("Create ")[1].split(" ")[0])
+            elif "Write a short title" in system:
+                text = "Tort Duty Basics"
+            elif mode == "badjson_always" or (mode == "badjson_once" and COUNT["json"] % 2 == 1):
+                text = "Sure! Here are your cards: {broken json"
+            elif re.search(r"Create (\d+) flashcards", system):
+                n = int(re.search(r"Create (\d+) flashcards", system).group(1))
                 text = json.dumps({"title": "Mock deck", "cards": [{"front": f"Term {i}", "back": f"Meaning {i}", "topic": "Mock", "difficulty": "easy"} for i in range(n + 2)]})
-            elif "practice questions" in system:
+            elif "practice questions from the SOURCE" in system:
                 text = json.dumps({"title": "Mock set", "questions": [
-                    {"type": "mcq", "question": "Pick B", "options": ["A1", "B1", "C1", "D1"], "correct_answer": "B", "explanation": "B is right."},
-                    {"type": "true_false", "question": "Sky is blue?", "options": ["yes", "no"], "correct_answer": "True", "explanation": "It is."},
+                    {"type": "mcq", "question": "Pick B", "options": ["A1", "B1", "C1", "D1"], "correct_answer": "B", "explanation": "B is right.", "topic": "Negligence"},
+                    {"type": "true_false", "question": "Sky is blue?", "options": ["yes", "no"], "correct_answer": "True", "explanation": "It is.", "topic": "Nature"},
                     {"type": "mcq", "question": "Broken key", "options": ["A", "B"], "correct_answer": "Z nonsense", "explanation": ""},
-                    {"type": "short_answer", "question": "Define law.", "correct_answer": "A rule.", "explanation": "Basic."},
+                    {"type": "short_answer", "question": "Define law.", "correct_answer": "A rule.", "explanation": "Basic.", "topic": "Negligence"},
                 ]})
+            elif "realistic study plan" in system:
+                today = date.today()
+                text = json.dumps({"title": "Mock plan", "overview": "Weak topics first.", "days": [{"date": (today + timedelta(days=i)).isoformat(), "items": [{"topic": "Negligence", "activity": "Lesson + 10 practice questions", "duration": 40}, {"topic": "Tort", "activity": "Flashcards", "duration": 20}]} for i in range(3)], "tips": ["Sleep well"]})
+            elif "Reply with the single word" in _all_text(body):
+                text = "OK"
             else:
                 text = json.dumps({"title": "Mock material", "overview": "Overview.", "sections": [{"heading": "Key concepts", "content": "Stuff **bold**."}], "definitions": [{"term": "Tort", "meaning": "A civil wrong."}], "summary": "Done."})
+            if gemini:
+                return self.reply(200, {"candidates": [{"content": {"parts": [{"text": text}]}, "finishReason": "STOP"}], "usageMetadata": {"promptTokenCount": 90, "candidatesTokenCount": 40}})
             return self.reply(200, {"choices": [{"message": {"content": text}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 100, "completion_tokens": 50}})
         # streaming answer
+        COUNT["stream"] += 1
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
@@ -103,13 +133,24 @@ class MockDeepSeek(BaseHTTPRequestHandler):
             self.wfile.write(b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
             return
         pieces = ["Great ", "question! ", "Here is ", "the answer."]
-        for piece in pieces:
-            self.wfile.write(f"data: {json.dumps({'choices': [{'delta': {'content': piece}}]})}\n\n".encode())
-            self.wfile.flush()
-            time.sleep(0.02)
-        self.wfile.write(b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n')
-        self.wfile.write(b'data: {"choices":[],"usage":{"prompt_tokens":321,"completion_tokens":12,"prompt_cache_hit_tokens":100}}\n\n')
-        self.wfile.write(b"data: [DONE]\n\n")
+        if mode == "slow":
+            pieces = [f"part{i} " for i in range(60)]
+        try:
+            for piece in pieces:
+                if gemini:
+                    self.wfile.write(f"data: {json.dumps({'candidates': [{'content': {'parts': [{'text': piece}]}}]})}\n\n".encode())
+                else:
+                    self.wfile.write(f"data: {json.dumps({'choices': [{'delta': {'content': piece}}]})}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(0.15 if mode == "slow" else 0.02)
+            if gemini:
+                self.wfile.write(b'data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":200,"candidatesTokenCount":9,"cachedContentTokenCount":50}}\n\n')
+                return
+            self.wfile.write(b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n')
+            self.wfile.write(b'data: {"choices":[],"usage":{"prompt_tokens":321,"completion_tokens":12,"prompt_cache_hit_tokens":100}}\n\n')
+            self.wfile.write(b"data: [DONE]\n\n")
+        except (BrokenPipeError, ConnectionResetError):
+            SEEN.append({"auth": None, "goog": None, "body": {"_closed_early": True}})
 
 
 # ------------------------------------------------------------------ helpers
@@ -140,6 +181,22 @@ def events(text: str) -> list[tuple[str, dict]]:
 
 def last_stream() -> dict:
     return next(r["body"] for r in reversed(SEEN) if r["body"].get("stream"))
+
+
+def last_json() -> dict:
+    return next(r["body"] for r in reversed(SEEN) if "messages" in r["body"] and not r["body"].get("stream") and "Write a short title" not in str(r["body"]["messages"][0].get("content")) and "compress tutoring" not in str(r["body"]["messages"][0].get("content")))
+
+
+def png(side: int) -> str:
+    """A valid side×side PNG as a data URL."""
+    import base64
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * side for _ in range(side))
+    data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    return "data:image/png;base64," + base64.b64encode(data).decode()
 
 
 def student() -> str:
@@ -217,17 +274,19 @@ def run() -> None:
     check("deltas join into the full answer", answer == "Great question! Here is the answer.", answer)
     done = ev[-1][1] if ev else {}
     check("done carries usage + remaining", done.get("usage", {}).get("input") == 321 and done.get("remaining_today") == 199, done)
-    body = SEEN[-1]["body"]
-    check("key stays server-side, sent as Bearer", SEEN[-1]["auth"] == "Bearer ds-test-key")
+    body = last_stream()
+    check("key stays server-side, sent as Bearer", next(r for r in reversed(SEEN) if r["body"].get("stream"))["auth"] == "Bearer ds-test-key")
     check("request streams with thinking off", body["stream"] and body["thinking"] == {"type": "disabled"} and body["stream_options"]["include_usage"])
     check("system prompt has the tutor persona + course", "AI Tutor" in body["messages"][0]["content"] and course["code"] in body["messages"][0]["content"], body["messages"][0]["content"][:600])
     say(me, cid, "Give me an example", mode="EXAMPLE")
-    body = SEEN[-1]["body"]
+    body = last_stream()
     roles = [m["role"] for m in body["messages"]]
     check("follow-up carries earlier turns (memory)", roles[:4] == ["system", "user", "assistant", "user"] and "Donoghue" in body["messages"][1]["content"], roles)
     code, full = call("GET", f"/tutor/conversations/{cid}", token=me)
     check("messages saved with type + tokens", code == 200 and len(full["messages"]) == 4 and full["messages"][2]["type"] == "general" or len(full["messages"]) == 4, full)
-    check("title comes from the first message", full["title"].startswith("Explain the rule"), full["title"])
+    time.sleep(0.4)
+    code, full = call("GET", f"/tutor/conversations/{cid}", token=me)
+    check("AI writes a short title after the first exchange (background)", full["title"] == "Tort Duty Basics", full["title"])
     check("other students can't read it", call("GET", f"/tutor/conversations/{cid}", token=other)[0] == 404)
     check("other students can't post into it", say(other, cid, "hi")[0] == 404)
 
@@ -273,27 +332,29 @@ def run() -> None:
     code, text = say(me, cid, "What does my upload say about consideration?", context={"upload_id": up.get("id")})
     system = last_stream()["messages"][0]["content"]
     check("upload text retrieved for the answer", "consideration requires something of value" in system, system[-800:])
-    check("others can't use my upload", "consideration requires" not in (say(other, call("POST", "/tutor/conversations", {}, other)[1]["id"], "consideration", context={"upload_id": up.get("id")}) and last_stream()["messages"][0]["content"]))
+    check("others can't use my upload", say(other, call("POST", "/tutor/conversations", {}, other)[1]["id"], "consideration", context={"upload_id": up.get("id")})[0] == 404)
     bad, ctype = multipart("file", "virus.exe", b"MZ....", "application/octet-stream")
     check("unsupported uploads refused", call("POST", "/tutor/uploads", token=me, raw=bad, ctype=ctype)[0] in (400, 415, 422))
 
     print("images")
-    png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-    code, text = say(me, cid, "What is this diagram?", image=png)
-    last = SEEN[-1]["body"]["messages"][-1]["content"]
+    code, text = say(me, cid, "What is this diagram?", image=png(32))
+    last = last_stream()["messages"][-1]["content"]
     check("image sent to the model as image_url", code == 200 and isinstance(last, list) and last[1]["type"] == "image_url", last if not isinstance(last, list) else "")
     code, full = call("GET", f"/tutor/conversations/{cid}", token=me)
     stored = [m for m in full["messages"] if m["meta"].get("image")]
     check("image not stored, only flagged", stored and "base64" not in json.dumps(full), stored)
     check("non-image data refused", say(me, cid, "x", image="data:text/html;base64,PGgxPg==")[0] in (413, 415, 422))
+    check("tiny/odd image dimensions refused", say(me, cid, "x", image=png(4))[0] == 422)
+    check("fake image bytes refused", say(me, cid, "x", image="data:image/png;base64,aGVsbG8gd29ybGQgdGhpcyBpcyBub3QgYSBwbmc=")[0] == 415)
 
     print("generators (JSON)")
     code, fc = call("POST", "/tutor/generate", {"kind": "FLASHCARDS", "count": 5, "source": {"course_id": course["id"], "topic": "Negligence"}}, me)
     check("5 flashcards exactly", code == 200 and len(fc["data"]["cards"]) == 5, fc)
-    check("JSON mode requested", SEEN[-1]["body"].get("response_format") == {"type": "json_object"})
+    check("JSON mode requested", last_json().get("response_format") == {"type": "json_object"})
     code, pr = call("POST", "/tutor/generate", {"kind": "PRACTICE", "count": 4, "types": ["mcq", "true_false", "short_answer"], "source": {"conversation_id": cid}}, me)
     qs = pr.get("data", {}).get("questions", []) if code == 200 else []
     check("practice validated (letter key fixed, broken key dropped)", len(qs) == 3 and qs[0]["correct_answer"] == "B1" and qs[1]["options"] == ["True", "False"], pr)
+    check("practice stored at once (set id, question ids) but not listed", bool(pr.get("set_id")) and all(q.get("id") for q in qs) and not call("GET", "/tutor/saved?kind=practice", token=me)[1]["items"], pr)
     code, mt = call("POST", "/tutor/generate", {"kind": "MATERIAL", "source": {"selected_text": "A tort is a civil wrong that causes harm."}}, me)
     check("study material structured", code == 200 and mt["data"]["sections"][0]["heading"] == "Key concepts" and mt["data"]["definitions"], mt)
     check("generate needs a source", call("POST", "/tutor/generate", {"kind": "FLASHCARDS", "source": {}}, me)[0] == 422)
@@ -302,10 +363,12 @@ def run() -> None:
     code, saved = call("POST", "/tutor/saved", {"kind": "flashcards", "data": fc["data"], "course_id": course["id"]}, me)
     check("save deck", code == 201 and saved["items"] == 5, saved)
     check("list shows it", any(i["id"] == saved["id"] for i in call("GET", "/tutor/saved?kind=flashcards", token=me)[1]["items"]))
-    code, edited = call("PATCH", f"/tutor/saved/{saved['id']}", {"title": "My deck", "data": {**fc["data"], "cards": fc["data"]["cards"][:2]}}, me)
-    check("edit deck", code == 200 and edited["title"] == "My deck" and edited["items"] == 2, edited)
-    check("others can't open it", call("GET", f"/tutor/saved/{saved['id']}", token=other)[0] == 404)
-    check("delete deck", call("DELETE", f"/tutor/saved/{saved['id']}", token=me)[0] == 200 and call("GET", f"/tutor/saved/{saved['id']}", token=me)[0] == 404)
+    code, edited = call("PATCH", f"/tutor/saved/flashcards/{saved['id']}", {"title": "My deck", "data": {**fc["data"], "cards": saved["data"]["cards"][:2]}}, me)
+    check("edit deck (keeps card ids)", code == 200 and edited["title"] == "My deck" and edited["items"] == 2 and edited["data"]["cards"][0]["id"] == saved["data"]["cards"][0]["id"], edited)
+    check("others can't open it", call("GET", f"/tutor/saved/flashcards/{saved['id']}", token=other)[0] == 404)
+    code, dup = call("POST", f"/tutor/saved/flashcards/{saved['id']}/duplicate", {}, me)
+    check("duplicate deck", code == 201 and dup["title"].endswith("(copy)") and dup["items"] == 2 and dup["id"] != saved["id"], dup)
+    check("delete deck", call("DELETE", f"/tutor/saved/flashcards/{saved['id']}", token=me)[0] == 200 and call("GET", f"/tutor/saved/flashcards/{saved['id']}", token=me)[0] == 404)
     check("unknown kinds refused", call("POST", "/tutor/saved", {"kind": "exe", "data": {}}, me)[0] == 422)
 
     print("progress awareness")
@@ -331,7 +394,7 @@ def run() -> None:
     before = len(call("GET", f"/tutor/conversations/{cid}", token=me)[1]["messages"])
     MODE["value"] = "402"
     code, body = say(me, cid, "hello")
-    check("empty DeepSeek balance → 402 JSON", code == 402 and "balance" in str(body), body)
+    check("provider balance error → friendly message only", code == 503 and body.get("detail") == "AI Tutor is temporarily unavailable. Please try again." and "402" not in str(body), body)
     MODE["value"] = "empty"
     code, text = say(me, cid, "hello")
     check("empty answer → SSE error event", code == 200 and events(text)[-1][0] == "error", text)
@@ -350,12 +413,14 @@ def run() -> None:
         attempt = Attempt(student_id=sid, quiz_id=quiz.id, status="in_progress", deadline_at=datetime.utcnow() + timedelta(minutes=30), question_ids=[])
         db.add(attempt)
         db.commit()
+        call("PUT", "/admin/tutor/settings", {"ai_exam_mode": "AI_DISABLED"}, staff)
         code, body = say(me, cid, "help me with question 3")
         check("active exam → tutor paused (423)", code == 423 and "exam" in str(body).lower(), body)
         code, st = call("GET", "/tutor/status", token=me)
         check("status shows the exam lock", bool(st.get("exam_locked")), st)
         db.delete(attempt)
         db.commit()
+        call("PUT", "/admin/tutor/settings", {"ai_exam_mode": "CONCEPT_ONLY"}, staff)
 
     print("conversation management + summary memory")
     code, c2 = call("POST", "/tutor/conversations", {}, me)
@@ -366,7 +431,7 @@ def run() -> None:
         convo = db.get(AIConversation, c2["id"])
         check("older turns folded into a summary", convo.summary.startswith("SUMMARY:") and convo.summarized_until > 0, convo.summary)
     say(me, c2["id"], "and finally?")
-    check("summary sent as memory", "SUMMARY: the student" in _all_text(SEEN[-1]["body"]))
+    check("summary sent as memory (in the system prompt)", "SUMMARY: the student" in last_stream()["messages"][0]["content"])
     check("rename", call("PATCH", f"/tutor/conversations/{cid}", {"title": "Tort revision"}, me)[1]["title"] == "Tort revision")
     check("delete (soft)", call("DELETE", f"/tutor/conversations/{cid}", token=me)[0] == 200 and call("GET", f"/tutor/conversations/{cid}", token=me)[0] == 404)
     check("restore", call("POST", f"/tutor/conversations/{cid}/restore", token=me)[0] == 200)
@@ -375,6 +440,10 @@ def run() -> None:
 
     code, usage = call("GET", "/admin/tutor/usage", token=staff)
     check("staff usage totals", code == 200 and usage["totals"]["requests"] > 10 and usage["totals"]["estimated_cost"] > 0 and usage["top_students"], usage["totals"])
+    run_v2(me, other, staff, course, cid, q_id, hidden_id, hidden_expl, material_id)
+
+
+from verify_ai_tutor_v2 import run_v2  # noqa: E402
 
 
 if __name__ == "__main__":
