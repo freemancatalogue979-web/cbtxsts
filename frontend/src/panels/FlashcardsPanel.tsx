@@ -343,7 +343,6 @@ function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a' | 'a_
           whileTap={{scale: 0.995}}
         >
           <Card className="card-raised relative min-h-56 w-full overflow-hidden p-5 sm:min-h-64">
-            <div className="pointer-events-none absolute -top-20 -right-16 size-52 rounded-full bg-nova-600/14 blur-3xl" />
             <Scenery layer="arena" className="opacity-60" />
             <div className="relative flex items-center justify-between gap-2">
               <Chip className="border-white/12 bg-white/6 text-mist-400">
@@ -591,7 +590,6 @@ export default function FlashcardsPanel() {
   return (
     <div className="grid gap-4">
       <Card className="relative overflow-hidden p-4 sm:p-5">
-        <div className="pointer-events-none absolute -top-20 -right-16 size-48 rounded-full bg-nova-600/14 blur-3xl" />
         <div className="relative flex flex-wrap items-center gap-4">
           <ProgressRing value={progress?.goal_percent ?? 0} size={78} stroke={7}>
             <span className="text-[0.8rem] font-black text-mist-50">{Math.round(progress?.goal_percent ?? 0)}%</span>

@@ -232,7 +232,6 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
     const total = Number(summary?.total ?? 0);
     return (
       <Card className="relative overflow-hidden p-5 text-center">
-        <div className="pointer-events-none absolute -top-24 left-1/2 size-56 -translate-x-1/2 rounded-full bg-nova-600/20 blur-3xl" />
         <div className="relative mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white">
           {summary?.perfect ? <Trophy className="size-7" /> : <Gauge className="size-7" />}
         </div>
@@ -481,7 +480,6 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
   return (
     <div className="grid gap-3">
       <Card className="relative overflow-hidden p-4">
-        <div className="pointer-events-none absolute -top-20 -right-16 size-44 rounded-full bg-rose-600/18 blur-3xl" />
         <div className="relative flex items-center gap-2">
           <Skull className="size-4 text-rose-300" />
           <h3 className="min-w-0 truncate text-[0.95rem] font-black text-mist-50">{fight.boss.name}</h3>
@@ -886,7 +884,6 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
     return (
       <div className="grid gap-3">
         <Card className="relative overflow-hidden p-5 text-center">
-          <div className="pointer-events-none absolute -top-24 left-1/2 size-56 -translate-x-1/2 rounded-full bg-nova-600/20 blur-3xl" />
           <div className="relative mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white">
             {summary.perfect ? <Trophy className="size-7" /> : <Target className="size-7" />}
           </div>
@@ -1267,7 +1264,6 @@ export default function PracticePanel() {
         <>
           {community && (
             <Card className="relative overflow-hidden p-4">
-              <div className="pointer-events-none absolute -top-20 -right-14 size-44 rounded-full bg-rose-600/18 blur-3xl" />
               <div className="relative flex items-center gap-2">
                 <Skull className="size-4 text-rose-300" />
                 <h3 className="text-[0.95rem] font-black text-mist-50">{community.name}</h3>

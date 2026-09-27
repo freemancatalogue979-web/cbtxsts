@@ -21,7 +21,6 @@ function PrizeCard({prize, onClaim}: {prize: Prize; onClaim: (prize: Prize) => v
   return (
     <motion.li variants={staggerItem}>
       <Card className="group relative flex h-full flex-col overflow-hidden p-4 sm:p-5">
-        <div className={`pointer-events-none absolute -top-20 -right-14 size-44 rounded-full bg-gradient-to-br ${gradient} opacity-20 blur-3xl`} />
         <div className="relative flex items-start justify-between gap-3">
           <span className={`grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${gradient} text-ink-950 shadow-lg sm:size-14`}>
             <Icon className="size-6 sm:size-7" strokeWidth={2.2} />
@@ -136,7 +135,6 @@ export default function PrizesPanel() {
 
       {vault && (
         <Card className="relative overflow-hidden p-4 sm:p-5">
-          <div className="pointer-events-none absolute -top-20 -left-10 size-56 rounded-full bg-gold-500/12 blur-3xl" />
           <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0">
  <p className="flex items-center gap-2 text-[0.62rem] font-black tracking-[0.16em] text-mist-500 sm:text-[0.68rem] sm:tracking-[0.24em]">

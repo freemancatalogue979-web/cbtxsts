@@ -308,7 +308,6 @@ function BankStrip({bank, streak}: {bank: PlaytimeBank | null; streak?: {current
   const next = bank.thresholds.find((threshold) => threshold > bank.study_xp_today);
   return (
     <Card className="relative overflow-hidden p-3.5">
-      <div className="pointer-events-none absolute -top-14 -right-8 size-36 rounded-full bg-nova-500/14 blur-3xl" />
       <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-nova-500/30 bg-nova-500/12">
           <Play className="size-4 text-nova-300" />
@@ -904,7 +903,6 @@ function Reader({
       </div>
 
       <Card className="relative min-w-0 overflow-hidden p-4">
-        <div className="pointer-events-none absolute -top-20 -right-10 size-44 rounded-full bg-nova-500/14 blur-3xl" />
         <div className="relative min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Chip className={ACCENTS[detail.accent] ?? ACCENTS.violet}>{detail.topic || 'General'}</Chip>

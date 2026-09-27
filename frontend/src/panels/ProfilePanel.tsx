@@ -316,7 +316,6 @@ export default function ProfilePanel({
         <motion.div variants={staggerItem}>
           <Card className={`relative overflow-hidden p-4 sm:p-6 ${profileTheme?.className ?? ''}`}>
             <div className="pointer-events-none absolute inset-0 bg-ink-950/55" />
-            <div className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-nova-600/18 blur-3xl" />
             <div className="relative flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-5">
               <div className="flex shrink-0 flex-col items-center gap-1.5">
                 <div className="relative">

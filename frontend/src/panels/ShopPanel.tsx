@@ -264,7 +264,6 @@ function Preview({
       <div className="flex flex-col gap-3">
         {/* live preview: the actual aura / frame / portrait, not a picture of it */}
         <div className="relative grid place-items-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-ink-800/80 to-ink-950/90 py-6">
-          <span aria-hidden className="pointer-events-none absolute -top-16 size-52 rounded-full blur-3xl" style={{background: item.rarity_meta.deep, opacity: 0.35}} />
           {item.slot === 'theme' ? (
             <span className={`cosy-preview ${themeOf({theme: item.key})?.className ?? ''} grid size-24 place-items-center rounded-2xl border-2 border-black/30 text-2xl`}>
               {item.glyph}
@@ -540,7 +539,6 @@ export default function ShopPanel() {
         <div className="space-y-4">
           {/* Active Loadout Showcase */}
           <Card className="relative overflow-hidden p-4 sm:p-6">
-            <div className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-gold-600/15 blur-3xl" />
  <p className="flex items-center gap-2 text-[0.72rem] font-black tracking-[0.18em] text-gold-300">
               <Crown className="size-3.5" /> Equipped loadout
             </p>

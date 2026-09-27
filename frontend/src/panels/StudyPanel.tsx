@@ -119,7 +119,6 @@ function SpinCard() {
 
   return (
     <Card className="relative overflow-hidden p-4 sm:p-5">
-      <div className="pointer-events-none absolute -top-16 -right-10 size-44 rounded-full bg-gold-500/14 blur-3xl" />
       <div className="relative flex items-center gap-3.5">
         <motion.span
           animate={spinning ? {rotate: 360} : {rotate: 0}}
@@ -152,7 +151,6 @@ function DailyCard({onOpen}: {onOpen: () => void}) {
   }, []);
   return (
     <Card className="relative overflow-hidden p-4 sm:p-5">
-      <div className="pointer-events-none absolute -top-20 -left-10 size-52 rounded-full bg-nova-600/16 blur-3xl" />
       <div className="relative flex flex-wrap items-center gap-3">
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-nova-500/30 bg-nova-500/12 text-nova-300">
           <CalendarDays className="size-5" />

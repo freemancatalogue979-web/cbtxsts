@@ -39,7 +39,6 @@ export function QuestionCard({
     >
       <div className="relative overflow-hidden rounded-[calc(0.75rem-1.5px)] bg-ink-850 p-4 sm:p-6">
         <span aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-nova-400/40 to-transparent" />
-        <span aria-hidden className="pointer-events-none absolute -top-24 -right-14 size-52 rounded-full bg-nova-600/15 blur-3xl" />
         {number !== undefined && (
           <span
             aria-hidden

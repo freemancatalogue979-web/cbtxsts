@@ -659,7 +659,6 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
       <div className="w-full py-1 sm:py-4">
         <Card className="relative overflow-hidden p-4 text-center sm:p-8">
           <div className={`pointer-events-none absolute inset-x-0 top-0 h-1.5 ${iWon ? 'bg-gradient-to-r from-mint-400 to-pulse-500' : draw ? 'bg-white/20' : 'bg-gradient-to-r from-flare-600 to-nova-600'}`} />
-          <div className="pointer-events-none absolute -top-24 left-1/2 size-72 -translate-x-1/2 rounded-full bg-nova-600/22 blur-3xl" />
           <Character
             mood={iWon ? 'celebrate' : draw ? 'think' : 'sad'}
             size={72}
@@ -803,7 +802,6 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
     return (
       <div className="w-full py-2 sm:py-6">
         <Card className="relative overflow-hidden p-4 text-center sm:p-8">
-          <div className="pointer-events-none absolute -top-20 left-1/2 size-64 -translate-x-1/2 rounded-full bg-gold-500/16 blur-3xl" />
           <motion.span
             animate={{y: [0, -8, 0]}}
             transition={{repeat: Infinity, duration: 2.4, ease: 'easeInOut'}}

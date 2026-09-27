@@ -100,13 +100,6 @@ function Splash() {
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
       <div className="relative flex flex-col items-center gap-6">
         <div className="relative grid place-items-center">
-          {/* soft brand halo */}
-          <motion.span
-            aria-hidden
-            animate={reduced ? {opacity: 0.5} : {opacity: [0.35, 0.75, 0.35], scale: [0.94, 1.06, 0.94]}}
-            transition={reduced ? {duration: 0} : {repeat: Infinity, duration: 2.6, ease: 'easeInOut'}}
-            className="absolute size-56 rounded-full bg-nova-600/25 blur-3xl sm:size-72"
-          />
           <motion.span
             aria-hidden
             animate={reduced ? {rotate: 0} : {rotate: 360}}

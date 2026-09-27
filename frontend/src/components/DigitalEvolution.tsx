@@ -45,12 +45,6 @@ export default function DigitalEvolution({
   return (
     <>
       <Card className={`relative overflow-hidden border border-teal-500/25 p-4 sm:p-5 ${className}`}>
-        {/* Soft bioluminescent glow */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -top-16 -right-12 size-48 rounded-full blur-3xl opacity-30"
-          style={{background: current.color}}
-        />
 
         <div className="relative flex flex-col gap-3">
           {/* Header */}

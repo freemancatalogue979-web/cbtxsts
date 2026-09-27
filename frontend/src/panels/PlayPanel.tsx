@@ -245,19 +245,19 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
             key={quiz.id}
             initial={{opacity: 0, y: -10}}
             animate={{opacity: 1, y: 0}}
-            className="relative overflow-hidden rounded-[1.3rem] border border-flare-500/40 bg-gradient-to-r from-flare-600/22 via-ink-900/80 to-ink-900/80 p-4 shadow-[0_30px_80px_-40px_rgba(244,63,94,0.55)] sm:p-5"
+            className="relative overflow-hidden rounded-[1.3rem] border border-flare-500/40 bg-gradient-to-r from-flare-600/22 via-ink-900/80 to-ink-900/80 p-3.5 sm:p-5"
           >
-            <div className="pointer-events-none absolute -top-14 -left-10 size-40 rounded-full bg-flare-600/25 blur-3xl" />
-            <div className="relative flex flex-wrap items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-flare-500/20 text-flare-300">
-                <Megaphone className="size-5 animate-pulse" />
+            <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-flare-500/20 text-flare-300 sm:size-11 sm:rounded-2xl">
+                <Megaphone className="size-5" />
               </span>
               <div className="min-w-0 flex-1">
- <p className="flex items-center gap-2 text-[0.66rem] font-black tracking-[0.22em] text-flare-300">
-                  <span className="size-2 animate-ping rounded-full bg-flare-400" />
+                <p className="flex items-center gap-1.5 text-[0.62rem] font-black tracking-[0.1em] whitespace-nowrap text-flare-300 sm:text-[0.66rem] sm:tracking-[0.16em]">
+                  <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-flare-400" />
                   Compulsory exam · live now
                 </p>
-                <h2 className="mt-0.5 truncate font-display text-[1rem] font-black tracking-tight text-mist-50 sm:text-[1.15rem]">
+                <h2 className="mt-0.5 line-clamp-2 font-display leading-snug text-[1rem] font-black tracking-tight text-mist-50 sm:text-[1.15rem]">
                   {quiz.title}
                 </h2>
                 <p className="mt-0.5 text-[0.72rem] font-bold text-mist-400">
@@ -268,7 +268,8 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
                   {resuming ? ' · your clock kept running — resume where you left off' : ''}
                 </p>
               </div>
-              <Button variant="danger" size="lg" className="shrink-0" onClick={() => onStartExam(quiz)} icon={<Play className="size-4" />}>
+              </div>
+              <Button variant="danger" className="w-full shrink-0 sm:w-auto" onClick={() => onStartExam(quiz)} icon={<Play className="size-4" />}>
                 {resuming ? 'Resume' : 'Enter now'}
               </Button>
             </div>
@@ -283,8 +284,6 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
       <motion.section variants={staggerContainer} initial="hidden" animate="show" className="space-y-4">
         <motion.div variants={staggerItem}>
           <Card className="relative overflow-hidden p-4 sm:p-7">
-            <div className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-nova-600/20 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-28 -left-10 size-64 rounded-full bg-flare-600/16 blur-3xl" />
             {/* The hero greets you on the home screen; the chosen mascot
                 still rides along in the corner as your companion. */}
             <Character

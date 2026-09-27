@@ -119,7 +119,6 @@ export default function RoomsSection({onOpenRoom}: {onOpenRoom: (roomId: number)
         </Card>
 
         <Card className="relative overflow-hidden p-4 sm:p-5">
-          <div className="pointer-events-none absolute -top-16 -right-10 size-44 rounded-full bg-nova-600/18 blur-3xl" />
           <div className="relative">
             <h3 className="flex items-center gap-2 text-[0.9rem] font-extrabold text-mist-50">
               <Crown className="size-4 text-gold-400" /> Host a room

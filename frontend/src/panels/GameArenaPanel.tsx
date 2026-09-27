@@ -88,7 +88,6 @@ function BankCard({bank, streak}: {bank: PlaytimeBank; streak: GameHub['streak']
   const seconds = remaining % 60;
   return (
     <Card className="relative min-w-0 overflow-hidden p-4">
-      <div className="pointer-events-none absolute -top-20 -right-10 size-48 rounded-full bg-nova-500/16 blur-3xl" />
       <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
         <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-nova-500/30 bg-nova-500/12">
           <Gamepad2 className="size-5 text-nova-300" />

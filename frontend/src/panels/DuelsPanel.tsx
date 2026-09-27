@@ -689,7 +689,6 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
 
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-[1.35fr_1fr]">
         <Card className="relative overflow-hidden p-4 sm:p-5">
-          <div className="pointer-events-none absolute -top-16 -right-10 size-44 rounded-full bg-flare-600/18 blur-3xl" />
           <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div className="min-w-0 flex-1">
               <h3 className="text-base font-black tracking-tight text-mist-50 sm:text-lg">Quick match</h3>

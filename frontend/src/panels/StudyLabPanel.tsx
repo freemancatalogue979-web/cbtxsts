@@ -246,7 +246,6 @@ export default function StudyLabPanel() {
     <div className="grid gap-3 sm:gap-4">
       {/* ------------------------------------------------- header + streaks */}
       <Card className="relative overflow-hidden !p-4 sm:!p-5">
-        <div className="pointer-events-none absolute -top-16 -right-10 size-40 rounded-full bg-nova-500/15 blur-3xl" />
         <div className="flex flex-wrap items-center gap-3">
           <span className="brand-gradient grid size-11 shrink-0 place-items-center rounded-2xl text-white">
             <GraduationCap className="size-6" />

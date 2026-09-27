@@ -326,7 +326,6 @@ export default function MysteryPanel() {
   return (
     <div className="grid gap-3 sm:gap-4">
       <Card className="relative overflow-hidden !p-4 sm:!p-5">
-        <div className="pointer-events-none absolute -top-14 -right-8 size-36 rounded-full bg-gold-500/12 blur-3xl" />
         <div className="flex items-center gap-3">
           <span className="brand-gradient grid size-11 shrink-0 place-items-center rounded-2xl text-white">
             <Search className="size-6" />

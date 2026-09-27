@@ -291,7 +291,6 @@ export default function RankedTeams({onSoloQueue}: {onSoloQueue?: () => void}) {
   return (
     <div className="grid gap-3 sm:gap-4">
       <Card className="relative overflow-hidden !p-4 sm:!p-5">
-        <div className="pointer-events-none absolute -top-16 -right-10 size-44 rounded-full bg-flare-500/12 blur-3xl" />
         <div className="flex flex-wrap items-center gap-3">
           <span className="brand-gradient grid size-12 shrink-0 place-items-center rounded-2xl text-white">
             <TrendingUp className="size-6" />

@@ -124,7 +124,6 @@ export default function Result({
       {/* -------------------------------------------------------- slip */}
       <Card className="print-slip relative overflow-hidden p-4 sm:p-8">
         <div className="brand-gradient absolute inset-x-0 top-0 h-1.5 print-hide" />
-        <div className="pointer-events-none absolute -top-28 -right-20 size-72 rounded-full bg-nova-600/18 blur-3xl print-hide" />
         {/* The hero wears the exam's outcome — celebrating a pass, taking a
             quiet bow otherwise. It never computes the grade itself. */}
         <Character
