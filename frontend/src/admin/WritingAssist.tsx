@@ -11,7 +11,7 @@
  * only saved when staff press Save / Publish.
  */
 import {AlertTriangle, CheckCheck, KeyRound, Laugh, ListChecks, SpellCheck, Sparkles, Target, Wand2} from 'lucide-react';
-import {useEffect, useMemo, useState, type ReactNode} from 'react';
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Button, EmptyState, Modal, ProgressBar, Segmented, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
 import {stripMarks} from '../lib/richText';
@@ -193,6 +193,8 @@ export function RewriteReview({
   const [use, setUse] = useState<Set<number>>(new Set());
   const [showing, setShowing] = useState<Record<number, 'new' | 'old'>>({});
   const [model, setModel] = useState('');
+  const resultsRef = useRef<RewriteSection[]>([]);
+  resultsRef.current = results;
 
   useEffect(() => {
     if (!open) return;
@@ -210,58 +212,82 @@ export function RewriteReview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /** Small batches: progress for staff, friendlier to the free rate limit, and
-   * each request answers well inside proxy time limits (~100-120 s). */
-  const batches = (indexes: number[]) => {
-    const out: number[][] = [];
-    let current: number[] = [];
-    let size = 0;
-    for (const index of indexes) {
-      const weight = JSON.stringify(sections[index]).length;
-      if (current.length && (current.length >= 2 || size + weight > 5000)) {
-        out.push(current);
-        current = [];
-        size = 0;
-      }
-      current.push(index);
-      size += weight;
-    }
-    if (current.length) out.push(current);
-    return out;
-  };
+  /** The server rewrites in the background (in small batches, retrying on its
+   * own); we only poll with short requests, so a long material can never hit a
+   * proxy's time limit (Cloudflare ~100 s, others ~120 s). */
+  const jobRef = useRef<string | null>(null);
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => () => {
+    // closing the editor stops the server-side job too
+    if (jobRef.current) void api.materials.cancelRewriteJob(jobRef.current).catch(() => undefined);
+    jobRef.current = null;
+  }, []);
 
   const run = async (indexes: number[]) => {
     setError('');
-    const groups = batches(indexes);
-    const total = indexes.length + results.length;
-    let done = results.length;
-    setProgress({done, total});
-    for (let g = 0; g < groups.length; g += 1) {
-      const group = groups[g];
-      try {
-        const payload = await api.materials.assistRewrite({
-          title,
-          style,
-          sections: group.map((index) => ({index, title: sections[index].title, blocks: sections[index].blocks})),
-        });
-        setModel(payload.model);
-        setResults((current) => [...current.filter((row) => !group.includes(row.index)), ...payload.sections].sort((a, b) => a.index - b.index));
+    setPending([]);
+    const already = results.filter((row) => !indexes.includes(row.index)).length;
+    const total = indexes.length + already;
+    setProgress({done: already, total});
+    let job;
+    try {
+      job = await api.materials.startRewriteJob({
+        title,
+        style,
+        sections: indexes.map((index) => ({index, title: sections[index].title, blocks: sections[index].blocks})),
+      });
+    } catch (problem) {
+      setError((problem as Error).message);
+      setPending(indexes);
+      setProgress(null);
+      return;
+    }
+    jobRef.current = job.id;
+    let after = 0;
+    let misses = 0;
+    for (;;) {
+      if (job.sections.length) {
+        const fresh = job.sections;
+        after = Math.max(after, job.seq);
+        if (job.model) setModel(job.model);
+        setResults((current) => [...current.filter((row) => !fresh.some((item) => item.index === row.index)), ...fresh].sort((a, b) => a.index - b.index));
         setUse((current) => {
           const next = new Set(current);
-          payload.sections.filter((row) => row.changed).forEach((row) => next.add(row.index));
+          fresh.filter((row) => row.changed).forEach((row) => next.add(row.index));
           return next;
         });
-        done += group.length;
-        setProgress({done, total});
+      }
+      setWaiting(job.waiting);
+      setProgress({done: already + job.done, total});
+      if (job.status !== 'running') break;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (jobRef.current !== job.id) return; // closed / replaced
+      try {
+        job = await api.materials.rewriteJob(job.id, after);
+        misses = 0;
       } catch (problem) {
-        setError((problem as Error).message);
-        setPending(groups.slice(g).flat());
-        setProgress(null);
-        return;
+        // a dropped poll (flaky network, proxy hiccup) is retried; the job keeps going
+        misses += 1;
+        if (misses >= 8 || /no longer available/i.test((problem as Error).message)) {
+          setError((problem as Error).message);
+          setPending(indexes.filter((index) => !resultsRef.current.some((row) => row.index === index)));
+          setProgress(null);
+          jobRef.current = null;
+          return;
+        }
       }
     }
-    setPending([]);
+    jobRef.current = null;
+    setWaiting(0);
+    if (job.failed.length) {
+      setError(job.error || 'Some sections could not be rewritten.');
+      setPending(job.failed);
+    }
     setProgress(null);
+  };
+
+  const stop = () => {
+    if (jobRef.current) void api.materials.cancelRewriteJob(jobRef.current).catch(() => undefined);
   };
 
   const reviewing = results.length > 0 && !progress;
@@ -348,7 +374,16 @@ export function RewriteReview({
             Rewriting {Math.min(progress.done + 1, progress.total)} of {progress.total}…
           </p>
           <ProgressBar value={Math.round((progress.done / Math.max(1, progress.total)) * 100)} />
-          <p className="text-[0.74rem] text-mist-500">{isDeepSeek ? 'Usually a few seconds per step.' : 'This can take a little while on the free plan.'}</p>
+          <p className="text-[0.74rem] text-mist-500">
+            {waiting
+              ? `The AI asked us to slow down — trying again in about ${waiting} s. You can keep this open; nothing is lost.`
+              : isDeepSeek
+                ? 'Usually a few seconds per step. Long materials keep going on the server — no time limits.'
+                : 'This can take a little while on the free plan. Long materials keep going on the server — no time limits.'}
+          </p>
+          <Button size="sm" variant="ghost" onClick={stop}>
+            Stop after this step
+          </Button>
         </div>
       ) : reviewing ? (
         <div className="min-w-0 space-y-3">

@@ -1384,6 +1384,40 @@ def assist_rewrite(payload: dict, _: Any = Depends(require_admin)) -> dict:
         ) from error
 
 
+def _owner(admin: Any) -> str:
+    return str(getattr(admin, "id", "") or getattr(admin, "email", "") or "")
+
+
+@admin_router.post("/assist/rewrite/jobs")
+def assist_rewrite_start(payload: dict, admin: Any = Depends(require_admin)) -> dict:
+    """Start rewriting any number of sections in the background (answers at once).
+
+    Poll ``GET /assist/rewrite/jobs/{id}?after=<seq>`` for progress; each poll is
+    a short request, so no proxy (Cloudflare 100 s, others 120 s) can time out.
+    """
+    sections = [row for row in (payload.get("sections") or []) if isinstance(row, dict)]
+    try:
+        return ai_rewrite.start_job(str(payload.get("title") or ""), sections, str(payload.get("style") or "easy"), _owner(admin))
+    except ai_rewrite.AIError as error:
+        raise HTTPException(error.status, str(error)) from error
+
+
+@admin_router.get("/assist/rewrite/jobs/{job_id}")
+def assist_rewrite_poll(job_id: str, after: int = 0, admin: Any = Depends(require_admin)) -> dict:
+    try:
+        return ai_rewrite.job_state(job_id, _owner(admin), max(0, after))
+    except ai_rewrite.AIError as error:
+        raise HTTPException(error.status, str(error)) from error
+
+
+@admin_router.post("/assist/rewrite/jobs/{job_id}/cancel")
+def assist_rewrite_cancel(job_id: str, admin: Any = Depends(require_admin)) -> dict:
+    try:
+        return ai_rewrite.cancel_job(job_id, _owner(admin))
+    except ai_rewrite.AIError as error:
+        raise HTTPException(error.status, str(error)) from error
+
+
 @admin_router.post("/import/preview")
 async def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
     """Read a document and show what would be created — nothing is saved."""

@@ -539,7 +539,7 @@ def _pdf_text(data: bytes) -> tuple[str, int]:
         raise
     except Exception as error:  # noqa: BLE001 - any malformed PDF lands here
         raise DocumentError(f"That PDF could not be opened: {error}", 415) from error
-    text = "\n\n".join(pages)
+    text = "\n\n".join(_strip_page_furniture(pages))
     if len(text.strip()) < 40:
         raise DocumentError(
             "This PDF has no selectable text — it is probably a scan or photos of pages. "
@@ -547,6 +547,66 @@ def _pdf_text(data: bytes) -> tuple[str, int]:
             415,
         )
     return text, len(pages)
+
+
+_PAGE_NUMBER = re.compile(r"^(?:page\s*)?[-–—(\[]?\s*\d{1,4}\s*[-–—)\]]?(?:\s*(?:of|/)\s*\d{1,4})?$", re.I)
+_FURNITURE_WORDS = re.compile(r"^(?:downloaded from|printed (?:on|by)|confidential|all rights reserved|copyright|©)", re.I)
+
+
+def _exact_key(line: str) -> str:
+    return re.sub(r"\s+", " ", line.strip().lower())
+
+
+def _furniture_key(line: str) -> str:
+    """Normalise a header/footer line so "Page 3" and "Page 4" compare equal."""
+    return re.sub(r"\d+", "#", _exact_key(line))
+
+
+def _has_page_number(line: str, page_no: int) -> bool:
+    return any(abs(int(value) - page_no) <= 3 for value in re.findall(r"\d{1,4}", line))
+
+
+def _strip_page_furniture(pages: list[str]) -> list[str]:
+    """Drop running headers/footers and page numbers that PDFs repeat on every page.
+
+    A line near the top or bottom of a page is furniture when the same text sits
+    there on at least 40 % of pages (min. 3) — or the same text apart from a
+    number that tracks the page number ("RPC Companion · 12") — or when it is a
+    bare page number such as "12", "- 12 -" or "Page 3 of 40". Real headings
+    like "Rule 1", "Rule 2" differ by more than the page count, so they stay.
+    """
+    split = [page.replace("\r", "").split("\n") for page in pages]
+    edge = 2
+    exact: dict[str, int] = {}
+    numbered: dict[str, int] = {}
+    for page_no, lines in enumerate(split, start=1):
+        real = [line for line in lines if line.strip()]
+        edges = real[:edge] + real[-edge:] if len(real) > 6 else []
+        for key in {_exact_key(line) for line in edges}:
+            exact[key] = exact.get(key, 0) + 1
+        for key in {_furniture_key(line) for line in edges if len(line.strip()) <= 60 and re.search(r"\d", line) and _has_page_number(line, page_no)}:
+            numbered[key] = numbered.get(key, 0) + 1
+    threshold = max(3, int(len(split) * 0.4 + 0.999))
+    enough = len(split) >= 3
+    rep_exact = {k for k, n in exact.items() if enough and n >= threshold and len(k) <= 120}
+    rep_numbered = {k for k, n in numbered.items() if enough and n >= threshold and len(k) <= 120}
+    out: list[str] = []
+    for page_no, lines in enumerate(split, start=1):
+        real_index = [i for i, line in enumerate(lines) if line.strip()]
+        near = set(real_index[:edge] + real_index[-edge:]) if len(real_index) > 6 else set()
+        kept = []
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if i in near and stripped and (
+                _exact_key(stripped) in rep_exact
+                or (len(stripped) <= 60 and _furniture_key(stripped) in rep_numbered and _has_page_number(stripped, page_no))
+                or _PAGE_NUMBER.match(stripped)
+                or _FURNITURE_WORDS.match(stripped)
+            ):
+                continue
+            kept.append(line)
+        out.append("\n".join(kept))
+    return out
 
 
 # ------------------------------------------------------------ packaging

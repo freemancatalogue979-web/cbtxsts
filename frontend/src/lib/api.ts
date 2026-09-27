@@ -58,6 +58,7 @@ import type {
   MaterialCard,
   MaterialBlock,
   MaterialNote,
+  RewriteJob,
   RewriteSection,
   SpellingChange,
   SpellingDoc,
@@ -751,6 +752,11 @@ export const api = {
     /** Rewrite sections with Gemini for staff review (nothing is saved). */
     assistRewrite: (body: {title: string; style: string; sections: {index: number; title: string; blocks: MaterialBlock[]}[]}) =>
       request<{style: string; model: string; sections: RewriteSection[]}>('/api/admin/materials/assist/rewrite', {method: 'POST', body}),
+    /** Rewrite any number of sections in the background; poll with rewriteJob. */
+    startRewriteJob: (body: {title: string; style: string; sections: {index: number; title: string; blocks: MaterialBlock[]}[]}) =>
+      request<RewriteJob>('/api/admin/materials/assist/rewrite/jobs', {method: 'POST', body}),
+    rewriteJob: (id: string, after = 0) => request<RewriteJob>(`/api/admin/materials/assist/rewrite/jobs/${id}?after=${after}`),
+    cancelRewriteJob: (id: string) => request<RewriteJob>(`/api/admin/materials/assist/rewrite/jobs/${id}/cancel`, {method: 'POST'}),
     /** Undo: restore an earlier snapshot (the restore is saved as a new version). */
     restoreVersion: (id: number, versionId: number) =>
       request<MaterialDetail>(`/api/admin/materials/${id}/versions/${versionId}/restore`, {method: 'POST'}),

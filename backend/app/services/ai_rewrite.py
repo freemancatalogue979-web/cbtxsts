@@ -55,7 +55,12 @@ Rules you must follow:
 1. Keep EVERY fact. Never invent facts, cases, dates, statistics, names or references. If unsure, keep the original wording.
 2. Keep every number, date, amount, formula, section/article number, case name and quotation exactly as written.
 3. Fix spelling and grammar. Use British/Nigerian English spelling (colour, organisation, programme, centre, judgement).
-4. Wrap key terms and important numbers in **double stars** so they show in bold (for example: **osmosis**, **1999**, **Section 36**). Do not bold whole sentences.
+4. Highlight sparingly with **double stars** (shown in bold). Bold ONLY, and only the FIRST time it appears in a section:
+   - the term being defined or explained (e.g. **mischief rule**, **deponent**, **osmosis**);
+   - case names (e.g. **Donoghue v Stevenson**) and statute / rule references (e.g. **Section 36**, **Rule 14 of the RPC**);
+   - Latin maxims and terms of art (e.g. **ejusdem generis**, **locus standi**);
+   - a number, date or amount that must be remembered (a deadline, a limit, a year of enactment).
+   Never bold: whole sentences or clauses (more than 5 words), headings or section titles, list numbering, ordinary words, words already bold earlier in the section, or law-report citations such as (2004) 12 NWLR (Pt. 887) 1. Aim for about one bold phrase per two or three sentences — if everything is bold, nothing stands out.
 5. Return the SAME sections (same "index" values) with blocks using ONLY these types:
    heading, subheading, paragraph, list, numbers, table, keyterm, definition, note, tip, example, summary, quote, reference, image, video, attachment, divider.
    - paragraph/heading/subheading/note/tip/example/summary/quote/reference/definition use "text" (definition may also have "title").
@@ -161,10 +166,12 @@ def _call(model: str, prompt: str, settings: dict, timeout: float | None = None,
     return text
 
 
-def _generate(prompt: str) -> tuple[str, str]:
+def _generate(prompt: str, budget: float | None = None) -> tuple[str, str]:
     if ai_provider() == "deepseek":
-        return _generate_deepseek(prompt)
-    settings = gemini_settings()
+        return _generate_deepseek(prompt, budget)
+    settings = dict(gemini_settings())
+    if budget:
+        settings["budget"] = budget
     if not settings["key"]:
         raise AIError(status()["setup"] or "AI is not set up.", 503)
     tried: list[str] = []
@@ -249,8 +256,10 @@ def _deepseek_call(model: str, prompt: str, settings: dict, timeout: float, thin
     return text
 
 
-def _generate_deepseek(prompt: str) -> tuple[str, str]:
-    settings = deepseek_settings()
+def _generate_deepseek(prompt: str, budget: float | None = None) -> tuple[str, str]:
+    settings = dict(deepseek_settings())
+    if budget:
+        settings["budget"] = budget
     if not settings["key"]:
         raise AIError(SETUP["deepseek"], 503)
     deadline = time.monotonic() + settings["budget"]
@@ -322,13 +331,89 @@ def _words(blocks: list[dict]) -> int:
     return sum(len(text.split()) for text in _texts(blocks))
 
 
-def rewrite(title: str, sections: list[dict], style: str) -> dict:
-    """Rewrite ``sections`` (each {index, title, blocks}); returns suggestions + warnings."""
-    style = style if style in STYLES else "easy"
+# ---------------------------------------------------------------- highlights
+_BOLD_RE = re.compile(r"\*\*([^*\n]+?)\*\*")
+_PLAIN_BLOCKS = {"heading", "subheading"}
+_BORING = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "be", "it", "this", "that",
+    "these", "those", "with", "as", "by", "at", "from", "not", "no", "yes", "note", "important", "remember",
+}
+_CITATION_RE = re.compile(r"^[\(\[]\d{4}[\)\]]\s*\d*\s*[A-Z][A-Za-z.]*")
+
+
+def _unbold(text: str) -> str:
+    return _BOLD_RE.sub(r"\1", text)
+
+
+def tidy_bold(blocks: list[dict]) -> list[dict]:
+    """Keep AI highlighting useful: short phrases only, first mention per section,
+    nothing in headings, a density cap per block. Returns new blocks."""
+    seen: set[str] = set()
+
+    def fix(text: str, cap: int) -> str:
+        kept = 0
+
+        def one(match: re.Match) -> str:
+            nonlocal kept
+            inner = match.group(1).strip()
+            key = re.sub(r"\s+", " ", inner.lower()).strip(" .,;:")
+            words = inner.split()
+            bad = (
+                not key
+                or len(words) > 6
+                or len(inner) > 60
+                or all(word.lower().strip(".,;:()") in _BORING for word in words)
+                or _CITATION_RE.match(inner)
+                or key in seen
+                or kept >= cap
+            )
+            if bad:
+                return match.group(1)
+            seen.add(key)
+            kept += 1
+            return match.group(0)
+
+        return _BOLD_RE.sub(one, text)
+
+    def cap_for(text: str) -> int:
+        return max(2, len(_unbold(text).split()) // 14 + 1)
+
+    out: list[dict] = []
+    for block in blocks:
+        block = dict(block)
+        kind = block.get("type")
+        for key in ("text", "title", "meaning", "caption"):
+            value = block.get(key)
+            if not isinstance(value, str) or "**" not in value:
+                continue
+            if kind in _PLAIN_BLOCKS or (key == "title" and kind == "definition"):
+                block[key] = _unbold(value)
+            else:
+                block[key] = fix(value, cap_for(value))
+        if isinstance(block.get("term"), str):
+            block["term"] = _unbold(block["term"])  # the key-term box already stands out
+        if isinstance(block.get("items"), list):
+            block["items"] = [fix(item, 2) if isinstance(item, str) else item for item in block["items"]]
+        if isinstance(block.get("head"), list):
+            block["head"] = [_unbold(cell) if isinstance(cell, str) else cell for cell in block["head"]]
+        if isinstance(block.get("rows"), list):
+            block["rows"] = [[fix(cell, 1) if isinstance(cell, str) else cell for cell in row] if isinstance(row, list) else row for row in block["rows"]]
+        out.append(block)
+    return out
+
+
+def _clean_sections(sections: list[dict]) -> list[dict]:
     clean_sections = []
     for row in sections:
         blocks = engine.sanitise_blocks(row.get("blocks") or [])
         clean_sections.append({"index": int(row.get("index", len(clean_sections))), "title": engine.clean_text(row.get("title"), 200), "blocks": blocks})
+    return clean_sections
+
+
+def rewrite(title: str, sections: list[dict], style: str, budget: float | None = None) -> dict:
+    """Rewrite ``sections`` (each {index, title, blocks}); returns suggestions + warnings."""
+    style = style if style in STYLES else "easy"
+    clean_sections = _clean_sections(sections)
     if not clean_sections:
         raise AIError("Choose at least one section to rewrite.", 422)
     size = len(json.dumps(clean_sections))
@@ -339,7 +424,7 @@ def rewrite(title: str, sections: list[dict], style: str) -> dict:
         f"Style: {STYLES[style]}\n\nMaterial title: {engine.clean_text(title, 200) or 'Untitled'}\n\n"
         f"Rewrite these sections and reply with JSON only:\n{json.dumps({'sections': clean_sections}, ensure_ascii=False)}"
     )
-    text, model = _generate(prompt)
+    text, model = _generate(prompt, budget)
     returned = {int(row.get("index", -1)): row for row in _parse(text) if str(row.get("index", "")).lstrip("-").isdigit()}
 
     results = []
@@ -348,7 +433,7 @@ def rewrite(title: str, sections: list[dict], style: str) -> dict:
         if row is None:
             results.append({"index": original["index"], "title": original["title"], "blocks": original["blocks"], "warnings": ["The AI skipped this section — it is unchanged."], "changed": False})
             continue
-        blocks = engine.sanitise_blocks(row.get("blocks") or [])
+        blocks = tidy_bold(engine.sanitise_blocks(row.get("blocks") or []))
         # media blocks must survive untouched
         media = [block for block in original["blocks"] if block["type"] in {"image", "video", "attachment"}]
         for block in media:
@@ -368,10 +453,188 @@ def rewrite(title: str, sections: list[dict], style: str) -> dict:
         results.append(
             {
                 "index": original["index"],
-                "title": engine.clean_text(row.get("title"), 200) or original["title"],
+                "title": _unbold(engine.clean_text(row.get("title"), 200)) or original["title"],
                 "blocks": blocks,
                 "warnings": warnings,
                 "changed": True,
             }
         )
     return {"style": style, "model": model, "sections": results}
+
+
+# ------------------------------------------------------------ background jobs
+# A long material (dozens of sections) takes minutes to rewrite. Doing that in
+# one browser request trips proxy limits (Cloudflare ~100 s → 520/524, other
+# proxies 120 s). Instead the server works through the sections in a thread and
+# the editor polls for progress with short requests. One API worker (see
+# main.run) means an in-memory registry is enough.
+import threading
+import uuid
+
+JOB_TTL = 3 * 3600
+MAX_JOBS = 30
+BATCH_CHARS = 6000
+BATCH_SECTIONS = 2
+BACKGROUND_BUDGET = 150.0  # per batch; no proxy is waiting on it
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _batches(sections: list[dict]) -> list[list[dict]]:
+    out: list[list[dict]] = []
+    current: list[dict] = []
+    size = 0
+    for section in sections:
+        weight = len(json.dumps(section, ensure_ascii=False))
+        if current and (len(current) >= BATCH_SECTIONS or size + weight > BATCH_CHARS):
+            out.append(current)
+            current, size = [], 0
+        current.append(section)
+        size += weight
+    if current:
+        out.append(current)
+    return out
+
+
+def _retry_wait(error: AIError, attempt: int) -> float | None:
+    """Seconds to wait before retrying a batch, or None when retrying is pointless."""
+    text = str(error).lower()
+    if error.status in (401, 402, 403, 413, 422) or any(
+        hint in text for hint in ("api key", "balance", "not set up", "none of these", "backend/.env")
+    ):
+        return None  # a wrong key, empty balance or bad model name won't fix itself
+    if error.status == 429:
+        return (20.0, 40.0, 60.0)[min(attempt, 2)]  # free-tier per-minute limits
+    return (2.0, 4.0, 8.0)[min(attempt, 2)]
+
+
+def _sleep(job: dict, seconds: float) -> None:
+    end = time.monotonic() + seconds
+    while time.monotonic() < end and not job["cancel"]:
+        time.sleep(0.25)
+
+
+def _run_job(job: dict, batches: list[list[dict]]) -> None:
+    fatal = ""
+    for batch in batches:
+        if job["cancel"] or fatal:
+            job["failed"].extend(row["index"] for row in batch)
+            continue
+        indexes = [row["index"] for row in batch]
+        job["current"] = indexes
+        for attempt in range(4):
+            try:
+                result = rewrite(job["title"], batch, job["style"], budget=BACKGROUND_BUDGET)
+            except AIError as error:
+                wait = _retry_wait(error, attempt)
+                job["last_error"] = str(error)
+                if wait is None:
+                    fatal = str(error)
+                    job["failed"].extend(indexes)
+                    break
+                if attempt == 3:
+                    job["failed"].extend(indexes)
+                    break
+                job["waiting"] = round(wait)
+                _sleep(job, wait)
+                job["waiting"] = 0
+                if job["cancel"]:
+                    job["failed"].extend(indexes)
+                    break
+            except Exception as error:  # noqa: BLE001 - one bad batch must not kill the job
+                import logging
+
+                logging.getLogger("arena").exception("rewrite batch failed")
+                job["last_error"] = f"Rewrite failed ({type(error).__name__})."
+                job["failed"].extend(indexes)
+                break
+            else:
+                job["model"] = result["model"]
+                with _jobs_lock:
+                    for row in result["sections"]:
+                        job["seq"] += 1
+                        job["results"].append({**row, "seq": job["seq"]})
+                break
+        job["done"] = len(job["results"]) + len(job["failed"])
+    job["current"] = []
+    job["error"] = fatal or (job["last_error"] if job["failed"] and not job["cancel"] else "")
+    job["status"] = "cancelled" if job["cancel"] else ("done" if not fatal else "failed")
+    job["finished_at"] = time.time()
+
+
+def _prune() -> None:
+    now = time.time()
+    for key, job in list(_jobs.items()):
+        if job.get("finished_at") and now - job["finished_at"] > JOB_TTL:
+            _jobs.pop(key, None)
+    while len(_jobs) >= MAX_JOBS:
+        oldest = min(_jobs.values(), key=lambda job: job["created_at"])
+        oldest["cancel"] = True
+        _jobs.pop(oldest["id"], None)
+
+
+def start_job(title: str, sections: list[dict], style: str, owner: str = "") -> dict:
+    """Queue a rewrite of any number of sections; returns the job's public state."""
+    style = style if style in STYLES else "easy"
+    clean = [row for row in _clean_sections(sections) if row["blocks"]]
+    if not clean:
+        raise AIError("Choose at least one section to rewrite.", 422)
+    if len(clean) > 300:
+        raise AIError("That is too many sections for one go (300 max).", 413)
+    if not status()["configured"]:
+        raise AIError(status()["setup"] or "AI is not set up.", 503)
+    job = {
+        "id": uuid.uuid4().hex,
+        "owner": owner,
+        "title": title,
+        "style": style,
+        "total": len(clean),
+        "done": 0,
+        "results": [],
+        "failed": [],
+        "seq": 0,
+        "current": [],
+        "waiting": 0,
+        "model": "",
+        "error": "",
+        "last_error": "",
+        "status": "running",
+        "cancel": False,
+        "created_at": time.time(),
+        "finished_at": None,
+    }
+    with _jobs_lock:
+        _prune()
+        _jobs[job["id"]] = job
+    threading.Thread(target=_run_job, args=(job, _batches(clean)), name=f"rewrite-{job['id'][:6]}", daemon=True).start()
+    return job_state(job["id"], owner)
+
+
+def job_state(job_id: str, owner: str = "", after: int = 0) -> dict:
+    job = _jobs.get(job_id)
+    if job is None or (job["owner"] and owner and job["owner"] != owner):
+        raise AIError("That rewrite is no longer available (the server may have restarted). Start it again.", 404)
+    with _jobs_lock:
+        fresh = [row for row in job["results"] if row["seq"] > after]
+    return {
+        "id": job["id"],
+        "status": job["status"],
+        "style": job["style"],
+        "total": job["total"],
+        "done": job["done"],
+        "current": list(job["current"]),
+        "waiting": job["waiting"],
+        "failed": sorted(job["failed"]),
+        "model": job["model"],
+        "error": job["error"],
+        "seq": job["seq"],
+        "sections": fresh,
+    }
+
+
+def cancel_job(job_id: str, owner: str = "") -> dict:
+    job = _jobs.get(job_id)
+    if job is None or (job["owner"] and owner and job["owner"] != owner):
+        raise AIError("That rewrite is no longer available.", 404)
+    job["cancel"] = True
+    return job_state(job_id, owner)

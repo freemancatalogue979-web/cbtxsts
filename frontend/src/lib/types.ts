@@ -1131,6 +1131,22 @@ export interface RewriteSection {
   changed: boolean;
 }
 
+/** A background rewrite (see api.materials.startRewriteJob). `sections` holds only results newer than `after`. */
+export interface RewriteJob {
+  id: string;
+  status: 'running' | 'done' | 'failed' | 'cancelled';
+  style: string;
+  total: number;
+  done: number;
+  current: number[];
+  waiting: number;
+  failed: number[];
+  model: string;
+  error: string;
+  seq: number;
+  sections: RewriteSection[];
+}
+
 /** A player's own note on a material (the reader's Notes tab). */
 export interface MaterialNote {
   id: number;
