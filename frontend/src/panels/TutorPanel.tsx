@@ -7,18 +7,19 @@
  * this screen only shows them).
  */
 import {
-  BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
-  ListChecks, Lock, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, Send, Sparkles, Square,
-  Target, Trash2, X,
+  Archive, ArchiveRestore, ArrowDown, BarChart3, BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
+  ListChecks, Lock, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, Search, Send, Settings2, ShieldCheck, Sparkles, Square,
+  Target, ThumbsDown, ThumbsUp, Trash2, X,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Modal, Select, Skeleton, copyText} from '../components/ui';
-import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, QuizView, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
+import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText} from '../components/ui';
+import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, PlanView, QuizView, toolFromResult, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
 import {Markdown} from '../lib/markdown';
 import {formatRelative} from '../lib/format';
 import {
-  ASK_TUTOR_EVENT, readImage, streamMessage, takePendingAsk, tutorApi, type Conversation, type GenKind, type SavedItem,
-  type TutorAsk, type TutorContext, type TutorCourse, type TutorMessage, type TutorMode, type TutorStatus, type TutorUpload,
+  ASK_TUTOR_EVENT, readImage, streamMessage, streamRegenerate, takePendingAsk, tutorApi, type Conversation, type GenKind, type LearningProfile,
+  type SavedItem, type StreamHandlers, type StudyDashboard, type TutorAsk, type TutorContext, type TutorCourse, type TutorMessage, type TutorMode,
+  type TutorStatus, type TutorUpload,
 } from '../lib/tutor';
 import {useSession} from '../store/session';
 
@@ -32,8 +33,9 @@ const EXAMPLES: {label: string; prompt: string; mode?: TutorMode; gen?: GenKind;
   {label: 'Make flashcards', prompt: '', gen: 'flashcards', icon: Layers},
   {label: 'Create practice questions', prompt: '', gen: 'practice', icon: ListChecks},
   {label: 'Summarize this material', prompt: 'Summarize this material.', mode: 'SUMMARY', icon: BookOpen},
-  {label: 'Make a study plan', prompt: 'Make me a realistic study plan.', mode: 'STUDY_PLAN', icon: CalendarCheck},
-  {label: 'What am I getting wrong?', prompt: 'What am I getting wrong, and what should I study next?', mode: 'WHAT_TO_STUDY', icon: Brain},
+  {label: 'Make a study plan', prompt: '', gen: 'plan', icon: CalendarCheck},
+  {label: 'Analyze my progress', prompt: 'Analyze my progress: strengths, weak topics, repeated mistakes and what to do this week.', mode: 'PROGRESS', icon: BarChart3},
+  {label: 'What should I study?', prompt: 'What should I study next?', mode: 'WHAT_TO_STUDY', icon: Brain},
   {label: "Explain it like I'm a beginner", prompt: "Explain it like I'm a complete beginner.", mode: 'SIMPLE', icon: Bot},
 ];
 
@@ -41,11 +43,34 @@ const QUICK: {label: string; mode: TutorMode; prompt: string}[] = [
   {label: 'Explain this', mode: 'EXPLAIN', prompt: 'Explain this.'},
   {label: 'Teach me', mode: 'TEACH', prompt: 'Teach me this as a short lesson.'},
   {label: 'Explain simply', mode: 'SIMPLE', prompt: 'Explain it more simply.'},
+  {label: 'Hint', mode: 'HINT', prompt: 'Give me a hint — not the answer.'},
+  {label: 'Similar question', mode: 'SIMILAR', prompt: 'Give me a similar question to practise.'},
+  {label: 'Exam revision', mode: 'EXAM_REVISION', prompt: 'Help me revise for my exam: key points, likely questions and common mistakes.'},
   {label: 'Example', mode: 'EXAMPLE', prompt: 'Give me an example.'},
   {label: 'Notes', mode: 'NOTES', prompt: 'Turn this into clear study notes.'},
   {label: 'Glossary', mode: 'GLOSSARY', prompt: 'Make a glossary of the key terms.'},
   {label: 'What should I study?', mode: 'WHAT_TO_STUDY', prompt: 'What should I study next?'},
+  {label: 'My progress', mode: 'PROGRESS', prompt: 'Analyze my progress.'},
 ];
+
+const EXAM_MODE_TEXT: Record<string, string> = {
+  CONCEPT_ONLY: 'Exam in progress — the tutor can explain general concepts, but not answer exam questions.',
+  HINT_ONLY: 'Exam in progress — the tutor can give hints and concepts, never the answer.',
+  FULL_ASSISTANCE: 'Exam in progress — this exam allows full AI help.',
+};
+
+function dayGroup(iso: string | null): string {
+  if (!iso) return 'Older';
+  const d = new Date(iso);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const diff = (start.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000;
+  if (diff <= 0) return 'Today';
+  if (diff <= 1) return 'Yesterday';
+  if (diff <= 7) return 'Previous 7 days';
+  if (diff <= 30) return 'Previous 30 days';
+  return 'Older';
+}
 
 interface Attached {
   context: TutorContext;
@@ -68,7 +93,15 @@ export default function TutorPanel() {
   const [image, setImage] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [gen, setGen] = useState<{kind: GenKind; text?: string} | null>(null);
+  const [gen, setGen] = useState<{kind: GenKind; text?: string; count?: number | null} | null>(null);
+  const [chatQuery, setChatQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [socratic, setSocratic] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
+  const [dashboard, setDashboard] = useState<StudyDashboard | null>(null);
+  const [feedbackFor, setFeedbackFor] = useState<TutorMessage | null>(null);
+  const requestIdRef = useRef<string | null>(null);
   const [tool, setTool] = useState<ToolState | null>(null);
   const [library, setLibrary] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -82,7 +115,14 @@ export default function TutorPanel() {
   const pendingSend = useRef<TutorAsk | null>(null);
 
   const refreshStatus = useCallback(() => tutorApi.status().then(setStatus).catch(() => undefined), []);
-  const refreshChats = useCallback(() => tutorApi.conversations().then((r) => setChats(r.conversations)).catch(() => setChats([])), []);
+  const refreshChats = useCallback(
+    (archived = false, q = '') => tutorApi.conversations(archived, q).then((r) => setChats(r.conversations)).catch(() => setChats([])),
+    [],
+  );
+  useEffect(() => {
+    const t = window.setTimeout(() => void refreshChats(showArchived, chatQuery.trim()), chatQuery ? 300 : 0);
+    return () => window.clearTimeout(t);
+  }, [chatQuery, showArchived, refreshChats]);
 
   const openChat = useCallback(async (id: number | null) => {
     abortRef.current?.abort();
@@ -114,7 +154,7 @@ export default function TutorPanel() {
   // first load
   useEffect(() => {
     refreshStatus();
-    refreshChats();
+    tutorApi.dashboard().then(setDashboard).catch(() => undefined);
     tutorApi.options().then((r) => {
       setCourses(r.courses);
       setUploads(r.uploads);
@@ -152,12 +192,20 @@ export default function TutorPanel() {
   };
 
   useEffect(() => {
-    if (!messages.length) return;
+    if (!messages.length || !atBottom) return;
     scrollRef.current?.scrollTo({top: scrollRef.current.scrollHeight, behavior: streaming ? 'auto' : 'smooth'});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, streaming]);
+  const scrollToBottom = () => {
+    setAtBottom(true);
+    scrollRef.current?.scrollTo({top: scrollRef.current.scrollHeight, behavior: 'smooth'});
+  };
 
   const topics = courses.find((c) => c.id === courseId)?.topics ?? [];
   const locked = status?.exam_locked ?? null;
+  const examNote = !locked && status?.exam?.active ? EXAM_MODE_TEXT[status.exam.mode ?? ''] ?? null : null;
+  const features = status?.features;
+  const genOn = (kind: GenKind) => !features || features[({flashcards: 'flashcards', practice: 'practice', material: 'materials', plan: 'study_plans'} as const)[kind]] !== false;
   const unavailable = status && (!status.configured || !status.enabled);
   const remaining = status?.remaining_today ?? null;
 
@@ -176,7 +224,7 @@ export default function TutorPanel() {
         return toast('error', 'Could not start a chat', (error as Error).message);
       }
     }
-    const context: TutorContext = {course_id: courseId, topic: topic || undefined, ...(attached?.context ?? {}), ...(extra ?? {})};
+    const context: TutorContext = {course_id: courseId, topic: topic || undefined, ...(socratic ? {socratic: true} : {}), ...(attached?.context ?? {}), ...(extra ?? {})};
     const now = new Date().toISOString();
     const sentImage = image;
     const userMsg: TutorMessage = {id: -Date.now(), role: 'user', content: content || 'Explain this image.', type: 'chat', meta: {mode, ...(sentImage ? {image: true} : {}), ...(label || attached ? {label: label || attached?.label} : {})}, created_at: now};
@@ -185,6 +233,7 @@ export default function TutorPanel() {
     setDraft('');
     setImage(null);
     setStreaming(true);
+    setAtBottom(true);
     const controller = new AbortController();
     abortRef.current = controller;
     const patchBot = (patch: Partial<TutorMessage> | ((m: TutorMessage) => Partial<TutorMessage>)) =>
@@ -194,21 +243,19 @@ export default function TutorPanel() {
         id,
         {content, mode, context, image: sentImage},
         {
+          ...botHandlers(patchBot, mode),
+          onRoute: (route) => {
+            // "make 12 flashcards…" → open the right tool instead of chatting
+            setMessages((list) => list.filter((m) => m.id !== botId && m.id !== userMsg.id));
+            setGen({kind: route.kind === 'quiz' ? 'practice' : route.kind, count: route.count, text: undefined});
+          },
           onMeta: (meta) => {
+            requestIdRef.current = meta.request_id;
             setMessages((list) => list.map((m) => (m.id === userMsg.id ? {...m, id: meta.user_message_id} : m)));
             setChats((list) => {
               const rest = (list ?? []).filter((c) => c.id !== meta.conversation_id);
               return [{id: meta.conversation_id, title: meta.title, course_id: courseId, topic, archived: false, created_at: now, last_message_at: now}, ...rest];
             });
-          },
-          onDelta: (piece) => patchBot((m) => ({content: m.content + piece})),
-          onDone: (done) => {
-            patchBot({id: done.message_id, pending: false, meta: {mode, finish: done.finish}});
-            setStatus((s) => (s ? {...s, remaining_today: done.remaining_today, usage: {...s.usage, today: s.usage.today + 1}} : s));
-          },
-          onError: (detail, partial) => {
-            patchBot((m) => ({pending: false, failed: true, content: partial && m.content ? `${m.content}\n\n_(answer cut off)_` : detail}));
-            toast('error', 'The tutor hit a problem', detail);
           },
         },
         controller.signal,
@@ -224,8 +271,74 @@ export default function TutorPanel() {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      requestIdRef.current = null;
     }
-  }, [attached, chatId, courseId, image, locked, refreshStatus, streaming, toast, topic]);
+  }, [attached, chatId, courseId, image, locked, refreshStatus, streaming, toast, topic, socratic]);
+
+  /** delta/done/error/cancelled handling shared by send + regenerate */
+  function botHandlers(patchBot: (p: Partial<TutorMessage> | ((m: TutorMessage) => Partial<TutorMessage>)) => void, mode: TutorMode): StreamHandlers {
+    return {
+      onMeta: (meta) => { requestIdRef.current = meta.request_id; },
+      onDelta: (piece) => patchBot((m) => ({content: m.content + piece})),
+      onDone: (done) => {
+        patchBot({id: done.message_id, pending: false, meta: {mode, finish: done.finish}});
+        setStatus((s) => (s ? {...s, remaining_today: done.remaining_today, usage: {...s.usage, today: s.usage.today + 1}} : s));
+      },
+      onCancelled: (info) => patchBot((m) => ({...(info.message_id ? {id: info.message_id} : {}), pending: false, content: m.content ? `${m.content}\n\n_(stopped)_` : '_(stopped)_'})),
+      onError: (detail, partial) => {
+        patchBot((m) => ({pending: false, failed: true, content: partial && m.content ? `${m.content}\n\n_(answer cut off)_` : detail}));
+        toast('error', 'The tutor hit a problem', detail);
+      },
+    };
+  }
+
+  /** Stop = tell the server to cancel (it saves the partial answer and stops
+   * paying for tokens), then close the connection if it doesn't end soon. */
+  const stop = () => {
+    const controller = abortRef.current;
+    const rid = requestIdRef.current;
+    if (!controller) return;
+    if (!rid) return controller.abort();
+    tutorApi.cancel(rid).catch(() => controller.abort());
+    window.setTimeout(() => { if (abortRef.current === controller) controller.abort(); }, 4000);
+  };
+
+  const regenerateAnswer = async (style: '' | 'simpler' | 'example' | 'shorter' | 'detailed' = '') => {
+    if (!chatId || streaming) return;
+    const lastBot = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (!lastBot) return;
+    const oldId = lastBot.id;
+    const botId = -Date.now();
+    setMessages((list) => list.map((m) => (m.id === oldId ? {...m, id: botId, content: '', pending: true, failed: false, feedback: undefined} : m)));
+    setStreaming(true);
+    setAtBottom(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const patchBot = (patch: Partial<TutorMessage> | ((m: TutorMessage) => Partial<TutorMessage>)) =>
+      setMessages((list) => list.map((m) => (m.id === botId ? {...m, ...(typeof patch === 'function' ? patch(m) : patch)} : m)));
+    try {
+      await streamRegenerate(chatId, style, botHandlers(patchBot, 'CHAT'), controller.signal);
+      if (controller.signal.aborted) patchBot((m) => ({pending: false, content: m.content ? `${m.content}\n\n_(stopped)_` : '_(stopped)_'}));
+    } catch (error) {
+      patchBot({pending: false, failed: true, content: (error as Error).message});
+      toast('error', 'Could not regenerate', (error as Error).message);
+    } finally {
+      setStreaming(false);
+      abortRef.current = null;
+      requestIdRef.current = null;
+    }
+  };
+
+  const rate = async (message: TutorMessage, rating: 1 | -1 | 0, reason?: string, comment?: string) => {
+    if (message.id <= 0) return;
+    setMessages((list) => list.map((m) => (m.id === message.id ? {...m, feedback: rating} : m)));
+    try {
+      await tutorApi.feedback(message.id, {rating, reason, comment});
+      if (rating === -1 && reason) toast('success', 'Thanks — that helps us improve the tutor');
+    } catch (error) {
+      toast('error', 'Feedback not sent', (error as Error).message);
+    }
+  };
 
   // auto-send from the bridge once state has settled
   useEffect(() => {
@@ -276,7 +389,7 @@ export default function TutorPanel() {
     setRegenerating(true);
     try {
       const result = await tutorApi.generate(tool.request as GenRequest);
-      setTool({kind: tool.request.kind, data: result.data, request: tool.request} as ToolState);
+      setTool(toolFromResult(tool.request as GenRequest, result));
       setStatus((s) => (s ? {...s, remaining_today: result.remaining_today} : s));
     } catch (error) {
       toast('error', 'Could not regenerate', (error as Error).message);
@@ -287,20 +400,22 @@ export default function TutorPanel() {
 
   const openSaved = async (item: SavedItem) => {
     try {
-      const full = await tutorApi.savedItem(item.id);
+      const full = await tutorApi.savedItem(item.kind, item.id);
       setLibrary(false);
-      setTool({kind: full.kind, data: full.data, savedId: full.id} as ToolState);
+      setTool({kind: full.kind, data: full.data, savedId: full.id, ...(full.kind === 'practice' ? {setId: full.id} : full.kind === 'plan' ? {planId: full.id} : {})} as ToolState);
     } catch (error) {
       toast('error', 'Could not open it', (error as Error).message);
     }
   };
 
-  const saveMessage = async (message: TutorMessage) => {
-    const kind = message.type === 'study_plan' ? 'plan' : 'notes';
-    const title = (lastUser?.content || 'Tutor notes').slice(0, 80);
+  const saveMessage = async (message: TutorMessage, as: 'notes' | 'material') => {
+    const index = messages.findIndex((m) => m.id === message.id);
+    const question = [...messages.slice(0, Math.max(0, index))].reverse().find((m) => m.role === 'user');
+    const title = (question?.content || lastUser?.content || 'Tutor notes').replace(/\s+/g, ' ').slice(0, 80);
+    const data = as === 'notes' ? {title, content: message.content} : {title, sections: [{heading: title, content: message.content}]};
     try {
-      await tutorApi.save({kind, title, data: {title, content: message.content}, course_id: courseId, topic, conversation_id: chatId});
-      toast('success', kind === 'plan' ? 'Study plan saved' : 'Saved to your notes');
+      await tutorApi.save({kind: as, title, data, course_id: courseId, topic, conversation_id: chatId, source_type: 'conversation', source_id: chatId});
+      toast('success', as === 'notes' ? 'Saved as a note' : 'Saved as study material', 'Find it in My AI Resources.');
     } catch (error) {
       toast('error', 'Could not save', (error as Error).message);
     }
@@ -330,54 +445,90 @@ export default function TutorPanel() {
       regenerating,
       onDeleted: () => setTool(null),
       onAsk: askFromTool,
+      onOpenTool: (next: ToolState, left: number) => {
+        setTool(next);
+        setStatus((st) => (st ? {...st, remaining_today: left} : st));
+      },
+      onGenFrom: (kind: GenKind, text: string) => setGen({kind, text: text.slice(0, 6000)}),
     };
     const onChange = (data: unknown) => setTool((t) => (t ? ({...t, data} as ToolState) : t));
     if (tool.kind === 'flashcards') return <DeckView {...common} data={tool.data} onChange={onChange} />;
-    if (tool.kind === 'practice') return <QuizView {...common} data={tool.data} onChange={onChange} />;
+    if (tool.kind === 'practice') return <QuizView {...common} setId={tool.setId} data={tool.data} onChange={onChange} />;
     if (tool.kind === 'material') return <MaterialView {...common} data={tool.data} onChange={onChange} />;
-    return <NotesView {...common} kind={tool.kind} data={tool.data} onChange={onChange} />;
+    if (tool.kind === 'plan') return <PlanView {...common} planId={tool.planId} data={tool.data} onChange={onChange} />;
+    return <NotesView {...common} kind="notes" data={tool.data} onChange={onChange} />;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, regenerating, courseId, topic, chatId, send]);
+
+  const grouped = useMemo(() => {
+    const out: [string, Conversation[]][] = [];
+    for (const c of chats ?? []) {
+      const g = chatQuery ? 'Results' : showArchived ? 'Archived' : dayGroup(c.last_message_at ?? c.created_at);
+      const last = out[out.length - 1];
+      if (last && last[0] === g) last[1].push(c);
+      else out.push([g, [c]]);
+    }
+    return out;
+  }, [chats, chatQuery, showArchived]);
+
+  const chatAction = async (c: Conversation, action: 'rename' | 'archive' | 'delete', title?: string) => {
+    try {
+      if (action === 'rename' && title) {
+        const next = await tutorApi.updateConversation(c.id, {title});
+        setChats((list) => (list ?? []).map((x) => (x.id === c.id ? {...x, title: next.title} : x)));
+      } else if (action === 'archive') {
+        await tutorApi.updateConversation(c.id, {archived: !c.archived});
+        setChats((list) => (list ?? []).filter((x) => x.id !== c.id));
+        toast('info', c.archived ? 'Chat restored' : 'Chat archived');
+      } else if (action === 'delete') {
+        await tutorApi.deleteConversation(c.id);
+        setChats((list) => (list ?? []).filter((x) => x.id !== c.id));
+        if (c.id === chatId) void openChat(null);
+        toast('info', 'Chat deleted');
+      }
+    } catch (error) {
+      toast('error', 'That did not work', (error as Error).message);
+    }
+  };
 
   const chatList = (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <Button size="sm" block icon={<MessageSquarePlus className="size-4" />} onClick={() => { setAttached(null); void openChat(null); }}>New chat</Button>
+      <label className="flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-ink-950/60 px-2 focus-within:border-nova-400/60">
+        <Search className="size-3.5 shrink-0 text-mist-500" />
+        <input value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} placeholder="Search chats" className="min-w-0 flex-1 bg-transparent text-[0.76rem] text-mist-100 placeholder:text-mist-600 focus:outline-none" aria-label="Search chats" />
+        {chatQuery && <button onClick={() => setChatQuery('')} aria-label="Clear search"><X className="size-3 text-mist-500" /></button>}
+      </label>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
         {chats === null ? (
           [0, 1, 2].map((i) => <Skeleton key={i} className="h-11" />)
         ) : chats.length ? (
-          chats.map((c) => (
-            <ChatRow
-              key={c.id}
-              chat={c}
-              active={c.id === chatId}
-              onOpen={() => void openChat(c.id)}
-              onRename={async (title) => {
-                try {
-                  const next = await tutorApi.updateConversation(c.id, {title});
-                  setChats((list) => (list ?? []).map((x) => (x.id === c.id ? {...x, title: next.title} : x)));
-                } catch (error) {
-                  toast('error', 'Could not rename', (error as Error).message);
-                }
-              }}
-              onDelete={async () => {
-                try {
-                  await tutorApi.deleteConversation(c.id);
-                  setChats((list) => (list ?? []).filter((x) => x.id !== c.id));
-                  if (c.id === chatId) void openChat(null);
-                  toast('info', 'Chat deleted');
-                } catch (error) {
-                  toast('error', 'Could not delete', (error as Error).message);
-                }
-              }}
-            />
+          grouped.map(([group, rows]) => (
+            <div key={group}>
+              <p className="px-2 pt-2 pb-0.5 text-[0.62rem] font-extrabold tracking-[0.14em] text-mist-600 uppercase">{group}</p>
+              {rows.map((c) => (
+                <ChatRow
+                  key={c.id}
+                  chat={c}
+                  active={c.id === chatId}
+                  onOpen={() => void openChat(c.id)}
+                  onRename={(title) => void chatAction(c, 'rename', title)}
+                  onArchive={() => void chatAction(c, 'archive')}
+                  onDelete={() => void chatAction(c, 'delete')}
+                />
+              ))}
+            </div>
           ))
         ) : (
-          <p className="px-1 py-4 text-center text-[0.78rem] text-mist-500">Your chats will appear here.</p>
+          <p className="px-1 py-4 text-center text-[0.78rem] text-mist-500">{chatQuery ? 'No chats match that search.' : showArchived ? 'No archived chats.' : 'No conversations yet. Ask your first question to get started.'}</p>
         )}
       </div>
+      <button onClick={() => { setChatQuery(''); setShowArchived((v) => !v); }} className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-[0.76rem] font-bold text-mist-400 hover:bg-white/[0.05]">
+        {showArchived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} {showArchived ? 'Back to chats' : 'Archived chats'}
+      </button>
       <button onClick={() => { setHistoryOpen(false); setTool(null); setLibrary(true); }} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[0.8rem] font-bold text-mist-200 hover:bg-white/[0.06]">
-        <Save className="size-4 text-nova-300" /> My library
+        <Save className="size-4 text-nova-300" /> My AI Resources
+        {dashboard && dashboard.flashcards_due > 0 && <span className="ml-auto rounded-full bg-gold-500/20 px-1.5 text-[0.66rem] text-gold-100">{dashboard.flashcards_due} due</span>}
       </button>
     </div>
   );
@@ -397,6 +548,9 @@ export default function TutorPanel() {
             {remaining} left today
           </span>
         )}
+        <button className="grid size-9 place-items-center rounded-lg border border-white/10 text-mist-300 hover:bg-white/[0.06]" aria-label="Tutor settings" title="How the tutor explains" onClick={() => setProfileOpen(true)}>
+          <Settings2 className="size-4.5" />
+        </button>
         <button className="grid size-9 place-items-center rounded-lg border border-white/10 text-mist-300 hover:bg-white/[0.06] lg:hidden" aria-label="Chats and library" onClick={() => setHistoryOpen(true)}>
           <History className="size-4.5" />
         </button>
@@ -405,6 +559,16 @@ export default function TutorPanel() {
       {locked && (
         <div className="mb-2.5 flex items-start gap-2 rounded-xl border border-gold-400/35 bg-gold-500/10 px-3 py-2.5 text-[0.82rem] text-gold-100">
           <Lock className="mt-0.5 size-4 shrink-0" /> {locked}
+        </div>
+      )}
+      {examNote && (
+        <div className="mb-2.5 flex items-start gap-2 rounded-xl border border-gold-400/30 bg-gold-500/[0.08] px-3 py-2 text-[0.8rem] text-gold-100">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" /> {examNote}
+        </div>
+      )}
+      {status?.user_disabled && (
+        <div className="mb-2.5 flex items-start gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5 text-[0.82rem] text-mist-300">
+          <Lock className="mt-0.5 size-4 shrink-0" /> AI Tutor has been switched off for your account. Contact the arena staff if you think this is a mistake.
         </div>
       )}
       {unavailable && (
@@ -467,7 +631,15 @@ export default function TutorPanel() {
               </div>
 
               {/* messages */}
-              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5">
+              <div className="relative flex min-h-0 flex-1 flex-col">
+              <div
+                ref={scrollRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+                }}
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5"
+              >
                 {loadingChat ? (
                   <div className="space-y-3 p-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
                 ) : messages.length === 0 ? (
@@ -475,8 +647,9 @@ export default function TutorPanel() {
                     <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Bot className="size-6" /></span>
                     <h2 className="mt-3 text-[1.08rem] font-extrabold text-mist-50 sm:text-xl">Ask anything about what you're learning.</h2>
                     <p className="mt-1 max-w-md text-[0.8rem] text-mist-500">Pick a course or topic above for sharper answers — or attach a document or photo of a question.</p>
+                    {dashboard && <StudyCards dashboard={dashboard} onAsk={(prompt, mode, t) => { if (t) setTopic(t); void send(prompt, mode); }} onPlan={() => setGen({kind: 'plan'})} onResources={() => setLibrary(true)} />}
                     <div className="mt-4 grid w-full grid-cols-2 gap-1.5">
-                      {EXAMPLES.map((row) => (
+                      {EXAMPLES.filter((row) => !row.gen || genOn(row.gen)).map((row) => (
                         <button key={row.label} disabled={!!locked || !!unavailable} onClick={() => runExample(row)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-[0.74rem] leading-tight font-bold sm:px-3 sm:py-2.5 sm:text-[0.8rem] text-mist-200 transition-colors enabled:hover:border-nova-400/40 enabled:hover:bg-nova-500/10 disabled:opacity-40">
                           <row.icon className="size-4 shrink-0 text-nova-300" />
                           <span className="min-w-0">{row.label}</span>
@@ -493,13 +666,22 @@ export default function TutorPanel() {
                         last={i === messages.length - 1}
                         busy={streaming}
                         onFollow={(prompt, mode) => void send(prompt, mode)}
-                        onSave={() => saveMessage(m)}
+                        onSave={(as) => saveMessage(m, as)}
                         onFlashcards={() => setGen({kind: 'flashcards', text: m.content})}
+                        onPractice={() => setGen({kind: 'practice', text: m.content})}
+                        onRegenerate={(style) => void regenerateAnswer(style)}
+                        onRate={(rating) => (rating === -1 ? setFeedbackFor(m) : void rate(m, rating))}
                         onRetry={() => { if (lastUser) { setMessages((list) => list.slice(0, -2)); void send(lastUser.content, (lastUser.meta.mode as TutorMode) || 'CHAT'); } }}
                       />
                     ))}
                   </div>
                 )}
+              </div>
+              {!atBottom && messages.length > 0 && (
+                <button onClick={scrollToBottom} className="absolute bottom-2 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full border border-white/15 bg-ink-900/95 text-mist-200 shadow-lg hover:bg-ink-800" aria-label="Scroll to the latest message">
+                  <ArrowDown className="size-4" />
+                </button>
+              )}
               </div>
 
               {/* quick actions */}
@@ -511,9 +693,10 @@ export default function TutorPanel() {
                     </button>
                   ))}
                   <button disabled={streaming} onClick={() => setSummaryOpen(true)} className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[0.72rem] font-bold text-mist-300 hover:bg-white/[0.06] disabled:opacity-40">Summarize…</button>
-                  <button disabled={streaming} onClick={() => setGen({kind: 'flashcards'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Flashcards</button>
-                  <button disabled={streaming} onClick={() => setGen({kind: 'practice'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Practice me</button>
-                  <button disabled={streaming} onClick={() => setGen({kind: 'material'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Study material</button>
+                  {genOn('flashcards') && <button disabled={streaming} onClick={() => setGen({kind: 'flashcards'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Flashcards</button>}
+                  {genOn('practice') && <button disabled={streaming} onClick={() => setGen({kind: 'practice'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Practice me</button>}
+                  {genOn('material') && <button disabled={streaming} onClick={() => setGen({kind: 'material'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Study material</button>}
+                  {genOn('plan') && <button disabled={streaming} onClick={() => setGen({kind: 'plan'})} className="shrink-0 rounded-full border border-nova-400/30 px-2.5 py-1 text-[0.72rem] font-bold text-nova-200 hover:bg-nova-500/10 disabled:opacity-40">Study plan</button>}
                 </div>
               )}
 
@@ -553,13 +736,13 @@ export default function TutorPanel() {
                     rows={1}
                     maxLength={status?.limits.max_message_chars ?? 4000}
                     disabled={!!locked || !!unavailable}
-                    placeholder={locked ? 'Paused during your exam' : image ? 'What should I explain about this image?' : 'Ask the tutor…'}
+                    placeholder={locked ? 'Paused during your exam' : image ? 'What should I explain about this image?' : socratic ? 'Ask — the tutor will guide you with questions…' : 'Ask the tutor…'}
                     className="max-h-40 min-h-[2.4rem] flex-1 resize-none bg-transparent px-1.5 py-2 text-[0.9rem] text-mist-50 placeholder:text-mist-600 focus:outline-none"
                     style={{fieldSizing: 'content'} as React.CSSProperties}
                     aria-label="Message"
                   />
                   {streaming ? (
-                    <button onClick={() => abortRef.current?.abort()} className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-mist-100 hover:bg-white/15" aria-label="Stop answering">
+                    <button onClick={stop} className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-mist-100 hover:bg-white/15" aria-label="Stop answering">
                       <Square className="size-4 fill-current" />
                     </button>
                   ) : (
@@ -568,7 +751,12 @@ export default function TutorPanel() {
                     </button>
                   )}
                 </div>
-                <p className="mt-1 hidden px-1 text-[0.66rem] text-mist-600 sm:block">Enter to send · Shift+Enter for a new line · The tutor can make mistakes — check important facts with your materials.</p>
+                <div className="mt-1 flex items-center gap-2 px-1">
+                  <button onClick={() => setSocratic((v) => !v)} className={`rounded-full border px-2 py-0.5 text-[0.66rem] font-bold ${socratic ? 'border-pulse-400/60 bg-pulse-500/20 text-pulse-100' : 'border-white/10 text-mist-500 hover:text-mist-300'}`} title="The tutor asks guiding questions instead of giving the answer straight away" aria-pressed={socratic}>
+                    Socratic {socratic ? 'on' : 'off'}
+                  </button>
+                  <p className="hidden min-w-0 flex-1 truncate text-[0.66rem] text-mist-600 sm:block">Enter to send · Shift+Enter for a new line · The tutor can make mistakes — check important facts with your materials.</p>
+                </div>
               </div>
             </>
           )}
@@ -581,6 +769,9 @@ export default function TutorPanel() {
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Your chats" size="sm">
         <div className="flex h-[60dvh] flex-col">{chatList}</div>
       </Modal>
+
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} socratic={socratic} onSocratic={setSocratic} />
+      <FeedbackModal message={feedbackFor} onClose={() => setFeedbackFor(null)} onSend={(reason, comment) => { if (feedbackFor) void rate(feedbackFor, -1, reason, comment); setFeedbackFor(null); }} />
 
       <Modal open={summaryOpen} onClose={() => setSummaryOpen(false)} title="Summarize" subtitle="Summaries use the attached material, upload or this chat." size="sm">
         <div className="grid gap-2">
@@ -601,6 +792,7 @@ export default function TutorPanel() {
         open={!!gen}
         onClose={() => setGen(null)}
         initialKind={gen?.kind ?? 'flashcards'}
+        initialCount={gen?.count}
         conversationId={chatId && messages.length ? chatId : null}
         courses={courses}
         uploads={uploads}
@@ -616,13 +808,13 @@ export default function TutorPanel() {
   );
 }
 
-function ChatRow({chat, active, onOpen, onRename, onDelete}: {chat: Conversation; active: boolean; onOpen: () => void; onRename: (title: string) => void; onDelete: () => void}) {
+function ChatRow({chat, active, onOpen, onRename, onArchive, onDelete}: {chat: Conversation; active: boolean; onOpen: () => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void}) {
   const [menu, setMenu] = useState(false);
   return (
     <div className={`group relative flex items-center rounded-lg ${active ? 'bg-nova-500/15' : 'hover:bg-white/[0.05]'}`}>
       <button onClick={onOpen} className="min-w-0 flex-1 px-2.5 py-2 text-left">
         <span className={`block truncate text-[0.8rem] font-bold ${active ? 'text-white' : 'text-mist-200'}`}>{chat.title}</span>
-        <span className="block truncate text-[0.66rem] text-mist-500">{formatRelative(chat.last_message_at)}</span>
+        <span className="block truncate text-[0.66rem] text-mist-500">{chat.snippet ? chat.snippet : formatRelative(chat.last_message_at)}</span>
       </button>
       <button className="grid size-8 shrink-0 place-items-center rounded-md text-mist-500 hover:text-mist-200" aria-label="Chat options" onClick={() => setMenu((v) => !v)}>
         <MoreHorizontal className="size-4" />
@@ -631,6 +823,9 @@ function ChatRow({chat, active, onOpen, onRename, onDelete}: {chat: Conversation
         <div className="absolute top-full right-1 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-ink-900 shadow-xl" onMouseLeave={() => setMenu(false)}>
           <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); const title = window.prompt('Rename chat', chat.title); if (title?.trim()) onRename(title.trim()); }}>
             <Pencil className="size-3.5" /> Rename
+          </button>
+          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); onArchive(); }}>
+            {chat.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} {chat.archived ? 'Unarchive' : 'Archive'}
           </button>
           <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-flare-300 hover:bg-flare-500/10" onClick={() => { setMenu(false); if (window.confirm('Delete this chat?')) onDelete(); }}>
             <Trash2 className="size-3.5" /> Delete
@@ -664,6 +859,7 @@ function ComposerMenu({disabled, uploading, onImage, onDoc, onGen}: {disabled: b
             {item(<Layers className="size-4 text-nova-300" />, 'Make flashcards', () => onGen('flashcards'))}
             {item(<ListChecks className="size-4 text-nova-300" />, 'Practice me (AI quiz)', () => onGen('practice'))}
             {item(<BookOpen className="size-4 text-nova-300" />, 'Create study material', () => onGen('material'))}
+            {item(<CalendarCheck className="size-4 text-nova-300" />, 'Make a study plan', () => onGen('plan'))}
           </div>
         </>
       )}
@@ -671,16 +867,20 @@ function ComposerMenu({disabled, uploading, onImage, onDoc, onGen}: {disabled: b
   );
 }
 
-function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onRetry}: {
+function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onPractice, onRegenerate, onRate, onRetry}: {
   message: TutorMessage;
   last: boolean;
   busy: boolean;
   onFollow: (prompt: string, mode: TutorMode) => void;
-  onSave: () => void;
+  onSave: (as: 'notes' | 'material') => void;
   onFlashcards: () => void;
+  onPractice: () => void;
+  onRegenerate: (style: '' | 'simpler' | 'example' | 'shorter' | 'detailed') => void;
+  onRate: (rating: 1 | -1 | 0) => void;
   onRetry: () => void;
 }) {
   const {toast} = useSession();
+  const [saveMenu, setSaveMenu] = useState(false);
   if (message.role === 'user') {
     const label = message.meta.label as string | undefined;
     return (
@@ -712,13 +912,35 @@ function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onR
         {!message.pending && !generated && message.content && (
           <div className="mt-1 flex flex-wrap items-center gap-0.5">
             <MiniAction label="Copy" icon={<Copy className="size-3.5" />} onClick={async () => { const ok = await copyText(message.content); toast(ok ? 'success' : 'error', ok ? 'Copied' : 'Copy failed'); }} />
-            {!message.failed && (
+            {!message.failed && message.id > 0 && (
               <>
-                <MiniAction label="Save" icon={<Save className="size-3.5" />} onClick={onSave} />
-                <MiniAction label="Why?" onClick={() => onFollow('Why? Explain the reasoning behind that.', 'CHAT')} disabled={busy} />
-                <MiniAction label="Simpler" onClick={() => onFollow('Explain that more simply.', 'SIMPLE')} disabled={busy} />
+                <span className="relative">
+                  <MiniAction label="Save" icon={<Save className="size-3.5" />} onClick={() => setSaveMenu((v) => !v)} />
+                  {saveMenu && (
+                    <>
+                      <span className="fixed inset-0 z-20" onClick={() => setSaveMenu(false)} />
+                      <span className="absolute bottom-full left-0 z-30 mb-1 w-48 overflow-hidden rounded-lg border border-white/10 bg-ink-900 py-1 shadow-xl">
+                        {([
+                          ['Save as note', () => onSave('notes')],
+                          ['Save as study material', () => onSave('material')],
+                          ['Use for flashcards', onFlashcards],
+                        ] as [string, () => void][]).map(([label, fn]) => (
+                          <button key={label} className="block w-full px-3 py-2 text-left text-[0.76rem] font-semibold text-mist-100 hover:bg-white/[0.06]" onClick={() => { setSaveMenu(false); fn(); }}>{label}</button>
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </span>
+                {last && <MiniAction label="Regenerate" icon={<RefreshCw className="size-3.5" />} onClick={() => onRegenerate('')} disabled={busy} />}
+                {last ? <MiniAction label="Simpler" onClick={() => onRegenerate('simpler')} disabled={busy} /> : <MiniAction label="Simpler" onClick={() => onFollow('Explain that more simply.', 'SIMPLE')} disabled={busy} />}
                 <MiniAction label="Example" onClick={() => onFollow('Give me an example of that.', 'EXAMPLE')} disabled={busy} />
+                <MiniAction label="Summarize" onClick={() => onFollow('Summarize that in a few key points.', 'SUMMARY')} disabled={busy} />
                 <MiniAction label="Flashcards" icon={<Layers className="size-3.5" />} onClick={onFlashcards} disabled={busy} />
+                <MiniAction label="Practice" icon={<ListChecks className="size-3.5" />} onClick={onPractice} disabled={busy} />
+                <span className="ml-auto flex items-center">
+                  <button onClick={() => onRate(message.feedback === 1 ? 0 : 1)} className={`grid size-7 place-items-center rounded-md hover:bg-white/[0.06] ${message.feedback === 1 ? 'text-mint-300' : 'text-mist-600 hover:text-mist-300'}`} aria-label="Helpful" aria-pressed={message.feedback === 1}><ThumbsUp className="size-3.5" /></button>
+                  <button onClick={() => onRate(message.feedback === -1 ? 0 : -1)} className={`grid size-7 place-items-center rounded-md hover:bg-white/[0.06] ${message.feedback === -1 ? 'text-flare-300' : 'text-mist-600 hover:text-mist-300'}`} aria-label="Not helpful" aria-pressed={message.feedback === -1}><ThumbsDown className="size-3.5" /></button>
+                </span>
               </>
             )}
             {last && message.failed && <MiniAction label="Retry" icon={<RefreshCw className="size-3.5" />} onClick={onRetry} disabled={busy} />}
@@ -735,5 +957,166 @@ function MiniAction({label, icon, onClick, disabled}: {label: string; icon?: Rea
       {icon}
       {label}
     </button>
+  );
+}
+
+/* ------------------------------------------------------------- study cards */
+function StudyCards({dashboard, onAsk, onPlan, onResources}: {dashboard: StudyDashboard; onAsk: (prompt: string, mode: TutorMode, topic?: string) => void; onPlan: () => void; onResources: () => void}) {
+  const rec = dashboard.recommended;
+  const today = dashboard.today_plan.filter((i) => i.status === 'pending');
+  if (!rec && !today.length && !dashboard.flashcards_due && !dashboard.weak.length) return null;
+  return (
+    <div className="mt-4 grid w-full gap-1.5 text-left sm:grid-cols-2">
+      {rec && (
+        <button onClick={() => onAsk(`Teach me ${rec.topic}. ${rec.reason}`, 'TEACH', rec.topic)} className="rounded-xl border border-nova-400/30 bg-nova-500/[0.08] px-3 py-2.5 hover:bg-nova-500/15 sm:col-span-2">
+          <p className="text-[0.64rem] font-extrabold tracking-[0.14em] text-nova-300 uppercase">Recommended now · {rec.minutes} min</p>
+          <p className="text-[0.86rem] font-bold text-mist-50">{rec.topic}</p>
+          <p className="text-[0.74rem] text-mist-400">{rec.reason} {rec.activity}</p>
+        </button>
+      )}
+      {today.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+          <p className="text-[0.64rem] font-extrabold tracking-[0.14em] text-mist-500 uppercase">Today's plan</p>
+          {today.slice(0, 2).map((i) => <p key={i.id} className="truncate text-[0.8rem] text-mist-200">• {i.topic} — {i.duration} min</p>)}
+          {today.length > 2 && <p className="text-[0.72rem] text-mist-500">+{today.length - 2} more</p>}
+        </div>
+      )}
+      {dashboard.flashcards_due > 0 && (
+        <button onClick={onResources} className="rounded-xl border border-gold-400/25 bg-gold-500/[0.06] px-3 py-2.5 hover:bg-gold-500/10">
+          <p className="text-[0.64rem] font-extrabold tracking-[0.14em] text-gold-200 uppercase">Flashcards due</p>
+          <p className="text-[0.86rem] font-bold text-mist-50">{dashboard.flashcards_due} to review</p>
+        </button>
+      )}
+      {dashboard.weak.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+          <p className="text-[0.64rem] font-extrabold tracking-[0.14em] text-mist-500 uppercase">Weak topics</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {dashboard.weak.slice(0, 4).map((w) => (
+              <button key={w.topic} onClick={() => onAsk(`Help me improve on ${w.topic} — my accuracy is ${Math.round(w.accuracy)}%.`, 'TEACH', w.topic)} className="rounded-full border border-flare-400/30 px-2 py-0.5 text-[0.7rem] font-bold text-flare-100 hover:bg-flare-500/15">
+                {w.topic} · {Math.round(w.accuracy)}%
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {!today.length && dashboard.counts.plan === 0 && (
+        <button onClick={onPlan} className="rounded-xl border border-dashed border-white/15 px-3 py-2.5 text-[0.78rem] font-bold text-mist-300 hover:bg-white/[0.04]">
+          <CalendarCheck className="mr-1 inline size-3.5" /> Make a study plan
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- profile */
+function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onClose: () => void; socratic: boolean; onSocratic: (v: boolean) => void}) {
+  const {toast} = useSession();
+  const [profile, setProfile] = useState<LearningProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (open) tutorApi.profile().then(setProfile).catch(() => setProfile({explanation_style: 'balanced', difficulty: 'medium', language: 'English', goals: ''}));
+  }, [open]);
+  const save = async () => {
+    if (!profile) return;
+    setBusy(true);
+    try {
+      setProfile(await tutorApi.saveProfile(profile));
+      toast('success', 'Saved', 'The tutor will explain things your way.');
+      onClose();
+    } catch (error) {
+      toast('error', 'Could not save', (error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="How should the tutor explain?"
+      subtitle="Used in every answer. Your exam rules always come first."
+      size="sm"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" loading={busy} onClick={save} disabled={!profile}>Save</Button></>}
+    >
+      {!profile ? (
+        <Skeleton className="h-40" />
+      ) : (
+        <div className="space-y-3">
+          <Field label="Explanation style">
+            <div className="grid grid-cols-2 gap-1.5">
+              {([['simple', 'Simple'], ['balanced', 'Balanced'], ['detailed', 'Detailed'], ['socratic', 'Guide me with questions']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setProfile({...profile, explanation_style: v})} className={`rounded-lg border px-2 py-2 text-[0.76rem] font-bold ${profile.explanation_style === v ? 'border-nova-400/70 bg-nova-500/20 text-white' : 'border-white/10 text-mist-300 hover:bg-white/[0.05]'}`}>{label}</button>
+              ))}
+            </div>
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Level">
+              <Select value={profile.difficulty} onChange={(e) => setProfile({...profile, difficulty: e.target.value as LearningProfile['difficulty']})}>
+                <option value="easy">Beginner</option>
+                <option value="medium">Intermediate</option>
+                <option value="hard">Advanced</option>
+              </Select>
+            </Field>
+            <Field label="Language">
+              <TextInput value={profile.language} onChange={(e) => setProfile({...profile, language: e.target.value})} maxLength={40} list="tutor-langs" />
+              <datalist id="tutor-langs">{['English', 'Simple English', 'Pidgin English', 'Yoruba', 'Igbo', 'Hausa', 'French'].map((l) => <option key={l} value={l} />)}</datalist>
+            </Field>
+          </div>
+          <Field label="My goals (optional)">
+            <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Pass LAW 411 with an A, understand case law better" />
+          </Field>
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2">
+            <span>
+              <span className="block text-[0.82rem] font-bold text-mist-100">Socratic mode for this chat</span>
+              <span className="block text-[0.72rem] text-mist-500">The tutor asks guiding questions before explaining.</span>
+            </span>
+            <input type="checkbox" checked={socratic} onChange={(e) => onSocratic(e.target.checked)} className="size-4 accent-[var(--color-nova-400,#7c83ff)]" />
+          </label>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* --------------------------------------------------------------- feedback */
+const FEEDBACK_REASONS: [string, string][] = [
+  ['incorrect', 'It was wrong'],
+  ['unclear', 'Hard to understand'],
+  ['too_long', 'Too long'],
+  ['too_short', 'Not detailed enough'],
+  ['off_topic', 'Did not answer my question'],
+  ['gave_answer', 'Gave away the answer'],
+  ['other', 'Something else'],
+];
+
+function FeedbackModal({message, onClose, onSend}: {message: TutorMessage | null; onClose: () => void; onSend: (reason: string, comment: string) => void}) {
+  const [reason, setReason] = useState('incorrect');
+  const [comment, setComment] = useState('');
+  useEffect(() => {
+    if (message) {
+      setReason('incorrect');
+      setComment('');
+    }
+  }, [message]);
+  return (
+    <Modal
+      open={!!message}
+      onClose={onClose}
+      title="What went wrong?"
+      subtitle="Your feedback goes to the arena staff to improve the tutor."
+      size="sm"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" onClick={() => onSend(reason, comment.trim())}>Send feedback</Button></>}
+    >
+      <div className="space-y-3">
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {FEEDBACK_REASONS.map(([value, label]) => (
+            <button key={value} onClick={() => setReason(value)} className={`rounded-lg border px-3 py-2 text-left text-[0.78rem] font-bold ${reason === value ? 'border-flare-400/60 bg-flare-500/15 text-white' : 'border-white/10 text-mist-300 hover:bg-white/[0.05]'}`}>{label}</button>
+          ))}
+        </div>
+        <Field label="Comment (optional)">
+          <TextArea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} placeholder="e.g. the case name is wrong" />
+        </Field>
+      </div>
+    </Modal>
   );
 }

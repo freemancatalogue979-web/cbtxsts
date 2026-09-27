@@ -127,7 +127,7 @@ def downgrade() -> dict:
                             for day in data.get("days", []):
                                 lines.append(f"\n**{day['date']}**")
                                 lines += [f"- {i['topic']}: {i['activity']} ({i['duration']} min)" for i in day["items"]]
-                            data = {"title": full["title"], "text": "\n".join(lines)}
+                            data = {"title": full["title"], "content": "\n".join(lines)}
                         db.add(AISavedItem(user_id=student.id, kind=kind, title=full["title"], course_id=full["course_id"], topic=full.get("topic") or "", data=data))
                         moved += 1
     with engine.begin() as conn:

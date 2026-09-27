@@ -229,8 +229,25 @@ Players get an **AI Tutor** tab ("Ask anything about what you're learning.") pow
 * **Limits (staff → AI Tutor)** — enforced by the API, shown by the app: per-day (default 20),
   per-month (400), per-minute (10), answers at once (2), message length, answer length and chats per
   player. Usage and estimated cost are tracked in `ai_usage` / `ai_usage_events` and shown to staff.
-* **Exam-safe mode** (on by default) — the tutor pauses while a player has an exam in progress and
-  never reveals answers of exam-only questions from an exam the player can still sit.
+* **Exam protection (server-decided)** — while a player has an exam open, staff choose one of
+  `AI_DISABLED`, `CONCEPT_ONLY` (default; the live question is never sent to the AI), `HINT_ONLY`
+  (question visible, answer withheld) or `FULL_ASSISTANCE`. The app cannot override it.
+* **Tutor v2** — Stop really cancels on the server (the partial answer is kept); Regenerate / Simpler;
+  👍👎 feedback with a reason; chats grouped by date, searchable, archivable; learning profile
+  (style, level, language, goals) and a Socratic toggle; "make 12 flashcards…" opens the right tool.
+* **My AI Resources** — notes, study materials, flashcard decks (spaced review: *I know* / *I don't
+  know*), practice sets (results tracked per topic, "Try another", "Practice my mistakes") and
+  day-by-day study plans (complete / skip / reschedule). Each can be opened, renamed, duplicated or
+  deleted. AI practice questions are kept separate from the official bank and are never published.
+* **Providers** — DeepSeek or Gemini behind one provider layer (`services/ai_providers.py`,
+  prices in `AI_PRICING_CONFIG`); retries after 1/2/4 s; students only ever see "AI Tutor is
+  temporarily unavailable. Please try again." while staff see the technical reason in Logs.
+* **Staff → AI Tutor** — Overview, Settings, Usage (Today / Yesterday / 7 / 30 days / custom), Costs
+  with a monthly budget cap, Users (disable, reset today's quota, custom quota — chat text is never
+  shown), Conversations (titles only), Models (provider/model, connection test), Limits, Logs
+  (no prompts or keys) and Features (switch individual tools off).
+* **Migrations** — the API upgrades itself on start. `scripts/migrate_ai.py backup|upgrade|verify|downgrade`
+  does it explicitly; each upgrade/downgrade takes a timestamped SQLite backup first.
 * The tutor has no tools that touch SQL, files or the shell — context is gathered by fixed,
   permission-checked server code.
 
@@ -388,7 +405,8 @@ cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
 #          fallback, thinking retry, key / balance / rate / busy errors, time limit
 cd backend && ./.venv/bin/python scripts/verify_deepseek.py
 
-# Backend: AI Tutor end to end (58 checks) — starts its own API on :3995 with a throw-away DB and a
+# Backend: AI Tutor end to end (163 checks, incl. cross-user access, exam modes, malformed JSON,
+#          prompt injection, provider down, Gemini, cancel, staff dashboards) — starts its own API on :3995 with a throw-away DB and a
 #          mock DeepSeek on :3996: streaming, memory + summaries, question/material/upload context,
 #          exam-safe mode, images, JSON generators, saved items, limits and staff usage
 cd backend && ./.venv/bin/python scripts/verify_ai_tutor.py
@@ -486,6 +504,12 @@ cd frontend && npm run typecheck && npm run build
 | `DEEPSEEK_MODEL` | `deepseek-flash` | DeepSeek model to try first (falls back to `deepseek-v4-flash`, `deepseek-chat`) |
 | `AI_PROVIDER` | `auto` | `gemini` or `deepseek` to force a provider |
 | `TUTOR_MODEL` | DeepSeek model | Model the AI Tutor uses |
+| `AI_ENABLED` / `AI_MODEL` | `true` / provider default | First-run defaults (staff can change them in the app) |
+| `AI_DAILY_LIMIT` / `AI_MONTHLY_LIMIT` | `20` / `400` | Requests per student (first-run defaults) |
+| `AI_MAX_MESSAGE_LENGTH` / `AI_MAX_RESPONSE_TOKENS` | `4000` / `1800` | Message characters / answer tokens |
+| `AI_MONTHLY_BUDGET_USD` | `0` (no cap) | Stop AI requests past this estimated monthly cost |
+| `AI_RETRY_BASE` | `1` s | Backoff base for provider retries (1, 2, 4 s) |
+| `AI_PRICE_INPUT` / `_CACHED` / `_OUTPUT` | from `AI_PRICING_CONFIG` | Override prices (USD per 1M tokens) |
 | `TUTOR_STREAM_TIMEOUT` | `45` s | Longest wait for the tutor's answer to start / continue |
 | `TUTOR_MAX_UPLOAD_MB` | `10` | Largest document a player may upload to the tutor |
 | `TUTOR_PRICE_INPUT` / `_CACHED` / `_OUTPUT` | `0.14` / `0.028` / `0.28` | USD per million tokens, for the cost estimate |

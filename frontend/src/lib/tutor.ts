@@ -8,7 +8,8 @@ import {ApiError, tokenStore} from './api';
 
 export type TutorMode =
   | 'CHAT' | 'EXPLAIN' | 'QUESTION_HELP' | 'WHY_WRONG' | 'TEACH' | 'SIMPLE' | 'EXAMPLE' | 'SUMMARY'
-  | 'NOTES' | 'GLOSSARY' | 'STUDY_PLAN' | 'WHAT_TO_STUDY' | 'IMAGE_EXPLANATION';
+  | 'NOTES' | 'GLOSSARY' | 'STUDY_PLAN' | 'WHAT_TO_STUDY' | 'IMAGE_EXPLANATION'
+  | 'HINT' | 'SIMILAR' | 'PROGRESS' | 'SOCRATIC' | 'EXAM_REVISION';
 
 export interface TutorContext {
   course_id?: number | null;
@@ -20,7 +21,16 @@ export interface TutorContext {
   upload_id?: number;
   selected_text?: string;
   summary_length?: 'quick' | 'detailed' | 'revision';
+  socratic?: boolean;
 }
+
+export interface LearningProfile {
+  explanation_style: 'simple' | 'balanced' | 'detailed' | 'socratic';
+  difficulty: 'easy' | 'medium' | 'hard';
+  language: string;
+  goals: string;
+}
+export type TutorFeatures = Record<'images' | 'materials' | 'flashcards' | 'practice' | 'study_plans' | 'quiz' | 'saving' | 'uploads', boolean>;
 
 export interface TutorStatus {
   configured: boolean;
@@ -30,6 +40,11 @@ export interface TutorStatus {
   usage: {today: number; month: number};
   remaining_today: number;
   exam_locked: string | null;
+  provider?: string;
+  user_disabled?: boolean;
+  features?: TutorFeatures;
+  exam?: {active: boolean; mode: string | null};
+  profile?: LearningProfile;
 }
 
 export interface TutorCourse {
@@ -42,6 +57,8 @@ export interface TutorUpload {
   id: number;
   title: string;
   sections: number;
+  status?: 'processing' | 'ready' | 'failed';
+  error?: string | null;
 }
 export interface Conversation {
   id: number;
@@ -49,9 +66,12 @@ export interface Conversation {
   course_id: number | null;
   topic: string;
   archived: boolean;
+  archived_at?: string | null;
+  context_type?: string;
   created_at: string;
   last_message_at: string | null;
   messages?: number;
+  snippet?: string;
 }
 export interface TutorMessage {
   id: number;
@@ -60,12 +80,16 @@ export interface TutorMessage {
   type: string;
   meta: Record<string, unknown>;
   created_at: string;
+  feedback?: number;
   /** client-only */
   pending?: boolean;
   failed?: boolean;
 }
 
 export interface Flashcard {
+  id?: number;
+  next_review_at?: string | null;
+  interval_days?: number;
   front: string;
   back: string;
   topic?: string;
@@ -76,6 +100,9 @@ export interface Deck {
   cards: Flashcard[];
 }
 export interface PracticeQuestion {
+  id?: number;
+  times_answered?: number;
+  times_correct?: number;
   type: 'mcq' | 'true_false' | 'short_answer' | 'calculation' | 'scenario';
   question: string;
   options: string[];
@@ -87,6 +114,47 @@ export interface PracticeQuestion {
 export interface PracticeSet {
   title: string;
   questions: PracticeQuestion[];
+  attempts?: number;
+  best_score?: number;
+  last_score?: number | null;
+}
+export interface PlanItem {
+  id?: number;
+  topic: string;
+  activity: string;
+  duration: number;
+  status?: 'pending' | 'completed' | 'skipped';
+}
+export interface StudyPlan {
+  title: string;
+  overview?: string;
+  tips?: string[];
+  exam_date?: string | null;
+  minutes_per_day?: number;
+  days: {date: string; items: PlanItem[]}[];
+  progress?: {done: number; total: number; skipped: number};
+}
+export interface PracticeResult {
+  answered: number;
+  correct: number;
+  score: number | null;
+  best: number;
+  attempts: number;
+  topics: {topic: string; answered: number; correct: number; accuracy: number}[];
+  weak: string[];
+  strong: string[];
+}
+export interface StudyDashboard {
+  counts: Record<'flashcards' | 'cards_due' | 'practice' | 'material' | 'notes' | 'plan', number>;
+  flashcards_due: number;
+  weak: {topic: string; accuracy: number; attempted: number; course_id?: number | null}[];
+  strong: {topic: string; accuracy: number; attempted: number}[];
+  accuracy: number | null;
+  attempted: number;
+  repeated_mistakes: {question_id: number; text: string; topic: string; times: number}[];
+  upcoming: {exam: string; at: string | null}[];
+  today_plan: {id: number; plan_id: number; plan: string; topic: string; activity: string; duration: number; status: string}[];
+  recommended: {topic: string; course_id?: number | null; reason: string; activity: string; minutes: number} | null;
 }
 export interface StudyMaterial {
   title: string;
@@ -105,10 +173,16 @@ export interface NotesDoc {
   content: string;
 }
 
-export type GenKind = 'flashcards' | 'practice' | 'material';
-export type SavedKind = GenKind | 'notes' | 'plan';
+export type GenKind = 'flashcards' | 'practice' | 'material' | 'plan';
+export type SavedKind = GenKind | 'notes';
 export interface SavedItem {
   id: number;
+  key?: string;
+  due?: number;
+  attempts?: number;
+  best_score?: number;
+  exam_date?: string | null;
+  done?: number;
   kind: SavedKind;
   title: string;
   course_id: number | null;
@@ -116,12 +190,32 @@ export interface SavedItem {
   items: number;
   created_at: string;
   updated_at: string;
-  data?: Deck | PracticeSet | StudyMaterial | NotesDoc;
+  data?: Deck | PracticeSet | StudyMaterial | NotesDoc | StudyPlan;
 }
+export type SavedCounts = StudyDashboard['counts'];
 
 export interface GenerateSource extends TutorContext {
   conversation_id?: number;
+  message_id?: number;
   questions?: number[];
+  missed?: string[];
+  similar_to?: {question: string};
+  plan?: {exam_date?: string; minutes_per_day?: number; days?: number; subjects?: string; topics?: string; difficulty?: string};
+}
+export interface GenerateReply {
+  kind: GenKind;
+  data: Deck | PracticeSet | StudyMaterial | StudyPlan;
+  model: string;
+  remaining_today: number;
+  set_id?: number;
+  plan_id?: number;
+  source?: {source_type: string; source_id: number | null; course_id: number | null; topic: string};
+}
+export interface RouteReply {
+  route: 'generate';
+  kind: 'flashcards' | 'practice' | 'quiz' | 'plan';
+  count: number | null;
+  text: string;
 }
 
 async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -162,24 +256,36 @@ async function readJson<T>(response: Response): Promise<T> {
 export const tutorApi = {
   status: () => call<TutorStatus>('/status'),
   options: () => call<{courses: TutorCourse[]; uploads: TutorUpload[]}>('/options'),
-  conversations: (archived = false) => call<{conversations: Conversation[]}>(`/conversations${archived ? '?archived=true' : ''}`),
-  createConversation: (body: {course_id?: number | null; topic?: string} = {}) => call<Conversation>('/conversations', 'POST', body),
+  conversations: (archived = false, q = '') =>
+    call<{conversations: Conversation[]}>(`/conversations?${q ? `q=${encodeURIComponent(q)}` : archived ? 'archived=true' : ''}`),
+  createConversation: (body: {course_id?: number | null; topic?: string; context_type?: string} = {}) => call<Conversation>('/conversations', 'POST', body),
   conversation: (id: number) => call<Conversation & {messages: TutorMessage[]}>(`/conversations/${id}`),
   updateConversation: (id: number, body: Partial<Pick<Conversation, 'title' | 'archived' | 'course_id' | 'topic'>>) => call<Conversation>(`/conversations/${id}`, 'PATCH', body),
   deleteConversation: (id: number) => call<{ok: boolean}>(`/conversations/${id}`, 'DELETE'),
   restoreConversation: (id: number) => call<Conversation>(`/conversations/${id}/restore`, 'POST'),
-  generate: (body: {kind: GenKind; count?: number; difficulty?: string; types?: string[]; source: GenerateSource; instructions?: string}) =>
-    call<{kind: GenKind; data: Deck | PracticeSet | StudyMaterial; model: string; remaining_today: number}>('/generate', 'POST', {...body, kind: body.kind.toUpperCase()}),
-  saved: (kind = '') => call<{items: SavedItem[]}>(`/saved${kind ? `?kind=${kind}` : ''}`),
-  savedItem: (id: number) => call<SavedItem>(`/saved/${id}`),
-  save: (body: {kind: SavedKind; title?: string; data: object; course_id?: number | null; topic?: string; conversation_id?: number | null}) => call<SavedItem>('/saved', 'POST', body),
-  updateSaved: (id: number, body: {title?: string; data?: object}) => call<SavedItem>(`/saved/${id}`, 'PATCH', body),
-  deleteSaved: (id: number) => call<{ok: boolean}>(`/saved/${id}`, 'DELETE'),
+  cancel: (requestId: string) => call<{ok: boolean; cancelled: boolean}>(`/streams/${requestId}/cancel`, 'POST'),
+  feedback: (messageId: number, body: {rating: 1 | -1 | 0; reason?: string; comment?: string}) => call<{ok: boolean; rating: number}>(`/messages/${messageId}/feedback`, 'POST', body),
+  profile: () => call<LearningProfile>('/profile'),
+  saveProfile: (body: Partial<LearningProfile>) => call<LearningProfile>('/profile', 'PUT', body),
+  generate: (body: {kind: GenKind | 'quiz'; count?: number; difficulty?: string; types?: string[]; source: GenerateSource; instructions?: string}) =>
+    call<GenerateReply>('/generate', 'POST', {...body, kind: body.kind.toUpperCase()}),
+  saved: (kind = '', q = '') => call<{items: SavedItem[]; counts: SavedCounts}>(`/saved?kind=${kind}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+  savedItem: (kind: SavedKind, id: number) => call<SavedItem>(`/saved/${kind}/${id}`),
+  save: (body: {kind: SavedKind; title?: string; data?: object; course_id?: number | null; topic?: string; conversation_id?: number | null; set_id?: number; plan_id?: number; source_type?: string; source_id?: number | null}) =>
+    call<SavedItem>('/saved', 'POST', body),
+  updateSaved: (kind: SavedKind, id: number, body: {title?: string; data?: object}) => call<SavedItem>(`/saved/${kind}/${id}`, 'PATCH', body),
+  deleteSaved: (kind: SavedKind, id: number) => call<{ok: boolean}>(`/saved/${kind}/${id}`, 'DELETE'),
+  duplicateSaved: (kind: SavedKind, id: number) => call<SavedItem>(`/saved/${kind}/${id}/duplicate`, 'POST'),
+  reviewCard: (cardId: number, rating: 'know' | 'dont_know') => call<{id: number; next_review_at: string; interval_days: number}>(`/flashcards/${cardId}/review`, 'POST', {rating}),
+  practiceResults: (setId: number, answers: {question_id: number; correct: boolean}[]) => call<PracticeResult>(`/practice-sets/${setId}/results`, 'POST', {answers}),
+  updatePlanItem: (planId: number, itemId: number, body: {status?: string; date?: string}) => call<SavedItem>(`/plans/${planId}/items/${itemId}`, 'PATCH', body),
+  dashboard: () => call<StudyDashboard>('/dashboard'),
   upload: (file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return call<{id: number; title: string; sections: number; words: number}>('/uploads', 'POST', form);
+    return call<{id: number; title: string; sections: number; words: number; status: string}>('/uploads', 'POST', form);
   },
+  uploadStatus: (id: number) => call<{id: number; title: string; status: string; error?: string | null; sections: number; words: number}>(`/uploads/${id}`),
   deleteUpload: (id: number) => call<{ok: boolean}>(`/uploads/${id}`, 'DELETE'),
 };
 
@@ -193,41 +299,134 @@ export interface TutorAdminSettings {
   ai_max_response_tokens: number;
   ai_max_conversations: number;
   ai_exam_safe: boolean;
+  ai_provider: string;
+  ai_model: string;
+  ai_exam_mode: string;
+  ai_monthly_budget_usd: number;
+  ai_retention_deleted_days: number;
+  ai_retention_logs_days: number;
+  ai_retention_unsaved_days: number;
+  ai_feat_images: boolean;
+  ai_feat_materials: boolean;
+  ai_feat_flashcards: boolean;
+  ai_feat_practice: boolean;
+  ai_feat_study_plans: boolean;
+  ai_feat_quiz: boolean;
+  ai_feat_saving: boolean;
+  ai_feat_uploads: boolean;
 }
-export interface TutorAdminUsage {
-  days: number;
-  totals: {requests: number; failed: number; rate_limited: number; tokens: number; estimated_cost: number; average_latency_ms: number; students: number};
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  configured: boolean;
+  active: boolean;
+  model: string;
+  default_model: string;
+  fallbacks: string[];
+  pricing: Record<string, {input: number; cached: number; output: number}>;
+  key_env: string;
+}
+export type AdminRange = {range: string; start?: string; end?: string};
+export interface TutorOverview {
+  range: {from: string; to: string; label: string};
+  totals: {
+    requests: number; successful: number; failed: number; rate_limited: number; invalid_json: number; cancelled: number; active_users: number;
+    input_tokens: number; output_tokens: number; cached_tokens: number; tokens: number; estimated_cost: number; average_latency_ms: number;
+    average_response_chars: number; failure_rate: number; conversations: number; month_cost: number;
+  };
   daily: {day: string; requests: number; tokens: number; cost: number}[];
-  top_students: {id: number; name: string; requests: number; cost: number}[];
-  recent_errors: {at: string; kind: string; error: string}[];
+  by_feature: {kind: string; requests: number; cost: number}[];
+  by_model: {provider: string; model: string; requests: number; input_tokens: number; output_tokens: number; cached_tokens: number; cost: number; pricing: {input: number; cached: number; output: number}}[];
+  top_students: {id: number; name: string; username: string; requests: number; cost: number}[];
 }
-type AdminSettingsReply = {settings: TutorAdminSettings; provider: {name: string; configured: boolean; model: string; base: string}};
+export interface TutorAdminUser {
+  id: number; name: string; username: string; banned: boolean; ai_disabled: boolean; daily_limit: number; monthly_limit: number;
+  custom_quota: boolean; today: number; month: number; note: string; requests?: number; tokens?: number; cost?: number; last_used?: string | null;
+}
+export interface TutorAdminUserDetail extends TutorAdminUser {
+  by_feature: {kind: string; requests: number}[];
+  conversations: {id: number; title: string; messages: number; context_type: string; archived: boolean; deleted: boolean; last_message_at: string | null}[];
+  saved: SavedCounts;
+}
+export interface TutorQuality {
+  range: string;
+  feedback: {helpful: number; not_helpful: number; negative_rate: number};
+  reasons: {reason: string; count: number}[];
+  reported_topics: {topic: string; count: number}[];
+  recent_negative: {at: string; reason: string; comment: string; topic: string; course_id: number | null}[];
+  failed_requests: number;
+  failure_rate: number;
+  invalid_json: number;
+  invalid_json_rate: number;
+}
+export interface TutorLog {
+  id: number; at: string; request_id: string; user: {id: number; name: string}; kind: string; provider: string; model: string; status: string;
+  input_tokens: number; output_tokens: number; cached_tokens: number; cost: number; latency_ms: number; course_id: number | null; error: string;
+}
+type AdminSettingsReply = {
+  settings: TutorAdminSettings;
+  provider: {name: string; id: string; configured: boolean; model: string};
+  providers: ProviderInfo[];
+  exam_modes: string[];
+  features: string[];
+};
+const qs = (r: AdminRange, extra: Record<string, string | number | undefined> = {}) => {
+  const p = new URLSearchParams();
+  p.set('range', r.range);
+  if (r.start) p.set('start', r.start);
+  if (r.end) p.set('end', r.end);
+  Object.entries(extra).forEach(([k, v]) => v !== undefined && v !== '' && p.set(k, String(v)));
+  return p.toString();
+};
 
 export const tutorAdminApi = {
   settings: () => call<AdminSettingsReply>('/api/admin/tutor/settings'),
   update: (body: Partial<TutorAdminSettings>) => call<AdminSettingsReply>('/api/admin/tutor/settings', 'PUT', body),
-  usage: (days = 30) => call<TutorAdminUsage>(`/api/admin/tutor/usage?days=${days}`),
+  test: () => call<{ok: boolean; provider: string; model: string; reply?: string; latency_ms?: number; error?: string}>('/api/admin/tutor/test', 'POST'),
+  overview: (r: AdminRange) => call<TutorOverview>(`/api/admin/tutor/overview?${qs(r)}`),
+  users: (r: AdminRange, q = '') => call<{range: string; users: TutorAdminUser[]}>(`/api/admin/tutor/users?${qs(r, {q})}`),
+  user: (id: number) => call<TutorAdminUserDetail>(`/api/admin/tutor/users/${id}`),
+  userSettings: (id: number, body: {disabled?: boolean; daily_limit?: number | null; monthly_limit?: number | null; note?: string}) => call<TutorAdminUser>(`/api/admin/tutor/users/${id}/settings`, 'PUT', body),
+  resetQuota: (id: number) => call<TutorAdminUser>(`/api/admin/tutor/users/${id}/reset-quota`, 'POST'),
+  conversations: (q = '') => call<{conversations: {id: number; title: string; student: {id: number; name: string; username: string}; messages: number; context_type: string; archived: boolean; deleted: boolean; last_message_at: string | null}[]}>(`/api/admin/tutor/conversations?q=${encodeURIComponent(q)}`),
+  courses: (r: AdminRange) => call<{range: string; general_requests: number; courses: {id: number; code: string; title: string; requests: number; students: number; cost: number; top_topics: {topic: string; chats: number}[]}[]}>(`/api/admin/tutor/courses?${qs(r)}`),
+  quality: (r: AdminRange) => call<TutorQuality>(`/api/admin/tutor/quality?${qs(r)}`),
+  logs: (r: AdminRange, filters: {status?: string; kind?: string; user_id?: number; page?: number}) => call<{range: string; total: number; page: number; per_page: number; logs: TutorLog[]}>(`/api/admin/tutor/logs?${qs(r, filters)}`),
+  models: () => call<{providers: ProviderInfo[]}>('/api/admin/tutor/models'),
+  cleanup: () => call<{ok: boolean; removed: {conversations: number; events: number; practice_sets: number}}>('/api/admin/tutor/cleanup', 'POST'),
 };
 
 export interface StreamHandlers {
-  onMeta?: (meta: {conversation_id: number; user_message_id: number; title: string; model: string}) => void;
+  onMeta?: (meta: {conversation_id: number; user_message_id: number; request_id: string; title: string; model: string; context?: Record<string, unknown>}) => void;
   onDelta: (text: string) => void;
   onDone: (done: {message_id: number; remaining_today: number; finish?: string}) => void;
   onError: (detail: string, partial: boolean) => void;
+  onCancelled?: (info: {message_id: number | null}) => void;
+  /** "make 10 flashcards" etc. — the server asks the app to open a tool */
+  onRoute?: (route: RouteReply) => void;
 }
 
 /** POST a message and read the server-sent events as they arrive. Errors
  * before the stream starts (limits, exam lock, AI down…) throw ApiError. */
-export async function streamMessage(
+export function streamMessage(
   conversationId: number,
-  body: {content: string; mode?: TutorMode; context?: TutorContext; image?: string | null},
+  body: {content: string; mode?: TutorMode; context?: TutorContext; image?: string | null; route?: boolean},
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
+  return streamRequest(`/api/tutor/conversations/${conversationId}/messages`, body, handlers, signal);
+}
+
+/** Ask again (optionally simpler / with an example / shorter / more detailed). */
+export function streamRegenerate(conversationId: number, style: '' | 'simpler' | 'example' | 'shorter' | 'detailed', handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
+  return streamRequest(`/api/tutor/conversations/${conversationId}/regenerate`, {style}, handlers, signal);
+}
+
+async function streamRequest(url: string, body: object, handlers: StreamHandlers, signal?: AbortSignal): Promise<void> {
   const token = tokenStore.get();
   let response: Response;
   try {
-    response = await fetch(`/api/tutor/conversations/${conversationId}/messages`, {
+    response = await fetch(url, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? {Authorization: `Bearer ${token}`} : {})},
       body: JSON.stringify(body),
@@ -240,6 +439,11 @@ export async function streamMessage(
   if (!response.ok || !response.body) {
     await readJson(response);
     throw new ApiError('The tutor did not answer. Try again.', response.status);
+  }
+  if ((response.headers.get('Content-Type') || '').includes('application/json')) {
+    const route = await readJson<RouteReply>(response);
+    if (route && route.route === 'generate') handlers.onRoute?.(route);
+    return;
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -264,6 +468,9 @@ export async function streamMessage(
     else if (event === 'done') {
       finished = true;
       handlers.onDone(parsed as never);
+    } else if (event === 'cancelled') {
+      finished = true;
+      handlers.onCancelled?.(parsed as never);
     } else if (event === 'error') {
       finished = true;
       handlers.onError(String(parsed.detail ?? 'Something went wrong.'), Boolean(parsed.partial));
