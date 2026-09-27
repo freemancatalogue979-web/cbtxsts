@@ -187,7 +187,7 @@ the same section.
   names, British spelling, course and topic words, codes and Latin phrases (*audi alteram partem*).
   "Sure" fixes come pre-ticked and the rest are for staff to check. Imports apply the sure fixes
   automatically (a checkbox turns this off). Every fix can be undone.
-- **Make it easy to read:** Google Gemini rewrites the chosen sections in one of three styles
+- **Make it easy to read:** Google Gemini (free) or DeepSeek (paid but very cheap) rewrites the chosen sections in one of three styles
   (*Easy to read*, *Fun to learn*, *Exam-ready*). Staff compare New and Original for each section,
   see warnings if a number or key term went missing, and pick which sections to use. Nothing
   reaches players until the material is saved.
@@ -197,6 +197,9 @@ the same section.
   that file yourself, or set it as an environment variable or secret on your host, then restart the API. Without a key the button explains the
   setup and everything else keeps working. On the free tier Google may use submitted text to
   improve its models, so don't send private student data.
+  **DeepSeek instead:** create a key at <https://platform.deepseek.com> (*API keys*), add a small
+  balance and set `DEEPSEEK_API_KEY=sk-...` in `backend/.env` (the start scripts detect `sk-` keys).
+  When that key is set DeepSeek is used; `AI_PROVIDER=gemini|deepseek` forces one.
 
 ---
 
@@ -348,6 +351,10 @@ cd backend && ./.venv/bin/python scripts/verify_player_notes.py
 #          GEMINI_API_KEY=test-key GEMINI_API_BASE=http://127.0.0.1:3999/v1beta
 cd backend && ./.venv/bin/python scripts/verify_writing_assist.py
 
+# Backend: DeepSeek provider against a local mock (no internet or API server needed): model
+#          fallback, thinking retry, key / balance / rate / busy errors, time limit
+cd backend && ./.venv/bin/python scripts/verify_deepseek.py
+
 # Frontend: 90 checks — boots the real bundle in jsdom, walks the landing page, every tab (including Shop),
 #           the live season climb, the month rollover and the ladder
 cd frontend && node scripts/render-check.mjs
@@ -437,6 +444,9 @@ cd frontend && npm run typecheck && npm run build
 | `CBT_ADMIN_EMAIL` / `CBT_ADMIN_PASSWORD` | `admin@quizarena.ng` / `arena2026` | Bootstrap staff account |
 | `CBT_CORS_ORIGINS` / `CBT_CORS_REGEX` | localhost + `*.e2b.app` | Allowed browser origins |
 | `GEMINI_API_KEY` | unset | Free Google AI Studio key for *Make it easy to read* (optional) |
+| `DEEPSEEK_API_KEY` | unset | DeepSeek key for the rewrite; used instead of Gemini when set |
+| `DEEPSEEK_MODEL` | `deepseek-flash` | DeepSeek model to try first (falls back to `deepseek-v4-flash`, `deepseek-chat`) |
+| `AI_PROVIDER` | `auto` | `gemini` or `deepseek` to force a provider |
 | `GEMINI_BUDGET` / `GEMINI_TIMEOUT` | `75` / `60` s | Most time one rewrite request may take in total / per Gemini call (keeps under proxy limits) |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model to try first (falls back to other Flash models) |
 | `VITE_API_TARGET` | `http://127.0.0.1:3000` | Where the dev server proxies |

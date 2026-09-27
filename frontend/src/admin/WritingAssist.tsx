@@ -3,7 +3,7 @@
  *
  *  - SpellingReview: offline spelling / typo fixer. Lists each fix in context
  *    (sure fixes pre-ticked, "maybe" fixes unticked) and applies only the ticked ones.
- *  - RewriteReview: "Make it easy to read" with Google Gemini. Staff choose a
+ *  - RewriteReview: "Make it easy to read" with Google Gemini or DeepSeek. Staff choose a
  *    style and sections, then compare each rewrite with the original and pick
  *    which to use. Numbers missing from a rewrite are flagged for a fact check.
  *
@@ -181,7 +181,9 @@ export function RewriteReview({
   renderBlock: (block: MaterialBlock, key: number) => ReactNode;
   onUse: (chosen: RewriteSection[]) => void;
 }) {
-  const [ai, setAi] = useState<{configured: boolean; model: string; setup: string | null} | null>(null);
+  const [ai, setAi] = useState<{configured: boolean; model: string; setup: string | null; provider?: string; provider_id?: string} | null>(null);
+  const providerName = ai?.provider || 'Google Gemini';
+  const isDeepSeek = ai?.provider_id === 'deepseek';
   const [style, setStyle] = useState<Style>('easy');
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [results, setResults] = useState<RewriteSection[]>([]);
@@ -307,7 +309,7 @@ export function RewriteReview({
       open={open}
       onClose={() => (progress ? undefined : onClose())}
       title="Make it easy to read"
-      subtitle={reviewing ? `Review each section — nothing changes until you choose “Use”.${model ? ` · ${model}` : ''}` : 'Google Gemini rewrites the text in simple, friendly English. You review it first.'}
+      subtitle={reviewing ? `Review each section — nothing changes until you choose “Use”.${model ? ` · ${model}` : ''}` : `${providerName} rewrites the text in simple, friendly English. You review it first.`}
       size="lg"
       footer={footer}
     >
@@ -320,11 +322,18 @@ export function RewriteReview({
             <div className="min-w-0 text-[0.84rem] leading-relaxed text-mist-200">
               <p className="font-extrabold text-mist-50">AI writing help isn't set up yet</p>
               <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+                {isDeepSeek ? (
+                  <li>
+                    Open <b>platform.deepseek.com</b>, create an API key and add a small balance (it costs very little).
+                  </li>
+                ) : (
+                  <li>
+                    Open <b>aistudio.google.com</b>, sign in and choose <b>Get API key</b> — it's free.
+                  </li>
+                )}
                 <li>
-                  Open <b>aistudio.google.com</b>, sign in and choose <b>Get API key</b> — it's free.
-                </li>
-                <li>
-                  On the server, add <code className="rounded bg-white/10 px-1">GEMINI_API_KEY=your-key</code> to <code className="rounded bg-white/10 px-1">backend/.env</code>.
+                  On the server, add <code className="rounded bg-white/10 px-1 [overflow-wrap:anywhere]">{isDeepSeek ? 'DEEPSEEK_API_KEY' : 'GEMINI_API_KEY'}=your-key</code> to{' '}
+                  <code className="rounded bg-white/10 px-1">backend/.env</code>.
                 </li>
                 <li>Restart the API, then come back here.</li>
               </ol>
@@ -339,7 +348,7 @@ export function RewriteReview({
             Rewriting {Math.min(progress.done + 1, progress.total)} of {progress.total}…
           </p>
           <ProgressBar value={Math.round((progress.done / Math.max(1, progress.total)) * 100)} />
-          <p className="text-[0.74rem] text-mist-500">This can take a little while on the free plan.</p>
+          <p className="text-[0.74rem] text-mist-500">{isDeepSeek ? 'Usually a few seconds per step.' : 'This can take a little while on the free plan.'}</p>
         </div>
       ) : reviewing ? (
         <div className="min-w-0 space-y-3">
@@ -465,8 +474,10 @@ export function RewriteReview({
             </ul>
           </div>
           <p className="text-[0.72rem] leading-snug text-mist-500">
-            Facts, numbers, names and cases are kept; key terms come back in <b className="text-mist-300">bold</b>. On the free plan Google may use submitted text to improve its
-            models — don't send private student data.
+            Facts, numbers, names and cases are kept; key terms come back in <b className="text-mist-300">bold</b>.{' '}
+            {isDeepSeek
+              ? `Text is sent to ${providerName} to be rewritten — don't send private student data.`
+              : "On the free plan Google may use submitted text to improve its models — don't send private student data."}
           </p>
         </div>
       )}

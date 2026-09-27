@@ -1,4 +1,4 @@
-"""“Make it easy to read”: rewrite material sections with Google Gemini.
+"""“Make it easy to read”: rewrite material sections with Google Gemini or DeepSeek.
 
 Staff pick a style, Gemini rewrites the chosen sections, and staff review the
 result next to the original before anything is used (nothing is saved here).
@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from ..config import gemini_settings
+from ..config import ai_provider, deepseek_settings, gemini_settings
 from . import materials as engine
 
 STYLES: dict[str, str] = {
@@ -80,16 +80,27 @@ class AIError(Exception):
         self.status = status
 
 
+PROVIDERS = {"gemini": "Google Gemini", "deepseek": "DeepSeek"}
+SETUP = {
+    "gemini": "Create a free key at aistudio.google.com (Get API key), add GEMINI_API_KEY=your-key to backend/.env, then restart the API.",
+    "deepseek": "Create a key at platform.deepseek.com (API keys) and add a small balance, put DEEPSEEK_API_KEY=your-key in backend/.env, then restart the API.",
+}
+
+
+def _settings(provider: str) -> dict:
+    return deepseek_settings() if provider == "deepseek" else gemini_settings()
+
+
 def status() -> dict:
-    settings = gemini_settings()
+    provider = ai_provider()
+    settings = _settings(provider)
     return {
         "configured": bool(settings["key"]),
-        "provider": "Google Gemini",
+        "provider": PROVIDERS[provider],
+        "provider_id": provider,
         "model": settings["model"],
         "styles": [{"id": key, "label": {"easy": "Easy to read", "fun": "Fun to learn", "exam": "Exam-ready"}[key]} for key in STYLES],
-        "setup": None
-        if settings["key"]
-        else "Create a free key at aistudio.google.com (Get API key), add GEMINI_API_KEY=your-key to backend/.env, then restart the API.",
+        "setup": None if settings["key"] else SETUP[provider],
     }
 
 
@@ -151,6 +162,8 @@ def _call(model: str, prompt: str, settings: dict, timeout: float | None = None,
 
 
 def _generate(prompt: str) -> tuple[str, str]:
+    if ai_provider() == "deepseek":
+        return _generate_deepseek(prompt)
     settings = gemini_settings()
     if not settings["key"]:
         raise AIError(status()["setup"] or "AI is not set up.", 503)
@@ -160,7 +173,7 @@ def _generate(prompt: str) -> tuple[str, str]:
     deadline = time.monotonic() + settings["budget"]
     for model in [settings["model"], *[m for m in settings["fallbacks"] if m != settings["model"]]]:
         left = deadline - time.monotonic()
-        if tried and left < 5:  # not worth starting another model this late
+        if tried and left < min(5.0, settings["budget"] / 10):  # not worth starting another model this late
             raise AIError("Gemini took too long to answer. Try again with fewer sections at a time.", 504)
         try:
             try:
@@ -176,6 +189,89 @@ def _generate(prompt: str) -> tuple[str, str]:
     raise AIError(f"None of these Gemini models are available to your key: {', '.join(tried)}. Set GEMINI_MODEL in backend/.env.", 502)
 
 
+# ----------------------------------------------------------------- deepseek
+def _deepseek_call(model: str, prompt: str, settings: dict, timeout: float, think: bool = False) -> str:
+    """OpenAI-style chat completion against DeepSeek."""
+    body: dict = {
+        "model": model,
+        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
+        "temperature": 0.4,
+        "response_format": {"type": "json_object"},
+        "stream": False,
+    }
+    if not think:
+        body["thinking"] = {"type": "disabled"}  # much faster; not needed to rewrite
+    request = urllib.request.Request(
+        f"{settings['base']}/chat/completions",
+        method="POST",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {settings['key']}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as error:
+        detail = ""
+        try:
+            detail = str(json.loads(error.read() or b"{}").get("error", {}).get("message", ""))
+        except Exception:  # noqa: BLE001 - best effort message
+            pass
+        low = detail.lower()
+        if error.code in (400, 404) and "model" in low and ("not exist" in low or "not found" in low or "invalid" in low or "unknown" in low):
+            raise LookupError(detail or f"model {model} not found") from error
+        if error.code in (400, 422) and not think and "think" in low:
+            raise _ThinkingUnsupported(detail) from error
+        if error.code == 401:
+            raise AIError("DeepSeek refused the API key. Check DEEPSEEK_API_KEY in backend/.env.", 502) from error
+        if error.code == 402:
+            raise AIError("Your DeepSeek balance is empty. Top up at platform.deepseek.com, then try again.", 402) from error
+        if error.code == 429:
+            raise AIError("DeepSeek is rate-limiting requests. Wait a minute and try again.", 429) from error
+        if error.code in (500, 502, 503):
+            raise AIError("DeepSeek is busy right now. Try again in a minute.", 503) from error
+        raise AIError(f"DeepSeek returned an error ({error.code}). {detail[:200]}", 502) from error
+    except (TimeoutError, socket.timeout) as error:
+        raise AIError("DeepSeek took too long to answer. Try again with fewer sections at a time.", 504) from error
+    except (urllib.error.URLError, OSError) as error:
+        if isinstance(getattr(error, "reason", None), (TimeoutError, socket.timeout)):
+            raise AIError("DeepSeek took too long to answer. Try again with fewer sections at a time.", 504) from error
+        raise AIError("Could not reach DeepSeek. Check the server's internet connection and try again.", 504) from error
+
+    choices = payload.get("choices") or []
+    if not choices:
+        raise AIError("DeepSeek returned nothing. Try again.", 502)
+    message = choices[0].get("message") or {}
+    text = message.get("content") or ""
+    if not text.strip():
+        raise AIError(f"DeepSeek returned an empty answer ({choices[0].get('finish_reason', 'unknown')}). Try again.", 502)
+    if choices[0].get("finish_reason") == "length":
+        raise AIError("DeepSeek's answer was cut off. Rewrite fewer sections at a time.", 502)
+    return text
+
+
+def _generate_deepseek(prompt: str) -> tuple[str, str]:
+    settings = deepseek_settings()
+    if not settings["key"]:
+        raise AIError(SETUP["deepseek"], 503)
+    deadline = time.monotonic() + settings["budget"]
+    tried: list[str] = []
+    for model in [settings["model"], *[m for m in settings["fallbacks"] if m != settings["model"]]]:
+        left = deadline - time.monotonic()
+        if tried and left < min(5.0, settings["budget"] / 10):
+            raise AIError("DeepSeek took too long to answer. Try again with fewer sections at a time.", 504)
+        try:
+            try:
+                return _deepseek_call(model, prompt, settings, timeout=min(settings["timeout"], left)), model
+            except _ThinkingUnsupported:
+                left = deadline - time.monotonic()
+                if left < 2:
+                    raise AIError("DeepSeek took too long to answer. Try again with fewer sections at a time.", 504) from None
+                return _deepseek_call(model, prompt, settings, timeout=min(settings["timeout"], left), think=True), model
+        except LookupError:
+            tried.append(model)
+    raise AIError(f"None of these DeepSeek models are available: {', '.join(tried)}. Set DEEPSEEK_MODEL in backend/.env.", 502)
+
+
 def _parse(text: str) -> list[dict]:
     cleaned = text.strip()
     fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", cleaned, re.S)
@@ -186,14 +282,14 @@ def _parse(text: str) -> list[dict]:
     except json.JSONDecodeError:
         start, end = cleaned.find("{"), cleaned.rfind("}")
         if start < 0 or end <= start:
-            raise AIError("Gemini's answer was not in the expected format. Try again.", 502) from None
+            raise AIError("The AI's answer was not in the expected format. Try again.", 502) from None
         try:
             data = json.loads(cleaned[start : end + 1])
         except json.JSONDecodeError as error:
-            raise AIError("Gemini's answer was cut off or malformed. Try fewer sections at a time.", 502) from error
+            raise AIError("The AI's answer was cut off or malformed. Try fewer sections at a time.", 502) from error
     sections = data.get("sections") if isinstance(data, dict) else data
     if not isinstance(sections, list):
-        raise AIError("Gemini's answer had no sections. Try again.", 502)
+        raise AIError("The AI's answer had no sections. Try again.", 502)
     return [row for row in sections if isinstance(row, dict)]
 
 
@@ -250,7 +346,7 @@ def rewrite(title: str, sections: list[dict], style: str) -> dict:
     for original in clean_sections:
         row = returned.get(original["index"])
         if row is None:
-            results.append({"index": original["index"], "title": original["title"], "blocks": original["blocks"], "warnings": ["Gemini skipped this section — it is unchanged."], "changed": False})
+            results.append({"index": original["index"], "title": original["title"], "blocks": original["blocks"], "warnings": ["The AI skipped this section — it is unchanged."], "changed": False})
             continue
         blocks = engine.sanitise_blocks(row.get("blocks") or [])
         # media blocks must survive untouched

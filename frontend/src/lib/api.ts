@@ -742,7 +742,7 @@ export const api = {
       ),
     /** Writing help: is Gemini set up? (never returns the key) */
     assistStatus: () =>
-      request<{ai: {configured: boolean; provider: string; model: string; setup: string | null; styles: {id: string; label: string}[]}; spelling: {available: boolean}}>(
+      request<{ai: {configured: boolean; provider: string; provider_id?: string; model: string; setup: string | null; styles: {id: string; label: string}[]}; spelling: {available: boolean}}>(
         '/api/admin/materials/assist/status',
       ),
     /** Spelling + typo fixes for the editor's current content. Send `accept` to get the fixed document back. */

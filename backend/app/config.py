@@ -93,3 +93,26 @@ def gemini_settings() -> dict:
         "timeout": float(os.getenv("GEMINI_TIMEOUT", "60")),
         "budget": float(os.getenv("GEMINI_BUDGET", "75")),
     }
+
+
+# DeepSeek (paid, very cheap): create a key at https://platform.deepseek.com
+# (API keys), add a small balance, and put DEEPSEEK_API_KEY=... in backend/.env.
+def deepseek_settings() -> dict:
+    return {
+        "key": os.getenv("DEEPSEEK_API_KEY", "").strip(),
+        # DeepSeek renames models now and then; unknown names fall through the list.
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash").strip(),
+        "fallbacks": [m.strip() for m in os.getenv("DEEPSEEK_FALLBACK_MODELS", "deepseek-v4-flash,deepseek-chat").split(",") if m.strip()],
+        "base": os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com").rstrip("/"),
+        "timeout": float(os.getenv("DEEPSEEK_TIMEOUT", os.getenv("GEMINI_TIMEOUT", "60"))),
+        "budget": float(os.getenv("DEEPSEEK_BUDGET", os.getenv("GEMINI_BUDGET", "75"))),
+    }
+
+
+def ai_provider() -> str:
+    """AI_PROVIDER=deepseek|gemini forces one; otherwise DeepSeek when its key is
+    set, else Gemini."""
+    chosen = os.getenv("AI_PROVIDER", "auto").strip().lower()
+    if chosen in {"deepseek", "gemini"}:
+        return chosen
+    return "deepseek" if deepseek_settings()["key"] else "gemini"
