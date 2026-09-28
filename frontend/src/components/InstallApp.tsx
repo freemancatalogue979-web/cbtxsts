@@ -7,7 +7,7 @@
  * open short steps for that exact browser (iPhone Safari, Firefox, Opera Mini,
  * or a plain-http link, which no browser can install from).
  */
-import {AlertTriangle, CheckCircle2, ChevronDown, Download, EllipsisVertical, ExternalLink, Globe, Loader2, Lock, MonitorDown, Plus, RefreshCw, Share, Smartphone, SquarePlus, X, XCircle} from 'lucide-react';
+import {AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, EllipsisVertical, ExternalLink, Globe, Loader2, Lock, MonitorDown, Plus, RefreshCw, Share, Smartphone, SquarePlus, X, XCircle} from 'lucide-react';
 import {useEffect, useState, type ReactNode} from 'react';
 import {
   inAppBrowser,
@@ -48,7 +48,7 @@ function useInstallAction() {
   return {...state, run, busy, help};
 }
 
-type Variant = 'pill' | 'icon' | 'tile' | 'card';
+type Variant = 'pill' | 'icon' | 'tile' | 'row' | 'card';
 
 /** An install entry point. Renders nothing once the app is installed. */
 export default function InstallApp({variant = 'card', className = ''}: {variant?: Variant; className?: string}) {
@@ -73,6 +73,23 @@ export default function InstallApp({variant = 'card', className = ''}: {variant?
           <span className="hidden min-[380px]:inline">Install app</span>
           <span className="min-[380px]:hidden">Install</span>
         </Button>
+        {action.help}
+      </>
+    );
+  }
+
+  if (variant === 'row') {
+    // A settings-style list row (the phone menu's Account group).
+    return (
+      <>
+        <button type="button" onClick={action.run} disabled={action.busy} className={className}>
+          <Download className="size-[18px] shrink-0 text-nova-300" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.84rem] font-semibold text-mist-100">Install the app</span>
+            <span className="block truncate text-[0.68rem] text-mist-500">Home-screen icon, full screen, works offline</span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-mist-600" />
+        </button>
         {action.help}
       </>
     );

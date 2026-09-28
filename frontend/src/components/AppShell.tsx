@@ -1,10 +1,10 @@
 /** App chrome: desktop nav tabs, mobile bottom bar, header stats, notifications. */
 import {Bell, BellRing, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Coins, Flame, Gem, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
+import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import type {ReactNode} from 'react';
 import type {InboxNote} from '../lib/types';
-import {Avatar, Button, Chip, IconButton, Modal} from './ui';
+import {Avatar, Button, Chip, IconButton} from './ui';
 import {Holdable} from './Holdable';
 import {api} from '../lib/api';
 import {cacheRead, cacheWrite, userScope} from '../lib/cache';
@@ -13,13 +13,13 @@ import SeasonBadge from './SeasonBadge';
 import {music} from '../lib/music';
 import {sfx} from '../lib/sfx';
 import {DESKTOP_MORE_TABS, DESKTOP_PRIMARY_TABS, MOBILE_TABS, MORE_TABS, TABS} from '../lib/nav';
-import {IconOrb} from './ui';
 import CommandPalette from './CommandPalette';
 import {jumpToMaterial} from '../lib/palette';
 import type {Tab} from '../lib/nav';
 import {formatNumber, formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
 import InstallApp, {InstallBanner} from './InstallApp';
+import MoreSheet from './MoreSheet';
 
 const SEEN_KEY = 'arena.notices.seen';
 
@@ -417,6 +417,7 @@ export function AppShell({
   const chatTotal = Object.values(chatUnread).reduce((sum, count) => sum + count, 0);
   const musicState = useSyncExternalStore(music.subscribe, music.state);
   const [moreOpen, setMoreOpen] = useState(false);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [desktopMoreOpen, setDesktopMoreOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -747,54 +748,16 @@ export function AppShell({
         )}
       </AnimatePresence>
 
-      {/* The overflow menu: a game menu grid rather than a list of links. */}
-      <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="Menu" subtitle="Everything else in the arena.">
-        <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-4">
-          {MORE_TABS.map((id) => {
-            const item = TABS.find((row) => row.id === id);
-            if (!item) return null;
-            const Icon = item.icon;
-            const active = tab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => {
-                  setMoreOpen(false);
-                  onTab(id);
-                }}
-                className={`gpress flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border-2 p-2.5 ${
-                  active ? 'border-nova-400/60 bg-nova-500/16' : 'border-white/12 bg-white/[0.03]'
-                }`}
-              >
-                <IconOrb tone={active ? 'nova' : 'ink'} size="sm">
-                  <Icon className="size-4" />
-                </IconOrb>
-                <span className="w-full truncate text-center text-[0.7rem] font-extrabold text-mist-100">{item.label}</span>
-              </button>
-            );
-          })}
-          <InstallApp variant="tile" />
-        </div>
-
-        {profile && (
-          <div className="mt-4 grid min-w-0 grid-cols-2 gap-2">
-            <div className="sunken flex min-w-0 items-center gap-2 px-3 py-2.5">
-              <Coins className="size-4 shrink-0 text-gold-300" />
-              <span className="min-w-0">
- <span className="block text-[0.6rem] font-black tracking-wider text-mist-500">Coins</span>
-                <span className="block truncate text-[0.9rem] font-extrabold text-gold-200 tabular">{formatNumber(profile.coins)}</span>
-              </span>
-            </div>
-            <div className="sunken flex min-w-0 items-center gap-2 px-3 py-2.5">
-              <Flame className="size-4 shrink-0 text-flare-300" />
-              <span className="min-w-0">
- <span className="block text-[0.6rem] font-black tracking-wider text-mist-500">Combo</span>
-                <span className="block truncate text-[0.9rem] font-extrabold text-flare-200 tabular">{profile.streak} days</span>
-              </span>
-            </div>
-          </div>
-        )}
-      </Modal>
+      {/* The phone overflow menu: player header + grouped destinations. */}
+      <MoreSheet
+        open={moreOpen}
+        onClose={closeMore}
+        tab={tab}
+        onTab={onTab}
+        onAdmin={onAdmin}
+        onSignOut={onSignOut}
+        chatTotal={chatTotal}
+      />
 
       {profile && role === 'student' && tab !== 'tutor' && (
         <div className="print-hide fixed right-4 bottom-24 z-40 hidden items-center gap-1.5 rounded-full border border-mint-500/25 bg-ink-900/85 px-3 py-1.5 text-[0.7rem] font-bold text-mint-300 backdrop-blur lg:flex">
