@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Save, Search, SkipForward, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
-import {Button, Chip, ChoiceCards, EmptyState, Field, Modal, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips} from '../ui';
+import {Button, Chip, ChoiceCards, EmptyState, Field, Modal, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips, PillSelect} from '../ui';
 import {Markdown} from '../../lib/markdown';
 import {
   downloadText, materialToMarkdown, tutorApi, type Deck, type GenKind, type GenerateSource, type NotesDoc,
@@ -195,9 +195,12 @@ export function GenerateSheet({
                 <TextInput type="date" value={examDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setExamDate(e.target.value)} />
               </Field>
               <Field label="Minutes per day">
-                <Select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-                  {[30, 45, 60, 90, 120, 180].map((m) => <option key={m} value={m}>{m >= 60 ? `${m / 60} h${m % 60 ? ` ${m % 60} min` : ''}`.replace('.5 h', ' h 30 min') : `${m} min`}</option>)}
-                </Select>
+                <PillSelect
+                  aria-label="Minutes per day"
+                  value={String(minutes)}
+                  onChange={(m) => setMinutes(Number(m))}
+                  options={[30, 45, 60, 90, 120, 180].map((m) => ({value: String(m), label: m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${m / 60} h`}))}
+                />
               </Field>
               <Field label="Focus topics (optional)">
                 <TextInput list="tutor-gen-topics" value={topicName} onChange={(e) => setTopicName(e.target.value)} placeholder="Leave empty to use your weak topics" maxLength={200} />
@@ -257,9 +260,7 @@ export function GenerateSheet({
               <Stepper value={count} onChange={setCount} min={kind === 'flashcards' ? 5 : 3} max={max} suffix={kind === 'flashcards' ? 'cards' : 'questions'} aria-label="How many" />
             </Field>
             <Field label="Difficulty">
-              <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-                {['mixed', 'easy', 'medium', 'hard'].map((d) => <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>)}
-              </Select>
+              <PillSelect aria-label="Difficulty" value={difficulty} onChange={setDifficulty} options={['mixed', 'easy', 'medium', 'hard'].map((d) => ({value: d, label: d[0].toUpperCase() + d.slice(1)}))} />
             </Field>
           </div>
         )}

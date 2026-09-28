@@ -7,7 +7,7 @@
  */
 import {ArrowLeft, CheckCircle2, CircleHelp, LifeBuoy, Paperclip, Plus, Send, LifeBuoyIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Skeleton, TextArea, TextInput, PillSelect} from '../components/ui';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
@@ -214,11 +214,7 @@ function NewTicketModal({
     >
       <div className="grid gap-3">
         <Field label="Category">
-          <Select value={category} onChange={(event) => setCategory(event.target.value)}>
-            {CATEGORIES.map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </Select>
+          <PillSelect aria-label="Category" value={category} onChange={setCategory} options={CATEGORIES.map(([value, label]) => ({value, label}))} />
         </Field>
         <Field label="Subject">
           <TextInput value={subject} maxLength={200} placeholder="e.g. Ranked match ended but my points didn't update" onChange={(event) => setSubject(event.target.value)} />

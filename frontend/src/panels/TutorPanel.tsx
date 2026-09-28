@@ -12,7 +12,7 @@ import {
   Target, ThumbsDown, ThumbsUp, Trash2, X, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, SwitchRow} from '../components/ui';
+import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, SwitchRow, PillSelect} from '../components/ui';
 import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, PlanView, QuizView, toolFromResult, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
 import {Markdown} from '../lib/markdown';
 import {formatRelative} from '../lib/format';
@@ -1050,12 +1050,17 @@ function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onC
             </div>
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Level">
-              <Select value={profile.difficulty} onChange={(e) => setProfile({...profile, difficulty: e.target.value as LearningProfile['difficulty']})}>
-                <option value="easy">Beginner</option>
-                <option value="medium">Intermediate</option>
-                <option value="hard">Advanced</option>
-              </Select>
+            <Field label="Level" className="col-span-2">
+              <PillSelect
+                aria-label="Level"
+                value={profile.difficulty}
+                onChange={(difficulty) => setProfile({...profile, difficulty})}
+                options={[
+                  {value: 'easy', label: 'Beginner'},
+                  {value: 'medium', label: 'Intermediate'},
+                  {value: 'hard', label: 'Advanced'},
+                ]}
+              />
             </Field>
             <Field label="Language">
               <TextInput value={profile.language} onChange={(e) => setProfile({...profile, language: e.target.value})} maxLength={40} list="tutor-langs" />
