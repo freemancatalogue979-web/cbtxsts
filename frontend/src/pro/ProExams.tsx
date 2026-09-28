@@ -48,17 +48,34 @@ export default function ProExams({onStartExam, onOpenResult}: {onStartExam: (qui
     {id: 'mini', label: 'Mini exams', count: minis ? minis.length : null},
   ];
 
+  const examAction = (quiz: Quiz) => {
+    const attempt = quiz.my_attempt;
+    if (filter === 'completed' && attempt)
+      return (
+        <button type="button" className="pro-btn pro-btn-sm" onClick={() => onOpenResult(attempt.id)}>
+          {pct(attempt.percentage)} · Result
+        </button>
+      );
+    if (filter === 'open')
+      return (
+        <button type="button" className="pro-btn pro-btn-sm pro-btn-primary" onClick={() => onStartExam(quiz)}>
+          {attempt?.status === 'in_progress' ? 'Resume' : 'Start'}
+        </button>
+      );
+    return <span className="pro-meta">Not open</span>;
+  };
+
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader title="Exams" description="Official exams run in a strict, timed environment. Mini exams are personal, timed tests built from the question bank." />
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4">
-          <div className="pro-tabs" role="tablist" aria-label="Exam lists">
+          <div className="pro-tabs pro-tabs-fit" role="tablist" aria-label="Exam lists">
             {tabs.map((row) => (
               <button key={row.id} type="button" role="tab" className="pro-tab" aria-selected={filter === row.id} onClick={() => setFilter(row.id)}>
                 {row.label}
-                {row.count != null && <span className="pro-meta ml-1.5 pro-num">{row.count}</span>}
+                {row.count != null && <span className="pro-meta ml-1.5 pro-num max-[379px]:hidden">{row.count}</span>}
               </button>
             ))}
           </div>
@@ -108,7 +125,22 @@ export default function ProExams({onStartExam, onOpenResult}: {onStartExam: (qui
             </div>
           ) : (
             <div className="pro-card overflow-hidden">
-              <div className="pro-scroll-x">
+              {/* phones: a list, not a squeezed table */}
+              <ul className="pro-rows grid md:hidden">
+                {groups[filter].map((quiz) => (
+                  <li key={quiz.id} className="flex min-w-0 items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{quiz.title}</p>
+                      <p className="pro-meta mt-0.5">
+                        {quiz.course?.code ?? '—'} · {quiz.question_count} questions · {quiz.duration_minutes} min
+                        {filter === 'upcoming' && quiz.scheduled_at ? ` · opens ${formatRelative(quiz.scheduled_at)}` : ''}
+                      </p>
+                    </div>
+                    <div className="shrink-0">{examAction(quiz)}</div>
+                  </li>
+                ))}
+              </ul>
+              <div className="pro-scroll-x hidden md:block">
                 <table className="pro-table min-w-[36rem]">
                   <thead>
                     <tr>
@@ -121,7 +153,6 @@ export default function ProExams({onStartExam, onOpenResult}: {onStartExam: (qui
                   </thead>
                   <tbody>
                     {groups[filter].map((quiz) => {
-                      const attempt = quiz.my_attempt;
                       return (
                         <tr key={quiz.id}>
                           <td>
@@ -131,19 +162,7 @@ export default function ProExams({onStartExam, onOpenResult}: {onStartExam: (qui
                           <td className="pro-meta">{quiz.course?.code ?? '—'}</td>
                           <td className="pro-num text-right">{quiz.question_count}</td>
                           <td className="pro-num text-right">{quiz.duration_minutes}m</td>
-                          <td className="text-right">
-                            {filter === 'completed' && attempt ? (
-                              <button type="button" className="pro-btn pro-btn-sm" onClick={() => onOpenResult(attempt.id)}>
-                                {pct(attempt.percentage)} · Result
-                              </button>
-                            ) : filter === 'open' ? (
-                              <button type="button" className="pro-btn pro-btn-sm pro-btn-primary" onClick={() => onStartExam(quiz)}>
-                                {attempt?.status === 'in_progress' ? 'Resume' : 'Start'}
-                              </button>
-                            ) : (
-                              <span className="pro-meta">Not open</span>
-                            )}
-                          </td>
+                          <td className="text-right">{examAction(quiz)}                          </td>
                         </tr>
                       );
                     })}

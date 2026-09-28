@@ -13,7 +13,7 @@ import type {Quiz} from '../lib/types';
 import {miniExamApi, openMiniExam, type MiniExam} from '../lib/tutor';
 import {useSession} from '../store/session';
 import {setFocus} from './focus';
-import {Badge, Empty, LoadingRows, Metric, PageHeader, Progress, Section, greeting, minutesLabel, pct, toneFor} from './ui';
+import {Badge, Empty, LoadingRows, Metric, PageHeader, Progress, Section, greeting, minutesLabel, pct, studyTotals, toneFor} from './ui';
 
 type Json = Record<string, any>;
 
@@ -44,8 +44,10 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
 
   const week = analytics?.overview ?? {};
   const all = month?.overview ?? {};
-  const answered30 = Number(all.answered ?? 0);
-  const minutes30 = (Number(all.average_seconds ?? 0) * answered30) / 60;
+  const totals = studyTotals(all);
+  const weekTotals = studyTotals(week);
+  const answered30 = totals.answered;
+  const minutes30 = totals.minutes;
   const mastered = (lab?.mastered ?? []).length;
   const known = Number(lab?.topics_known ?? 0);
   const mastery = known ? (mastered / known) * 100 : 0;
@@ -87,14 +89,14 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric
           label="Accuracy"
-          value={loading ? '—' : pct(all.accuracy)}
-          sub={week.answered ? `${pct(week.accuracy)} this week` : 'No answers this week'}
-          tone={toneFor(Number(all.accuracy ?? 0), answered30)}
+          value={loading ? '—' : answered30 ? pct(totals.accuracy) : '—'}
+          sub={weekTotals.answered ? `${pct(weekTotals.accuracy)} this week` : 'No answers this week'}
+          tone={toneFor(totals.accuracy, answered30)}
         />
-        <Metric label="Questions" value={loading ? '—' : answered30.toLocaleString()} sub={`${Number(week.answered ?? 0)} this week`} />
-        <Metric label="Topics mastered" value={loading ? '—' : mastered} sub={known ? `of ${known} studied` : 'None studied yet'} />
-        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes30)} sub="answering, last 30 days" />
-        <Metric label="Current streak" value={loading ? '—' : `${Number(all.streak ?? profile?.streak ?? 0)} d`} sub={`Best ${Number(all.best_streak ?? 0)} d`} />
+        <Metric label="Questions" value={loading ? '—' : answered30.toLocaleString()} sub={`${weekTotals.answered} this week`} />
+        <Metric label="Mastered" value={loading ? '—' : mastered} sub={known ? `of ${known} studied` : "No topics studied yet"} />
+        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes30)} sub="last 30 days" />
+        <Metric label="Streak" value={loading ? '—' : `${Number(all.streak ?? profile?.streak ?? 0)} d`} sub={`Best ${Number(all.best_streak ?? 0)} d`} />
         <Metric label="Mastery" value={loading ? '—' : pct(mastery)} sub={`${Number(lab?.open_mistakes ?? 0)} open mistakes`} />
       </div>
 

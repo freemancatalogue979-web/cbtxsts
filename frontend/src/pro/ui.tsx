@@ -114,3 +114,12 @@ export function minutesLabel(minutes: number): string {
   const rest = Math.round(minutes % 60);
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
+
+/** Exam answers + practice runs combined: what a student actually did. */
+export function studyTotals(o: Record<string, any> | null | undefined): {answered: number; correct: number; accuracy: number; minutes: number} {
+  const examAnswered = Number(o?.answered ?? 0);
+  const answered = examAnswered + Number(o?.practice_answered ?? 0);
+  const correct = Number(o?.correct ?? 0) + Number(o?.practice_correct ?? 0);
+  const seconds = Number(o?.average_seconds ?? 0) * examAnswered + Number(o?.practice_seconds ?? 0);
+  return {answered, correct, accuracy: answered ? Math.round((correct / answered) * 1000) / 10 : 0, minutes: seconds / 60};
+}

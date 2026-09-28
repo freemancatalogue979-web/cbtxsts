@@ -181,6 +181,11 @@ def analytics(
             "duel_wins": duel_wins,
             "flashcards_reviewed": len(flashcard_reviews),
             "practice_runs": len(practice_runs),
+            # Practice is graded per run, not per Answer row — reported
+            # separately so exam figures above keep their meaning.
+            "practice_answered": sum(int(run.total or 0) for run in practice_runs),
+            "practice_correct": sum(int(run.correct or 0) for run in practice_runs),
+            "practice_seconds": round(sum(int(run.elapsed_ms or 0) for run in practice_runs) / 1000),
             "best_streak": student.best_streak,
             "streak": student.streak,
             "level": game.level_from_xp(student.xp),

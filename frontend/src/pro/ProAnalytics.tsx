@@ -4,7 +4,7 @@ import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import type {Tab} from '../lib/nav';
 import {setFocus} from './focus';
-import {Empty, LoadingRows, Metric, PageHeader, Progress, Section, minutesLabel, pct, toneFor} from './ui';
+import {Empty, LoadingRows, Metric, PageHeader, Progress, Section, minutesLabel, pct, studyTotals, toneFor} from './ui';
 
 type Json = Record<string, any>;
 const WINDOWS = [7, 30, 90] as const;
@@ -33,8 +33,9 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
   }, []);
 
   const o = data?.overview ?? {};
-  const answered = Number(o.answered ?? 0);
-  const minutes = (Number(o.average_seconds ?? 0) * answered) / 60;
+  const totals = studyTotals(o);
+  const answered = totals.answered;
+  const minutes = totals.minutes;
   const timeline: Json[] = data?.accuracy_over_time ?? [];
 
   /* topic mastery: merge weakest + strongest into one sorted table */
@@ -73,15 +74,15 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric label="Accuracy" value={loading ? '—' : pct(o.accuracy)} tone={toneFor(Number(o.accuracy ?? 0), answered)} sub={answered ? `${Number(o.correct ?? 0)} of ${answered} correct` : 'No answers yet'} />
-        <Metric label="Questions" value={loading ? '—' : answered.toLocaleString()} sub={`${Number(o.questions_per_day ?? 0)} per day`} />
-        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes)} sub={`${Number(o.average_seconds ?? 0).toFixed(1)} s per question`} />
+        <Metric label="Accuracy" value={loading ? '—' : answered ? pct(totals.accuracy) : '—'} tone={toneFor(totals.accuracy, answered)} sub={answered ? `${totals.correct} of ${answered} correct` : 'No answers yet'} />
+        <Metric label="Questions" value={loading ? '—' : answered.toLocaleString()} sub={`${Math.round((answered / Math.max(1, Number(data?.window_days ?? 30))) * 10) / 10} per day`} />
+        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes)} sub={answered ? `${Math.round((minutes * 60) / answered)} s per question` : 'exams and practice'} />
         <Metric label="Exams" value={loading ? '—' : Number(o.exams ?? 0)} sub={`Best ${pct(o.best_percentage)}`} />
         <Metric label="Practice runs" value={loading ? '—' : Number(o.practice_runs ?? 0)} sub={`${Number(o.flashcards_reviewed ?? 0)} flashcards reviewed`} />
         <Metric label="Open mistakes" value={lab ? Number(lab.open_mistakes ?? 0) : '—'} sub={lab ? `${(lab.mastered ?? []).length} topics mastered` : ''} />
       </div>
 
-      <Section title="Accuracy over time" description="Daily accuracy (line) and questions answered (bars).">
+      <Section title="Exam accuracy over time" description="Exam questions answered per day (bars) and accuracy (line).">
         {loading ? <LoadingRows rows={2} /> : timeline.length ? <TimelineChart rows={timeline} /> : <Empty title="No activity in this window" />}
       </Section>
 

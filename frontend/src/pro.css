@@ -638,3 +638,9 @@ select.pro-input { padding-right: 32px; }
 
 /* a scroll strip that never causes page overflow */
 .pro-scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+
+/* tab strips that must fit a phone without hiding a tab */
+@media (max-width: 639px) {
+  .pro-tabs-fit { gap: 0; }
+  .pro-tabs-fit .pro-tab { flex: 1 1 0; min-width: 0; padding: 10px 4px; font-size: 0.8125rem; text-align: center; }
+}
