@@ -2671,6 +2671,35 @@ class AIProposal(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class AITask(Base):
+    """A long-running staff AI job (read whole materials, build topics, map
+    every bank question, generate up to 1000 questions). Runs in the background
+    and only ever produces proposals — nothing is saved until staff approve."""
+
+    __tablename__ = "ai_tasks"
+    __table_args__ = (Index("ix_ai_tasks_status", "status", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued|running|done|failed|cancelled|interrupted
+    stage: Mapped[str] = mapped_column(String(24), default="")
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    log: Mapped[list] = mapped_column(JSON, default=list)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(String(400), default="")
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost: Mapped[float] = mapped_column(Float, default=0.0)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class AIStaffUsage(Base):
     """AI requests made by staff (the student tables are keyed to students)."""
 

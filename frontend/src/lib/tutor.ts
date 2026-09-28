@@ -451,7 +451,15 @@ export interface ProposalCard {
   course?: string | null;
   count: number;
 }
-export type AgentAction = MiniExamCard | ProposalCard;
+export interface TaskCard {
+  type: 'task';
+  id: number;
+  title: string;
+  course: string;
+  status: string;
+  estimate?: {calls?: number; cost?: number; minutes?: number; materials?: number; bank_questions?: number};
+}
+export type AgentAction = MiniExamCard | ProposalCard | TaskCard;
 
 /** POST a message and read the server-sent events as they arrive. Errors
  * before the stream starts (limits, exam lock, AI down…) throw ApiError. */
@@ -643,7 +651,7 @@ export const miniExamApi = {
 
 /* ------------------------------------------------------- staff assistant */
 export interface StaffToolInfo {name: string; label: string; status: string; summary?: string; ms?: number}
-export interface AgentTurn {role: 'user' | 'assistant'; content: string; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean; meta?: {cost?: number; ms?: number; at?: string}}
+export interface AgentTurn {role: 'user' | 'assistant'; content: string; display?: string; files?: {id: number; title: string; words?: number}[]; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean; meta?: {cost?: number; ms?: number; at?: string}}
 export interface Proposal {
   id: number;
   kind: string;
@@ -657,6 +665,7 @@ export interface Proposal {
   decided_at: string | null;
   result: Record<string, unknown>;
   payload?: {items?: Record<string, unknown>[]; rationale?: string; [key: string]: unknown};
+  task_id?: number | null;
 }
 export interface AIStaffStatus {
   configured: boolean;
@@ -697,7 +706,62 @@ export interface AIUsageReport {
   daily: {day: string; cost: number; requests: number}[];
 }
 
+export type AITaskStatus = 'queued' | 'running' | 'done' | 'stopped' | 'failed' | 'cancelled' | 'interrupted';
+export interface AITaskParams {
+  course_id?: number;
+  material_ids?: number[];
+  build_topics?: boolean;
+  classify_questions?: boolean;
+  map_materials?: boolean;
+  reclassify_difficulty?: boolean;
+  only_untagged?: boolean;
+  generate_questions?: number;
+  difficulty?: {easy: number; medium: number; hard: number};
+  topics?: string[];
+  topic_count?: number;
+  instructions?: string;
+  max_cost?: number;
+}
+export interface AITaskEstimate {materials: number; characters: number; passages: number; bank_questions: number; calls: number; input_tokens: number; output_tokens: number; cost: number; minutes: number; max_cost: number; model: string; provider: string}
+export interface AITaskProposal {id: number; kind: string; title: string; count: number; status: 'pending' | 'approved' | 'rejected' | 'missing'}
+export interface AITask {
+  id: number;
+  course_id: number | null;
+  course?: string | null;
+  title: string;
+  status: AITaskStatus;
+  stage: string;
+  progress: {stage?: string; done?: number; total?: number; label?: string; percent?: number; stages?: string[]};
+  result: {
+    read?: {materials: number; passages: number; characters: number};
+    topics?: {total: number; new: number; names: string[]};
+    classify?: {questions: number; changed: number; unmatched: number};
+    generate?: {asked: number; made: number; duplicates?: number; invalid?: number};
+    [key: string]: unknown;
+  };
+  error: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  params: AITaskParams & {estimate?: AITaskEstimate};
+  cancel_requested: boolean;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: {at: string; level: 'info' | 'warn'; text: string}[];
+  proposals: AITaskProposal[];
+}
+export interface AITaskLimits {max_questions: number; default_max_cost: number; hard_max_cost: number; workers: number}
+export interface AITaskApproval {approved: number; topics: number; questions: number; classified: number; materials: number; errors: string[]}
+
 export const aiStaffApi = {
+  tasks: (courseId?: number | null) => call<{tasks: AITask[]; limits: AITaskLimits}>(`/api/admin/ai/tasks${courseId ? `?course_id=${courseId}` : ''}`),
+  task: (id: number) => call<AITask>(`/api/admin/ai/tasks/${id}`),
+  estimateTask: (params: AITaskParams) => call<{estimate: AITaskEstimate; title: string}>('/api/admin/ai/tasks/estimate', 'POST', params),
+  startTask: (params: AITaskParams) => call<AITask>('/api/admin/ai/tasks', 'POST', params),
+  cancelTask: (id: number) => call<AITask>(`/api/admin/ai/tasks/${id}/cancel`, 'POST'),
+  approveTask: (id: number) => call<AITaskApproval>(`/api/admin/ai/tasks/${id}/approve-all`, 'POST'),
   status: () => call<AIStaffStatus>('/api/admin/ai/status'),
   chat: (messages: {role: 'user' | 'assistant'; content: string}[], course_id?: number | null) =>
     call<{reply: string; tools: StaffToolInfo[]; actions: AgentAction[]; usage: {cost: number}; request_id: string}>('/api/admin/ai/agent', 'POST', {messages, course_id}),

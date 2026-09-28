@@ -299,3 +299,67 @@ def propose_classification(ctx: ToolContext, args: dict) -> dict:
         raise ToolError("No changes to propose (unknown ids or nothing different).")
     counts = Counter(k for i in items for k in i["after"])
     return _proposal(ctx, "classification", course, f"Reclassify {len(items)} questions in {course.code}", args.get("rationale", "") or ", ".join(f"{v} {k}" for k, v in counts.items()), {"items": items})
+
+
+# ------------------------------------------------------------------ bulk work
+@tool(
+    "start_ai_task",
+    description=("Start a BACKGROUND task for bulk work that is too big for one reply: read whole course materials, build a topic list from them, "
+                 "map EVERY existing bank question onto those topics, tag materials with topics, and/or generate 1-1000 new questions grounded in the "
+                 "material. Runs with no size limit and produces proposals for staff review. Use this for any request over ~20 questions or 'all questions'."),
+    parameters={"type": "object", "properties": {
+        "course_id": COURSE_ID,
+        "material_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": 50, "description": "Materials to read; omit for all course materials."},
+        "build_topics": {"type": "boolean", "description": "Read the materials and propose a topic list (default true)."},
+        "classify_questions": {"type": "boolean", "description": "Assign every existing bank question to a topic (default true)."},
+        "map_materials": {"type": "boolean", "description": "Tag each material with its main topic (default true)."},
+        "reclassify_difficulty": {"type": "boolean", "description": "Also re-rate question difficulty (default false)."},
+        "only_untagged": {"type": "boolean", "description": "Only map questions that have no topic yet (default false)."},
+        "generate_questions": {"type": "integer", "minimum": 0, "maximum": 1000, "description": "How many new questions to write (0 for none)."},
+        "difficulty": {"type": "object", "properties": {"easy": {"type": "integer", "minimum": 0, "maximum": 100}, "medium": {"type": "integer", "minimum": 0, "maximum": 100}, "hard": {"type": "integer", "minimum": 0, "maximum": 100}}, "description": "Difficulty mix in percent."},
+        "topics": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 40, "description": "Only these topics (for generation); omit to cover all."},
+        "topic_count": {"type": "integer", "minimum": 0, "maximum": 40, "description": "Target number of topics to build (0 = automatic)."},
+        "instructions": {"type": "string", "maxLength": 1500, "description": "Extra guidance from staff (style, level, focus)."},
+    }, "required": ["course_id"]},
+    roles=STAFF, label="Starting a background AI task", writes=True,
+)
+def start_ai_task(ctx: ToolContext, args: dict) -> dict:
+    from . import tasks
+
+    course = _course(ctx, args["course_id"])
+    try:
+        task = tasks.create(ctx.db, ctx.admin, course, args)
+    except tasks.TaskError as error:
+        raise ToolError(error.message) from error
+    est = (task.params or {}).get("estimate") or {}
+    ctx.actions.append({"type": "task", "id": task.id, "title": task.title, "course": course.code, "status": task.status,
+                        "estimate": {k: est.get(k) for k in ("calls", "cost", "minutes", "materials", "bank_questions")}})
+    return {"task_id": task.id, "status": "queued", "plan": task.title, "estimate": est,
+            "summary": (f"Background task #{task.id} started ({task.title}). It reads {est.get('materials', 0)} material(s) and "
+                        f"{est.get('bank_questions', 0)} bank question(s); about {est.get('minutes', 1)} min, est. ${est.get('cost', 0):.3f}. "
+                        "Progress shows live in the Tasks tab; results arrive as proposals for review.")}
+
+
+@tool(
+    "get_ai_task",
+    description="Progress and results of a background AI task (or the latest tasks for a course when task_id is omitted).",
+    parameters={"type": "object", "properties": {"task_id": {"type": "integer", "minimum": 1}, "course_id": COURSE_ID}},
+    roles=STAFF, label="Checking a background task",
+)
+def get_ai_task(ctx: ToolContext, args: dict) -> dict:
+    from ...models import AITask
+    from . import tasks
+
+    def brief(t: AITask) -> dict:
+        out = tasks.public(t)
+        return {k: out[k] for k in ("id", "title", "status", "stage", "progress", "result", "error", "cost", "log")}
+
+    if args.get("task_id"):
+        t = ctx.db.get(AITask, args["task_id"])
+        if t is None:
+            raise ToolError("No such task.")
+        return brief(t)
+    stmt = select(AITask).order_by(AITask.id.desc()).limit(5)
+    if args.get("course_id"):
+        stmt = stmt.where(AITask.course_id == args["course_id"])
+    return {"tasks": [brief(t) for t in ctx.db.execute(stmt).scalars()]}

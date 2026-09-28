@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ...models import Admin, AIProposal, Course, CourseTopic, Question
+from ...models import Admin, AIProposal, Course, CourseTopic, Material, Question
 from ..course_bank import ensure_bank_quiz
 from ..questions import AnswerValidationError, apply_question_fields, audit, record_version, validate_payload, validate_saved_question
 
@@ -31,6 +31,7 @@ def public(p: AIProposal, *, full: bool = False) -> dict:
         "id": p.id, "kind": p.kind, "course_id": p.course_id, "title": p.title, "summary": p.summary, "status": p.status,
         "count": len((p.payload or {}).get("items") or []), "created_at": p.created_at.isoformat() if p.created_at else None,
         "decided_at": p.decided_at.isoformat() if p.decided_at else None, "result": p.result or {},
+        "task_id": (p.payload or {}).get("task_id"),
     }
     if full:
         out["payload"] = p.payload or {}
@@ -56,7 +57,7 @@ def approve(db: Session, p: AIProposal, admin: Admin, *, selected: list[int] | N
     items = _items(p, selected, edited)
     if not items:
         raise ProposalError("Select at least one item to approve.", 422)
-    applier = {"topics": _apply_topics, "questions": _apply_questions, "classification": _apply_classification}.get(p.kind)
+    applier = {"topics": _apply_topics, "questions": _apply_questions, "classification": _apply_classification, "material_topics": _apply_material_topics}.get(p.kind)
     if applier is None:
         raise ProposalError("Unknown proposal type.", 422)
     result = applier(db, course, items, admin)
@@ -151,3 +152,20 @@ def _apply_classification(db: Session, course: Course, items: list[dict], admin:
             continue
         updated.append(q.id)
     return {"updated": len(updated), "question_ids": updated, "errors": errors}
+
+
+def _apply_material_topics(db: Session, course: Course, items: list[dict], admin: Admin) -> dict:
+    updated, errors = [], []
+    for item in items:
+        m = db.get(Material, int(item.get("material_id") or 0))
+        if m is None or m.course_id != course.id:
+            errors.append(f"material {item.get('material_id')} not found in {course.code}")
+            continue
+        topic = str(item.get("after") or "").strip()[:120]
+        if not topic or topic == (m.topic or ""):
+            continue
+        m.topic = topic
+        m.updated_at = _now()
+        updated.append(m.id)
+    db.flush()
+    return {"updated": len(updated), "material_ids": updated, "errors": errors}

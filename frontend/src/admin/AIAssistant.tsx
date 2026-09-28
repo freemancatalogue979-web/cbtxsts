@@ -3,6 +3,8 @@
  *
  *   Assistant  chat with the platform through permission-checked tools
  *   Insights   course health computed straight from the staff tools (no AI call, free)
+ *   Tasks      background bulk jobs: read whole materials, build topics, map every
+ *              question, write up to 1000 questions (all as proposals)
  *   Review     AI proposals waiting for approval (preview → edit → approve / reject)
  *   Activity   every tool the AI used, who it acted for, and how long it took
  *
@@ -11,28 +13,31 @@
  */
 import {
   AlertTriangle, ArrowUp, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ClipboardCheck, Coins, Copy, Eraser, FileQuestion, Filter, GraduationCap,
-  History, Inbox, Layers, ListTree, Loader2, Lock, MessageSquarePlus, Pencil, Radar, RefreshCw, RotateCcw, Search, ShieldCheck, Sparkles, Tags,
-  Target, UserSearch, Wand2, X, XCircle, Zap,
+  History, Inbox, Layers, ListTree, Loader2, Lock, MessageSquarePlus, Paperclip, Pencil, Radar, RefreshCw, RotateCcw, Search, ShieldCheck, Sparkles, Tags,
+  Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText,
 } from 'lucide-react';
-import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
 import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone} from '../components/ui';
 import {ToolTrail} from '../components/tutor/AgentBits';
+import TasksView, {attachFile, TaskInline, type AttachedMaterial} from './AITasks';
+import {IMPORT_ACCEPT} from './MaterialImport';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {Markdown} from '../lib/markdown';
 import {
-  aiStaffApi, type AgentTurn, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type ToolCallRow, type ToolEvent,
+  aiStaffApi, type AgentTurn, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type TaskCard, type ToolCallRow, type ToolEvent,
 } from '../lib/tutor';
 import type {Course} from '../lib/types';
 import {useSession} from '../store/session';
 
-type View = 'assistant' | 'insights' | 'review' | 'activity';
+type View = 'assistant' | 'insights' | 'tasks' | 'review' | 'activity';
 const THREAD_KEY = 'ag.staff.assistant';
 const COURSE_KEY = 'ag.staff.course';
 const KIND: Record<string, {label: string; icon: typeof Tags; tone: Tone}> = {
   questions: {label: 'Questions', icon: FileQuestion, tone: 'nova'},
   topics: {label: 'Topics', icon: ListTree, tone: 'cyan'},
   classification: {label: 'Classification', icon: Tags, tone: 'pulse'},
+  material_topics: {label: 'Material tags', icon: FileText, tone: 'gold'},
 };
 const SEVERITY: Record<AIInsightIssue['severity'], {label: string; dot: string; pill: string; tone: Tone}> = {
   high: {label: 'High', dot: 'bg-flare-400', pill: 'border-flare-400/35 bg-flare-500/12 text-flare-200', tone: 'flare'},
@@ -55,6 +60,8 @@ const TOOL_NAMES: Record<string, string> = {
   propose_topics: 'Draft topics',
   propose_questions: 'Draft questions',
   propose_classification: 'Classify questions',
+  start_ai_task: 'Start background task',
+  get_ai_task: 'Check a task',
 };
 const toolName = (name: string) => TOOL_NAMES[name] ?? name.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
@@ -70,7 +77,8 @@ const PLAYBOOKS: {title: string; icon: typeof Tags; tone: Tone; plays: Play[]}[]
   },
   {
     title: 'Content & topics', icon: BookOpen, tone: 'cyan', plays: [
-      {label: 'Topics from materials', prompt: 'Read the course materials and propose a clean topic list for this course, with short descriptions.'},
+      {label: 'Topics + map every question', prompt: 'Read all the materials in this course, build the topic list from them, assign every existing bank question to the right topic, and tag each material with its topic.'},
+      {label: 'Write 200 questions from materials', prompt: 'Read all the materials in this course and write 200 new exam questions across all the topics (balanced difficulty), grounded in the material.'},
       {label: 'Missing explanations', prompt: 'Which questions in this course have no explanation? Draft explanations for up to 10 of them.'},
       {label: 'Course outline', prompt: 'Build a week-by-week course outline from the topics and materials of this course, and flag topics with thin material.'},
     ],
@@ -114,6 +122,8 @@ export default function AIAssistant({onPending}: {onPending?: (n: number) => voi
   const [openProposal, setOpenProposal] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [queued, setQueued] = useState<string | null>(null);
+  const [focusTask, setFocusTask] = useState<number | null>(null);
+  const openTask = (id: number) => { setFocusTask(id); setView('tasks'); };
 
   const loadStatus = useCallback(() => {
     aiStaffApi.status().then((s) => { setStatus(s); onPending?.(s.pending_proposals); }).catch(() => undefined);
@@ -149,11 +159,12 @@ export default function AIAssistant({onPending}: {onPending?: (n: number) => voi
       <Tabs view={view} onChange={setView} pending={status?.pending_proposals ?? 0} />
       {view === 'assistant' && (
         <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          <Chat status={status} course={course} onProposal={setOpenProposal} onUsed={changed} queued={queued} onQueuedUsed={() => setQueued(null)} />
+          <Chat status={status} course={course} onProposal={setOpenProposal} onTask={openTask} onUsed={changed} queued={queued} onQueuedUsed={() => setQueued(null)} />
           <Rail status={status} course={course} refreshKey={refreshKey} onAsk={askAI} onInsights={() => setView('insights')} />
         </div>
       )}
       {view === 'insights' && <Insights courseId={courseId} onCourse={setCourseId} onAsk={askAI} refreshKey={refreshKey} />}
+      {view === 'tasks' && <TasksView course={course} focusId={focusTask} onOpenProposal={setOpenProposal} onChanged={changed} />}
       {view === 'review' && <Review key={refreshKey} onOpen={setOpenProposal} />}
       {view === 'activity' && <Activity />}
       <ProposalModal id={openProposal} onClose={() => setOpenProposal(null)} onDecided={changed} />
@@ -263,11 +274,12 @@ function Tabs({view, onChange, pending}: {view: View; onChange: (v: View) => voi
   const tabs: {id: View; label: string; icon: typeof Tags; badge?: number}[] = [
     {id: 'assistant', label: 'Assistant', icon: Sparkles},
     {id: 'insights', label: 'Insights', icon: Radar},
+    {id: 'tasks', label: 'Tasks', icon: Zap},
     {id: 'review', label: 'Review', icon: ClipboardCheck, badge: pending},
     {id: 'activity', label: 'Activity', icon: History},
   ];
   return (
-    <div role="tablist" className="grid grid-cols-4 gap-1 rounded-2xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
+    <div role="tablist" className="grid grid-cols-5 gap-1 rounded-2xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
       {tabs.map((t) => {
         const on = view === t.id;
         return (
@@ -293,8 +305,10 @@ function Tabs({view, onChange, pending}: {view: View; onChange: (v: View) => voi
 }
 
 /* -------------------------------------------------------------------- chat */
-function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
-  status: AIStaffStatus | null; course: Course | null; onProposal: (id: number) => void; onUsed: () => void; queued: string | null; onQueuedUsed: () => void;
+type Upload = {key: string; name: string; stage: string; fraction?: number; material?: AttachedMaterial; error?: string};
+
+function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}: {
+  status: AIStaffStatus | null; course: Course | null; onProposal: (id: number) => void; onTask: (id: number) => void; onUsed: () => void; queued: string | null; onQueuedUsed: () => void;
 }) {
   const {toast} = useSession();
   const [turns, setTurns] = useState<AgentTurn[]>(() => {
@@ -307,6 +321,9 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [student, setStudent] = useState('');
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const ready = !!status?.configured;
@@ -323,13 +340,39 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [draft]);
 
-  const send = useCallback(async (text: string, history?: AgentTurn[]) => {
-    const content = text.trim();
-    if (!content || busy) return;
+  const uploading = uploads.some((u) => !u.material && !u.error);
+  const attached = uploads.filter((u) => u.material).map((u) => u.material as AttachedMaterial);
+
+  const addFiles = (list: FileList | File[] | null | undefined) => {
+    const files = Array.from(list ?? []).slice(0, 5);
+    if (!files.length) return;
+    if (!course) {
+      toast('info', 'Pick a course first', 'Attached files are saved into the selected course as draft materials.');
+      return;
+    }
+    for (const file of files) {
+      const key = `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2, 6)}`;
+      setUploads((u) => [...u, {key, name: file.name, stage: 'Uploading', fraction: 0}]);
+      attachFile(file, course.id, (stage, fraction) => setUploads((u) => u.map((x) => (x.key === key ? {...x, stage, fraction} : x))))
+        .then((material) => setUploads((u) => u.map((x) => (x.key === key ? {...x, material, stage: 'Attached'} : x))))
+        .catch((e) => setUploads((u) => u.map((x) => (x.key === key ? {...x, error: errText(e)} : x))));
+    }
+    if (fileInput.current) fileInput.current.value = '';
+  };
+
+  const send = useCallback(async (text: string, history?: AgentTurn[], files: AttachedMaterial[] = []) => {
+    let content = text.trim();
+    if ((!content && !files.length) || busy) return;
+    const display = content;
+    if (!content) content = 'I attached a file. Tell me briefly what it covers and what we can build from it for this course.';
+    if (files.length) {
+      content += '\n\n' + files.map((f) => `[Attached file "${f.filename}" — saved in ${course?.code ?? 'the course'} as draft material #${f.id} "${f.title}"${f.words ? `, about ${f.words} words` : ''}. Use material_id ${f.id}.]`).join('\n');
+    }
     const base = history ?? turns;
-    const next: AgentTurn[] = [...base, {role: 'user', content, meta: {at: new Date().toISOString()}}];
+    const next: AgentTurn[] = [...base, {role: 'user', content, display: files.length ? display || 'Sent a file' : undefined, files: files.length ? files.map((f) => ({id: f.id, title: f.title, words: f.words})) : undefined, meta: {at: new Date().toISOString()}}];
     setTurns(next);
     setDraft('');
+    if (files.length) setUploads((u) => u.filter((x) => !x.material));
     setBusy(true);
     const started = performance.now();
     try {
@@ -343,6 +386,7 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
       onUsed();
     }
   }, [busy, turns, course, toast, onUsed]);
+  const submit = () => { if (!uploading) void send(draft, undefined, attached); };
 
   useEffect(() => {
     if (!queued || busy) return;
@@ -365,7 +409,18 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
   const scope = course ? course.code : 'all courses';
 
   return (
-    <Card className="flex h-[min(44rem,calc(100dvh-9rem))] min-h-[30rem] min-w-0 flex-col overflow-hidden p-0">
+    <div
+      className="relative min-w-0"
+      onDragOver={(e: DragEvent) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={(e: DragEvent) => { e.preventDefault(); setDragging(false); if (ready) addFiles(e.dataTransfer.files); }}
+    >
+    <Card className={`relative flex h-[min(44rem,calc(100dvh-9rem))] min-h-[30rem] min-w-0 flex-col overflow-hidden p-0 ${dragging ? 'ring-2 ring-nova-400/60' : ''}`}>
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-ink-950/75 backdrop-blur-sm">
+          <p className="flex items-center gap-2 rounded-2xl border border-nova-400/40 bg-nova-500/15 px-4 py-3 text-[0.9rem] font-extrabold text-white"><Paperclip className="size-5" /> Drop to attach to {course?.code ?? 'the course'}</p>
+        </div>
+      )}
       <div className="flex min-w-0 items-center gap-2 border-b border-white/6 bg-white/[0.02] px-3 py-2">
         <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"><Sparkles className="size-4" /></span>
         <div className="min-w-0 flex-1">
@@ -435,7 +490,16 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
 
         {turns.map((turn, i) => turn.role === 'user' ? (
           <div key={i} className="flex justify-end">
-            <div className="max-w-[88%] rounded-2xl rounded-br-md bg-gradient-to-br from-nova-500/45 to-pulse-600/35 px-3.5 py-2 text-[0.86rem] whitespace-pre-wrap text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] [overflow-wrap:anywhere]">{turn.content}</div>
+            <div className="max-w-[88%] rounded-2xl rounded-br-md bg-gradient-to-br from-nova-500/45 to-pulse-600/35 px-3.5 py-2 text-[0.86rem] whitespace-pre-wrap text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] [overflow-wrap:anywhere]">
+              {turn.files?.length ? (
+                <span className="mb-1.5 flex flex-wrap justify-end gap-1">
+                  {turn.files.map((f) => (
+                    <span key={f.id} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-black/25 px-2 py-1 text-[0.7rem] font-bold"><FileText className="size-3.5 shrink-0" /><span className="truncate">{f.title}</span></span>
+                  ))}
+                </span>
+              ) : null}
+              {turn.display ?? turn.content}
+            </div>
           </div>
         ) : (
           <div key={i} className="flex min-w-0 gap-2.5">
@@ -447,6 +511,7 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
                 {turn.tools && turn.tools.length > 0 && <ToolTrail tools={turn.tools as ToolEvent[]} />}
                 <div className="min-w-0 text-[0.86rem] [overflow-wrap:anywhere]"><Markdown text={turn.content} /></div>
               </div>
+              {(turn.actions ?? []).filter((a): a is TaskCard => a.type === 'task').map((t) => <TaskInline key={`t${t.id}`} id={t.id} onOpen={onTask} />)}
               {(turn.actions ?? []).filter((a): a is ProposalCard => a.type === 'proposal').map((p) => {
                 const K = KIND[p.kind] ?? {label: p.kind, icon: Sparkles, tone: 'nova' as Tone};
                 return (
@@ -497,25 +562,41 @@ function Chat({status, course, onProposal, onUsed, queued, onQueuedUsed}: {
         )}
       </div>
 
-      <form className="border-t border-white/6 bg-black/15 p-2.5" onSubmit={(e) => { e.preventDefault(); void send(draft); }}>
-        <div className={`flex min-w-0 items-end gap-2 rounded-2xl border bg-white/[0.035] p-1.5 pl-3 transition focus-within:border-nova-400/50 ${ready ? 'border-white/10' : 'border-white/6 opacity-70'}`}>
+      <form className="border-t border-white/6 bg-black/15 p-2.5" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        {uploads.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {uploads.map((u) => (
+              <span key={u.key} className={`relative inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-xl border py-1 pr-1 pl-2 text-[0.72rem] font-bold ${u.error ? 'border-flare-400/40 bg-flare-500/10 text-flare-100' : u.material ? 'border-mint-400/35 bg-mint-500/10 text-mint-100' : 'border-white/12 bg-white/[0.04] text-mist-200'}`} title={u.error || u.name}>
+                {u.error ? <AlertTriangle className="size-3.5 shrink-0" /> : u.material ? <FileText className="size-3.5 shrink-0" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+                <span className="max-w-[11rem] truncate">{u.material?.title ?? u.name}</span>
+                <span className="shrink-0 text-[0.62rem] font-semibold opacity-75">{u.error ? 'failed' : u.material ? `#${u.material.id}` : `${u.stage}…`}</span>
+                <button type="button" onClick={() => setUploads((list) => list.filter((x) => x.key !== u.key))} className="grid size-5 shrink-0 place-items-center rounded-md hover:bg-white/10" aria-label={`Remove ${u.name}`}><X className="size-3" /></button>
+                {!u.material && !u.error && u.fraction != null && u.stage === 'Uploading' && <span className="absolute bottom-0 left-0 h-0.5 bg-nova-400" style={{width: `${u.fraction * 100}%`}} />}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className={`flex min-w-0 items-end gap-1.5 rounded-2xl border bg-white/[0.035] p-1.5 pl-1.5 transition focus-within:border-nova-400/50 ${ready ? 'border-white/10' : 'border-white/6 opacity-70'}`}>
+          <input ref={fileInput} type="file" multiple accept={IMPORT_ACCEPT} className="hidden" onChange={(e) => addFiles(e.target.files)} />
+          <Button type="button" variant="ghost" icon={<Paperclip className="size-4" />} label={course ? `Attach a file to ${course.code} (PDF, Word, slides…)` : 'Pick a course to attach files'} onClick={() => (course ? fileInput.current?.click() : addFiles([]))} disabled={!ready || busy} />
           <textarea
             ref={input}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
             rows={1}
             maxLength={4000}
-            placeholder={ready ? `Ask about ${scope}…` : 'Connect an AI key to chat'}
+            placeholder={ready ? (attached.length ? 'What should I do with this file?' : `Ask about ${scope}…`) : 'Connect an AI key to chat'}
             className="max-h-40 min-h-9 min-w-0 flex-1 resize-none bg-transparent py-2 text-[0.86rem] text-mist-50 outline-none placeholder:text-mist-500"
             disabled={!ready}
             aria-label="Message the assistant"
           />
-          <Button type="submit" icon={<ArrowUp className="size-4" />} label="Send" disabled={!draft.trim() || busy || !ready} loading={busy} />
+          <Button type="submit" icon={<ArrowUp className="size-4" />} label="Send" disabled={(!draft.trim() && !attached.length) || busy || !ready || uploading} loading={busy} />
         </div>
-        <p className="mt-1 hidden px-1 text-[0.62rem] font-semibold text-mist-600 sm:block">Enter to send · Shift + Enter for a new line · Drafts are proposals — you approve before anything is saved.</p>
+        <p className="mt-1 hidden px-1 text-[0.62rem] font-semibold text-mist-600 sm:block">Enter to send · Attach or drop files (PDF, Word, slides) · Big jobs run as background tasks · Drafts wait for your approval.</p>
       </form>
     </Card>
+    </div>
   );
 }
 
@@ -1008,6 +1089,9 @@ function StatusPill({status}: {status: Proposal['status']}) {
 }
 
 type Item = Record<string, unknown>;
+const PAGE = 30;
+const itemTopic = (it: Item) => String(it.topic ?? (it.after as Record<string, string> | undefined)?.topic ?? it.after ?? '').trim();
+const itemText = (it: Item) => [it.text, it.name, it.title, it.description, it.explanation, itemTopic(it)].filter(Boolean).join(' ').toLowerCase();
 
 function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: () => void; onDecided: () => void}) {
   const {toast} = useSession();
@@ -1018,10 +1102,18 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [q, setQ] = useState('');
+  const [topic, setTopic] = useState('all');
+  const [show, setShow] = useState<'all' | 'selected' | 'flagged'>('all');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     setP(null);
     setEditing(null);
+    setQ('');
+    setTopic('all');
+    setShow('all');
+    setPage(0);
     setRejecting(false);
     setReason('');
     if (!id) return;
@@ -1068,6 +1160,26 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
   const patch = (index: number, change: Item) => setItems((list) => list.map((it, i) => (i === index ? {...it, ...change} : it)));
   const toggle = (index: number) => setPicked((s) => { const n = new Set(s); if (n.has(index)) n.delete(index); else n.add(index); return n; });
 
+  const topics = useMemo(() => {
+    const counts = new Map<string, number>();
+    items.forEach((it) => { const t = itemTopic(it); if (t) counts.set(t, (counts.get(t) ?? 0) + 1); });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [items]);
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return items.map((it, i) => ({it, i})).filter(({it, i}) =>
+      (topic === 'all' || itemTopic(it) === topic)
+      && (show === 'all' || (show === 'selected' ? picked.has(i) : Boolean(it.possible_duplicate || it.exists)))
+      && (!needle || itemText(it).includes(needle)),
+    ).map(({i}) => i);
+  }, [items, q, topic, show, picked]);
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE));
+  const safePage = Math.min(page, pages - 1);
+  const shown = visible.slice(safePage * PAGE, safePage * PAGE + PAGE);
+  const big = items.length > 12;
+  const filtered = visible.length !== items.length;
+  const flagged = items.filter((it) => it.possible_duplicate || it.exists).length;
+
   const K = KIND[p?.kind ?? '']?.icon ?? Sparkles;
   return (
     <Modal
@@ -1108,15 +1220,42 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
               <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Not in this semester's syllabus" autoFocus />
             </Field>
           )}
+          {big && (
+            <div className="sticky -top-1 z-10 -mx-1 space-y-2 rounded-2xl border border-white/8 bg-ink-900/95 p-2 backdrop-blur">
+              <div className="flex min-w-0 items-center gap-2">
+                <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-2.5 focus-within:border-nova-400/50">
+                  <Search className="size-4 shrink-0 text-mist-500" />
+                  <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder={`Search ${items.length} items`} className="min-w-0 flex-1 bg-transparent text-[0.8rem] text-mist-100 outline-none placeholder:text-mist-500" aria-label="Search items" />
+                  {q && <button onClick={() => setQ('')} aria-label="Clear search" className="text-mist-500 hover:text-mist-200"><X className="size-3.5" /></button>}
+                </label>
+                {topics.length > 1 && (
+                  <select value={topic} onChange={(e) => { setTopic(e.target.value); setPage(0); }} aria-label="Filter by topic" className="ag-select h-9 max-w-[42%] min-w-0 appearance-none truncate rounded-xl border border-white/10 bg-black/25 px-2.5 text-[0.76rem] font-bold text-mist-200 outline-none">
+                    <option value="all">All topics</option>
+                    {topics.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
+                  </select>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-1 text-[0.7rem] font-extrabold">
+                {(['all', 'selected', ...(flagged ? ['flagged'] : [])] as ('all' | 'selected' | 'flagged')[]).map((v) => (
+                  <button key={v} onClick={() => { setShow(v); setPage(0); }} className={`rounded-full px-2.5 py-1 capitalize transition ${show === v ? 'bg-white/[0.12] text-white' : 'text-mist-400 hover:bg-white/[0.05]'}`}>
+                    {v === 'all' ? `All ${items.length}` : v === 'selected' ? `Selected ${picked.size}` : `Flagged ${flagged}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {pending && items.length > 1 && (
-            <div className="flex items-center gap-2 text-[0.74rem] font-bold text-mist-400">
-              <button className="rounded-full px-2 py-1 hover:bg-white/[0.06]" onClick={() => setPicked(new Set(items.map((_, i) => i)))}>Select all</button>
+            <div className="flex flex-wrap items-center gap-1 text-[0.74rem] font-bold text-mist-400">
+              <button className="rounded-full px-2 py-1 hover:bg-white/[0.06]" onClick={() => setPicked(new Set(items.map((_, i) => i)))}>Select all {items.length}</button>
+              {filtered && <button className="rounded-full px-2 py-1 hover:bg-white/[0.06]" onClick={() => setPicked((s) => new Set([...s, ...visible]))}>Select {visible.length} shown</button>}
+              {filtered && <button className="rounded-full px-2 py-1 hover:bg-white/[0.06]" onClick={() => setPicked((s) => { const n = new Set(s); visible.forEach((i) => n.delete(i)); return n; })}>Clear shown</button>}
               <button className="rounded-full px-2 py-1 hover:bg-white/[0.06]" onClick={() => setPicked(new Set())}>Select none</button>
               <span className="ml-auto">{picked.size} selected</span>
             </div>
           )}
+          {visible.length === 0 && <p className="rounded-xl border border-dashed border-white/12 px-3 py-6 text-center text-[0.8rem] text-mist-400">Nothing matches these filters.</p>}
           <div className="space-y-2">
-            {items.map((item, i) => (
+            {shown.map((i) => items[i]).map((item, n) => { const i = shown[n]; return (
               <ItemCard
                 key={i}
                 kind={p.kind}
@@ -1129,8 +1268,15 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
                 onEdit={() => setEditing(editing === i ? null : i)}
                 onChange={(change) => patch(i, change)}
               />
-            ))}
+            ); })}
           </div>
+          {pages > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <Button size="sm" variant="ghost" icon={<ChevronLeft className="size-4" />} onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}>Prev</Button>
+              <span className="text-[0.74rem] font-bold text-mist-400">{safePage * PAGE + 1}–{Math.min(visible.length, safePage * PAGE + PAGE)} of {visible.length}</span>
+              <Button size="sm" variant="ghost" onClick={() => setPage(Math.min(pages - 1, safePage + 1))} disabled={safePage >= pages - 1}>Next <ChevronRight className="size-4" /></Button>
+            </div>
+          )}
         </div>
       )}
     </Modal>
@@ -1187,9 +1333,18 @@ function ItemCard({kind, item, index, selectable, selected, onToggle, editing, o
               </div>
             </>
           )}
+          {kind === 'material_topics' && (
+            <>
+              <p className="flex min-w-0 items-center gap-1.5 text-[0.82rem] font-bold text-mist-100"><FileText className="size-4 shrink-0 text-mist-400" /><span className="truncate">{s('title')}</span></p>
+              <p className="mt-1 text-[0.72rem] text-mist-300"><b className="text-mist-400">Topic</b> <s className="text-mist-600">{s('before') || '—'}</s> → <b className="text-mint-200">{s('after')}</b></p>
+              {Array.isArray(item.covers) && (item.covers as string[]).length > 1 && (
+                <p className="mt-1 flex flex-wrap gap-1">{(item.covers as string[]).map((c) => <span key={c} className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[0.64rem] font-semibold text-mist-400">{c}</span>)}</p>
+              )}
+            </>
+          )}
           {flag && <p className="mt-1 text-[0.68rem] font-bold text-amber-300">{flag}</p>}
         </div>
-        {selectable && kind !== 'classification' && (
+        {selectable && kind !== 'classification' && kind !== 'material_topics' && (
           <Button size="sm" variant="ghost" icon={editing ? <CheckCircle2 className="size-3.5" /> : <Pencil className="size-3.5" />} label={editing ? 'Done editing' : 'Edit'} onClick={onEdit} />
         )}
       </div>

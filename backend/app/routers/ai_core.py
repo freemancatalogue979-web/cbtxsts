@@ -6,6 +6,8 @@ Staff     /api/admin/ai/agent        the staff assistant (tool-using, proposal-o
           /api/admin/ai/tool-calls   audit trail of every tool the AI used
           /api/admin/ai/usage        cost + cache-hit tracking (students + staff)
           /api/admin/ai/insights     course health from the staff tools — no AI call, no cost
+          /api/admin/ai/tasks…       background bulk jobs (read materials → topics → map
+                                     every question → generate up to 1000 questions)
 """
 
 from __future__ import annotations
@@ -22,12 +24,12 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_admin, require_student
-from ..models import Admin, AIProposal, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, Config, Course, CourseTopic, Material, Question, Quiz, Student
+from ..models import Admin, AIProposal, AITask, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, Config, Course, CourseTopic, Material, Question, Quiz, Student
 from ..services import ai_core
 from ..services import ai_providers as providers
 from ..services import ai_tutor as tutor
 from ..services import mini_exam
-from ..services.ai_core import admin_tools, proposals, registry
+from ..services.ai_core import admin_tools, proposals, registry, tasks
 
 log = logging.getLogger("arena.ai")
 
@@ -186,7 +188,7 @@ def _role(admin: Admin) -> str:
 
 def _staff_today(db: Session, admin: Admin) -> int:
     since = tutor.utcnow() - timedelta(days=1)
-    return db.execute(select(func.count(AIStaffUsage.id)).where(AIStaffUsage.admin_id == admin.id, AIStaffUsage.created_at >= since, AIStaffUsage.status == "ok")).scalar_one()
+    return db.execute(select(func.count(AIStaffUsage.id)).where(AIStaffUsage.admin_id == admin.id, AIStaffUsage.created_at >= since, AIStaffUsage.status == "ok", AIStaffUsage.kind != "ADMIN_TASK")).scalar_one()
 
 
 def _record_staff(db: Session, admin: Admin, *, request_id: str, model: str, provider: str, usage: dict | None, latency: int, status_: str = "ok", error: str = "") -> dict:
@@ -270,6 +272,8 @@ def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Dep
         raise HTTPException(error.status, str(error)) from error
     cost = _record_staff(db, admin, request_id=request_id, model=model, provider=impl.name, usage=usage, latency=int((time.monotonic() - started) * 1000))
     db.commit()
+    if any(a.get("type") == "task" for a in ctx.actions):
+        tasks.kick()
     return {"reply": text, "tools": tools, "actions": ctx.actions, "usage": cost, "request_id": request_id}
 
 
@@ -470,3 +474,106 @@ def insights(course_id: int | None = None, db: Session = Depends(get_db), admin:
                         "topics": (performance.get("topics") or [])[:8], "flagged": flagged[:6]},
         "weakest": health.get("weakest", [])[:5], "most_missed": health.get("most_missed", [])[:5], "duplicates": dup[:5],
     }
+
+
+# ------------------------------------------------------------------ tasks
+def _task_err(error: tasks.TaskError) -> HTTPException:
+    return HTTPException(error.status, error.message)
+
+
+def _task_course(db: Session, payload: dict) -> Course:
+    course = db.get(Course, int(payload.get("course_id") or 0))
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pick a course first.")
+    return course
+
+
+@admin_router.get("/tasks")
+def list_tasks(course_id: int | None = None, limit: int = Query(30, ge=1, le=100), db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    stmt = select(AITask).order_by(AITask.id.desc()).limit(limit)
+    if course_id:
+        stmt = stmt.where(AITask.course_id == course_id)
+    codes = dict(db.execute(select(Course.id, Course.code)).all())
+    rows = db.execute(stmt).scalars().all()
+    pending = dict(db.execute(select(AIProposal.id, AIProposal.status).where(AIProposal.id.in_([p["id"] for t in rows for p in (t.result or {}).get("proposals", [])] or [0]))).all())
+    out = []
+    for t in rows:
+        item = {**tasks.public(t), "course": codes.get(t.course_id)}
+        item["proposals"] = [{**p, "status": pending.get(p["id"], "missing")} for p in (t.result or {}).get("proposals", [])]
+        out.append(item)
+    return {"tasks": out, "limits": {"max_questions": tasks.MAX_QUESTIONS, "default_max_cost": tasks.default_max_cost(), "hard_max_cost": tasks.HARD_MAX_COST, "workers": tasks.workers()}}
+
+
+@admin_router.post("/tasks/estimate")
+def estimate_task(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    course = _task_course(db, payload)
+    try:
+        params = tasks.clean_params(db, course, payload)
+    except tasks.TaskError as error:
+        raise _task_err(error) from error
+    return {"estimate": tasks.estimate(db, course, params), "params": params, "title": tasks.describe(params, course)}
+
+
+@admin_router.post("/tasks", status_code=202)
+def create_task(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    course = _task_course(db, payload)
+    try:
+        task = tasks.create(db, admin, course, payload)
+    except tasks.TaskError as error:
+        db.rollback()
+        raise _task_err(error) from error
+    db.commit()
+    tasks.kick()
+    return {**tasks.public(task, full=True), "course": course.code, "proposals": []}
+
+
+@admin_router.get("/tasks/{task_id}")
+def get_task(task_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    t = db.get(AITask, task_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found.")
+    course = db.get(Course, t.course_id) if t.course_id else None
+    ids = [p["id"] for p in (t.result or {}).get("proposals", [])]
+    states = dict(db.execute(select(AIProposal.id, AIProposal.status).where(AIProposal.id.in_(ids or [0]))).all())
+    return {**tasks.public(t, full=True), "course": course.code if course else None,
+            "proposals": [{**p, "status": states.get(p["id"], "missing")} for p in (t.result or {}).get("proposals", [])]}
+
+
+@admin_router.post("/tasks/{task_id}/cancel")
+def cancel_task(task_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    t = db.get(AITask, task_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found.")
+    try:
+        tasks.cancel(db, t)
+    except tasks.TaskError as error:
+        raise _task_err(error) from error
+    db.commit()
+    return tasks.public(t)
+
+
+@admin_router.post("/tasks/{task_id}/approve-all")
+def approve_task(task_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """Staff approve every pending proposal a task produced, in a safe order
+    (topics first, then material tags, question mapping, new questions)."""
+    t = db.get(AITask, task_id)
+    if t is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found.")
+    order = {"topics": 0, "material_topics": 1, "classification": 2, "questions": 3}
+    ids = [p["id"] for p in (t.result or {}).get("proposals", [])]
+    rows = sorted(db.execute(select(AIProposal).where(AIProposal.id.in_(ids or [0]), AIProposal.status == "pending")).scalars(), key=lambda p: (order.get(p.kind, 9), p.id))
+    if not rows:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Nothing left to approve for this task.")
+    summary = {"approved": 0, "topics": 0, "questions": 0, "classified": 0, "materials": 0, "errors": []}
+    for p in rows:
+        try:
+            result = proposals.approve(db, p, admin)
+        except proposals.ProposalError as error:
+            summary["errors"].append(f"#{p.id}: {error.message}")
+            continue
+        summary["approved"] += 1
+        key = {"topics": "topics", "questions": "questions", "classification": "classified", "material_topics": "materials"}[p.kind]
+        summary[key] += int(result.get("created") or result.get("updated") or 0)
+        summary["errors"] += [f"#{p.id}: {e}" for e in (result.get("errors") or [])[:5]]
+    db.commit()
+    return summary

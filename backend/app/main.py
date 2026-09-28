@@ -133,6 +133,11 @@ def _startup_db() -> dict:
         from .services import ai_library, ai_migrations, ai_tutor
 
         ai_migrations.ensure_indexes()
+        from .services.ai_core import tasks as ai_tasks
+
+        interrupted = ai_tasks.recover()
+        if interrupted:
+            logger.info("ai tasks | %s interrupted by restart", interrupted)
 
         with session_scope() as db:
             moved = ai_library.migrate_legacy_saved(db)
