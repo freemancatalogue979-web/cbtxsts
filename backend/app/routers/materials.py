@@ -1418,10 +1418,7 @@ def assist_rewrite_cancel(job_id: str, admin: Any = Depends(require_admin)) -> d
         raise HTTPException(error.status, str(error)) from error
 
 
-@admin_router.post("/import/preview")
-async def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
-    """Read a document and show what would be created — nothing is saved."""
-    draft = _read_upload(file.filename or "document", await file.read())
+def _preview_payload(draft: dict) -> dict:
     return {
         **{key: value for key, value in draft.items() if key != "sections"},
         "sections": [
@@ -1436,31 +1433,15 @@ async def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depe
     }
 
 
-@admin_router.post("/import", status_code=status.HTTP_201_CREATED)
-async def admin_import(
-    file: UploadFile = File(...),
-    course_id: int = Form(...),
-    title: str = Form(""),
-    topic: str = Form(""),
-    description: str = Form(""),
-    kind: str = Form("material"),
-    status_value: str = Form("draft", alias="status"),
-    keep_file: bool = Form(True),
-    parent_id: int | None = Form(None),
-    fix_spelling: bool = Form(True),
-    db: Session = Depends(get_db),
-    admin: Admin = Depends(require_admin),
-) -> dict:
-    """Create a material from an uploaded document. Staff only fill the basics
-    (course, title, topic); the content is the document itself."""
+def _import_draft(db: Session, admin: Admin, *, filename: str, data: bytes, draft: dict, course_id: int, title: str = "", topic: str = "",
+                  description: str = "", kind: str = "material", status_value: str = "draft", keep_file: bool = True,
+                  parent_id: int | None = None, fix_spelling: bool = True) -> dict:
+    """Turn a parsed document into a material (shared by the direct import and background jobs)."""
     from ..models import Course as CourseModel
     from ..services.questions import audit
 
     if db.get(CourseModel, course_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Choose a course for this material.")
-    filename = file.filename or "document"
-    data = await file.read()
-    draft = _read_upload(filename, data)
     kind = kind if kind in {"material", "note"} else "material"
     publish = status_value if status_value in {"draft", "published", "archived"} else "draft"
     link = _store_original(filename, data) if keep_file else ""
@@ -1502,6 +1483,91 @@ async def admin_import(
     )
     db.commit()
     return {**created, "import": {**{key: draft[key] for key in ("filename", "format", "pages", "words", "notes")}, "spelling_fixed": spelling_fixed}}
+
+
+# Plain `def` (not async): FastAPI runs these in its thread pool, so reading a
+# big document never freezes the server for everyone else.
+@admin_router.post("/import/preview")
+def admin_import_preview(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
+    """Read a document and show what would be created — nothing is saved."""
+    return _preview_payload(_read_upload(file.filename or "document", file.file.read()))
+
+
+@admin_router.post("/import", status_code=status.HTTP_201_CREATED)
+def admin_import(
+    file: UploadFile = File(...),
+    course_id: int = Form(...),
+    title: str = Form(""),
+    topic: str = Form(""),
+    description: str = Form(""),
+    kind: str = Form("material"),
+    status_value: str = Form("draft", alias="status"),
+    keep_file: bool = Form(True),
+    parent_id: int | None = Form(None),
+    fix_spelling: bool = Form(True),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin),
+) -> dict:
+    """Create a material from an uploaded document in one request (small files /
+    scripts). The app uses the background upload jobs below instead."""
+    filename = file.filename or "document"
+    data = file.file.read()
+    draft = _read_upload(filename, data)
+    return _import_draft(db, admin, filename=filename, data=data, draft=draft, course_id=course_id, title=title, topic=topic,
+                         description=description, kind=kind, status_value=status_value, keep_file=keep_file, parent_id=parent_id,
+                         fix_spelling=fix_spelling)
+
+
+# ------------------------------------------------------ background uploads
+# Upload once → the server reads it in the background → the app polls → staff
+# press Import → the material is created in the background too. No request
+# waits on document processing, so nothing can hit a proxy timeout (the free
+# tunnels cut requests at ~100–120 s), and the file is never uploaded twice.
+@admin_router.post("/import/uploads", status_code=status.HTTP_202_ACCEPTED)
+def admin_import_upload(file: UploadFile = File(...), admin: Admin = Depends(require_admin)) -> dict:
+    from ..services import import_jobs
+
+    try:
+        return import_jobs.start(file.filename or "document", file.file.read(), owner=admin.id)
+    except import_jobs.JobError as error:
+        raise HTTPException(error.status, error.message) from error
+
+
+@admin_router.get("/import/uploads/{job_id}")
+def admin_import_upload_status(job_id: str, admin: Admin = Depends(require_admin)) -> dict:
+    from ..services import import_jobs
+
+    try:
+        return import_jobs.public(import_jobs.get(job_id, owner=admin.id))
+    except import_jobs.JobError as error:
+        raise HTTPException(error.status, error.message) from error
+
+
+@admin_router.post("/import/uploads/{job_id}/commit", status_code=status.HTTP_202_ACCEPTED)
+def admin_import_upload_commit(job_id: str, payload: dict, admin: Admin = Depends(require_admin)) -> dict:
+    from ..services import import_jobs
+
+    try:
+        course_id = int(payload.get("course_id") or 0)
+    except (TypeError, ValueError):
+        course_id = 0
+    if not course_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choose a course for this material.")
+    fields = {
+        "course_id": course_id,
+        "title": str(payload.get("title") or "")[:200],
+        "topic": str(payload.get("topic") or "")[:120],
+        "description": str(payload.get("description") or "")[:500],
+        "kind": str(payload.get("kind") or "material"),
+        "status_value": str(payload.get("status") or "draft"),
+        "keep_file": bool(payload.get("keep_file", True)),
+        "parent_id": int(payload["parent_id"]) if str(payload.get("parent_id") or "").isdigit() else None,
+        "fix_spelling": bool(payload.get("fix_spelling", True)),
+    }
+    try:
+        return import_jobs.public(import_jobs.commit(job_id, owner=admin.id, fields=fields))
+    except import_jobs.JobError as error:
+        raise HTTPException(error.status, error.message) from error
 
 
 @files_router.get("/{name}")

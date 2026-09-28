@@ -25,6 +25,7 @@ backend/data/*.db-shm
 backend/data/*.sqlite*
 # Documents staff upload as course materials (kept on the server, never in git).
 backend/data/material_files/
+backend/data/import-jobs/
 .env
 .env.*
 !.env.example

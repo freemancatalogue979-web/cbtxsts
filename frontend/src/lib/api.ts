@@ -176,6 +176,16 @@ export class ApiError extends Error {
   }
 }
 
+export interface ImportJob {
+  id: string;
+  state: 'reading' | 'ready' | 'error' | 'importing' | 'done';
+  filename: string;
+  size: number;
+  error: string | null;
+  preview?: MaterialImportPreview;
+  material?: {id: number; title: string};
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
@@ -782,6 +792,46 @@ export const api = {
       if (params.parent_id) form.append('parent_id', String(params.parent_id));
       return request<MaterialDetail>('/api/admin/materials/import', {method: 'POST', body: form});
     },
+    /* Background import: upload once (with progress), poll while the server
+       reads it, then commit. Every request is short, so big files never hit
+       a proxy timeout. */
+    importUpload: (file: File, onProgress?: (fraction: number) => void) =>
+      new Promise<ImportJob>((resolve, reject) => {
+        const form = new FormData();
+        form.append('file', file, file.name);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/admin/materials/import/uploads');
+        xhr.setRequestHeader('Accept', 'application/json');
+        const token = tokenStore.get();
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+        };
+        xhr.onerror = () => reject(new ApiError('Upload interrupted — check your connection and try again.', 0));
+        xhr.ontimeout = xhr.onerror;
+        xhr.onload = () => {
+          let payload: unknown = null;
+          try {
+            payload = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+          } catch {
+            /* proxy page */
+          }
+          if (xhr.status >= 200 && xhr.status < 300 && payload) return resolve(payload as ImportJob);
+          const detail =
+            payload && typeof payload === 'object' && 'detail' in payload
+              ? String((payload as {detail: unknown}).detail)
+              : xhr.status === 413
+                ? 'That file is too big for the server.'
+                : `Upload failed (${xhr.status || 'no reply'}). Try again.`;
+          reject(new ApiError(detail, xhr.status));
+        };
+        xhr.send(form);
+      }),
+    importStatus: (id: string) => request<ImportJob>(`/api/admin/materials/import/uploads/${id}`),
+    importCommit: (
+      id: string,
+      params: {course_id: number; title?: string; topic?: string; description?: string; kind?: 'material' | 'note'; status?: 'draft' | 'published'; keep_file?: boolean; parent_id?: number; fix_spelling?: boolean},
+    ) => request<ImportJob>(`/api/admin/materials/import/uploads/${id}/commit`, {method: 'POST', body: params}),
     duplicate: (id: number) => request<MaterialDetail>(`/api/admin/materials/${id}/duplicate`, {method: 'POST', body: {}}),
     publish: (id: number, status: 'draft' | 'published' | 'archived' = 'published') =>
       request<MaterialDetail>(`/api/admin/materials/${id}/publish`, {method: 'POST', body: {status}}),
