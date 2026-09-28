@@ -8,7 +8,9 @@
  * No music, no sound, no mascots, no reward pop-ups (see lib/mode.ts). The
  * command menu (Ctrl+K, or Ctrl+/) reaches every workspace, exam and material.
  */
-import {Search, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, ArrowLeftRight, Settings as SettingsIcon, ChevronDown} from 'lucide-react';
+import {Search, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, ArrowLeftRight, Settings as SettingsIcon, ChevronDown, Flame} from 'lucide-react';
+import {api} from '../lib/api';
+import {Ring} from './ui';
 import {MotionConfig} from 'motion/react';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import CommandPalette from '../components/CommandPalette';
@@ -18,7 +20,7 @@ import type {Tab} from '../lib/nav';
 import type {Quiz} from '../lib/types';
 import {askTutor} from '../lib/tutor';
 import {useSession} from '../store/session';
-import {PRO_MOBILE, PRO_NAV, PRO_SETTINGS, proLabel} from './nav';
+import {PRO_MOBILE, PRO_NAV, PRO_SETTINGS, proHue, proLabel} from './nav';
 
 const APPEARANCE_NEXT: Record<Appearance, Appearance> = {dark: 'light', light: 'system', system: 'dark'};
 const APPEARANCE_ICON = {dark: Moon, light: Sun, system: Monitor};
@@ -26,13 +28,13 @@ const APPEARANCE_ICON = {dark: Moon, light: Sun, system: Monitor};
 function Brand({compact = false}: {compact?: boolean}) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <img src="/brand/ag-icon-192.png" alt="" width={28} height={28} className="size-7 shrink-0 rounded-md" draggable={false} />
+      <img src="/brand/ag-icon-192.png" alt="" width={28} height={28} className="size-8 shrink-0 rounded-[10px]" style={{boxShadow: '0 0 0 1px var(--pro-border-strong), 0 6px 16px -8px var(--pro-accent-glow)'}} draggable={false} />
       {!compact && (
         <div className="min-w-0 leading-tight">
           <p className="truncate text-[0.8125rem] font-semibold tracking-tight" style={{color: 'var(--pro-text)'}}>
             Absolute Genesis
           </p>
-          <p className="text-[0.625rem] font-semibold tracking-[0.14em]" style={{color: 'var(--pro-accent-text)'}}>
+          <p className="mt-0.5 inline-flex rounded-full px-1.5 py-px text-[0.5625rem] font-bold tracking-[0.16em] text-white" style={{background: 'var(--pro-grad)'}}>
             PRO
           </p>
         </div>
@@ -43,27 +45,73 @@ function Brand({compact = false}: {compact?: boolean}) {
 
 function NavList({tab, onTab, onDone}: {tab: Tab; onTab: (tab: Tab) => void; onDone?: () => void}) {
   const current = tab === 'profile' ? 'settings' : tab;
+  const groups: string[] = [];
+  for (const item of PRO_NAV) if (item.group && !groups.includes(item.group)) groups.push(item.group);
   return (
     <nav aria-label="Pro navigation" className="grid gap-0.5">
-      {PRO_NAV.map((item) => {
-        const Icon = item.icon;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            className="pro-nav-item"
-            aria-current={current === item.id ? 'page' : undefined}
-            onClick={() => {
-              onTab(item.id);
-              onDone?.();
-            }}
-          >
-            <Icon className="size-4 shrink-0" />
-            <span className="truncate">{item.label}</span>
-          </button>
-        );
-      })}
+      {groups.map((group, gi) => (
+        <div key={group} className="grid gap-0.5">
+          <p className={`pro-nav-label ${gi === 0 ? 'pt-1' : ''}`}>{group}</p>
+          {PRO_NAV.filter((item) => item.group === group).map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="pro-nav-item"
+                data-hue={item.hue}
+                aria-current={current === item.id ? 'page' : undefined}
+                onClick={() => {
+                  onTab(item.id);
+                  onDone?.();
+                }}
+              >
+                <span className="pro-nav-icon" aria-hidden>
+                  <Icon />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </nav>
+  );
+}
+
+/** Sidebar "Today" card: daily question goal + streak. Quiet, informative, no pop-ups. */
+function TodayCard({tab, onTab}: {tab: Tab; onTab: (tab: Tab) => void}) {
+  const {profile} = useSession();
+  const [goal, setGoal] = useState<{questions: number; done_today: number} | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.arena
+      .studyPlan()
+      .then((d) => live && setGoal((d as Record<string, any>).daily_goal ?? null))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [tab]);
+  const target = Math.max(1, Number(goal?.questions ?? 15));
+  const done = Number(goal?.done_today ?? 0);
+  const pctDone = Math.min(100, (done / target) * 100);
+  const streak = Number(profile?.streak ?? 0);
+  return (
+    <button type="button" onClick={() => onTab('bank')} className="pro-card pro-lift mx-1 mb-2 flex w-[calc(100%-0.5rem)] items-center gap-3 p-3 text-left" aria-label={`Today: ${done} of ${target} questions. Open the question bank`}>
+      <Ring value={pctDone} size={46} stroke={5} hue={pctDone >= 100 ? 'green' : 'violet'} label={`${Math.round(pctDone)}% of today's goal`}>
+        <span className="text-[0.6875rem]">{Math.round(pctDone)}%</span>
+      </Ring>
+      <span className="min-w-0 flex-1">
+        <span className="pro-eyebrow block">Today</span>
+        <span className="block truncate text-[0.8125rem] font-semibold" style={{color: 'var(--pro-text)'}}>
+          {Math.min(done, target)} / {target} questions
+        </span>
+        <span className="pro-meta flex items-center gap-1">
+          <Flame className="size-3" style={{color: 'var(--pro-h-amber)'}} /> {streak} day streak
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -154,13 +202,16 @@ export default function ProShell({
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <NavList tab={tab} onTab={go} />
           </div>
+          <div className="px-2 pt-2">
+            <TodayCard tab={tab} onTab={go} />
+          </div>
           <div className="grid gap-0.5 border-t px-3 py-3" style={{borderColor: 'var(--pro-border)'}}>
             <button type="button" className="pro-nav-item" aria-current={tab === 'settings' || tab === 'profile' ? 'page' : undefined} onClick={() => go('settings')}>
-              <SettingsIcon className="size-4 shrink-0" />
+              <span className="pro-nav-icon" aria-hidden><SettingsIcon /></span>
               <span>Settings</span>
             </button>
             <button type="button" className="pro-nav-item" onClick={() => setExperience('standard')}>
-              <ArrowLeftRight className="size-4 shrink-0" />
+              <span className="pro-nav-icon" aria-hidden><ArrowLeftRight /></span>
               <span>Standard mode</span>
             </button>
           </div>
@@ -173,7 +224,8 @@ export default function ProShell({
               <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon lg:hidden" aria-label="Open navigation" onClick={() => setDrawer(true)}>
                 <Menu className="size-5" />
               </button>
-              <div className="min-w-0 lg:hidden">
+              <div className="flex min-w-0 items-center gap-2.5" data-hue={proHue(tab)}>
+                <span className="pro-dot hidden lg:inline-block" aria-hidden />
                 <p className="truncate text-[0.9375rem] font-semibold" style={{color: 'var(--pro-text)'}}>
                   {proLabel(tab)}
                 </p>
@@ -182,7 +234,7 @@ export default function ProShell({
               <button
                 type="button"
                 onClick={() => setPalette(true)}
-                className="pro-input ml-auto hidden max-w-sm items-center gap-2 text-left md:flex lg:ml-0"
+                className="pro-input ml-auto hidden max-w-sm items-center gap-2 text-left md:flex lg:ml-6 lg:w-80"
                 aria-label="Search (Ctrl+K)"
               >
                 <Search className="size-4 shrink-0" style={{color: 'var(--pro-muted)'}} />
@@ -214,10 +266,7 @@ export default function ProShell({
                     aria-label="Account menu"
                     onClick={() => setAccount((open) => !open)}
                   >
-                    <span
-                      className="grid size-7 place-items-center rounded-full text-[0.6875rem] font-semibold"
-                      style={{background: 'var(--pro-accent-soft)', color: 'var(--pro-accent-text)'}}
-                    >
+                    <span className="pro-avatar size-8 text-[0.6875rem]">
                       {initials}
                     </span>
                     <ChevronDown className="hidden size-3.5 sm:block" />
@@ -268,13 +317,17 @@ export default function ProShell({
             const Icon = item.icon;
             return (
               <button key={id} type="button" className="pro-bottom-item" aria-current={tab === id ? 'page' : undefined} onClick={() => go(id)}>
-                <Icon className="size-5" />
+                <span className="pro-bottom-pill" aria-hidden>
+                  <Icon className="size-5" />
+                </span>
                 <span className="max-w-full truncate px-1">{item.label === 'AI Assistant' ? 'AI' : item.label}</span>
               </button>
             );
           })}
           <button type="button" className="pro-bottom-item" aria-label="More" onClick={() => setDrawer(true)}>
-            <Menu className="size-5" />
+            <span className="pro-bottom-pill" aria-hidden>
+              <Menu className="size-5" />
+            </span>
             <span>More</span>
           </button>
         </nav>
@@ -293,15 +346,18 @@ export default function ProShell({
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
                 <NavList tab={tab} onTab={go} onDone={() => setDrawer(false)} />
               </div>
+              <div className="px-2 pt-2" onClick={() => setDrawer(false)}>
+                <TodayCard tab={tab} onTab={go} />
+              </div>
               <div className="grid gap-0.5 border-t px-3 py-3" style={{borderColor: 'var(--pro-border)'}}>
                 <button type="button" className="pro-nav-item" aria-current={tab === 'settings' ? 'page' : undefined} onClick={() => go('settings')}>
-                  <SettingsIcon className="size-4" /> Settings
+                  <span className="pro-nav-icon" aria-hidden><SettingsIcon /></span> Settings
                 </button>
                 <button type="button" className="pro-nav-item" onClick={() => { setDrawer(false); setExperience('standard'); }}>
-                  <ArrowLeftRight className="size-4" /> Standard mode
+                  <span className="pro-nav-icon" aria-hidden><ArrowLeftRight /></span> Standard mode
                 </button>
                 <button type="button" className="pro-nav-item" onClick={() => { setDrawer(false); onSignOut(); }}>
-                  <LogOut className="size-4" /> Sign out
+                  <span className="pro-nav-icon" aria-hidden><LogOut /></span> Sign out
                 </button>
               </div>
             </div>

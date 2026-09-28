@@ -16,6 +16,12 @@ import {DESKTOP_MORE_TABS, DESKTOP_PRIMARY_TABS, MOBILE_TABS, MORE_TABS, TABS} f
 import CommandPalette from './CommandPalette';
 import {jumpToMaterial} from '../lib/palette';
 import type {Tab} from '../lib/nav';
+
+/* The desktop nav row only has room for every primary tab on wide screens:
+   the last few step into the More menu on smaller desktops (class strings are
+   written out in full so Tailwind can see them). */
+const NAV_FIT: Partial<Record<Tab, string>> = {mystery: 'hidden xl:flex', arena: 'hidden xl:flex', shop: 'hidden 2xl:flex'};
+const MORE_FIT: Partial<Record<Tab, string>> = {mystery: 'flex xl:hidden', arena: 'flex xl:hidden', shop: 'flex 2xl:hidden'};
 import {formatNumber, formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
 import InstallApp, {InstallBanner} from './InstallApp';
@@ -305,11 +311,11 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
           what turns it into a pill, and that only appears from sm up. */}
       <button
         onClick={() => setOpen((value) => !value)}
-        className="float-chip flex aspect-square shrink-0 items-center justify-center rounded-full border border-white/12 p-1 transition-colors hover:border-nova-400/40 sm:aspect-auto sm:gap-2 sm:pr-3 lg:aspect-square lg:gap-0 lg:pr-1 xl:aspect-auto xl:gap-2 xl:pr-3"
+        className="float-chip flex aspect-square shrink-0 items-center justify-center rounded-full border border-white/12 p-1 transition-colors hover:border-nova-400/40 sm:aspect-auto sm:gap-2 sm:pr-3 lg:aspect-square lg:gap-0 lg:pr-1 min-[1800px]:aspect-auto min-[1800px]:gap-2 min-[1800px]:pr-3"
         aria-label="Account menu"
       >
         <Avatar name={profile.name} hue={profile.avatar_hue} initials={profile.initials} size={30} />
-        <span className="hidden text-[0.8rem] font-bold text-mist-200 sm:block lg:hidden xl:block">{profile.name.split(' ')[0]}</span>
+        <span className="hidden text-[0.8rem] font-bold text-mist-200 sm:block lg:hidden min-[1800px]:block">{profile.name.split(' ')[0]}</span>
       </button>
 
       <AnimatePresence>
@@ -389,7 +395,7 @@ function LivePill() {
       title={`${label} to the live channel — the app re-syncs silently when the connection returns`}
     >
       {socketStatus === 'open' ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5 animate-pulse" />}
-      <span className="hidden tabular sm:inline">{label}</span>
+      <span className="hidden tabular sm:inline lg:hidden min-[1800px]:inline">{label}</span>
       <span className="hidden opacity-70 sm:inline lg:hidden 2xl:inline">
         · {online} online
       </span>
@@ -514,7 +520,7 @@ export function AppShell({
                 <button
                   key={item.id}
                   onClick={() => onTab(item.id)}
- className={`relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-bold tracking-wide transition-colors 2xl:gap-2 2xl:px-3.5 2xl:text-[0.80rem] ${
+ className={`${NAV_FIT[item.id] ?? 'flex'} relative items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-bold tracking-wide transition-colors 2xl:gap-2 2xl:px-3.5 2xl:text-[0.80rem] ${
                     active ? 'text-white' : 'text-mist-400 hover:text-mist-100'
                   }`}
                 >
@@ -550,7 +556,7 @@ export function AppShell({
                   desktopMoreOpen ? 'opacity-100 pointer-events-auto scale-100' : 'opacity-0 pointer-events-none scale-95'
                 }`}
               >
-                {DESKTOP_MORE_TABS.map((id) => {
+                {[...Object.keys(NAV_FIT) as Tab[], ...DESKTOP_MORE_TABS].map((id) => {
                   const item = TABS.find((row) => row.id === id)!;
                   const active = tab === item.id;
                   const Icon = item.icon;
@@ -561,7 +567,7 @@ export function AppShell({
                         setDesktopMoreOpen(false);
                         onTab(item.id);
                       }}
- className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[0.78rem] font-bold tracking-wide transition-colors ${
+ className={`${MORE_FIT[item.id] ?? 'flex'} items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[0.78rem] font-bold tracking-wide transition-colors ${
                         active ? 'bg-nova-500/20 text-nova-300' : 'text-mist-300 hover:bg-white/6 hover:text-mist-50'
                       }`}
                     >
@@ -591,7 +597,7 @@ export function AppShell({
                     jams: credits ride along (the mobile coins chip), crystals
                     from sm, streak from md — every value stays in the account
                     menu regardless. */}
-                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular sm:inline-flex lg:hidden 2xl:inline-flex" title="Data Crystals">
+                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular sm:inline-flex lg:hidden min-[1800px]:inline-flex" title="Data Crystals">
                   <Gem className="size-3 text-nova-400" />
                   {formatNumber(profile.diamonds ?? 0)}
                 </span>
@@ -599,7 +605,7 @@ export function AppShell({
                   <Coins className="size-3 text-amber-400" />
                   {formatNumber(profile.coins)}
                 </span>
-                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex lg:hidden xl:inline-flex" title="Daily streak">
+                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex lg:hidden min-[1800px]:inline-flex" title="Daily streak">
                   <Flame className="size-3.5 text-rose-400" />
                   {profile.streak}d
                 </span>

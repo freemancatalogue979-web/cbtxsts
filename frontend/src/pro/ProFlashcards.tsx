@@ -87,6 +87,8 @@ export default function ProFlashcards() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
+        icon={<Layers />}
+        hue="blue"
         eyebrow="Spaced review"
         title="Flashcards"
         description="Short daily reviews, scheduled so you see each card just before you'd forget it."
@@ -160,11 +162,11 @@ export default function ProFlashcards() {
             {decks.map((deck) => {
               const hue = KIND_HUE[deck.kind] ?? 'blue';
               return (
-                <article key={deck.id} className="pro-card pro-lift relative flex min-w-0 flex-col gap-3 p-4">
+                <article key={deck.id} className="pro-card pro-lift pro-stack relative mb-2 flex min-w-0 flex-col gap-3 p-4" data-hue={hue}>
                   <div className="flex min-w-0 items-start gap-3">
                     <Tile hue={hue}><Layers /></Tile>
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{deck.name}</h3>
+                      <h3 className="text-[0.9375rem] font-bold tracking-tight [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{deck.name}</h3>
                       {deck.description && <p className="pro-meta pro-clamp-2 mt-0.5">{deck.description}</p>}
                     </div>
                     <div className="relative shrink-0">
@@ -185,8 +187,8 @@ export default function ProFlashcards() {
                     </div>
                     <Progress value={deck.stats.mastery} tone={deck.stats.mastery >= 70 ? 'success' : undefined} label={`${deck.name} mastery`} />
                   </div>
-                  <button type="button" className="pro-btn pro-btn-sm w-full" onClick={() => setStudying({deckId: deck.id, mode: 'q_to_a'})}>
-                    Study deck
+                  <button type="button" className={`pro-btn pro-btn-sm w-full ${deck.stats.due > 0 ? 'pro-btn-primary' : 'pro-btn-soft'}`} onClick={() => setStudying({deckId: deck.id, mode: 'q_to_a'})}>
+                    {deck.stats.due > 0 ? `Review ${deck.stats.due} due` : 'Study deck'}
                   </button>
                 </article>
               );

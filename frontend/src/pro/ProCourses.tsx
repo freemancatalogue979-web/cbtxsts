@@ -3,17 +3,17 @@
  * Topics, question counts and the student's standing come from the shared
  * practice catalogue, analytics and Study Lab (one source of truth).
  */
-import {ArrowLeft, Search} from 'lucide-react';
+import {ArrowLeft, Search, Library, BookOpen, Target, ListChecks, Compass, Database, Layers} from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
 import {api} from '../lib/api';
 import type {Tab} from '../lib/nav';
 import {useSession} from '../store/session';
 import {createMiniExam, practiseTopic} from './actions';
 import {setFocus, useFocus} from './focus';
-import {Badge, Empty, LoadingRows, PageHeader, Progress, Section, pct, toneFor} from './ui';
+import {Cover, Empty, LoadingRows, Metric, PageHeader, Progress, Ring, Section, hueForCourse, pct, toneFor} from './ui';
 
 type Json = Record<string, any>;
-type CourseRow = {id: number; code: string; title: string; available: number; topics: {topic: string; key: string; count: number}[]};
+type CourseRow = {id: number; code: string; title: string; accent?: string; available: number; topics: {topic: string; key: string; count: number}[]};
 
 export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
   const {toast} = useSession();
@@ -43,6 +43,11 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
     for (const row of [...(analytics?.weakest_topics ?? []), ...(analytics?.strongest_topics ?? [])] as Json[]) {
       const key = String(row.key).toLowerCase();
       if (!map.has(key)) map.set(key, {accuracy: Number(row.accuracy ?? 0), answered: Number(row.answered ?? 0), state: ''});
+    }
+    /* practice runs count too — the heatmap folds in practice answers */
+    for (const row of (analytics?.mastery_heatmap ?? []) as Json[]) {
+      const key = String(row.topic).toLowerCase();
+      if (!map.has(key) && Number(row.answered) > 0) map.set(key, {accuracy: Number(row.mastery ?? 0), answered: Number(row.answered ?? 0), state: 'Practised'});
     }
     return map;
   }, [analytics, lab]);
@@ -74,6 +79,8 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
           </button>
         </div>
         <PageHeader
+          icon={<BookOpen />}
+          hue={hueForCourse(open)}
           eyebrow={open.code}
           title={open.title}
           description={`${open.topics.length} topics · ${open.available} practice questions`}
@@ -98,14 +105,14 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
           }
         />
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <MiniStat label="Your accuracy" value={stats?.answered ? pct(stats.accuracy) : '—'} />
-          <MiniStat label="Answered" value={String(stats?.answered ?? 0)} />
-          <MiniStat label="Topics studied" value={`${studied} / ${open.topics.length}`} />
-          <MiniStat label="Question bank" value={String(open.available)} />
+        <div className="pro-stagger grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Metric icon={<Target />} hue="green" label="Your accuracy" value={stats?.answered ? pct(stats.accuracy) : '—'} tone={stats?.answered ? toneFor(stats.accuracy) : undefined} sub={stats?.answered ? 'exam answers' : 'no exam answers yet'} />
+          <Metric icon={<ListChecks />} hue="blue" label="Answered" value={String(stats?.answered ?? 0)} sub="in this course" />
+          <Metric icon={<Compass />} hue="violet" label="Topics studied" value={`${studied} / ${open.topics.length}`} sub={`${Math.round(open.topics.length ? (studied / open.topics.length) * 100 : 0)}% coverage`} />
+          <Metric icon={<Database />} hue="amber" label="Question bank" value={String(open.available)} sub="practice questions" />
         </div>
 
-        <Section title="Topics" description="Open a topic to study it, or practise it straight from the bank.">
+        <Section icon={<Layers />} hue={hueForCourse(open)} title="Topics" description="Open a topic to study it, or practise it straight from the bank.">
           {open.topics.length === 0 ? (
             <Empty title="No topics yet" body="Your lecturers have not organised this course into topics yet." />
           ) : (
@@ -127,10 +134,15 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
                       return (
                         <tr key={t.key}>
                           <td>
-                            <p className="font-medium [overflow-wrap:anywhere]">{t.topic}</p>
-                            {s?.state && <p className="pro-meta">{s.state}</p>}
+                            <div className="flex min-w-0 items-center gap-3" data-hue={s?.answered ? undefined : hueForCourse(open)}>
+                              <span className="pro-dot" style={s?.answered ? {background: `var(--pro-${toneFor(s.accuracy) ?? 'accent'})`} : {opacity: 0.35}} />
+                              <div className="min-w-0">
+                                <p className="font-semibold [overflow-wrap:anywhere]">{t.topic}</p>
+                                {s?.state && <p className="pro-meta">{s.state}</p>}
+                              </div>
+                            </div>
                           </td>
-                          <td className="pro-num text-right">{t.count}</td>
+                          <td className="text-right"><span className="pro-count">{t.count}</span></td>
                           <td>
                             {s?.answered ? (
                               <div className="flex items-center gap-2.5">
@@ -145,7 +157,7 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
                           </td>
                           <td className="text-right">
                             <div className="inline-flex gap-1.5">
-                              <button type="button" className="pro-btn pro-btn-sm" onClick={() => studyTopic(open, t.topic)}>
+                              <button type="button" className="pro-btn pro-btn-sm pro-btn-soft" onClick={() => studyTopic(open, t.topic)}>
                                 Study
                               </button>
                               <button
@@ -217,11 +229,11 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <PageHeader title="Courses" description="Your courses, their topics and where you stand in each." />
+      <PageHeader icon={<Library />} hue="teal" eyebrow="Learn" title="Courses" description="Your courses, their topics and where you stand in each." />
 
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" style={{color: 'var(--pro-muted)'}} />
-        <input className="pro-input pl-9" placeholder="Search courses or topics" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search courses" />
+      <div className="pro-search max-w-md">
+        <Search />
+        <input className="pro-input" placeholder="Search courses or topics" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search courses" />
       </div>
 
       {courses === null ? (
@@ -244,37 +256,33 @@ export default function ProCourses({onTab}: {onTab: (tab: Tab) => void}) {
                   setOpenId(course.id);
                   setFocus({courseId: course.id, courseCode: course.code, courseTitle: course.title});
                 }}
-                className="pro-card grid min-w-0 gap-3 p-4 text-left transition-colors hover:border-[var(--pro-border-strong)] md:p-5"
+                className="pro-card pro-lift grid min-w-0 content-start gap-4 p-2.5 text-left"
               >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="pro-eyebrow">{course.code}</p>
-                    <p className="pro-h3 mt-1 [overflow-wrap:anywhere]">{course.title}</p>
+                <Cover hue={hueForCourse(course)} code={course.code} glyph={<BookOpen className="size-full" />} className="min-h-[124px]">
+                  <p className="mt-8 pr-12 text-[1.0625rem] leading-snug font-bold [overflow-wrap:anywhere]">{course.title}</p>
+                </Cover>
+                <div className="grid gap-3 px-2 pb-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Ring value={coverage} size={44} stroke={4.5} hue={hueForCourse(course)} label={`${Math.round(coverage)}% of topics studied`}>
+                      <span className="text-[0.6875rem]">{Math.round(coverage)}%</span>
+                    </Ring>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.875rem] font-semibold" style={{color: 'var(--pro-text)'}}>
+                        {studied} of {course.topics.length} topics studied
+                      </p>
+                      <p className="pro-meta truncate">{stats?.answered ? `${pct(stats.accuracy)} exam accuracy` : 'Coverage from practice and exams'}</p>
+                    </div>
                   </div>
-                  {stats?.answered ? <Badge tone={toneFor(stats.accuracy)}>{pct(stats.accuracy)}</Badge> : null}
-                </div>
-                <div>
-                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                    <span className="pro-meta">Topics studied</span>
-                    <span className="pro-meta pro-num">{studied} / {course.topics.length}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="pro-chip"><ListChecks /> {course.available} questions</span>
+                    <span className="pro-chip"><Layers /> {course.topics.length} topics</span>
                   </div>
-                  <Progress value={coverage} label={`${course.code} topics studied`} />
                 </div>
-                <p className="pro-meta">{course.available} questions in the bank</p>
               </button>
             );
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function MiniStat({label, value}: {label: string; value: string}) {
-  return (
-    <div className="pro-card p-3.5">
-      <p className="pro-eyebrow truncate">{label}</p>
-      <p className="mt-1.5 text-[1.25rem] font-semibold pro-num" style={{color: 'var(--pro-text)'}}>{value}</p>
     </div>
   );
 }

@@ -82,6 +82,11 @@ export default function ProBank() {
   const topicStats = useMemo(() => {
     const map = new Map<string, {accuracy: number; answered: number}>();
     for (const row of [...(analytics?.weakest_topics ?? []), ...(analytics?.strongest_topics ?? [])]) map.set(String(row.key).toLowerCase(), {accuracy: Number(row.accuracy), answered: Number(row.answered)});
+    /* practice answers live in the mastery heatmap — use them where exams are silent */
+    for (const row of (analytics?.mastery_heatmap ?? []) as Json[]) {
+      const key = String(row.topic).toLowerCase();
+      if (!map.has(key) && Number(row.answered) > 0) map.set(key, {accuracy: Number(row.mastery ?? 0), answered: Number(row.answered)});
+    }
     return map;
   }, [analytics]);
   const statFor = (name: string) => topicStats.get(name.toLowerCase());
@@ -121,7 +126,14 @@ export default function ProBank() {
 
   const stats = history?.stats ?? {};
   const runs: Json[] = (history?.runs ?? []).slice(0, 6);
-  const weak: Json[] = (analytics?.weakest_topics ?? []).slice(0, 4);
+  const weakExam: Json[] = (analytics?.weakest_topics ?? []).slice(0, 4);
+  const weak: Json[] = weakExam.length
+    ? weakExam
+    : ((analytics?.mastery_heatmap ?? []) as Json[])
+        .filter((r) => Number(r.answered) > 0 && Number(r.mastery) < 60)
+        .sort((a, b) => Number(a.mastery) - Number(b.mastery))
+        .slice(0, 4)
+        .map((r) => ({key: r.topic, accuracy: Number(r.mastery), answered: Number(r.answered)}));
   const courseByCode = new Map((catalog?.courses ?? []).map((c) => [c.code, c]));
   const courseById = new Map((catalog?.courses ?? []).map((c) => [c.id, c]));
   const filteredTopics = topics.filter((t) => !topicQuery.trim() || t.topic.toLowerCase().includes(topicQuery.trim().toLowerCase()));
@@ -129,7 +141,7 @@ export default function ProBank() {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <PageHeader eyebrow="Practice" title="Question Bank" description="Build a practice session from your course banks. Every question is marked by the server, with an explanation after each answer." />
+      <PageHeader icon={<ListChecks />} hue="green" eyebrow="Practice" title="Question Bank" description="Build a practice session from your course banks. Every question is marked by the server, with an explanation after each answer." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Sessions" value={history ? Number(stats.runs ?? 0) : '—'} sub={`${Number(stats.days_played ?? 0)} ${Number(stats.days_played ?? 0) === 1 ? 'day' : 'days'} practised`} icon={<ListChecks />} hue="blue" />

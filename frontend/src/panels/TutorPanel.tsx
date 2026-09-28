@@ -600,9 +600,9 @@ export default function TutorPanel() {
 
   return (
     <div className={`mx-auto w-full max-w-6xl ${pro ? 'pro-tutor' : ''}`}>
-      <div className={`flex flex-wrap items-center gap-2 ${pro ? 'mb-4' : 'mb-2.5'}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${pro ? 'pro-hero pro-hero-compact mb-4 gap-3' : 'mb-2.5'}`} data-hue={pro ? 'violet' : undefined}>
         {pro ? (
-          <span className="pro-tile" data-hue="violet" data-size="md" aria-hidden>
+          <span className="pro-hero-icon" aria-hidden>
             <Sparkles />
           </span>
         ) : (
@@ -612,7 +612,7 @@ export default function TutorPanel() {
         )}
         <div className="min-w-0 flex-1">
           <h1 className={pro ? 'pro-h2 leading-tight' : 'text-[1.05rem] leading-tight font-extrabold text-mist-50 sm:text-lg'}>{pro ? 'AI Assistant' : 'AI Tutor'}</h1>
-          <p className={pro ? 'pro-meta truncate' : 'truncate text-[0.74rem] font-medium text-mist-500'}>
+          <p className={pro ? 'pro-meta' : 'truncate text-[0.74rem] font-medium text-mist-500'}>
             {pro ? 'Academic help grounded in your course materials.' : 'Patient help that teaches, not just tells.'}
           </p>
         </div>
@@ -680,7 +680,7 @@ export default function TutorPanel() {
             <>
               {/* context bar */}
               <div className="flex flex-wrap items-center gap-1.5 pb-2">
-                <Select value={courseId ?? ''} onChange={(e) => { setCourseId(Number(e.target.value) || null); setTopic(''); }} className="!h-8 min-w-0 max-w-[11rem] flex-1 !py-0 text-[0.76rem] sm:flex-none" aria-label="Course">
+                <Select value={courseId ?? ''} onChange={(e) => { setCourseId(Number(e.target.value) || null); setTopic(''); }} className="!h-8 w-[8.25rem] shrink-0 !py-0 text-[0.76rem] sm:w-auto sm:max-w-[11rem]" aria-label="Course">
                   <option value="">Any course</option>
                   {courses.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
                 </Select>
@@ -690,7 +690,7 @@ export default function TutorPanel() {
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Topic (optional)"
                   maxLength={120}
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-ink-950/60 px-2.5 text-[0.76rem] text-mist-100 placeholder:text-mist-600 focus:border-nova-400/60 focus:outline-none sm:max-w-[14rem]"
+                  className="h-8 min-w-[5.5rem] flex-1 rounded-lg border border-white/10 bg-ink-950/60 px-2.5 text-[0.76rem] text-mist-100 placeholder:text-mist-600 focus:border-nova-400/60 focus:outline-none sm:max-w-[14rem]"
                   aria-label="Topic"
                 />
                 <datalist id="tutor-topics">{topics.map((t) => <option key={t.id} value={t.name} />)}</datalist>
@@ -706,9 +706,10 @@ export default function TutorPanel() {
                     type="button"
                     onClick={() => void setChatTemporary(true)}
                     title="Temporary chat — not saved to your history"
-                    className="ml-auto flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-[0.72rem] font-bold text-mist-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-mist-200"
+                    aria-label="Start a temporary chat"
+                    className="ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-[0.72rem] font-bold text-mist-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-mist-200"
                   >
-                    <Ghost className="size-3.5" /> Temporary
+                    <Ghost className="size-3.5" /> <span className="hidden sm:inline">Temporary</span>
                   </button>
                 )}
               </div>
@@ -742,7 +743,11 @@ export default function TutorPanel() {
                 ) : messages.length === 0 ? (
                   <div className="mx-auto flex max-w-2xl flex-col items-center px-1 py-5 text-center sm:py-8">
                     {pro ? (
-                      <span className="pro-tile" data-hue="violet" data-size="lg" aria-hidden><Sparkles /></span>
+                      <span className="pro-empty-art" data-hue="violet" style={{color: 'var(--mark)'}} aria-hidden>
+                        <i style={{top: 6, right: 22}} />
+                        <i style={{bottom: 14, left: 8, width: 6, height: 6}} />
+                        <span className="pro-tile" data-hue="violet" data-size="lg"><Sparkles /></span>
+                      </span>
                     ) : (
                       <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Bot className="size-6" /></span>
                     )}

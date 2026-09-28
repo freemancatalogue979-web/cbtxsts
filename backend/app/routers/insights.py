@@ -318,7 +318,9 @@ def study_plan(db: Session = Depends(get_db), student: Student = Depends(require
 
 def _answered_today(db: Session, student_id: int) -> int:
     start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    return int(db.scalar(select(func.count(Answer.id)).where(Answer.attempt_id.in_(select(Attempt.id).where(Attempt.student_id == student_id)), Answer.answered_at >= start)) or 0)
+    exam = int(db.scalar(select(func.count(Answer.id)).where(Answer.attempt_id.in_(select(Attempt.id).where(Attempt.student_id == student_id)), Answer.answered_at >= start)) or 0)
+    practice = int(db.scalar(select(func.coalesce(func.sum(PracticeRun.total), 0)).where(PracticeRun.student_id == student_id, PracticeRun.created_at >= start)) or 0)
+    return exam + practice
 
 
 def _recommendations(weak: list[dict], difficulties: dict[str, dict[str, int]], student: Student) -> list[dict]:
@@ -445,6 +447,18 @@ def heatmap(db: Session = Depends(get_db), student: Student = Depends(require_st
         entry = buckets.setdefault(day, {"day": day, "answered": 0, "correct": 0})
         entry["answered"] += 1
         entry["correct"] += 1 if is_correct else 0
+    # Practice runs are study too: fold their answered/correct counts in so a
+    # student who only practises still sees their activity.
+    runs = db.execute(
+        select(PracticeRun.created_at, PracticeRun.total, PracticeRun.correct).where(
+            PracticeRun.student_id == student.id, PracticeRun.created_at >= since
+        )
+    ).all()
+    for created_at, total, correct in runs:
+        day = created_at.date().isoformat()
+        entry = buckets.setdefault(day, {"day": day, "answered": 0, "correct": 0})
+        entry["answered"] += int(total or 0)
+        entry["correct"] += int(correct or 0)
     return {
         "days": days,
         "data": [

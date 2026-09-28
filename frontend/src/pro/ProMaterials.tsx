@@ -11,7 +11,7 @@ import {OPEN_MATERIAL_EVENT} from '../lib/palette';
 import type {MaterialCard, MaterialDetail, MyLearning} from '../lib/types';
 import {Reader} from '../panels/MaterialsPanel';
 import {useSession} from '../store/session';
-import {Badge, Empty, LoadingRows, Metric, PageHeader, Ring, Seg, Tile, hueForCourse, minutesLabel, type Hue} from './ui';
+import {Badge, Empty, LoadingRows, Metric, PageHeader, Ring, Seg, Tile, hueForCourse, minutesLabel, type Hue, Cover} from './ui';
 
 type CourseRow = {id: number; code: string; title: string; accent?: string};
 type View = 'library' | 'notes' | 'bookmarks' | 'glossary';
@@ -130,18 +130,18 @@ export default function ProMaterials() {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <PageHeader eyebrow="Library" title="Materials" description="Course reading with your highlights, notes and bookmarks kept alongside." />
+      <PageHeader icon={<BookOpen />} hue="amber" eyebrow="Library" title="Materials" description="Course reading with your highlights, notes and bookmarks kept alongside." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Reading" value={summary ? summary.reading : '—'} sub="in progress" icon={<BookOpen />} hue="blue" />
         <Metric label="Completed" value={summary ? summary.completed : '—'} sub={summary && items?.length ? `of ${items.length} in the library` : 'finished'} icon={<BookMarked />} hue="green" />
         <Metric label="Notes" value={summary ? summary.notes : '—'} sub={summary ? `${summary.bookmarks} bookmarks` : ''} icon={<NotebookPen />} hue="amber" />
-        <Metric label="Time reading" value={summary ? minutesLabel(summary.minutes) : '—'} sub="all time" icon={<Clock />} hue="violet" />
+        <Metric label="Read time" value={summary ? minutesLabel(summary.minutes) : '—'} sub="all time" icon={<Clock />} hue="violet" />
       </div>
 
       {continueList.length > 0 && view === 'library' && (
         <section className="grid gap-3">
-          <h2 className="pro-h3">Continue reading</h2>
+          <h2 className="pro-h3 flex items-center gap-2"><span className="pro-dot" style={{background: 'var(--pro-h-amber)'}} /> Continue reading</h2>
           <div className="pro-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {continueList.slice(0, 3).map((m) => {
               const pctDone = Number((m as {progress?: {percent?: number}}).progress?.percent ?? 0);
@@ -269,28 +269,27 @@ export default function ProMaterials() {
                     type="button"
                     onClick={() => void open(m.id)}
                     aria-busy={opening === m.id}
-                    className="pro-card pro-lift flex min-w-0 flex-col gap-3 p-4 text-left"
+                    className="pro-card pro-lift flex min-w-0 flex-col gap-3 p-2.5 text-left"
                   >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <Tile hue={hue}>{m.kind === 'note' ? <NotebookPen /> : <BookOpen />}</Tile>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{m.title}</p>
-                        <p className="pro-meta mt-0.5 truncate">
-                          {[course?.code ?? m.course_title, m.topic].filter(Boolean).join(' · ') || 'General'}
-                        </p>
-                      </div>
+                    <Cover hue={hue} code={course?.code ?? m.course_title ?? 'General'} glyph={m.kind === 'note' ? <NotebookPen className="size-full" /> : <BookOpen className="size-full" />} className="min-h-[84px]">
+                      <span className="absolute top-3.5 right-3.5 inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
+                        <Clock className="size-3" /> {m.estimated_minutes} min
+                      </span>
+                      <p className="mt-5 truncate text-[0.75rem] font-semibold text-white/85">{m.topic || 'General reading'}</p>
+                    </Cover>
+                    <div className="grid min-w-0 gap-1.5 px-1.5">
+                      <p className="text-[0.9375rem] leading-snug font-bold tracking-tight [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{m.title}</p>
+                      {m.description && <p className="pro-secondary pro-clamp-2">{m.description}</p>}
                     </div>
-                    {m.description && <p className="pro-secondary pro-clamp-2">{m.description}</p>}
-                    <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2">
+                    <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2 px-1.5 pb-1.5">
                       <Badge tone={LEVEL_TONE[m.difficulty]}>{m.difficulty}</Badge>
-                      <span className="pro-meta">{m.estimated_minutes} min</span>
-                      <span className="pro-meta">· {m.section_count} sections</span>
+                      <span className="pro-meta">{m.section_count} sections</span>
                       <span className="ml-auto">
                         {done ? <Badge tone="success">Completed</Badge> : pctDone > 0 ? <span className="pro-meta pro-num">{Math.round(pctDone)}%</span> : null}
                       </span>
                     </div>
                     {pctDone > 0 && !done && (
-                      <div className="pro-progress" aria-hidden>
+                      <div className="pro-progress mx-1.5 mb-1.5" aria-hidden>
                         <span style={{width: `${pctDone}%`, background: `var(--pro-h-${hue})`}} />
                       </div>
                     )}

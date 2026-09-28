@@ -1,11 +1,11 @@
-import {AlertCircle, Clock, FileCheck, ListChecks, Repeat, Target} from 'lucide-react';
+import {AlertCircle, Clock, FileCheck, ListChecks, Repeat, Target, BarChart3, Activity, LineChart, Brain, Gauge, Library, Trophy} from 'lucide-react';
 /** Pro analytics — the student's learning data, plainly presented. */
 import {useEffect, useMemo, useState} from 'react';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import type {Tab} from '../lib/nav';
 import {setFocus} from './focus';
-import {Empty, LoadingRows, Metric, PageHeader, Progress, Section, minutesLabel, pct, studyTotals, toneFor} from './ui';
+import {Empty, LoadingRows, Metric, PageHeader, Progress, Section, minutesLabel, pct, studyTotals, toneFor, Bars, Seg} from './ui';
 
 type Json = Record<string, any>;
 const WINDOWS = [7, 30, 90] as const;
@@ -15,6 +15,7 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
   const [data, setData] = useState<Json | null>(null);
   const [lab, setLab] = useState<Json | null>(null);
   const [loading, setLoading] = useState(true);
+  const [heat, setHeat] = useState<Json[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -33,6 +34,47 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
     api.studyLabOverview().then((d) => setLab(d as Json)).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    let live = true;
+    api.arena
+      .heatmap(Math.max(14, days))
+      .then((d) => live && setHeat(((d as Json).data ?? []) as Json[]))
+      .catch(() => live && setHeat([]));
+    return () => {
+      live = false;
+    };
+  }, [days]);
+
+  /* daily (7/30 days) or weekly (90 days) activity — exam answers + practice */
+  const activity = useMemo(() => {
+    const byDay = new Map(heat.map((r) => [String(r.day), Number(r.answered ?? 0)]));
+    const out: {label: string; value: number; today?: boolean; title: string}[] = [];
+    if (days <= 30) {
+      for (let i = days - 1; i >= 0; i -= 1) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const v = byDay.get(key) ?? 0;
+        const showLabel = days === 7 || i % 5 === 0;
+        out.push({label: showLabel ? (days === 7 ? d.toLocaleDateString(undefined, {weekday: 'short'}).slice(0, 2) : String(d.getDate())) : '', value: v, today: i === 0, title: `${d.toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}: ${v} questions`});
+      }
+    } else {
+      for (let w = 12; w >= 0; w -= 1) {
+        let v = 0;
+        const end = new Date();
+        end.setDate(end.getDate() - w * 7);
+        for (let k = 0; k < 7; k += 1) {
+          const d = new Date(end);
+          d.setDate(d.getDate() - k);
+          v += byDay.get(d.toISOString().slice(0, 10)) ?? 0;
+        }
+        out.push({label: w % 2 === 0 ? end.toLocaleDateString(undefined, {day: 'numeric', month: 'short'}) : '', value: v, today: w === 0, title: `Week to ${end.toLocaleDateString(undefined, {day: 'numeric', month: 'short'})}: ${v} questions`});
+      }
+    }
+    return out;
+  }, [heat, days]);
+  const activeDays = heat.filter((r) => Number(r.answered) > 0).length;
+
   const o = data?.overview ?? {};
   const totals = studyTotals(o);
   const answered = totals.answered;
@@ -43,6 +85,10 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
   const topics = useMemo(() => {
     const map = new Map<string, Json>();
     for (const row of [...(data?.weakest_topics ?? []), ...(data?.strongest_topics ?? [])] as Json[]) map.set(String(row.key), row);
+    for (const row of (data?.mastery_heatmap ?? []) as Json[]) {
+      const key = String(row.topic);
+      if (!map.has(key) && Number(row.answered) > 0) map.set(key, {key, accuracy: Number(row.mastery ?? 0), answered: Number(row.answered)});
+    }
     return [...map.values()].sort((a, b) => Number(a.accuracy) - Number(b.accuracy));
   }, [data]);
 
@@ -54,23 +100,13 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <PageHeader
+        icon={<BarChart3 />}
+        hue="teal"
+        eyebrow="Insight"
         title="Analytics"
         description="Accuracy, activity and mastery across your courses."
         actions={
-          <div className="inline-flex rounded-lg border p-0.5" style={{borderColor: 'var(--pro-border)'}} role="group" aria-label="Time window">
-            {WINDOWS.map((d) => (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={days === d}
-                onClick={() => setDays(d)}
-                className="rounded-md px-3 py-1.5 text-[0.8125rem] font-medium transition-colors"
-                style={days === d ? {background: 'var(--pro-accent-soft)', color: 'var(--pro-text)'} : {color: 'var(--pro-text-2)'}}
-              >
-                {d} days
-              </button>
-            ))}
-          </div>
+          <Seg label="Time window" value={days} onChange={(d) => setDays(d)} options={WINDOWS.map((d) => ({value: d, label: `${d} days`}))} />
         }
       />
 
@@ -83,21 +119,36 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
         <Metric icon={<AlertCircle />} hue="rose" label="Open mistakes" value={lab ? Number(lab.open_mistakes ?? 0) : '—'} sub={lab ? `${(lab.mastered ?? []).length} topics mastered` : ''} />
       </div>
 
-      <Section title="Exam accuracy over time" description="Exam questions answered per day (bars) and accuracy (line).">
-        {loading ? <LoadingRows rows={2} /> : timeline.length ? <TimelineChart rows={timeline} /> : <Empty title="No activity in this window" />}
+      <Section
+        icon={<Activity />}
+        hue="violet"
+        title="Study activity"
+        description={`Questions answered in exams and practice · ${activeDays} active day${activeDays === 1 ? '' : 's'}${days > 30 ? ' · weekly totals' : ''}`}
+      >
+        {activity.some((d) => d.value > 0) ? (
+          <Bars data={activity} label={`Questions answered, last ${days} days`} />
+        ) : (
+          <Empty icon={<Activity />} hue="violet" title="No activity in this window" body="Practice sessions and exams you complete will build this chart." />
+        )}
       </Section>
 
+      {timeline.length > 0 && (
+        <Section icon={<LineChart />} hue="blue" title="Exam accuracy over time" description="Exam questions answered per day (bars) and accuracy (line).">
+          <TimelineChart rows={timeline} />
+        </Section>
+      )}
+
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
-        <Section title="Topic mastery" description="Weakest first. Open a topic to study it.">
+        <Section icon={<Brain />} hue="rose" title="Topic mastery" description="Weakest first, from exams and practice. Open a topic to study it.">
           {loading ? (
             <LoadingRows rows={4} />
           ) : topics.length ? (
             <ul className="pro-rows grid">
               {topics.map((row) => (
                 <li key={row.key}>
-                  <button type="button" className="grid w-full min-w-0 gap-1.5 py-3 text-left first:pt-0 last:pb-0" onClick={() => openTopic(String(row.key))}>
+                  <button type="button" className="grid w-full min-w-0 gap-1.5 rounded-lg py-3 text-left transition-colors first:pt-0 last:pb-0 hover:opacity-90" onClick={() => openTopic(String(row.key))}>
                     <span className="flex min-w-0 items-baseline justify-between gap-3">
-                      <span className="min-w-0 text-[0.875rem] [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{row.key}</span>
+                      <span className="flex min-w-0 items-center gap-2 text-[0.875rem] font-semibold [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}><span className="pro-dot" style={{background: `var(--pro-${toneFor(Number(row.accuracy)) ?? 'accent'})`}} />{row.key}</span>
                       <span className="pro-meta pro-num shrink-0">
                         {pct(row.accuracy)} · {row.answered}
                       </span>
@@ -113,16 +164,16 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
         </Section>
 
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">
-          <Section title="By difficulty">
+          <Section icon={<Gauge />} hue="amber" title="By difficulty">
             {loading ? <LoadingRows rows={3} /> : <BreakdownTable rows={data?.difficulty ?? []} label="Difficulty" />}
           </Section>
-          <Section title="By course">
+          <Section icon={<Library />} hue="teal" title="By course">
             {loading ? <LoadingRows rows={3} /> : <BreakdownTable rows={data?.courses ?? []} label="Course" />}
           </Section>
         </div>
       </div>
 
-      <Section title="Exam scores">
+      <Section icon={<Trophy />} hue="green" title="Exam scores">
         {loading ? (
           <LoadingRows rows={3} />
         ) : (data?.exam_trend ?? []).length ? (

@@ -6,8 +6,8 @@
  * Content comes from Study Lab (summary, materials, common mistakes, the
  * student's own mistakes and mastery). Notes are autosaved on this device.
  */
-import {BookOpen, CheckCircle2, ChevronRight, Sparkles, XCircle} from 'lucide-react';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {Activity, AlertTriangle, BookOpen, CheckCircle2, ChevronRight, Feather, FileText, GraduationCap, Layers, Lightbulb, ListChecks, NotebookPen, Search, Sparkles, Target, Wand2, XCircle} from 'lucide-react';
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {api} from '../lib/api';
 import {cacheRead, cacheWrite, userScope} from '../lib/cache';
 import type {Tab} from '../lib/nav';
@@ -15,18 +15,27 @@ import {jumpToMaterial} from '../lib/palette';
 import {useSession} from '../store/session';
 import {AI_ACTIONS, askAbout, createMiniExam, practiseTopic} from './actions';
 import {setFocus, useFocus} from './focus';
-import {Badge, Empty, LoadingRows, PageHeader, Progress, Section, pct, toneFor} from './ui';
+import {Badge, Chip, Cover, Empty, LoadingRows, PageHeader, Ring, Section, Tile, hueForCourse, pct, toneFor, type Hue} from './ui';
 
 type Json = Record<string, any>;
-type CourseRow = {id: number; code: string; title: string; available: number; topics: {topic: string; key: string; count: number}[]};
+type CourseRow = {id: number; code: string; title: string; accent?: string; available: number; topics: {topic: string; key: string; count: number}[]};
 type WorkTab = 'study' | 'practice' | 'flashcards' | 'notes';
 
-const WORK_TABS: {id: WorkTab; label: string}[] = [
-  {id: 'study', label: 'Study'},
-  {id: 'practice', label: 'Practice'},
-  {id: 'flashcards', label: 'Flashcards'},
-  {id: 'notes', label: 'Notes'},
+const WORK_TABS: {id: WorkTab; label: string; icon: ReactNode}[] = [
+  {id: 'study', label: 'Study', icon: <BookOpen />},
+  {id: 'practice', label: 'Practice', icon: <Target />},
+  {id: 'flashcards', label: 'Flashcards', icon: <Layers />},
+  {id: 'notes', label: 'Notes', icon: <NotebookPen />},
 ];
+
+const ACTION_LOOK: Record<string, {icon: ReactNode; hue: Hue; hint: string}> = {
+  explain: {icon: <Lightbulb />, hue: 'amber', hint: 'Key ideas, in order'},
+  simplify: {icon: <Feather />, hue: 'teal', hint: 'Plain-language version'},
+  examples: {icon: <Wand2 />, hue: 'violet', hint: 'Worked cases'},
+  test: {icon: <Target />, hue: 'rose', hint: 'Five quick questions'},
+  flashcards: {icon: <Layers />, hue: 'blue', hint: 'Build a review set'},
+  analyze: {icon: <Activity />, hue: 'green', hint: 'What to revise next'},
+};
 
 export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
   const {profile, toast} = useSession();
@@ -36,6 +45,8 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
   const [page, setPage] = useState<Json | null>(null);
   const [loadingPage, setLoadingPage] = useState(false);
   const [work, setWork] = useState<WorkTab>('study');
+  const [heat, setHeat] = useState<Map<string, {mastery: number; answered: number}>>(new Map());
+  const [find, setFind] = useState('');
 
   useEffect(() => {
     api.arena
@@ -43,6 +54,14 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
       .then((d) => setCourses((d.courses ?? []) as CourseRow[]))
       .catch(() => setCourses([]));
     api.studyLabOverview().then((d) => setLab(d as Json)).catch(() => undefined);
+    api.arena
+      .analytics(90)
+      .then((d) => {
+        const map = new Map<string, {mastery: number; answered: number}>();
+        for (const row of ((d as Json).mastery_heatmap ?? []) as Json[]) map.set(String(row.topic).toLowerCase(), {mastery: Number(row.mastery ?? 0), answered: Number(row.answered ?? 0)});
+        setHeat(map);
+      })
+      .catch(() => undefined);
   }, []);
 
   /* Resolve the course for a topic opened from elsewhere (dashboard, AI). */
@@ -76,54 +95,104 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
   if (!topic) {
     return (
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-        <PageHeader title="Study" description="Choose a topic to open its workspace: reading, practice, flashcards, notes and AI help in one place." />
+        <PageHeader icon={<GraduationCap />} hue="blue" eyebrow="Learn" title="Study" description="Choose a topic to open its workspace: reading, practice, flashcards, notes and AI help in one place." />
         {lab?.continue && (
           <button
             type="button"
-            className="pro-card flex min-w-0 items-center gap-4 p-4 text-left md:p-5"
+            className="pro-card pro-lift flex min-w-0 items-center gap-4 p-4 text-left md:p-5"
+            data-hue="blue"
             onClick={() => setFocus({topic: String(lab.continue.topic), courseId: null})}
           >
+            <Ring value={Number(lab.continue.accuracy ?? 0)} size={52} stroke={5} hue="blue" label={`${pct(lab.continue.accuracy)} accuracy`}>
+              <BookOpen className="size-5" style={{color: 'var(--mark)'}} />
+            </Ring>
             <div className="min-w-0 flex-1">
-              <p className="pro-eyebrow">Continue</p>
-              <p className="pro-h3 mt-1 [overflow-wrap:anywhere]">{String(lab.continue.topic)}</p>
+              <p className="pro-eyebrow" style={{color: 'var(--mark)'}}>Continue where you left off</p>
+              <p className="pro-h3 mt-0.5 [overflow-wrap:anywhere]">{String(lab.continue.topic)}</p>
               <p className="pro-meta mt-0.5">
                 {lab.continue.state_label} · {pct(lab.continue.accuracy)} accuracy
               </p>
             </div>
-            <ChevronRight className="size-5 shrink-0" style={{color: 'var(--pro-muted)'}} />
+            <span className="pro-btn pro-btn-primary hidden sm:inline-flex">
+              Open <ChevronRight className="size-4" />
+            </span>
           </button>
         )}
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="pro-search min-w-0 flex-1 sm:max-w-sm">
+            <Search />
+            <input className="pro-input" placeholder="Find a topic" value={find} onChange={(e) => setFind(e.target.value)} aria-label="Find a topic" />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pro-meta">
+            <span className="inline-flex items-center gap-1.5"><span className="pro-dot" style={{background: 'var(--pro-success)'}} /> Strong</span>
+            <span className="inline-flex items-center gap-1.5"><span className="pro-dot" style={{background: 'var(--pro-warning)'}} /> Building</span>
+            <span className="inline-flex items-center gap-1.5"><span className="pro-dot" style={{background: 'var(--pro-danger)'}} /> Needs work</span>
+            <span className="inline-flex items-center gap-1.5"><span className="pro-dot" style={{background: 'var(--pro-track)'}} /> New</span>
+          </div>
+        </div>
         {courses === null ? (
           <LoadingRows rows={4} />
         ) : courses.length === 0 ? (
           <div className="pro-card">
-            <Empty title="No courses yet" body="Topics appear here once your courses have questions and materials." />
+            <Empty icon={<GraduationCap />} hue="blue" title="No courses yet" body="Topics appear here once your courses have questions and materials." />
           </div>
         ) : (
-          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-            {courses.map((c) => (
-              <Section key={c.id} title={c.title} description={`${c.code} · ${c.topics.length} topics`}>
-                {c.topics.length === 0 ? (
-                  <p className="pro-secondary">No topics yet.</p>
-                ) : (
-                  <ul className="pro-rows grid">
-                    {c.topics.map((t) => (
-                      <li key={t.key}>
-                        <button
-                          type="button"
-                          className="group flex w-full min-w-0 items-center gap-3 py-2.5 text-left first:pt-0"
-                          onClick={() => setFocus({courseId: c.id, courseCode: c.code, courseTitle: c.title, topic: t.topic})}
-                        >
-                          <span className="min-w-0 flex-1 text-[0.875rem] [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{t.topic}</span>
-                          <span className="pro-meta pro-num shrink-0">{t.count} q</span>
-                          <ChevronRight className="size-4 shrink-0 opacity-40 group-hover:opacity-100" style={{color: 'var(--pro-text-2)'}} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Section>
-            ))}
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-2">
+            {courses.map((c) => {
+              const hue = hueForCourse(c);
+              const term = find.trim().toLowerCase();
+              const topics = c.topics.filter((t) => !term || t.topic.toLowerCase().includes(term));
+              const started = c.topics.filter((t) => heat.get(t.topic.toLowerCase())?.answered).length;
+              if (term && !topics.length) return null;
+              return (
+                <section key={c.id} className="pro-card overflow-hidden p-2.5">
+                  <Cover hue={hue} code={c.code} glyph={<GraduationCap className="size-full" />}>
+                    <div className="mt-5 flex min-w-0 items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-[1.0625rem] leading-snug font-bold [overflow-wrap:anywhere]">{c.title}</h2>
+                        <p className="mt-0.5 text-[0.75rem] font-semibold text-white/80">
+                          {c.topics.length} topics · {started} started
+                        </p>
+                      </div>
+                    </div>
+                  </Cover>
+                  {topics.length === 0 ? (
+                    <p className="pro-secondary p-3">No topics yet.</p>
+                  ) : (
+                    <ul className="grid gap-0.5 px-3 pt-2 pb-1">
+                      {topics.map((t) => {
+                        const st = heat.get(t.topic.toLowerCase());
+                        const tone = st?.answered ? toneFor(st.mastery) : undefined;
+                        return (
+                          <li key={t.key}>
+                            <button
+                              type="button"
+                              className="pro-row-btn group py-2"
+                              onClick={() => setFocus({courseId: c.id, courseCode: c.code, courseTitle: c.title, topic: t.topic})}
+                            >
+                              <span className="pro-dot" style={{background: tone ? `var(--pro-${tone})` : 'var(--pro-track)'}} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-[0.8438rem] font-semibold [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{t.topic}</span>
+                                {st?.answered ? (
+                                  <span className="mt-1 flex items-center gap-2">
+                                    <span className="h-1 w-20 overflow-hidden rounded-full" style={{background: 'var(--pro-track)'}}>
+                                      <span className="block h-full rounded-full" style={{width: `${Math.max(4, st.mastery)}%`, background: `var(--pro-${tone})`}} />
+                                    </span>
+                                    <span className="pro-meta">{pct(st.mastery)} mastery</span>
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="pro-count">{t.count} q</span>
+                              <ChevronRight className="size-4 shrink-0 opacity-40 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" style={{color: 'var(--pro-text-2)'}} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
           </div>
         )}
       </div>
@@ -135,8 +204,21 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
   const understand = (page?.understand ?? {}) as Json;
   const materials: Json[] = understand.materials ?? [];
   const summary: string[] = understand.summary ?? [];
-  const common: Json[] = understand.common_mistakes ?? [];
   const mistakes: Json[] = page?.mistakes?.items ?? [];
+  /* common mistakes arrive as question references; resolve them to text and
+     only list traps the student hasn't already made (those get a badge). */
+  const commonIds = new Set(((understand.common_mistakes ?? []) as Json[]).map((row) => Number(row?.question_id)).filter(Boolean));
+  const ownIds = new Set(mistakes.map((row) => Number(row.question_id)));
+  const common: {text: string; detail?: string}[] = ((understand.common_mistakes ?? []) as Json[])
+    .map((row): {text: string; detail?: string} | null => {
+      if (typeof row === 'string') return {text: String(row)};
+      if (row?.question_id && ownIds.has(Number(row.question_id))) return null;
+      const text = String(row?.text ?? row?.label ?? row?.question ?? '').trim();
+      if (!text) return null;
+      return {text, detail: row.selected && row.correct_key ? `Often answered ${row.selected} — correct is ${row.correct_key}` : undefined};
+    })
+    .filter((row): row is {text: string; detail?: string} => Boolean(row));
+  const hue = hueForCourse(course);
   const topicCount = course?.topics.find((t) => t.topic.toLowerCase() === topic.toLowerCase())?.count ?? Number(page?.pool ?? 0);
 
   return (
@@ -159,12 +241,16 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
       </div>
 
       <PageHeader
-        eyebrow={course ? course.title : undefined}
+        icon={<GraduationCap />}
+        hue={hue}
+        eyebrow={course ? `${course.code} · ${course.title}` : 'Topic'}
         title={topic}
-        description={
+        description={mastery.answered ? `${pct(mastery.accuracy)} accuracy over ${mastery.answered} answers — keep going until the mastery check is passed.` : 'Read the key ideas, then practise to build your standing.'}
+        meta={
           <>
-            {topicCount} questions in the bank · {page?.state_label ?? 'Not started'}
-            {mastery.answered ? ` · ${pct(mastery.accuracy)} accuracy over ${mastery.answered} answers` : ''}
+            <Chip icon={<ListChecks />} hue="blue">{topicCount} questions</Chip>
+            <Chip icon={<Activity />} hue={mastery.check_passed ? 'green' : 'amber'}>{page?.state_label ?? 'Not started'}</Chip>
+            {mistakes.length > 0 && <Chip icon={<AlertTriangle />} hue="rose">{page?.mistakes?.total ?? mistakes.length} to revisit</Chip>}
           </>
         }
         actions={
@@ -185,22 +271,23 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
         }
       />
 
-      <div className="pro-tabs" role="tablist" aria-label="Workspace">
+      <div className="pro-tabs pro-tabs-fit" role="tablist" aria-label="Workspace">
         {WORK_TABS.map((row) => (
           <button key={row.id} type="button" role="tab" className="pro-tab" aria-selected={work === row.id} onClick={() => setWork(row.id)}>
+            {row.icon}
             {row.label}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5">
           {work === 'study' &&
             (loadingPage ? (
               <LoadingRows rows={5} />
             ) : (
               <>
-                <Section title="Key concepts">
+                <Section icon={<Lightbulb />} hue="amber" title="Key concepts">
                   {summary.length ? (
                     <ol className="pro-read grid list-decimal gap-2 pl-5" style={{color: 'var(--pro-text)'}}>
                       {summary.map((line, index) => (
@@ -210,19 +297,22 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
                       ))}
                     </ol>
                   ) : (
-                    <p className="pro-secondary">
-                      No summary for this topic yet. Open a material below, or ask the AI to explain it.
-                    </p>
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <p className="pro-secondary min-w-0 flex-1">No summary for this topic yet. Open a material below, or let the AI walk you through it.</p>
+                      <button type="button" className="pro-btn pro-btn-soft pro-btn-sm" onClick={() => askAbout(topic, AI_ACTIONS[0].prompt(topic), onTab)}>
+                        <Sparkles className="size-4" /> Explain it
+                      </button>
+                    </div>
                   )}
                 </Section>
 
-                <Section title="Materials" description="Reading linked to this topic.">
+                <Section icon={<BookOpen />} hue="blue" title="Materials" description="Reading linked to this topic.">
                   {materials.length ? (
                     <ul className="pro-rows grid">
                       {materials.map((m) => (
                         <li key={m.id} className="grid min-w-0 gap-2 py-3 first:pt-0 last:pb-0">
                           <div className="flex min-w-0 items-start gap-3">
-                            <BookOpen className="mt-0.5 size-4 shrink-0" style={{color: 'var(--pro-text-2)'}} />
+                            <Tile hue="blue" size="sm"><FileText /></Tile>
                             <div className="min-w-0 flex-1">
                               <p className="text-[0.9375rem] font-medium [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{m.title}</p>
                               <p className="pro-meta">
@@ -244,24 +334,27 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="pro-secondary">No materials are linked to this topic yet.</p>
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <p className="pro-secondary min-w-0 flex-1">No materials are linked to this topic yet.</p>
+                      <button type="button" className="pro-btn pro-btn-sm" onClick={() => onTab('materials')}>Browse library</button>
+                    </div>
                   )}
                 </Section>
 
                 {common.length > 0 && (
-                  <Section title="Common mistakes" description="Where students most often go wrong on this topic.">
-                    <ul className="grid gap-2">
+                  <Section icon={<AlertTriangle />} hue="amber" title="Common mistakes" description="Where students most often go wrong on this topic.">
+                    <ul className="pro-rows grid">
                       {common.slice(0, 5).map((row, index) => (
-                        <li key={index} className="pro-secondary flex gap-2.5 [overflow-wrap:anywhere]">
-                          <span className="mt-2 size-1 shrink-0 rounded-full" style={{background: 'var(--pro-warning)'}} />
-                          <span>{typeof row === 'string' ? row : String(row.text ?? row.label ?? row.question ?? '')}</span>
+                        <li key={index} className="grid min-w-0 gap-1 py-3 first:pt-0 last:pb-0 [overflow-wrap:anywhere]">
+                          <span className="text-[0.9375rem]" style={{color: 'var(--pro-text)'}}>{row.text}</span>
+                          {row.detail && <span className="pro-meta">{row.detail}</span>}
                         </li>
                       ))}
                     </ul>
                   </Section>
                 )}
 
-                <Section title="Your mistakes" description={mistakes.length ? `${page?.mistakes?.total ?? mistakes.length} on this topic` : undefined}>
+                <Section icon={<XCircle />} hue="rose" title="Your mistakes" description={mistakes.length ? `${page?.mistakes?.total ?? mistakes.length} on this topic` : undefined}>
                   {mistakes.length ? (
                     <ul className="pro-rows grid">
                       {mistakes.slice(0, 6).map((row) => (
@@ -275,13 +368,14 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
                               <CheckCircle2 className="size-3.5" /> Correct: {row.correct_answer}
                             </span>
                             {row.resolved && <Badge tone="success">Resolved</Badge>}
+                            {commonIds.has(Number(row.question_id)) && <Badge tone="warning">Common trap</Badge>}
                           </p>
                           {row.why && <p className="pro-secondary [overflow-wrap:anywhere]">{row.why}</p>}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="pro-secondary">No mistakes recorded on this topic.</p>
+                    <p className="pro-secondary inline-flex items-center gap-2"><CheckCircle2 className="size-4" style={{color: 'var(--pro-success)'}} /> No mistakes recorded on this topic.</p>
                   )}
                 </Section>
               </>
@@ -290,7 +384,7 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
           {work === 'practice' && <PracticeTab courseId={course?.id ?? null} topic={topic} max={topicCount} onTab={onTab} toast={toast} />}
 
           {work === 'flashcards' && (
-            <Section title="Flashcards" description="Spaced review keeps this topic fresh.">
+            <Section icon={<Layers />} hue="blue" title="Flashcards" description="Spaced review keeps this topic fresh.">
               <div className="grid gap-4">
                 <p className="pro-secondary">
                   Review your due cards, or have the AI build a set for <span style={{color: 'var(--pro-text)'}}>{topic}</span> from your course materials.
@@ -312,23 +406,33 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
 
         {/* side panel: AI actions + standing */}
         <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5">
-          <Section title="AI actions" description="Answers are grounded in your course materials.">
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-              {AI_ACTIONS.map((action) => (
-                <button key={action.key} type="button" className="pro-btn pro-btn-sm justify-start" onClick={() => askAbout(topic, action.prompt(topic), onTab)}>
-                  {action.label}
-                </button>
-              ))}
+          <Section icon={<Sparkles />} hue="violet" title="AI actions" description="Grounded in your course materials.">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
+              {AI_ACTIONS.map((action) => {
+                const look = ACTION_LOOK[action.key] ?? {icon: <Sparkles />, hue: 'violet' as Hue, hint: ''};
+                return (
+                  <button key={action.key} type="button" className="pro-row-btn" onClick={() => askAbout(topic, action.prompt(topic), onTab)}>
+                    <Tile hue={look.hue} size="sm">{look.icon}</Tile>
+                    <span className="grid min-w-0 flex-1 text-left">
+                      <span className="truncate text-[0.875rem] font-semibold" style={{color: 'var(--pro-text)'}}>{action.label}</span>
+                      {look.hint && <span className="pro-meta truncate">{look.hint}</span>}
+                    </span>
+                    <ChevronRight className="size-4 shrink-0" style={{color: 'var(--pro-muted)'}} />
+                  </button>
+                );
+              })}
             </div>
           </Section>
-          <Section title="Your standing">
-            <div className="grid gap-3">
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="pro-meta">Accuracy</span>
-                  <span className="pro-meta pro-num">{mastery.answered ? pct(mastery.accuracy) : '—'}</span>
+          <Section icon={<Target />} hue="green" title="Your standing">
+            <div className="grid gap-4">
+              <div className="flex items-center gap-4">
+                <Ring value={Number(mastery.accuracy ?? 0)} size={72} stroke={6} tone={toneFor(Number(mastery.accuracy ?? 0), Number(mastery.answered ?? 0))} label="Topic accuracy">
+                  <span className="pro-num text-[1rem] font-bold" style={{color: 'var(--pro-text)'}}>{mastery.answered ? pct(mastery.accuracy) : '—'}</span>
+                </Ring>
+                <div className="grid min-w-0 gap-0.5">
+                  <span className="text-[0.9375rem] font-semibold" style={{color: 'var(--pro-text)'}}>{page?.state_label ?? 'Not started'}</span>
+                  <span className="pro-meta">{mastery.check_passed ? 'Mastery check passed' : 'Pass the mastery check to master it'}</span>
                 </div>
-                <Progress value={Number(mastery.accuracy ?? 0)} tone={toneFor(Number(mastery.accuracy ?? 0), Number(mastery.answered ?? 0))} label="Topic accuracy" />
               </div>
               <dl className="grid grid-cols-2 gap-2 text-[0.8125rem]">
                 <dt className="pro-meta">Answered</dt>

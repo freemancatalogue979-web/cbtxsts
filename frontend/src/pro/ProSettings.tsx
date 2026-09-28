@@ -1,5 +1,5 @@
 /** Pro settings — experience, appearance, reading, shortcuts and account. */
-import {Monitor, Moon, Sun} from 'lucide-react';
+import {Monitor, Moon, Sun, Settings2, ArrowLeftRight, Palette, BookOpen, VolumeX, Keyboard, UserRound} from 'lucide-react';
 import type {ReactNode} from 'react';
 import {LINE_HEIGHTS, READ_SIZES, READ_WIDTHS, setAppearance, setExperience, setReadingPref, useExperience, type Appearance} from '../lib/mode';
 import {useSession} from '../store/session';
@@ -52,9 +52,9 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <PageHeader title="Settings" description="These preferences are saved on this device. Your courses, progress and history are the same in every mode." />
+      <PageHeader icon={<Settings2 />} hue="violet" eyebrow="Preferences" title="Settings" description="These preferences are saved on this device. Your courses, progress and history are the same in every mode." />
 
-      <Section title="Experience">
+      <Section icon={<ArrowLeftRight />} hue="violet" title="Experience">
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" className="pro-card p-4 text-left" style={{borderColor: 'var(--pro-accent)', background: 'var(--pro-accent-soft)'}} aria-pressed="true">
             <p className="pro-h3">Pro</p>
@@ -67,7 +67,7 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
         </div>
       </Section>
 
-      <Section title="Appearance">
+      <Section icon={<Palette />} hue="blue" title="Appearance">
         <div className="pro-rows grid">
           <Row title="Theme" description="System follows your device setting.">
             <Choice<Appearance>
@@ -84,7 +84,7 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
         </div>
       </Section>
 
-      <Section title="Reading" description="Applies to study content, notes and materials.">
+      <Section icon={<BookOpen />} hue="amber" title="Reading" description="Applies to study content, notes and materials.">
         <div className="pro-rows grid">
           <Row title="Font size">
             <Choice label="Font size" value={reading.size} onChange={(id) => setReadingPref('size', id)} options={READ_SIZES.map((r) => ({id: r.id, label: r.label}))} />
@@ -104,7 +104,7 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
         </div>
       </Section>
 
-      <Section title="Sound and motion">
+      <Section icon={<VolumeX />} hue="teal" title="Sound and motion">
         <div className="pro-rows grid">
           <Row title="Sound" description="Pro Mode never plays music or sound effects. Your Standard-mode music setting is kept as you left it.">
             <p className="pro-secondary">Off in Pro</p>
@@ -118,7 +118,7 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
         </div>
       </Section>
 
-      <Section title="Keyboard shortcuts">
+      <Section icon={<Keyboard />} hue="green" title="Keyboard shortcuts">
         <dl className="grid gap-2 sm:grid-cols-2">
           {SHORTCUTS.map(([keys, action]) => (
             <div key={keys} className="flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2" style={{borderColor: 'var(--pro-border)'}}>
@@ -135,7 +135,7 @@ export default function ProSettings({onSignOut}: {onSignOut: () => void}) {
         </dl>
       </Section>
 
-      <Section title="Account">
+      <Section icon={<UserRound />} hue="rose" title="Account">
         <div className="pro-rows grid">
           <Row title="Name">
             <p className="pro-body">{profile?.name}</p>
