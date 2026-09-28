@@ -3,7 +3,7 @@
  *  - ToolTrail: a compact "what I looked at" row (course topics, your progress…)
  *  - ActionCards: things the AI made — a real mini exam with a START button.
  */
-import {Check, ChevronRight, Clock, FileQuestion, Loader2, ShieldAlert, Sparkles, Timer, Wrench} from 'lucide-react';
+import {Check, ChevronRight, FileQuestion, Gauge, Loader2, Play, ShieldAlert, Sparkles, Timer, Wrench} from 'lucide-react';
 import {openMiniExam, type AgentAction, type MiniExamCard, type ToolEvent} from '../../lib/tutor';
 
 const DIFFICULTY: Record<string, string> = {easy: 'Easy', medium: 'Medium', hard: 'Hard', mixed: 'Mixed'};
@@ -63,44 +63,70 @@ export function ActionCards({actions}: {actions: AgentAction[]}) {
 }
 
 function MiniExamStartCard({card}: {card: MiniExamCard}) {
+  const topics = card.topics ?? [];
+  const shown = topics.slice(0, 3);
+  const perQuestion = card.question_count ? Math.round((card.duration_minutes * 60) / card.question_count) : 0;
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-nova-400/25 bg-gradient-to-br from-nova-500/[0.14] via-ink-900/60 to-pulse-500/[0.08] p-3.5 sm:p-4">
-      <div className="pointer-events-none absolute -top-10 -right-10 size-32 rounded-full bg-nova-500/15 blur-2xl" />
-      <div className="relative flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-lg shadow-nova-900/40">
-          <FileQuestion className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1 text-[0.62rem] font-extrabold tracking-[0.14em] text-nova-300 uppercase">
-            <Sparkles className="size-3" /> Mini exam{card.course ? ` · ${card.course}` : ''}
-          </p>
-          <p className="mt-0.5 text-[0.95rem] leading-snug font-extrabold text-mist-50">{card.title}</p>
-          {card.topics?.length > 0 && <p className="mt-0.5 line-clamp-2 text-[0.74rem] text-mist-400">{card.topics.join(' · ')}</p>}
+    <div className="relative overflow-hidden rounded-2xl p-px" style={{background: 'linear-gradient(135deg, rgba(167,139,250,0.7), rgba(56,189,248,0.25) 45%, rgba(236,72,153,0.45))'}}>
+      <div className="relative overflow-hidden rounded-[calc(1rem-1px)] bg-ink-950/95 p-3.5 sm:p-4">
+        <div aria-hidden className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-nova-500/20 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 size-36 rounded-full bg-sky-500/10 blur-3xl" />
+        <div className="relative flex items-start gap-3">
+          <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-300 to-pulse-600 text-white shadow-lg shadow-nova-900/50">
+            <FileQuestion className="size-5" />
+            <span className="absolute -right-1.5 -bottom-1.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-ink-950 bg-mint-400 px-1 text-[0.6rem] font-black text-ink-950 tabular">{card.question_count}</span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1 text-[0.6rem] font-black tracking-[0.14em] text-nova-300 uppercase">
+              <Sparkles className="size-3" /> Mini exam ready{card.course ? <span className="text-mist-500"> · {card.course}</span> : null}
+            </p>
+            <p className="mt-0.5 text-[0.95rem] leading-snug font-black text-mist-50">{card.title}</p>
+          </div>
         </div>
+        {shown.length > 0 && (
+          <div className="relative mt-2.5 flex flex-wrap gap-1">
+            {shown.map((t) => (
+              <span key={t} className="max-w-full truncate rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.66rem] font-bold text-mist-300">
+                <span className="text-nova-400">#</span> {t}
+              </span>
+            ))}
+            {topics.length > shown.length && <span className="rounded-full border border-dashed border-white/12 px-2 py-0.5 text-[0.66rem] font-bold text-mist-500">+{topics.length - shown.length} more</span>}
+          </div>
+        )}
+        <div className="relative mt-3 grid grid-cols-3 gap-1.5">
+          <Stat icon={<FileQuestion className="size-3.5" />} tone="bg-nova-500/15 text-nova-200" value={String(card.question_count)} label="questions" />
+          <Stat icon={<Timer className="size-3.5" />} tone="bg-sky-500/15 text-sky-200" value={`${card.duration_minutes}m`} label={perQuestion ? `~${perQuestion}s each` : 'minutes'} />
+          <Stat icon={<Gauge className="size-3.5" />} tone="bg-amber-500/15 text-amber-200" value={DIFFICULTY[card.difficulty] ?? card.difficulty} label="difficulty" extra={<DifficultyMeter level={card.difficulty} />} />
+        </div>
+        <button
+          onClick={() => openMiniExam(card.id)}
+          className="relative mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-b from-nova-300 to-nova-600 text-[0.84rem] font-black tracking-wide text-white shadow-lg shadow-nova-900/50 transition hover:brightness-110 active:scale-[0.99]"
+        >
+          <Play className="size-4 fill-current" /> Open exam <ChevronRight className="size-4 opacity-70" />
+        </button>
       </div>
-      <div className="relative mt-3 grid grid-cols-3 gap-1.5">
-        <Stat icon={<FileQuestion className="size-3.5" />} value={String(card.question_count)} label="questions" />
-        <Stat icon={<Timer className="size-3.5" />} value={`${card.duration_minutes}`} label="minutes" />
-        <Stat icon={<Clock className="size-3.5" />} value={DIFFICULTY[card.difficulty] ?? card.difficulty} label="difficulty" />
-      </div>
-      <button
-        onClick={() => openMiniExam(card.id)}
-        className="relative mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-b from-nova-400 to-nova-600 text-[0.84rem] font-extrabold tracking-wide text-white shadow-lg shadow-nova-900/40 transition hover:from-nova-300 hover:to-nova-500 active:scale-[0.99]"
-      >
-        Open exam <ChevronRight className="size-4" />
-      </button>
     </div>
   );
 }
 
-function Stat({icon, value, label}: {icon: React.ReactNode; value: string; label: string}) {
+function DifficultyMeter({level}: {level: string}) {
+  const bars = level === 'easy' ? ['bg-mint-400', '', ''] : level === 'medium' ? ['bg-amber-400', 'bg-amber-400', ''] : level === 'hard' ? ['bg-flare-400', 'bg-flare-400', 'bg-flare-400'] : ['bg-mint-400', 'bg-amber-400', 'bg-flare-400'];
   return (
-    <div className="rounded-xl border border-white/8 bg-ink-950/40 px-2 py-1.5 text-center">
-      <p className="flex items-center justify-center gap-1 text-[0.86rem] font-extrabold text-mist-50">
-        <span className="text-nova-300">{icon}</span>
-        {value}
-      </p>
-      <p className="text-[0.6rem] font-bold tracking-wide text-mist-500 uppercase">{label}</p>
+    <span className="flex items-end gap-0.5" aria-hidden>
+      {bars.map((c, i) => <span key={i} className={`w-1 rounded-sm ${c || 'bg-white/12'}`} style={{height: 5 + i * 3}} />)}
+    </span>
+  );
+}
+
+function Stat({icon, value, label, tone, extra}: {icon: React.ReactNode; value: string; label: string; tone: string; extra?: React.ReactNode}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-white/8 bg-white/[0.035] p-2">
+      <div className="flex items-center justify-between gap-1">
+        <span className={`grid size-6 shrink-0 place-items-center rounded-lg ${tone}`}>{icon}</span>
+        {extra}
+      </div>
+      <p className="mt-1.5 truncate text-[0.86rem] leading-none font-black text-mist-50 tabular">{value}</p>
+      <p className="mt-0.5 truncate text-[0.56rem] font-black tracking-[0.08em] text-mist-500 uppercase">{label}</p>
     </div>
   );
 }
