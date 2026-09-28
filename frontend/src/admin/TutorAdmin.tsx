@@ -1,7 +1,7 @@
 /** Staff: AI Tutor control room — overview, settings, usage, costs, users,
  * conversations (titles only), models, limits, logs and feature switches.
  * Everything is enforced by the API; this screen only edits and reports. */
-import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
+import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, Wand2, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {formatNumber, formatRelative} from '../lib/format';
@@ -10,10 +10,12 @@ import {
   type TutorOverview, type TutorQuality,
 } from '../lib/tutor';
 import {useSession} from '../store/session';
+import AIAssistant from './AIAssistant';
 
-type Tab = 'overview' | 'settings' | 'usage' | 'costs' | 'users' | 'conversations' | 'models' | 'limits' | 'logs' | 'features';
+type Tab = 'overview' | 'assistant' | 'settings' | 'usage' | 'costs' | 'users' | 'conversations' | 'models' | 'limits' | 'logs' | 'features';
 const TABS: {id: Tab; label: string; icon: typeof Bot}[] = [
   {id: 'overview', label: 'Overview', icon: LayoutDashboard},
+  {id: 'assistant', label: 'Assistant', icon: Wand2},
   {id: 'settings', label: 'Settings', icon: Settings2},
   {id: 'usage', label: 'Usage', icon: Activity},
   {id: 'costs', label: 'Costs', icon: Coins},
@@ -33,6 +35,9 @@ const LIMITS: {key: keyof TutorAdminSettings; label: string; hint: string}[] = [
   {key: 'ai_max_message_chars', label: 'Max message length', hint: 'Characters a student can send.'},
   {key: 'ai_max_response_tokens', label: 'Max answer length', hint: 'Tokens (~0.75 words each).'},
   {key: 'ai_max_conversations', label: 'Chats per student', hint: 'Oldest must be deleted beyond this.'},
+  {key: 'ai_mini_exam_daily_limit', label: 'Mini exams per day', hint: 'Per student, AI-made or self-made.'},
+  {key: 'ai_agent_max_steps', label: 'Tool rounds per answer', hint: '1–8. More = smarter, slower, pricier.'},
+  {key: 'ai_staff_daily_limit', label: 'Staff assistant per day', hint: 'Requests per staff member. 0 = no cap.'},
 ];
 const FEATURES: {key: keyof TutorAdminSettings; label: string; hint: string}[] = [
   {key: 'ai_feat_images', label: 'Image questions', hint: 'Students can attach a photo of a question.'},
@@ -43,6 +48,8 @@ const FEATURES: {key: keyof TutorAdminSettings; label: string; hint: string}[] =
   {key: 'ai_feat_quiz', label: 'AI quiz', hint: '"Quiz me" one question at a time.'},
   {key: 'ai_feat_study_plans', label: 'Study plans', hint: 'Day-by-day plans from results + exam date.'},
   {key: 'ai_feat_saving', label: 'Saving to My AI Resources', hint: 'Off = students can view but not keep results.'},
+  {key: 'ai_agent_enabled', label: 'Platform tools (agent)', hint: 'The tutor looks up courses, progress and the bank, and builds real mini exams.'},
+  {key: 'ai_exam_feedback', label: 'Mini-exam AI feedback', hint: 'A short written read of each finished mini exam.'},
 ];
 const EXAM_MODES: Record<string, [string, string]> = {
   AI_DISABLED: ['AI off during exams', 'The tutor is fully paused while a student has an exam open.'],
@@ -130,6 +137,7 @@ export default function TutorAdmin() {
       ) : (
         <>
           {tab === 'overview' && <OverviewTab range={range} providers={providers} settings={settings} onGo={setTab} />}
+          {tab === 'assistant' && <AIAssistant />}
           {tab === 'settings' && <SettingsTab settings={settings} set={set} />}
           {tab === 'usage' && <UsageTab range={range} />}
           {tab === 'costs' && <CostsTab range={range} settings={settings} set={set} />}
@@ -809,7 +817,7 @@ function LimitsTab({settings, set}: {settings: TutorAdminSettings; set: (p: Part
           </Field>
         ))}
       </div>
-      <p className="mt-2 text-[0.72rem] text-mist-500">Staff accounts are not limited. Give individual students a higher or lower quota in Users. The monthly spending cap is under Costs.</p>
+      <p className="mt-2 text-[0.72rem] text-mist-500">Staff chats in the student tutor are not limited; the staff assistant has its own daily cap above. Give individual students a higher or lower quota in Users. The monthly spending cap is under Costs.</p>
     </Panel>
   );
 }
@@ -833,7 +841,7 @@ function LogsTab({range}: {range: AdminRange}) {
         </Select>
         <Select value={kind} onChange={(e) => setKind(e.target.value)} className="!h-8 w-auto text-[0.78rem]" aria-label="Feature">
           <option value="">All features</option>
-          {['CHAT', 'QUESTION_HELP', 'WHY_WRONG', 'EXPLAIN', 'HINT', 'SUMMARY', 'FLASHCARDS', 'PRACTICE', 'MATERIAL', 'PLAN', 'IMAGE_EXPLANATION', 'TITLE', 'SUMMARY_MEMORY'].map((k) => <option key={k} value={k}>{k.toLowerCase().replace(/_/g, ' ')}</option>)}
+          {['CHAT', 'QUESTION_HELP', 'WHY_WRONG', 'EXPLAIN', 'HINT', 'SUMMARY', 'FLASHCARDS', 'PRACTICE', 'MATERIAL', 'PLAN', 'IMAGE_EXPLANATION', 'AGENT', 'EXAM_FEEDBACK', 'TITLE', 'SUMMARY_MEMORY'].map((k) => <option key={k} value={k}>{k.toLowerCase().replace(/_/g, ' ')}</option>)}
         </Select>
         <button className="grid size-8 place-items-center rounded-lg border border-white/10 text-mist-300 hover:bg-white/[0.06]" aria-label="Refresh" onClick={reload}><RefreshCw className="size-3.5" /></button>
         {data && <span className="ml-auto text-[0.74rem] text-mist-500">{formatNumber(data.total)} requests</span>}

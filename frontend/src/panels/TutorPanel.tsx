@@ -19,8 +19,9 @@ import {formatRelative} from '../lib/format';
 import {
   ASK_TUTOR_EVENT, readImage, streamMessage, streamRegenerate, takePendingAsk, tutorApi, type Conversation, type GenKind, type LearningProfile,
   type SavedItem, type StreamHandlers, type StudyDashboard, type TutorAsk, type TutorContext, type TutorCourse, type TutorMessage, type TutorMode,
-  type TutorStatus, type TutorUpload,
+  type TutorStatus, type TutorUpload, type ToolEvent, type AgentAction,
 } from '../lib/tutor';
+import {ActionCards, ToolTrail, mergeTool} from '../components/tutor/AgentBits';
 import {useSession} from '../store/session';
 
 const LAST_CHAT_KEY = 'arena.tutor.chat';
@@ -280,13 +281,15 @@ export default function TutorPanel() {
     return {
       onMeta: (meta) => { requestIdRef.current = meta.request_id; },
       onDelta: (piece) => patchBot((m) => ({content: m.content + piece})),
+      onTool: (tool) => patchBot((m) => ({meta: {...m.meta, tools: mergeTool(m.meta.tools as ToolEvent[] | undefined, tool)}})),
+      onActions: (actions) => patchBot((m) => ({meta: {...m.meta, actions}})),
       onDone: (done) => {
-        patchBot({id: done.message_id, pending: false, meta: {mode, finish: done.finish}});
+        patchBot((m) => ({id: done.message_id, pending: false, meta: {...m.meta, mode, finish: done.finish}}));
         setStatus((s) => (s ? {...s, remaining_today: done.remaining_today, usage: {...s.usage, today: s.usage.today + 1}} : s));
       },
       onCancelled: (info) => patchBot((m) => ({...(info.message_id ? {id: info.message_id} : {}), pending: false, content: m.content ? `${m.content}\n\n_(stopped)_` : '_(stopped)_'})),
       onError: (detail, partial) => {
-        patchBot((m) => ({pending: false, failed: true, content: partial && m.content ? `${m.content}\n\n_(answer cut off)_` : detail}));
+        patchBot((m) => ({pending: false, failed: !(m.meta.actions as unknown[] | undefined)?.length, content: partial && m.content ? `${m.content}\n\n_(answer cut off)_` : (m.meta.actions as unknown[] | undefined)?.length ? 'Your mini exam is ready below, but I couldn\'t finish my reply.' : detail}));
         toast('error', 'The tutor hit a problem', detail);
       },
     };
@@ -895,20 +898,25 @@ function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onP
     );
   }
   const generated = message.meta.generated as string | undefined;
+  const tools = (message.meta.tools as ToolEvent[] | undefined) ?? [];
+  const actions = (message.meta.actions as AgentAction[] | undefined) ?? [];
+  const runningTool = message.pending ? tools.find((tool) => tool.status === 'running') : undefined;
   return (
     <div className="flex gap-2">
       <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Sparkles className="size-3.5" /></span>
       <div className="min-w-0 flex-1">
         <div className={`rounded-2xl rounded-tl-md border px-3.5 py-2.5 ${message.failed ? 'border-flare-400/30 bg-flare-500/[0.07]' : 'border-white/8 bg-white/[0.03]'}`}>
+          {tools.length > 0 && <ToolTrail tools={tools} live={message.pending && !message.content} />}
           {message.pending && !message.content ? (
             <span className="flex items-center gap-1.5 py-1 text-[0.8rem] text-mist-400">
               <span className="flex gap-1">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-nova-300" style={{animationDelay: `${i * 0.15}s`}} />)}</span>
-              Thinking…
+              {runningTool ? `${runningTool.label}…` : tools.length ? 'Putting it together…' : 'Thinking…'}
             </span>
           ) : (
             <Markdown text={message.content} />
           )}
         </div>
+        {actions.length > 0 && <ActionCards actions={actions} />}
         {!message.pending && !generated && message.content && (
           <div className="mt-1 flex flex-wrap items-center gap-0.5">
             <MiniAction label="Copy" icon={<Copy className="size-3.5" />} onClick={async () => { const ok = await copyText(message.content); toast(ok ? 'success' : 'error', ok ? 'Copied' : 'Copy failed'); }} />

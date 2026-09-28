@@ -9,7 +9,7 @@ import {CelebrationLayer, Toasts} from './components/Overlays';
 import {Button, Chip} from './components/ui';
 import {applyFxProfile} from './lib/fx';
 import {jumpToMaterial} from './lib/palette';
-import {ASK_TUTOR_EVENT} from './lib/tutor';
+import {ASK_TUTOR_EVENT, OPEN_MINI_EXAM_EVENT} from './lib/tutor';
 import {TABS} from './lib/nav';
 import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
@@ -30,6 +30,7 @@ const Room = lazyScreen(() => import('./views/Room'));
 const Group = lazyScreen(() => import('./views/Group'));
 const GroupQuiz = lazyScreen(() => import('./views/GroupQuiz'));
 const Result = lazyScreen(() => import('./views/Result'));
+const MiniExam = lazyScreen(() => import('./views/MiniExam'));
 
 function ScreenLoading() {
   return (
@@ -49,6 +50,7 @@ type Route =
   | {view: 'room'; roomId: number}
   | {view: 'group'; groupId: number; section: GroupSection}
   | {view: 'groupquiz'; groupId: number; quizId: number}
+  | {view: 'mini'; examId: number}
   | {view: 'admin'};
 
 const TAB_IDS = TABS.map((row) => row.id) as string[];
@@ -70,6 +72,8 @@ function routePath(route: Route): string {
       return `#/group/${route.groupId}/${route.section}`;
     case 'groupquiz':
       return `#/group/${route.groupId}/quiz/${route.quizId}`;
+    case 'mini':
+      return `#/mini/${route.examId}`;
     default:
       return '#/admin';
   }
@@ -91,6 +95,7 @@ function routeFromHash(): Route {
   if (head === 'result' && hasId) return {view: 'result', attemptId: id};
   if (head === 'duel' && hasId) return {view: 'duel', duelId: id};
   if (head === 'room' && hasId) return {view: 'room', roomId: id};
+  if (head === 'mini' && hasId) return {view: 'mini', examId: id};
   if (head === 'group' && hasId) {
     /* #/group/{id}/quiz/{quizId} — the dedicated runner. */
     if (parts[2] === 'quiz') {
@@ -244,6 +249,16 @@ export default function App() {
     };
     window.addEventListener(ASK_TUTOR_EVENT, onAsk);
     return () => window.removeEventListener(ASK_TUTOR_EVENT, onAsk);
+  }, [navigate]);
+
+  /* The AI tutor made a mini exam → open it as its own screen. */
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const id = Number((event as CustomEvent<{id: number}>).detail?.id);
+      if (id > 0) navigate({view: 'mini', examId: id});
+    };
+    window.addEventListener(OPEN_MINI_EXAM_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_MINI_EXAM_EVENT, onOpen);
   }, [navigate]);
 
   /* Game layer: measure the device once and stamp data-fx on <html>. */
@@ -445,6 +460,17 @@ export default function App() {
           {route.view === 'duel' && (
             <FocusShell onBack={() => goBack('duels')} backLabel={backLabel()}>
               <DuelArena key={route.duelId} duelId={route.duelId} onExit={() => goBack('duels')} onOpenDuels={() => backToDashboard('duels')} />
+            </FocusShell>
+          )}
+
+          {route.view === 'mini' && (
+            <FocusShell onBack={() => goBack('tutor')} backLabel={backLabel()}>
+              <MiniExam
+                key={route.examId}
+                examId={route.examId}
+                onExit={() => goBack('tutor')}
+                onOpen={(id) => navigate({view: 'mini', examId: id}, 'replace')}
+              />
             </FocusShell>
           )}
 

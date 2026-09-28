@@ -314,6 +314,11 @@ export interface TutorAdminSettings {
   ai_feat_quiz: boolean;
   ai_feat_saving: boolean;
   ai_feat_uploads: boolean;
+  ai_agent_enabled: boolean;
+  ai_agent_max_steps: number;
+  ai_staff_daily_limit: number;
+  ai_mini_exam_daily_limit: number;
+  ai_exam_feedback: boolean;
 }
 export interface ProviderInfo {
   id: string;
@@ -414,7 +419,39 @@ export interface StreamHandlers {
   onCancelled?: (info: {message_id: number | null}) => void;
   /** "make 10 flashcards" etc. — the server asks the app to open a tool */
   onRoute?: (route: RouteReply) => void;
+  /** the agent is using a platform tool (running → ok / error / denied) */
+  onTool?: (tool: ToolEvent) => void;
+  /** things the agent made for the student (a mini exam card…) */
+  onActions?: (actions: AgentAction[]) => void;
 }
+
+export interface ToolEvent {
+  name: string;
+  label: string;
+  status: 'running' | 'ok' | 'error' | 'denied' | 'invalid';
+  summary?: string;
+  ms?: number;
+}
+
+export interface MiniExamCard {
+  type: 'mini_exam';
+  id: number;
+  title: string;
+  question_count: number;
+  duration_minutes: number;
+  difficulty: string;
+  topics: string[];
+  course?: string | null;
+}
+export interface ProposalCard {
+  type: 'proposal';
+  id: number;
+  kind: 'topics' | 'questions' | 'classification' | string;
+  title: string;
+  course?: string | null;
+  count: number;
+}
+export type AgentAction = MiniExamCard | ProposalCard;
 
 /** POST a message and read the server-sent events as they arrive. Errors
  * before the stream starts (limits, exam lock, AI down…) throw ApiError. */
@@ -475,6 +512,8 @@ async function streamRequest(url: string, body: object, handlers: StreamHandlers
     }
     if (event === 'meta') handlers.onMeta?.(parsed as never);
     else if (event === 'delta') handlers.onDelta(String(parsed.text ?? ''));
+    else if (event === 'tool') handlers.onTool?.(parsed as never);
+    else if (event === 'actions') handlers.onActions?.((parsed.actions as AgentAction[]) ?? []);
     else if (event === 'done') {
       finished = true;
       handlers.onDone(parsed as never);
@@ -521,6 +560,133 @@ export function readImage(file: File, maxMb = 4): Promise<string> {
 
 /* --------------------------------------------------------------- bridge */
 export const ASK_TUTOR_EVENT = 'arena:ask-tutor';
+
+/* ------------------------------------------------------------- mini exams */
+/** App-level route opener: the tutor lives inside the dashboard, the exam is its own screen. */
+export const OPEN_MINI_EXAM_EVENT = 'ag:open-mini-exam';
+export function openMiniExam(id: number): void {
+  window.dispatchEvent(new CustomEvent(OPEN_MINI_EXAM_EVENT, {detail: {id}}));
+}
+
+export type MiniExamStatus = 'ready' | 'in_progress' | 'submitted' | 'expired';
+export interface MiniExamQuestion {
+  question_id: number;
+  position: number;
+  text: string;
+  image_url: string | null;
+  options: {key: string; text: string}[];
+  topic: string;
+  difficulty: string;
+  marks: number;
+  selected: string | null;
+  correct?: string;
+  is_correct?: boolean | null;
+  explanation?: string;
+}
+export interface MiniExamTopicRow {topic: string; correct: number; total: number; wrong: number; skipped: number; percentage: number}
+export interface MiniExamAction {type: 'review' | 'mini_exam' | 'flashcards'; topic: string; label: string}
+export interface MiniExamAnalysis {
+  score: number;
+  total: number;
+  percentage: number;
+  correct: number;
+  wrong: number;
+  skipped: number;
+  questions: number;
+  topics: MiniExamTopicRow[];
+  difficulty: {level: string; correct: number; total: number; percentage: number}[];
+  weak_topics: string[];
+  strong_topics: string[];
+  avg_seconds: number | null;
+  time_used_seconds: number | null;
+  previous_percentage: number | null;
+  change: number | null;
+  recommended_actions: MiniExamAction[];
+  ai?: MiniExamFeedback;
+}
+export interface MiniExamFeedback {headline: string; summary: string; mistake_patterns: string[]; recommended_actions: string[]}
+export interface MiniExam {
+  id: number;
+  title: string;
+  status: MiniExamStatus;
+  created_by: string;
+  course: {id: number; code: string; title: string} | null;
+  topics: string[];
+  difficulty: string;
+  question_count: number;
+  duration_minutes: number;
+  started_at: string | null;
+  deadline_at: string | null;
+  finished_at: string | null;
+  seconds_left: number | null;
+  answered: number;
+  created_at: string | null;
+  score?: number;
+  total?: number;
+  percentage?: number;
+  analysis?: MiniExamAnalysis;
+  questions?: MiniExamQuestion[];
+}
+
+export const miniExamApi = {
+  list: () => call<{mini_exams: MiniExam[]}>('/api/ai/mini-exams'),
+  create: (body: {course_id: number; topics?: string[]; difficulty?: string; question_count: number; duration_minutes?: number; focus?: 'mixed' | 'weak' | 'new'}) =>
+    call<MiniExam>('/api/ai/mini-exams', 'POST', body),
+  get: (id: number) => call<MiniExam>(`/api/ai/mini-exams/${id}`),
+  start: (id: number) => call<MiniExam>(`/api/ai/mini-exams/${id}/start`, 'POST'),
+  answer: (id: number, question_id: number, selected: string | null, seconds: number) =>
+    call<{question_id: number; selected: string | null; answered: number; seconds_left: number | null}>(`/api/ai/mini-exams/${id}/answer`, 'POST', {question_id, selected, seconds}),
+  finish: (id: number) => call<MiniExam>(`/api/ai/mini-exams/${id}/finish`, 'POST'),
+  feedback: (id: number) => call<{feedback: MiniExamFeedback; cached: boolean}>(`/api/ai/mini-exams/${id}/feedback`, 'POST'),
+  remove: (id: number) => call<{ok: boolean}>(`/api/ai/mini-exams/${id}`, 'DELETE'),
+};
+
+/* ------------------------------------------------------- staff assistant */
+export interface StaffToolInfo {name: string; label: string; status: string; summary?: string; ms?: number}
+export interface AgentTurn {role: 'user' | 'assistant'; content: string; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean}
+export interface Proposal {
+  id: number;
+  kind: string;
+  course_id: number | null;
+  course?: string | null;
+  title: string;
+  summary: string;
+  status: 'pending' | 'approved' | 'rejected';
+  count: number;
+  created_at: string | null;
+  decided_at: string | null;
+  result: Record<string, unknown>;
+  payload?: {items?: Record<string, unknown>[]; rationale?: string; [key: string]: unknown};
+}
+export interface AIStaffStatus {
+  configured: boolean;
+  provider: string;
+  model: string;
+  agent_enabled: boolean;
+  pending_proposals: number;
+  used_today: number;
+  daily_limit: number;
+  tools: {student: string[]; staff: string[]};
+}
+export interface ToolCallRow {id: number; tool: string; role: string; status: string; summary: string; ms: number; at: string; student_id: number | null; admin_id: number | null; arguments?: Record<string, unknown>}
+export interface AIUsageReport {
+  days: number;
+  total_cost: number;
+  features: {feature: string; requests: number; input: number; output: number; cache_hit: number; cache_rate: number; cost: number}[];
+  daily: {day: string; cost: number; requests: number}[];
+}
+
+export const aiStaffApi = {
+  status: () => call<AIStaffStatus>('/api/admin/ai/status'),
+  chat: (messages: {role: 'user' | 'assistant'; content: string}[], course_id?: number | null) =>
+    call<{reply: string; tools: StaffToolInfo[]; actions: AgentAction[]; usage: {cost: number}; request_id: string}>('/api/admin/ai/agent', 'POST', {messages, course_id}),
+  proposals: (status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') => call<{proposals: Proposal[]}>(`/api/admin/ai/proposals?status=${status}`),
+  proposal: (id: number) => call<Proposal>(`/api/admin/ai/proposals/${id}`),
+  approve: (id: number, body: {selected?: number[]; items?: Record<string, unknown>[]}) => call<Proposal>(`/api/admin/ai/proposals/${id}/approve`, 'POST', body),
+  reject: (id: number, reason: string) => call<Proposal>(`/api/admin/ai/proposals/${id}/reject`, 'POST', {reason}),
+  usage: (days = 30) => call<AIUsageReport>(`/api/admin/ai/usage?days=${days}`),
+  toolCalls: (limit = 100) => call<{calls: ToolCallRow[]}>(`/api/admin/ai/tool-calls?limit=${limit}`),
+};
 
 export interface TutorAsk {
   /** Message to send (autoSend) or pre-fill. */
