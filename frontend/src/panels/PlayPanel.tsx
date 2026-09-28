@@ -294,7 +294,7 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
               size={104}
               tone="day"
               className="pointer-events-none absolute -right-2 -bottom-3 opacity-95 sm:right-3 sm:-bottom-2"
-              label="Arena hero"
+              label="Slime mascot"
             />
             <Mascot
               name={heroMascot}

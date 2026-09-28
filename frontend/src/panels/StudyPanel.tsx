@@ -369,7 +369,7 @@ function QuestionRunner({
     <div className="space-y-3.5">
       <BackHeader title={title} onExit={onExit} />
       <div className="flex items-center gap-2.5">
-        <Character mood={wrongFlash ? 'sad' : 'idle'} size={38} tone="day" className="-my-2 hidden sm:block" label="Arena hero" />
+        <Character mood={wrongFlash ? 'sad' : 'idle'} size={38} tone="day" className="-my-2 hidden sm:block" label="Slime mascot" />
         <ProgressBar value={(index / questions.length) * 100} className="flex-1" />
         {timerSeconds > 0 && (
           <Chip className={`tabular ${left <= 10 ? 'border-flare-500/40 bg-flare-500/14 text-flare-300' : ''}`} icon={<Timer className="size-3.5" />}>

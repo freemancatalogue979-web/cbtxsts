@@ -1,24 +1,24 @@
 /**
- * The arena hero — the illustrated character that reacts to what you do.
+ * The arena mascot — a cute lavender slime that reacts to what you do.
  *
  * One drawn character in four moods (idle, cheer, sad, celebrate) rather than a
- * pile of unrelated art, so the world has a consistent protagonist: it breathes
- * while you read a question, cheers when you get one right, slumps a little when
- * you don't, and jumps about when something big lands.
+ * pile of unrelated art, so the world has a consistent companion: it breathes
+ * while you read a question, cheers when you get one right, droops a little when
+ * you don't, and puts on a crown when something big lands.
  *
  * Presentation only. It never knows whether an answer was correct — the screen
  * that owns the server verdict tells it which mood to wear. Under
  * prefers-reduced-motion (or the low-effects profile) the idle bob is dropped so
  * the character is perfectly still.
  */
-import idle from '../assets/character/hero-idle.webp';
-import idleSmall from '../assets/character/hero-idle@256.webp';
-import cheer from '../assets/character/hero-cheer.webp';
-import cheerSmall from '../assets/character/hero-cheer@256.webp';
-import sad from '../assets/character/hero-sad.webp';
-import sadSmall from '../assets/character/hero-sad@256.webp';
-import celebrate from '../assets/character/hero-celebrate.webp';
-import celebrateSmall from '../assets/character/hero-celebrate@256.webp';
+import idle from '../assets/character/slime-idle.webp';
+import idleSmall from '../assets/character/slime-idle@256.webp';
+import cheer from '../assets/character/slime-cheer.webp';
+import cheerSmall from '../assets/character/slime-cheer@256.webp';
+import sad from '../assets/character/slime-sad.webp';
+import sadSmall from '../assets/character/slime-sad@256.webp';
+import celebrate from '../assets/character/slime-celebrate.webp';
+import celebrateSmall from '../assets/character/slime-celebrate@256.webp';
 
 export type CharacterMood = 'idle' | 'cheer' | 'sad' | 'celebrate' | 'think';
 export type CharacterTone = 'normal' | 'day' | 'night';
@@ -61,7 +61,7 @@ export default function Character({
       data-mood={mood}
       data-tone={tone}
       role="img"
-      aria-label={label ?? `Arena hero, ${mood}`}
+      aria-label={label ?? `Genesis slime, ${mood}`}
     >
       <img
         src={sprite.large}
@@ -69,7 +69,7 @@ export default function Character({
         sizes={`${size}px`}
         alt=""
         draggable={false}
-        className="size-full object-contain"
+        className="size-full object-contain object-bottom"
         style={{animation: MOOD_ANIMATION[mood] ?? MOOD_ANIMATION.idle, transformOrigin: '50% 90%'}}
       />
     </span>
