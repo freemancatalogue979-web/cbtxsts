@@ -230,6 +230,16 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
   }, [quizzes, filter]);
 
 
+  // the exam you're in the middle of, else the next open one you haven't sat
+  const upNext = useMemo(() => {
+    const rows = visible.filter((quiz) => !quiz.is_bank);
+    return (
+      rows.find((quiz) => quiz.my_attempt?.status === 'in_progress') ??
+      rows.find((quiz) => quiz.status === 'active' && quiz.question_count > 0 && !quiz.my_attempt) ??
+      null
+    );
+  }, [visible]);
+
   if (!profile) return <Skeleton className="h-64" />;
 
   const progress = profile.progress;
@@ -385,36 +395,8 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
         </motion.div>
       </motion.section>
 
-      {/* ------------------------------------------- continue mission module */}
-      {visible.length > 0 && (
-        <Card className="relative overflow-hidden border border-nova-500/30 bg-gradient-to-r from-nova-950/30 via-ink-900/80 to-ink-900/80 p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-nova-400 animate-pulse" />
- <span className="text-[0.62rem] font-black tracking-widest text-nova-400">
-                  CONTINUE MISSION · ACTIVE SECTOR
-                </span>
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-mist-50 truncate mt-1">
-                {(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0]).title}
-              </h3>
-              <p className="text-[0.76rem] font-medium text-mist-400 mt-0.5">
-                {(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0]).course?.title ?? 'Tactical Simulation'} · {(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0]).question_count} objectives · {(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0]).duration_minutes} min allotted
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              size="md"
-              className="shrink-0"
-              onClick={() => onStartExam(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0])}
-              icon={<Play className="size-4" />}
-            >
-              {(visible.find((q) => q.my_attempt?.status === 'in_progress') ?? visible[0]).my_attempt?.status === 'in_progress' ? 'Resume Mission' : 'Start Mission'}
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* ------------------------------------------------ continue / up next */}
+      {upNext && <ContinueCard quiz={upNext} onStart={() => onStartExam(upNext)} />}
 
       <Segmented
         value={pane}
@@ -511,6 +493,117 @@ function DailyBonusButton({onClaimed}: {onClaimed: () => void}) {
     <Button onClick={claim} loading={busy} icon={<Gift className="size-4" />} block>
       Claim daily bonus
     </Button>
+  );
+}
+
+/* ---------------------------------------------------------- continue card */
+function useNow(every = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), every);
+    return () => window.clearInterval(timer);
+  }, [every]);
+  return now;
+}
+
+function leftLabel(seconds: number): string {
+  if (seconds <= 0) return "Time's up";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** "Pick up where you left off" / "Up next" — the one exam worth a tap right now. */
+function ContinueCard({quiz, onStart}: {quiz: Quiz; onStart: () => void}) {
+  const attempt = quiz.my_attempt?.status === 'in_progress' ? quiz.my_attempt : null;
+  const now = useNow(attempt ? 1000 : 60000);
+  const accent = quiz.course?.accent || '#8b5cf6';
+  const total = Math.max(1, quiz.duration_minutes * 60);
+  const secondsLeft = attempt ? Math.max(0, Math.round((Date.parse(attempt.deadline_at) - now) / 1000)) : total;
+  const timePct = attempt ? Math.min(100, (secondsLeft / total) * 100) : 100;
+  const urgent = attempt && secondsLeft <= 300;
+
+  const stats = [
+    {icon: ScrollText, label: 'Questions', value: String(quiz.question_count)},
+    {icon: AlarmClock, label: attempt ? 'Time left' : 'Duration', value: attempt ? leftLabel(secondsLeft) : `${quiz.duration_minutes} min`},
+  ];
+
+  return (
+    <motion.section
+      initial={{opacity: 0, y: 10}}
+      animate={{opacity: 1, y: 0}}
+      transition={{duration: 0.35, ease: 'easeOut'}}
+      className="relative overflow-hidden rounded-3xl p-px"
+      style={{background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 60%, transparent), rgba(255,255,255,0.08) 45%, rgba(56,189,248,0.45))`}}
+    >
+      <div className="relative overflow-hidden rounded-[calc(1.5rem-1px)] bg-ink-950/95 p-4 sm:p-5">
+        {/* decor: accent glow, soft grid, watermark */}
+        <div aria-hidden className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full opacity-35 blur-3xl" style={{background: accent}} />
+        <div aria-hidden className="pointer-events-none absolute -bottom-20 -left-16 size-48 rounded-full bg-sky-500/15 blur-3xl" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{backgroundImage: 'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)', backgroundSize: '16px 16px', maskImage: 'linear-gradient(90deg, transparent, black 60%)'}}
+        />
+
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5 sm:gap-4">
+            {/* time ring (in progress) or course badge (up next) */}
+            <div className="relative shrink-0">
+              <ProgressRing value={timePct} size={68} stroke={6} gradientId="ring-brand">
+                <span className="grid size-12 place-items-center rounded-full text-white shadow-inner" style={{background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 60%, #a78bfa), color-mix(in srgb, ${accent} 50%, #1e1b4b))`}}>
+                  {attempt ? <Play className="size-5 translate-x-px fill-current" /> : <ScrollText className="size-5" />}
+                </span>
+              </ProgressRing>
+              {attempt && <span className="absolute -top-0.5 -right-0.5 size-3.5 animate-ping rounded-full bg-mint-400/70" />}
+              {attempt && <span className="absolute -top-0.5 -right-0.5 size-3.5 rounded-full border-2 border-ink-950 bg-mint-400" />}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.6rem] font-black tracking-[0.12em] uppercase ${
+                    attempt ? 'border-mint-400/35 bg-mint-500/12 text-mint-300' : 'border-nova-400/35 bg-nova-500/12 text-nova-200'
+                  }`}
+                >
+                  <span className={`size-1.5 rounded-full ${attempt ? 'animate-pulse bg-mint-400' : 'bg-nova-300'}`} />
+                  {attempt ? 'In progress' : 'Up next'}
+                </span>
+                {quiz.course && (
+                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[0.62rem] font-black tracking-wider" style={{color: `color-mix(in srgb, ${accent} 45%, #ede9fe)`}}>
+                    {quiz.course.code}
+                  </span>
+                )}
+              </div>
+              <h3 className="mt-1.5 line-clamp-2 text-[1.05rem] leading-tight font-black text-mist-50 sm:truncate sm:text-xl">{quiz.title}</h3>
+              <p className="mt-0.5 truncate text-[0.76rem] font-medium text-mist-400">
+                {attempt ? 'Your answers are saved. Pick up where you left off.' : quiz.course?.title ?? 'Ready when you are.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-stretch gap-2 sm:shrink-0">
+            {stats.map(({icon: Icon, label, value}) => (
+              <div
+                key={label}
+                className={`min-w-0 flex-1 rounded-2xl border px-2.5 py-2 sm:w-[6.5rem] sm:px-3 sm:flex-none ${
+                  label === 'Time left' && urgent ? 'border-flare-500/40 bg-flare-500/10' : 'border-white/8 bg-white/[0.04]'
+                }`}
+              >
+                <p className="flex items-center gap-1 truncate text-[0.58rem] font-black tracking-[0.06em] whitespace-nowrap sm:tracking-[0.1em] text-mist-500 uppercase">
+                  <Icon className="size-3 shrink-0" /> {label}
+                </p>
+                <p className={`mt-0.5 text-[0.98rem] font-black tabular ${label === 'Time left' && urgent ? 'text-flare-200' : 'text-mist-50'}`}>{value}</p>
+              </div>
+            ))}
+            <Button variant="primary" size="md" className="shrink-0 self-stretch !h-auto" onClick={onStart} icon={<Play className="size-4 fill-current" />}>
+              {attempt ? 'Resume' : 'Start'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </motion.section>
   );
 }
 

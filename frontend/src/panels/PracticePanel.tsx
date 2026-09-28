@@ -28,6 +28,7 @@ import {
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import Character from '../components/Character';
+import PracticeClock from '../components/PracticeClock';
 import {AnswerFeedback, AnswerTile, ComboMeter, Hearts} from '../components/GameQuestion';
 import {Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, SectionHeading, Segmented, Select, Skeleton} from '../components/ui';
 import AskTutorButton from '../components/tutor/AskTutorButton';
@@ -276,17 +277,15 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
             <Hearts value={Math.max(0, lives)} max={run.lives} />
           </span>
         )}
-        {run.seconds > 0 && (
-          <Chip className="border-white/12 bg-white/6 text-mist-300" icon={<Timer className="size-3.5" />}>
-            {frozen > 0 ? `frozen ${frozen}s` : `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`}
-          </Chip>
-        )}
-        <Chip className="ml-auto border-white/12 bg-white/6 text-mist-400">
-          {index + 1}/{run.questions.length}
-        </Chip>
       </div>
 
-      <ProgressBar value={((index + (feedback ? 1 : 0)) / run.questions.length) * 100} />
+      <RunHud
+        clock={run.seconds > 0 ? <PracticeClock remaining={remaining} totalSeconds={run.seconds} frozen={frozen} /> : <PracticeClock />}
+        title={<span className="text-mist-100">{label}</span>}
+        position={index + 1}
+        total={run.questions.length}
+        progress={((index + (feedback ? 1 : 0)) / run.questions.length) * 100}
+      />
 
       <Card className="relative overflow-hidden p-4 sm:p-5">
         {/* The hero watches the drill: cheering a hit, wincing a miss. */}
@@ -480,8 +479,10 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
   return (
     <div className="grid gap-3">
       <Card className="relative overflow-hidden p-4">
+        <div className="relative flex items-start gap-3">
+        <div className="min-w-0 flex-1">
         <div className="relative flex items-center gap-2">
-          <Skull className="size-4 text-rose-300" />
+          <Skull className="size-4 shrink-0 text-rose-300" />
           <h3 className="min-w-0 truncate text-[0.95rem] font-black text-mist-50">{fight.boss.name}</h3>
           <Chip className="ml-auto border-white/12 bg-white/6 text-mist-300" icon={<Swords className="size-3.5" />}>
             {combo > 1 ? `${combo}x combo` : 'combo —'}
@@ -501,6 +502,9 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
               transition={{type: 'spring', stiffness: 220, damping: 26}}
             />
           </div>
+        </div>
+        </div>
+        <PracticeClock paused={Boolean(over)} />
         </div>
         <div className="relative mt-3 flex flex-wrap gap-2">
           <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200" icon={<Zap className="size-3.5" />}>{damage} damage</Chip>
@@ -581,6 +585,7 @@ type CustomRunPayload = {
   token: string;
   questions: QuestionPayload[];
   ends_at: string | null;
+  started_at?: string | null;
   server_now: string | null;
   duration_seconds: number;
   course: {id: number; code: string; title: string; accent: string} | null;
@@ -980,20 +985,19 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
 
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {run.course && (
-          <Chip className="border-white/12 bg-white/6 text-mist-300">
-            <span style={{color: run.course.accent}} className="font-black">{run.course.code}</span>
-          </Chip>
-        )}
-        <Chip className="border-white/12 bg-white/6 text-mist-300">{run.topic || 'All topics'}</Chip>
-        <Chip className="ml-auto border-white/12 bg-white/6 text-mist-400">
-          {index + 1} / {total}
-        </Chip>
-        {run.ends_at && <RunClock endsAt={run.ends_at} skewRef={skew} />}
-      </div>
-
-      <ProgressBar value={(stats.answered / Math.max(total, 1)) * 100} />
+      <RunHud
+        clock={<PracticeClock endsAt={run.ends_at} totalSeconds={run.duration_seconds} startedAt={run.started_at} skewRef={skew} />}
+        title={
+          <>
+            {run.course && <span style={{color: run.course.accent}}>{run.course.code}</span>}
+            {run.course && <span className="text-mist-600"> · </span>}
+            <span className="text-mist-100">{run.topic || 'All topics'}</span>
+          </>
+        }
+        position={index + 1}
+        total={total}
+        progress={(stats.answered / Math.max(total, 1)) * 100}
+      />
 
       <div className="flex flex-wrap gap-1.5 text-[0.7rem] font-bold">
         <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-mist-400">{stats.answered} answered</span>
@@ -1335,22 +1339,21 @@ function formatHp(value: number): string {
 }
 
 
-/* The run countdown owns its own 500ms tick so only this chip re-renders —
-   the whole practice screen stays perfectly still between answers. */
-function RunClock({endsAt, skewRef}: {endsAt: string; skewRef: {readonly current: number}}) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-  useEffect(() => {
-    const ends = Date.parse(endsAt);
-    const update = () => setRemaining(Math.max(0, Math.ceil((ends - (Date.now() - skewRef.current)) / 1000)));
-    update();
-    const timer = window.setInterval(update, 500);
-    return () => window.clearInterval(timer);
-  }, [endsAt, skewRef]);
-  if (remaining === null) return null;
-  const low = remaining <= 60;
+/** Sticky run header: what you're practising, where you are, and the clock. */
+function RunHud({clock, title, position, total, progress}: {clock: ReactNode; title: ReactNode; position: number; total: number; progress: number}) {
   return (
-    <Chip className={`${low ? 'animate-pulse border-flare-500/40 bg-flare-500/12 text-flare-200' : 'border-white/12 bg-white/6 text-mist-300'}`} icon={<Timer className="size-3.5" />}>
-      {clock(remaining)}
-    </Chip>
+    <div className="sticky top-[calc(env(safe-area-inset-top)+4rem)] z-20 flex items-center gap-2.5 rounded-3xl border border-white/10 bg-ink-950/85 p-1.5 pl-3.5 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)] backdrop-blur-md sm:gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[0.8rem] font-black">{title}</p>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="text-[0.62rem] font-black tracking-[0.12em] text-mist-500 uppercase">Question</span>
+          <span className="text-[0.95rem] font-black tabular text-mist-50">{position}</span>
+          <span className="text-[0.72rem] font-bold tabular text-mist-500">/ {total}</span>
+        </div>
+        <ProgressBar value={progress} className="mt-1.5 h-1.5" />
+      </div>
+      {clock}
+    </div>
   );
 }
+
