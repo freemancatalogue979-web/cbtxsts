@@ -370,6 +370,7 @@ def attempt_state(
     time_remaining: int = 0,
 ) -> dict[str, Any]:
     answers = {row.question_id: row for row in attempt.answers}
+    by_id = {q.id: q for q in questions}
     payload = attempt_summary(attempt)
     payload.update(
         {
@@ -391,7 +392,12 @@ def attempt_state(
             "answers": [
                 {
                     "question_id": row.question_id,
-                    "selected": row.selected,
+                    # The letter the player saw and tapped. With option shuffling
+                    # the stored canonical key sits on a different letter, and a
+                    # resumed paper must highlight the option they actually chose.
+                    "selected": _label_for(attempt, by_id[row.question_id], row.selected)
+                    if row.selected and row.question_id in by_id
+                    else row.selected,
                     "flagged": row.flagged,
                     "seconds_spent": round(row.seconds_spent, 1),
                     **({"is_correct": row.is_correct} if reveal else {}),

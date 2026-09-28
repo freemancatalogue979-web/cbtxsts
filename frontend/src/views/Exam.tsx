@@ -352,7 +352,7 @@ export default function Exam({
   const heroMood: 'idle' | 'cheer' | 'sad' | 'think' =
     finished || reviewOnly
       ? current && currentAnswer?.selected
-        ? current.correct === currentAnswer.selected
+        ? correctLabel(current) === currentAnswer.selected
           ? 'cheer'
           : 'sad'
         : 'idle'

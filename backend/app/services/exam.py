@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import game
-from ..config import EXAM_GRACE_SECONDS
+from ..config import EXAM_GRACE_SECONDS, EXAM_SYNC_GRACE_SECONDS
 from ..events import Event, to_admins, to_everyone, to_student
 from ..models import Answer, Attempt, Config, Question, Quiz, Student, utcnow
 from .questions import (
@@ -124,6 +124,15 @@ def time_remaining(attempt: Attempt) -> int:
 def grace_seconds(attempt: Attempt) -> int:
     quiz = attempt.quiz
     return int(getattr(quiz, "grace_seconds", 0) or 0) or EXAM_GRACE_SECONDS
+
+
+def sync_window_seconds(attempt: Attempt) -> int:
+    """How long after the deadline queued (offline) answers are still accepted."""
+    return max(grace_seconds(attempt), EXAM_SYNC_GRACE_SECONDS)
+
+
+def past_sync_window(attempt: Attempt) -> bool:
+    return utcnow() > attempt.deadline_at + timedelta(seconds=sync_window_seconds(attempt))
 
 
 def per_question_seconds(attempt: Attempt) -> int:
@@ -341,7 +350,7 @@ def open_attempt(db: Session, student: Student, quiz: Quiz) -> tuple[Attempt, li
         raise ExamError("You have already submitted this examination.")
 
     if existing and existing.status == "in_progress":
-        if existing.deadline_at + timedelta(seconds=grace_seconds(existing)) < now:
+        if past_sync_window(existing):
             return finalize(db, existing, "expired")
         return existing, []
 
@@ -381,10 +390,11 @@ def record_answer(
     selected: str | None,
     seconds_spent: float = 0.0,
     flagged: bool | None = None,
+    allow_sync_grace: bool = False,
 ) -> tuple[Answer, list[Event]]:
     if attempt.status != "in_progress":
         raise ExamError("This examination is already closed.")
-    if time_remaining(attempt) <= 0:
+    if time_remaining(attempt) <= 0 and not (allow_sync_grace and not past_sync_window(attempt)):
         raise ExamError("Time is up — submit your paper to see the result.")
 
     question = db.get(Question, question_id)
@@ -529,9 +539,11 @@ def expire_overdue(db: Session) -> list[Event]:
     """Auto-submit attempts whose server deadline passed (background ticker)."""
     events: list[Event] = []
     cutoff = utcnow() - timedelta(seconds=EXAM_GRACE_SECONDS)
-    stale = db.scalars(
+    candidates = db.scalars(
         select(Attempt).where(Attempt.status == "in_progress", Attempt.deadline_at < cutoff)
     ).all()
+    # Wait out each paper's own window so answers queued offline can still land.
+    stale = [attempt for attempt in candidates if past_sync_window(attempt)]
     for attempt in stale:
         _, attempt_events = finalize(db, attempt, "expired")
         events.extend(attempt_events)

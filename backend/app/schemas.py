@@ -526,7 +526,7 @@ class QuizIn(BaseModel):
     version_label: str = Field(default="", max_length=12)
     template_of: int | None = None
     blueprint_id: int | None = None
-    shuffle_options: bool = False
+    shuffle_options: bool = True  # new exams shuffle A–D per student by default
     per_question_seconds: int = Field(default=0, ge=0, le=3600)
     grace_seconds: int = Field(default=0, ge=0, le=600)
     auto_submit: bool = True
@@ -648,6 +648,20 @@ class AnswerIn(BaseModel):
 
 class SubmitIn(BaseModel):
     submission_type: Literal["early", "auto_timer"] = "early"
+
+
+class ExamEventIn(BaseModel):
+    type: str = Field(max_length=32)
+    seconds: float = Field(default=0, ge=0, le=86_400)
+    question: int = Field(default=0, ge=0, le=10_000)
+
+
+class ExamSyncIn(BaseModel):
+    """One offline-friendly delivery: queued answers, integrity events, optional submit."""
+
+    answers: list[AnswerIn] = Field(default_factory=list, max_length=500)
+    events: list[ExamEventIn] = Field(default_factory=list, max_length=100)
+    submit: Literal["early", "auto_timer"] | None = None
 
 
 class DuelCreateIn(BaseModel):

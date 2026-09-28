@@ -157,11 +157,17 @@ def main() -> None:
     status, again = call("POST", f"/exams/{qid}/start", {}, token=tokens[0])
     check("refresh keeps the same paper", [q["id"] for q in again["questions"]] == papers[0])
     attempt_id = again.get("attempt_id") or again.get("id")
-    # answer every question right using the admin view of each bank question
+    # answer every question right using the admin view of each bank question.
+    # New exams shuffle A–D per player, so send the letter the correct option is
+    # *displayed* on (exactly what a player taps), found by its text.
+    shown = {q["id"]: q.get("options") or {} for q in again["questions"]}
     for q_id in papers[0]:
         _, full = call("GET", f"/admin/questions/{q_id}", token=T)
+        key = full["correct"]
+        right_text = (full.get("options") or {}).get(key) or full.get(f"option_{key.lower()}")
+        label = next((l for l, text in shown[q_id].items() if text == right_text), key)
         status, res = call("POST", f"/exams/attempts/{attempt_id}/answer",
-                           {"question_id": q_id, "selected": full["correct"], "seconds_spent": 2}, token=tokens[0])
+                           {"question_id": q_id, "selected": label, "seconds_spent": 2}, token=tokens[0])
         if status != 200:
             check("answer accepted", False, str(res)[:200])
             break

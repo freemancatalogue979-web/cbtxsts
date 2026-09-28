@@ -38,6 +38,7 @@ from ..models import (
     StudyGroupMember,
     utcnow,
 )
+from ..services import exam_integrity, item_analysis
 from ..schemas import (
     BankDrawIn,
     BlueprintGenerateIn,
@@ -1145,6 +1146,13 @@ def results(
         if q.strip():
             needle = q.strip().lower()
             rows = [r for r in rows if needle in r["student"]["name"].lower() or needle in r["student"]["phone"]]
+        # Staff-only integrity digest (never on the public leaderboard).
+        ids = [r["result"]["id"] for r in rows]
+        by_id = {a.id: a for a in db.scalars(select(Attempt).where(Attempt.id.in_(ids))).all()} if ids else {}
+        for r in rows:
+            attempt = by_id.get(r["result"]["id"])
+            if attempt is not None:
+                r["integrity"] = exam_integrity.summary(attempt)
         total = len(rows)
         return {
             "quiz_id": quiz_id,
@@ -1175,6 +1183,41 @@ def results(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/results/{attempt_id}/integrity")
+def result_integrity(attempt_id: int, db: Session = Depends(get_db)) -> dict:
+    """Full integrity timeline for one paper (screen leaves, offline spells, device moves)."""
+    attempt = db.get(Attempt, attempt_id)
+    if attempt is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Result not found.")
+    return {
+        "attempt_id": attempt.id,
+        "quiz": {"id": attempt.quiz_id, "title": attempt.quiz.title if attempt.quiz else ""},
+        "student": student_public(attempt.student, mask=False),
+        "status": attempt.status,
+        "started_at": iso(attempt.started_at),
+        "submitted_at": iso(attempt.submitted_at),
+        "submission_type": attempt.submission_type,
+        "summary": exam_integrity.summary(attempt),
+        "events": exam_integrity.timeline(attempt),
+    }
+
+
+@router.get("/quizzes/{quiz_id}/item-analysis")
+def quiz_item_analysis(quiz_id: int, db: Session = Depends(get_db)) -> dict:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None or quiz.is_bank:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Exam not found.")
+    return {"scope": "quiz", "quiz": {"id": quiz.id, "title": quiz.title}, **item_analysis.analyze(db, quiz_id=quiz.id)}
+
+
+@router.get("/courses/{course_id}/item-analysis")
+def course_item_analysis(course_id: int, db: Session = Depends(get_db)) -> dict:
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
+    return {"scope": "course", "course": {"id": course.id, "code": course.code, "title": course.title}, **item_analysis.analyze(db, course_id=course.id)}
 
 
 @router.get("/results/export")

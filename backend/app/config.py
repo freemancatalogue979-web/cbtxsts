@@ -60,6 +60,9 @@ DEFAULT_ADMIN_NAME = "Arena Administrator"
 # Gameplay tuning
 # ---------------------------------------------------------------------------
 EXAM_GRACE_SECONDS = 20          # extra seconds allowed after the deadline before auto-expiry
+# Answers queued on a phone while offline may still land this long after the
+# deadline (the device stops accepting taps at 0:00; this only covers delivery).
+EXAM_SYNC_GRACE_SECONDS = int(os.getenv("CBT_EXAM_SYNC_GRACE_SECONDS", "90") or 90)
 DUEL_QUESTION_COUNT = 10         # default head-to-head length
 DUEL_TIME_LIMIT_SECONDS = 180    # whole-duel hard clock (outer safety net)
 DUEL_PER_QUESTION_SECONDS = 20   # server-paced clock applied to every question

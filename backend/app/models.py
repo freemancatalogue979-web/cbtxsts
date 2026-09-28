@@ -457,6 +457,12 @@ class Attempt(Base):
     # exams fill it at start time so every player can get a different paper
     # that still survives refreshes. Empty on legacy attempts (whole quiz).
     question_ids: Mapped[list] = mapped_column(JSON, default=list)
+    # Exam integrity. ``device_id`` is the random id of the phone/browser that
+    # holds the paper (a second device must explicitly take over). ``integrity``
+    # is a small log for staff review — screen leaves, time away, offline spells,
+    # device switches — see services/exam_integrity.py. Nothing here auto-fails.
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    integrity: Mapped[dict] = mapped_column(JSON, default=dict)
 
     student: Mapped[Student] = relationship(back_populates="attempts")
     quiz: Mapped[Quiz] = relationship(back_populates="attempts")
