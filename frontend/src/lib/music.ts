@@ -24,6 +24,7 @@
  */
 import {audioBlobDelete, audioBlobDeleteAll, audioBlobGet, audioBlobKeys, audioBlobPut} from './audioStore';
 import {cacheRead, cacheWrite} from './cache';
+import {EXPERIENCE_EVENT, isPro} from './mode';
 import {musicOn, musicTrack, musicVolume, setMusicOn, setMusicTrack, setMusicVolume, type MusicTrackId} from './prefs';
 
 export type TrackId = MusicTrackId;
@@ -381,7 +382,8 @@ function playElement(el: HTMLAudioElement, restart: boolean): void {
 /* --------------------------------------------------------------- transport */
 
 function start(restart = false): void {
-  if (!musicOn() || !unlocked || state === 'playing') return;
+  // Pro Mode is silent: no background music, ever (the saved choice is kept).
+  if (!musicOn() || isPro() || !unlocked || state === 'playing') return;
   const el = currentElement();
   if (!el) {
     setState('paused'); // this device cannot play the file: stay quiet
@@ -551,14 +553,14 @@ export const music = {
   },
   /** Called from the first pointer/key gesture. */
   unlock(): void {
-    if (!musicOn() || isHeld()) return;
+    if (!musicOn() || isHeld() || isPro()) return;
     unlocked = true;
     if (state === 'paused') return; // a paused player stays paused until asked
     start(false);
   },
   /** Called once at boot: try to autoplay, else report 'blocked' for the UI. */
   autoplay(): void {
-    if (!musicOn()) {
+    if (!musicOn() || isPro()) {
       setState('off');
       return;
     }
@@ -579,7 +581,7 @@ export const music = {
   },
   /** Pre-warm: called on the first gesture and whenever the tab wakes. */
   warm(): void {
-    if (!musicOn()) return;
+    if (!musicOn() || isPro()) return;
     primeTracksLocally();
     ensureGraph();
     if (ctx && ctx.state === 'suspended' && state === 'playing') void ctx.resume().catch(() => undefined);
@@ -609,3 +611,18 @@ export const music = {
     };
   },
 };
+
+/* Standard ⇄ Pro: Pro silences the soundtrack on the spot; going back to
+   Standard picks up the player's own saved choice (on / off / paused). */
+if (typeof window !== 'undefined') {
+  window.addEventListener(EXPERIENCE_EVENT, () => {
+    if (isPro()) {
+      pauseEveryElementExcept(null);
+      watchVisibility(false);
+      pausedByVisibility = false;
+      setState('off');
+    } else {
+      music.autoplay();
+    }
+  });
+}

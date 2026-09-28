@@ -1,4 +1,5 @@
 /** Toasts + the big celebration overlay (level-ups, badges, duel wins, prizes). */
+import {useExperience} from '../lib/mode';
 import {
   AlertTriangle,
   Award,
@@ -285,8 +286,15 @@ export function CelebrationLayer() {
   const {celebrations, dismissCelebration} = useSession();
   const active = celebrations[0];
 
+  const {pro} = useExperience();
+
   useEffect(() => {
     if (!active) return undefined;
+    // Pro Mode: no game pop-ups — the moment is noted quietly and cleared.
+    if (pro) {
+      dismissCelebration(active.id);
+      return undefined;
+    }
     if (active.kind === 'duel_win' || active.kind === 'prize') celebrate({big: true});
     if (active.kind === 'duel_win' || active.kind === 'level_up') {
       HAPTICS.win();
@@ -297,8 +305,9 @@ export function CelebrationLayer() {
     }
     const timer = window.setTimeout(() => dismissCelebration(active.id), 9000);
     return () => window.clearTimeout(timer);
-  }, [active, dismissCelebration]);
+  }, [active, dismissCelebration, pro]);
 
+  if (pro) return null;
   return (
     <AnimatePresence mode="wait">
       {active && <CelebrationCard key={active.id} celebration={active} onClose={() => dismissCelebration(active.id)} />}

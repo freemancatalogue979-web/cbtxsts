@@ -1,7 +1,9 @@
 /** Navigation model shared by the desktop tabs and the mobile bottom bar. */
 import {Activity, BookOpen, CalendarDays, Gamepad2, Gift, GraduationCap, LifeBuoy, Map, Sparkles, Search, Shield, Store, Swords, TrendingUp, Trophy, User, Users} from 'lucide-react';
 
-export type Tab = 'play' | 'map' | 'study' | 'tutor' | 'materials' | 'arena' | 'ranked' | 'events' | 'mystery' | 'duels' | 'shop' | 'friends' | 'ranks' | 'prizes' | 'feed' | 'support' | 'profile';
+export type Tab = 'play' | 'map' | 'study' | 'tutor' | 'materials' | 'arena' | 'ranked' | 'events' | 'mystery' | 'duels' | 'shop' | 'friends' | 'ranks' | 'prizes' | 'feed' | 'support' | 'profile'
+  /* Pro Mode workspaces (same data, focused interfaces) */
+  | 'courses' | 'bank' | 'exams' | 'flashcards' | 'analytics' | 'settings';
 
 export const TABS: {id: Tab; label: string; short: string; icon: typeof Gamepad2}[] = [
   {id: 'play', label: 'Play', short: 'Home', icon: Trophy},
@@ -37,3 +39,6 @@ export const MORE_TABS: Tab[] = TABS.map((row) => row.id).filter((id) => !MOBILE
 
 export const DESKTOP_PRIMARY_TABS: Tab[] = ['play', 'ranked', 'events', 'study', 'tutor', 'mystery', 'arena', 'shop'];
 export const DESKTOP_MORE_TABS: Tab[] = ['map', 'materials', 'duels', 'friends', 'ranks', 'prizes', 'feed', 'support', 'profile'];
+
+/** Tabs that only exist in Pro Mode; Standard falls back to Home for them. */
+export const PRO_ONLY_TABS: Tab[] = ['courses', 'bank', 'exams', 'flashcards', 'analytics', 'settings'];

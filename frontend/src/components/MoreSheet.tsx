@@ -11,7 +11,8 @@
  * `sm` up. Every tab in MORE_TABS is always reachable: anything not placed in a
  * group lands in a trailing "More" group, so new tabs never go missing.
  */
-import {ArrowUpRight, ChevronRight, Coins, Flame, Gem, LifeBuoy, LogOut, Shield, X} from 'lucide-react';
+import {ArrowUpRight, Briefcase, ChevronRight, Coins, Flame, Gem, LifeBuoy, LogOut, Shield, X} from 'lucide-react';
+import {setExperience} from '../lib/mode';
 import {AnimatePresence, motion, useDragControls} from 'motion/react';
 import {useEffect} from 'react';
 import type {ReactNode} from 'react';
@@ -447,6 +448,21 @@ export default function MoreSheet({
                       <ChevronRight className="size-4 shrink-0 text-mist-600" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      setExperience('pro');
+                    }}
+                    className={rowClass}
+                  >
+                    <Briefcase className="size-[18px] shrink-0 text-nova-300" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.84rem] font-semibold text-mist-100">Switch to Pro Mode</span>
+                      <span className="block truncate text-[0.68rem] text-mist-500">Quiet, focused and professional — same progress</span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-mist-600" />
+                  </button>
                   <InstallApp variant="row" className={rowClass} />
                   {role && role !== 'student' && (
                     <button

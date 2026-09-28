@@ -7,6 +7,7 @@
  *
  * AudioContext is unlocked lazily on the first user gesture (browser autoplay policy).
  */
+import {isPro} from './mode';
 import {setSoundOn, soundOn} from './prefs';
 
 type SfxName =
@@ -140,7 +141,7 @@ const RECIPES: Record<SfxName, (c: AudioContext) => void> = {
 
 export const sfx = {
   play(name: SfxName): void {
-    if (!enabled) return;
+    if (!enabled || isPro()) return; // Pro Mode: no sound effects
     const c = ensure();
     if (!c || !master) return;
     try {
@@ -150,7 +151,7 @@ export const sfx = {
     }
   },
   playUiClick(type: 'tap' | 'nav' | 'select' | 'toggle' | 'confirm' | 'cancel' = 'tap'): void {
-    if (!enabled) return;
+    if (!enabled || isPro()) return;
     const c = ensure();
     if (!c || !master) return;
     try {

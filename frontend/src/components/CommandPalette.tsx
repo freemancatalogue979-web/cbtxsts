@@ -50,11 +50,22 @@ export default function CommandPalette({
   onClose,
   onTab,
   onOpenMaterial,
+  tabs,
+  actions,
+  onStartExam,
+  placeholder = 'Jump to a tab, exam or material…',
 }: {
   open: boolean;
   onClose: () => void;
   onTab: (tab: Tab) => void;
   onOpenMaterial: (materialId: number) => void;
+  /** Destinations to list (Pro passes its own); defaults to every arena tab. */
+  tabs?: {id: Tab; label: string; icon: typeof Search; hint?: string}[];
+  /** Extra commands (ask AI, switch mode…), listed with the destinations. */
+  actions?: {key: string; label: string; hint: string; icon: typeof Search; run: () => void}[];
+  /** Open an exam directly instead of pointing at the Play tab. */
+  onStartExam?: (quiz: Quiz) => void;
+  placeholder?: string;
 }) {
   const {profile, toast} = useSession();
   const scope = userScope(profile?.id);
@@ -110,11 +121,25 @@ export default function CommandPalette({
   const hits = useMemo<Hit[]>(() => {
     const build = (): Hit[] => {
       const rows: Hit[] = [];
-      for (const tab of TABS) {
+      for (const action of actions ?? []) {
+        rows.push({
+          key: `action:${action.key}`,
+          label: action.label,
+          hint: action.hint,
+          icon: action.icon,
+          score: 0,
+          run: () => {
+            remember(`action:${action.key}`, action.label);
+            onClose();
+            action.run();
+          },
+        });
+      }
+      for (const tab of tabs ?? TABS) {
         rows.push({
           key: `tab:${tab.id}`,
           label: tab.label,
-          hint: 'Go to tab',
+          hint: ('hint' in tab && tab.hint) || 'Go to tab',
           icon: tab.icon,
           score: 0,
           run: () => {
@@ -133,8 +158,12 @@ export default function CommandPalette({
           score: 0,
           run: () => {
             remember(`exam:${quiz.id}`, quiz.title);
-            onTab('play');
             onClose();
+            if (onStartExam) {
+              onStartExam(quiz);
+              return;
+            }
+            onTab('play');
             toast('info', quiz.title, 'Open the exam from the Play tab to start the clock.');
           },
         });
@@ -170,7 +199,7 @@ export default function CommandPalette({
       .filter((row) => row.score > 0)
       .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
       .slice(0, 30);
-  }, [materials, onClose, onOpenMaterial, onTab, query, quizzes, recent, remember, toast]);
+  }, [actions, materials, onClose, onOpenMaterial, onStartExam, onTab, query, quizzes, recent, remember, tabs, toast]);
 
   useEffect(() => {
     setCursor((current) => Math.min(current, Math.max(hits.length - 1, 0)));
@@ -214,7 +243,7 @@ export default function CommandPalette({
                 onClose();
               }
             }}
-            placeholder="Jump to a tab, exam or material…"
+            placeholder={placeholder}
             aria-label="Search the arena"
             /* text-base keeps iOS from zooming the page on focus. */
             className="min-w-0 flex-1 bg-transparent text-base font-semibold text-mist-50 placeholder:text-mist-600 focus:outline-none"

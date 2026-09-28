@@ -6,6 +6,7 @@
  * iOS Safari and desktop, so every call degrades to a no-op. Players who ask the
  * OS to reduce motion get nothing either.
  */
+import {isPro} from './mode';
 
 type Pattern = number | number[];
 
@@ -22,7 +23,7 @@ function supported(): boolean {
 }
 
 export function haptic(pattern: Pattern = 12): void {
-  if (!supported()) return;
+  if (!supported() || isPro()) return;
   try {
     navigator.vibrate(pattern);
   } catch {

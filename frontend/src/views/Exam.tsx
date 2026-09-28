@@ -455,6 +455,7 @@ export default function Exam({
       if (!state || confirmOpen) return;
       const target = event.target as HTMLElement;
       if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const question = state.questions[index];
       if (!question) return;
 
@@ -462,8 +463,8 @@ export default function Exam({
       else if (['b', 'B', '2'].includes(event.key)) pick(question, 'B');
       else if (['c', 'C', '3'].includes(event.key)) pick(question, 'C');
       else if (['d', 'D', '4'].includes(event.key)) pick(question, 'D');
-      else if (event.key === 'ArrowRight') go(index + 1);
-      else if (event.key === 'ArrowLeft') go(index - 1);
+      else if (event.key === 'ArrowRight' || event.key === 'n' || event.key === 'N') go(index + 1);
+      else if (event.key === 'ArrowLeft' || event.key === 'p' || event.key === 'P') go(index - 1);
       else if (['f', 'F'].includes(event.key)) toggleFlag(question);
     };
     window.addEventListener('keydown', onKey);

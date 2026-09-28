@@ -318,10 +318,11 @@ function Runner({exam, onFinished, onReload}: {exam: Exam; onFinished: (e: Exam)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (confirm || (event.target as HTMLElement)?.closest('input,textarea')) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const k = event.key.toUpperCase();
       if (['A', 'B', 'C', 'D', 'E'].includes(k) && q?.options.some((o) => o.key === k)) void choose(k);
-      else if (event.key === 'ArrowRight') setIndex((i) => Math.min(questions.length - 1, i + 1));
-      else if (event.key === 'ArrowLeft') setIndex((i) => Math.max(0, i - 1));
+      else if (event.key === 'ArrowRight' || k === 'N') setIndex((i) => Math.min(questions.length - 1, i + 1));
+      else if (event.key === 'ArrowLeft' || k === 'P') setIndex((i) => Math.max(0, i - 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

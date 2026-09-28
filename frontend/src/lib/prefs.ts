@@ -26,8 +26,8 @@ export const MASCOTS: {id: MascotName; name: string; blurb: string; short: strin
 export type ModeName = 'game' | 'pro' | 'fun';
 
 export const MODES: {id: ModeName; name: string; blurb: string; short: string}[] = [
-  {id: 'game', name: 'Game', blurb: 'The full arena HUD — glows, mascots, gold titles.', short: 'Full arena HUD.'},
-  {id: 'pro', name: 'Pro', blurb: 'Clean and professional. No mascots, flat surfaces.', short: 'Clean and professional.'},
+  {id: 'game', name: 'Standard', blurb: 'The full arena experience — rewards, mascots, music and animation.', short: 'Full arena experience.'},
+  {id: 'pro', name: 'Pro', blurb: 'A quiet, professional study workspace. No sound, mascots or pop-ups.', short: 'Quiet and professional.'},
   {id: 'fun', name: 'Fun', blurb: 'Bouncy, wiggly, extra sparkly. Pure playground.', short: 'Bouncy and sparkly.'},
 ];
 

@@ -10,7 +10,10 @@ import {Button, Chip} from './components/ui';
 import {applyFxProfile} from './lib/fx';
 import {jumpToMaterial} from './lib/palette';
 import {ASK_TUTOR_EVENT, OPEN_MINI_EXAM_EVENT} from './lib/tutor';
-import {TABS} from './lib/nav';
+import {PRO_ONLY_TABS, TABS} from './lib/nav';
+import {isPro, useExperience} from './lib/mode';
+import ProShell from './pro/ProShell';
+import ProRoutes from './pro/ProRoutes';
 import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
 import type {AttemptSummary, Duel, GroupSection, Quiz, RewardEvent} from './lib/types';
@@ -53,7 +56,7 @@ type Route =
   | {view: 'mini'; examId: number}
   | {view: 'admin'};
 
-const TAB_IDS = TABS.map((row) => row.id) as string[];
+const TAB_IDS = [...TABS.map((row) => row.id), ...PRO_ONLY_TABS] as string[];
 
 /** The routes worth putting in the address bar — every one of them reloads. */
 function routePath(route: Route): string {
@@ -141,6 +144,26 @@ function Splash() {
 /** Chrome for focused screens (exam, duel, result) — no bottom tabs. */
 function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; onBack: () => void; backLabel: string}) {
   const {profile} = useSession();
+  const {pro} = useExperience();
+  /* Pro / exam: a strict, distraction-free frame — back, title, nothing else. */
+  if (pro) {
+    return (
+      <div className="pro-app">
+        <header className="pro-topbar print-hide sticky top-0 z-50 safe-top">
+          <div className="mx-auto flex h-14 w-full max-w-[1100px] items-center gap-3 px-3 md:px-6">
+            <button type="button" onClick={onBack} className="pro-btn pro-btn-ghost pro-btn-sm -ml-1" aria-label={`Back to ${backLabel}`}>
+              <ChevronLeft className="size-4" />
+              <span className="hidden sm:inline">{backLabel}</span>
+            </button>
+            <span className="text-[0.8125rem] font-semibold tracking-tight" style={{color: 'var(--pro-text-2)'}}>
+              Absolute Genesis <span style={{color: 'var(--pro-accent-text)'}}>PRO</span>
+            </span>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[1100px] min-w-0 px-3 pt-4 pb-10 sm:px-5 md:pt-6">{children}</main>
+      </div>
+    );
+  }
   return (
     <div className="aurora min-h-dvh">
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
@@ -171,6 +194,7 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
 
 export default function App() {
   const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile, switchTo, beginSwitch, cancelSwitch, switchTarget} = useSession();
+  const {pro} = useExperience();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
   const [started, setStarted] = useState(false);
 
@@ -261,6 +285,11 @@ export default function App() {
     return () => window.removeEventListener(OPEN_MINI_EXAM_EVENT, onOpen);
   }, [navigate]);
 
+  /* Pro-only workspaces don't exist in Standard: land on Home instead. */
+  useEffect(() => {
+    if (!pro && route.view === 'dashboard' && PRO_ONLY_TABS.includes(route.tab)) navigate({view: 'dashboard', tab: 'play'}, 'replace');
+  }, [pro, route, navigate]);
+
   /* Game layer: measure the device once and stamp data-fx on <html>. */
   useEffect(() => {
     applyFxProfile();
@@ -279,6 +308,8 @@ export default function App() {
   useEffect(
     () =>
       on('duel_invite', () => {
+        // Pro Mode never pulls the student away from their work.
+        if (isPro()) return;
         if (routeRef.current.view === 'dashboard') navigate({view: 'dashboard', tab: 'duels'}, 'replace');
       }),
     [on, navigate],
@@ -404,7 +435,35 @@ export default function App() {
           exit={{opacity: 0}}
           transition={{duration: 0.2}}
         >
-          {route.view === 'dashboard' && (
+          {route.view === 'dashboard' && pro && (
+            <ProShell tab={route.tab} onTab={(tab) => navigate({view: 'dashboard', tab})} onSignOut={signOut} onStartExam={startExam}>
+              <ProRoutes
+                tab={route.tab}
+                onTab={(tab) => navigate({view: 'dashboard', tab})}
+                onStartExam={startExam}
+                onOpenResult={(attemptId) => navigate({view: 'result', attemptId})}
+                onSignOut={signOut}
+                fallback={
+                  <Dashboard
+                    tab={route.tab}
+                    onStartExam={startExam}
+                    onOpenDuel={openDuel}
+                    onOpenRoom={openRoom}
+                    onOpenResult={(attemptId) => navigate({view: 'result', attemptId})}
+                    onOpenDuels={() => navigate({view: 'dashboard', tab: 'duels'})}
+                    onOpenMaterial={(materialId) => {
+                      navigate({view: 'dashboard', tab: 'materials'});
+                      jumpToMaterial(materialId);
+                    }}
+                    onOpenGroup={openGroup}
+                    onSignOut={signOut}
+                  />
+                }
+              />
+            </ProShell>
+          )}
+
+          {route.view === 'dashboard' && !pro && (
             <AppShell
               tab={route.tab}
               onTab={(tab) => navigate({view: 'dashboard', tab})}
@@ -512,7 +571,7 @@ export default function App() {
       <Toasts />
       <CelebrationLayer />
 
-      {role === 'student' && (
+      {role === 'student' && !pro && (
         <button
           onClick={() => toast('info', 'Staff console', 'Sign out, then use the Staff tab on the login screen.')}
           className="print-hide fixed bottom-24 left-4 z-40 hidden items-center gap-1.5 rounded-full border border-white/12 bg-ink-900/80 px-3 py-1.5 text-[0.7rem] font-bold text-mist-500 backdrop-blur transition-colors hover:text-mist-200 lg:flex"

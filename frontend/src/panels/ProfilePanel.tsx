@@ -50,7 +50,6 @@ import {useSize} from '../lib/responsive';
 import Mascot from '../components/Mascot';
 import {
   applyFont,
-  applyMode,
   applySkin,
   applyTheme,
   currentFont,
@@ -77,6 +76,7 @@ import {cacheClearAll, cacheStats} from '../lib/cache';
 import {invalidatePhoto} from '../lib/photos';
 import {sfx} from '../lib/sfx';
 import {useSession} from '../store/session';
+import {setExperience} from '../lib/mode';
 import type {PlayerSummary, ResultRow} from '../lib/types';
 
 const HUES = [350, 20, 45, 130, 165, 195, 220, 260, 285, 315];
@@ -795,7 +795,7 @@ export default function ProfilePanel({
                       key={option.id}
                       onClick={() => {
                         setMode(option.id);
-                        applyMode(option.id);
+                        setExperience(option.id);
                         sfx.play('tap');
                       }}
                       className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors touch-manipulation ${
