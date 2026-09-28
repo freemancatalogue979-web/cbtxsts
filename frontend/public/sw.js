@@ -16,7 +16,7 @@
  *
  * Bump VERSION to drop every old cache on the next visit.
  */
-const VERSION = 'v4';
+const VERSION = 'v5';
 /* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
    makes the app installable and gives an offline fallback page; it never
    caches dev modules, so hot reload behaves exactly as before. */
@@ -33,7 +33,7 @@ const MAX_ASSETS = 160;
    make every lookup miss offline. Hashed files are identical either way. */
 const MATCH = {ignoreVary: true};
 
-const STATIC_PRECACHE = ['/manifest.webmanifest', '/brand/icon-192.png', '/brand/logo-96.png'];
+const STATIC_PRECACHE = ['/manifest.webmanifest', '/brand/ag-icon-192.png', '/brand/ag-logo-96.png'];
 
 /** Pull /assets/... URLs out of the built index.html so the shell works offline from visit one. */
 function assetsIn(html) {

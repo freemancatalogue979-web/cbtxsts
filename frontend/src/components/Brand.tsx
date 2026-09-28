@@ -9,7 +9,7 @@ import {useIsDesktop} from '../lib/viewport';
 export function LogoMark({size = 42, className = ''}: {size?: number | null; className?: string}) {
   return (
     <img
-      src="/brand/logo.webp"
+      src="/brand/ag-logo.webp"
       alt=""
       width={size ?? undefined}
       height={size ?? undefined}
@@ -50,7 +50,7 @@ export function Wordmark({
     if (size !== 'brand') return null;
     return (
       <div className={`flex min-w-0 shrink items-center gap-2 ${className}`}>
-        <img src="/brand/crest.webp" alt="" width={36} height={34} draggable={false} className="h-9 w-auto shrink-0 object-contain" />
+        <img src="/brand/ag-crest.webp" alt="" width={36} height={34} draggable={false} className="h-9 w-auto shrink-0 object-contain" />
         <span className="min-w-0 leading-tight">
           <span className="block truncate font-display text-[0.9rem] font-black tracking-[0.06em] text-mist-50">Absolute Genesis</span>
           {tagline && <span className="block truncate text-[0.6rem] font-bold tracking-[0.08em] text-mist-500">A completely new beginning</span>}

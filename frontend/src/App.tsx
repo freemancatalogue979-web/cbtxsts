@@ -1,6 +1,6 @@
 /** Root router: login, dashboard tabs, exam engine, duel arena, results, admin. */
 import {ChevronLeft, Coins, Shield} from 'lucide-react';
-import {AnimatePresence, motion, useReducedMotion} from 'motion/react';
+import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {AppShell} from './components/AppShell';
 import {Wordmark} from './components/Brand';
@@ -104,36 +104,31 @@ function routeFromHash(): Route {
 }
 
 /**
- * The loading screen: the arena crest is the whole point of it, so it is shown
- * as big as the viewport allows with a soft pulse and a shimmer ring behind it.
+ * The launch screen — Absolute Genesis crest rising over a violet dawn.
+ * Styles live inline in index.html (so the same screen paints before the
+ * bundle loads); this copy carries `ag-splash--live` to skip a second entrance.
  */
 function Splash() {
-  const reduced = useReducedMotion();
   return (
-    <div className="aurora grid min-h-dvh place-items-center overflow-hidden px-6">
-      <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
-      <div className="relative flex flex-col items-center gap-6">
-        <div className="relative grid place-items-center">
-          <motion.span
-            aria-hidden
-            animate={reduced ? {rotate: 0} : {rotate: 360}}
-            transition={reduced ? {duration: 0} : {repeat: Infinity, duration: 3.6, ease: 'linear'}}
-            className="absolute size-40 rounded-full border border-dashed border-white/15 sm:size-52"
-          />
-          <motion.img
-            src="/brand/logo.webp"
-            alt="Absolute Genesis"
-            draggable={false}
-            initial={{opacity: 0, scale: 0.82}}
-            animate={reduced ? {opacity: 1, scale: 1} : {opacity: 1, scale: [1, 1.05, 1]}}
-            transition={reduced ? {duration: 0} : {opacity: {duration: 0.35}, scale: {repeat: Infinity, duration: 1.8, ease: 'easeInOut'}}}
-            className="relative w-40 drop-shadow-[0_18px_40px_rgba(250,204,21,0.35)] sm:w-52 lg:w-60"
-          />
+    <div className="ag-splash ag-splash--live" role="status" aria-label="Loading Absolute Genesis">
+      <div className="ag-splash__rays" />
+      <div className="ag-splash__glow" />
+      <div className="ag-splash__stars" />
+      <div className="ag-splash__stack">
+        <img
+          className="ag-splash__logo"
+          src="/brand/ag-logo.webp"
+          alt="Absolute Genesis"
+          width={616}
+          height={629}
+          draggable={false}
+        />
+        <p className="ag-splash__tag">A completely new beginning</p>
+        <div className="ag-splash__bar">
+          <span />
         </div>
- <p className="game-title text-center font-display text-[0.9rem] font-black tracking-[0.34em] text-mist-400 sm:text-[1rem]">
-          A completely new beginning
-        </p>
       </div>
+      <p className="ag-splash__foot">CBT exams · Study · Compete</p>
     </div>
   );
 }

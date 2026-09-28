@@ -116,7 +116,7 @@ export default function InstallApp({variant = 'card', className = ''}: {variant?
   return (
     <>
       <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-nova-400/20 bg-nova-500/[0.07] px-4 py-3.5 sm:rounded-3xl sm:px-5 ${className}`}>
-        <img src="/brand/icon-192.png" alt="" className="size-11 shrink-0 rounded-xl" width={44} height={44} />
+        <img src="/brand/ag-icon-192.png" alt="" className="size-11 shrink-0 rounded-xl" width={44} height={44} />
         <div className="min-w-0 flex-1">
           <p className="text-[0.86rem] font-black text-mist-50">Install Absolute Genesis</p>
           <p className="text-[0.74rem] font-semibold leading-snug text-mist-400">
@@ -163,7 +163,7 @@ export function InstallBanner({className = ''}: {className?: string}) {
         aria-label="Install Absolute Genesis"
         className={`flex items-center gap-3 rounded-2xl border border-nova-400/25 bg-gradient-to-r from-nova-500/[0.14] to-fuchsia-500/[0.08] p-2.5 pr-2 sm:p-3 ${className}`}
       >
-        <img src="/brand/icon-192.png" alt="" className="size-10 shrink-0 rounded-xl" width={40} height={40} />
+        <img src="/brand/ag-icon-192.png" alt="" className="size-10 shrink-0 rounded-xl" width={40} height={40} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.82rem] font-black text-mist-50">Get the Absolute Genesis app</p>
           <p className="text-[0.7rem] font-semibold leading-snug text-mist-400">Home-screen icon, full screen, works on weak network.</p>
@@ -440,7 +440,7 @@ export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void
   return (
     <Modal open={open} onClose={onClose} title={title} subtitle="Takes about 10 seconds. No app store needed." size="sm" footer={<Button variant="outline" onClick={onClose}>Got it</Button>}>
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-        <img src="/brand/icon-192.png" alt="" className="size-12 shrink-0 rounded-xl" width={48} height={48} />
+        <img src="/brand/ag-icon-192.png" alt="" className="size-12 shrink-0 rounded-xl" width={48} height={48} />
         <div className="min-w-0">
           <p className="text-[0.9rem] font-black text-mist-50">Absolute Genesis</p>
           <p className="flex items-center gap-1 text-[0.72rem] font-semibold text-mist-400">

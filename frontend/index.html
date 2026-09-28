@@ -7,8 +7,9 @@
     <!-- One fixed scale: the arena is drawn for the viewport it lands on. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#07030f" />
-    <link rel="icon" type="image/png" href="/brand/logo-96.png" />
-    <link rel="apple-touch-icon" href="/brand/apple-touch-180.png" />
+    <link rel="icon" type="image/png" href="/brand/ag-logo-96.png" />
+    <link rel="preload" as="image" href="/brand/ag-logo.webp" fetchpriority="high" />
+    <link rel="apple-touch-icon" href="/brand/ag-apple-touch-180.png" />
     <!-- Installable app: manifest + standalone look on iPhone/Android. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -21,7 +22,7 @@
       content="Absolute Genesis — a completely new beginning. Real-time computer-based testing and exam practice: timed CBT exams, study materials, an AI tutor, live 1v1 duels, XP, streaks, leaderboards and prizes."
     />
     <meta property="og:title" content="Absolute Genesis — A completely new beginning." />
-    <meta property="og:image" content="/brand/logo-256.png" />
+    <meta property="og:image" content="/brand/ag-logo-256.png" />
     <meta property="og:description" content="Timed CBT exams, live duels with friends, XP, streaks, leaderboards and real prizes." />
     <meta property="og:type" content="website" />
     <script>
@@ -49,9 +50,99 @@
         }
       } catch (error) {}
     </script>
+    <!-- Launch screen. Styled inline so it paints on the very first frame —
+         before the app bundle (and its CSS, in dev) has loaded. React's own
+         <Splash /> reuses these classes, so the hand-over is seamless. -->
+    <style>
+      html, body { background: #07030f; }
+      .ag-splash {
+        position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
+        background:
+          radial-gradient(60% 42% at 50% 44%, rgba(124, 58, 237, 0.34), transparent 72%),
+          radial-gradient(38% 26% at 50% 30%, rgba(250, 204, 21, 0.13), transparent 70%),
+          linear-gradient(180deg, #0c0620 0%, #07030f 58%, #040208 100%);
+        color: #fff; -webkit-tap-highlight-color: transparent; user-select: none;
+      }
+      .ag-splash__rays {
+        position: absolute; left: 50%; top: 40%; width: 160vmax; height: 160vmax; pointer-events: none;
+        background: repeating-conic-gradient(from 0deg, rgba(253, 224, 140, 0.11) 0deg 3deg, transparent 3deg 15deg);
+        -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.55) 12%, transparent 34%);
+        mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0.55) 12%, transparent 34%);
+        transform: translate(-50%, -50%); animation: ag-spin 90s linear infinite;
+      }
+      .ag-splash__glow {
+        position: absolute; left: 50%; top: 42%; width: min(34rem, 120vw); aspect-ratio: 1; border-radius: 50%;
+        background: radial-gradient(circle, rgba(167, 139, 250, 0.32) 0%, rgba(124, 58, 237, 0.14) 38%, transparent 68%);
+        transform: translate(-50%, -50%); animation: ag-breathe 3.6s ease-in-out infinite; pointer-events: none;
+      }
+      .ag-splash__stars {
+        position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+        background-image:
+          radial-gradient(1.5px 1.5px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 78% 12%, #fde68a, transparent),
+          radial-gradient(1px 1px at 88% 64%, #fff, transparent), radial-gradient(1.5px 1.5px at 22% 76%, #c4b5fd, transparent),
+          radial-gradient(1px 1px at 46% 88%, #fff, transparent), radial-gradient(1px 1px at 64% 28%, #fff, transparent),
+          radial-gradient(1.5px 1.5px at 6% 52%, #fde68a, transparent), radial-gradient(1px 1px at 94% 36%, #c4b5fd, transparent);
+        animation: ag-twinkle 5s ease-in-out infinite;
+      }
+      .ag-splash__stack { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; }
+      .ag-splash__logo {
+        display: block; width: min(60vw, 15.5rem); height: auto; margin-bottom: 1.6rem;
+        filter: drop-shadow(0 18px 44px rgba(124, 58, 237, 0.5)) drop-shadow(0 0 26px rgba(250, 204, 21, 0.16));
+        animation: ag-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both, ag-float 4.5s ease-in-out 0.9s infinite;
+      }
+      .ag-splash__tag {
+        margin: 0; padding-left: 0.34em; text-align: center; text-transform: uppercase; letter-spacing: 0.34em;
+        font: 600 0.72rem/1.4 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(90deg, #c4b5fd 0%, #fde68a 35%, #fff7d6 50%, #fde68a 65%, #c4b5fd 100%);
+        background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+        animation: ag-fade 0.8s ease 0.35s both, ag-sheen 5s linear 1.2s infinite;
+      }
+      .ag-splash__bar {
+        width: 8.5rem; height: 3px; margin-top: 1.4rem; border-radius: 99px; overflow: hidden;
+        background: rgba(255, 255, 255, 0.08); animation: ag-fade 0.6s ease 0.6s both;
+      }
+      .ag-splash__bar > span {
+        display: block; width: 42%; height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, transparent, #a78bfa, #fcd34d, transparent);
+        animation: ag-load 1.35s ease-in-out infinite;
+      }
+      .ag-splash__foot {
+        position: absolute; left: 0; right: 0; bottom: max(1.6rem, env(safe-area-inset-bottom)); margin: 0; text-align: center;
+        font: 600 0.6rem/1 ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.22em;
+        text-transform: uppercase; color: rgba(226, 232, 240, 0.32); animation: ag-fade 0.8s ease 0.8s both;
+      }
+      /* React's copy takes over mid-animation: no second entrance. */
+      .ag-splash--live .ag-splash__logo { animation: ag-float 4.5s ease-in-out infinite; }
+      .ag-splash--live .ag-splash__tag { animation: ag-sheen 5s linear infinite; }
+      .ag-splash--live .ag-splash__bar, .ag-splash--live .ag-splash__foot { animation: none; }
+      @keyframes ag-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+      @keyframes ag-breathe { 0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.94); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); } }
+      @keyframes ag-twinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.7; } }
+      @keyframes ag-rise { from { opacity: 0; transform: translateY(18px) scale(0.92); } to { opacity: 1; transform: none; } }
+      @keyframes ag-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      @keyframes ag-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      @keyframes ag-sheen { from { background-position: 0% 0; } to { background-position: 220% 0; } }
+      @keyframes ag-load { from { transform: translateX(-110%); } to { transform: translateX(250%); } }
+      @media (prefers-reduced-motion: reduce) {
+        .ag-splash *, .ag-splash__rays, .ag-splash__glow { animation: none !important; }
+        .ag-splash__bar > span { width: 100%; opacity: 0.6; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="ag-splash" role="status" aria-label="Loading Absolute Genesis">
+        <div class="ag-splash__rays"></div>
+        <div class="ag-splash__glow"></div>
+        <div class="ag-splash__stars"></div>
+        <div class="ag-splash__stack">
+          <img class="ag-splash__logo" src="/brand/ag-logo.webp" alt="Absolute Genesis" width="616" height="629" fetchpriority="high" draggable="false" />
+          <p class="ag-splash__tag">A completely new beginning</p>
+          <div class="ag-splash__bar"><span></span></div>
+        </div>
+        <p class="ag-splash__foot">CBT exams · Study · Compete</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
