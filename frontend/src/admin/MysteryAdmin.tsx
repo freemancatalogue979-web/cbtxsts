@@ -6,7 +6,7 @@
  * and the solution paragraphs that correct deductions unlock. Everything here
  * is validated again on the server; this form just makes it pleasant to write.
  */
-import {ChevronDown, ChevronRight, Eye, Moon, Package, Pencil, Plus, Trash2} from 'lucide-react';
+import {ChevronDown, ChevronRight, Eye, Moon, Package, Pencil, Plus, Trash2, SearchIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -254,7 +254,7 @@ function CaseEditor({
   const num = (value: string) => Math.max(0, Number(value) || 0);
 
   return (
-    <Modal
+    <Modal icon={SearchIcon} tone="mint"
       open
       onClose={onClose}
       title={initial.id ? 'Edit mystery case' : 'New mystery case'}

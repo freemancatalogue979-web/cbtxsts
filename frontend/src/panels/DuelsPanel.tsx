@@ -15,7 +15,7 @@ import {
   Trophy,
   Users,
   X,
-  Zap,
+  Zap, SwordsIcon
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -289,7 +289,7 @@ function ChallengeModal({
   const capped = Math.min(stake, coins);
 
   return (
-    <Modal
+    <Modal icon={SwordsIcon} tone="flare"
       open={open}
       onClose={onClose}
       title="Start a duel"

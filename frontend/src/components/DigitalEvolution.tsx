@@ -4,7 +4,7 @@
  * Visualizes how the player's personal ecosystem evolves as they study:
  * SEED → SPROUT → NETWORK → NEURAL CORE → CYBER TREE → KNOWLEDGE NODE → ASCENSION
  */
-import {Dna, Info} from 'lucide-react';
+import {Dna, Info, DnaIcon} from 'lucide-react';
 import {useState} from 'react';
 import {Card, Modal, ProgressBar} from './ui';
 import {
@@ -122,7 +122,7 @@ export default function DigitalEvolution({
       </Card>
 
       {/* Evolutionary Codex Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Digital Evolution Codex" subtitle="A living digital ecosystem shaped by your study milestones" size="lg">
+      <Modal icon={DnaIcon} tone="pulse" open={showModal} onClose={() => setShowModal(false)} title="Digital Evolution Codex" subtitle="A living digital ecosystem shaped by your study milestones" size="lg">
         <div className="space-y-3">
           <p className="text-[0.78rem] leading-relaxed text-mist-300">
             In the CBT Arena, knowledge becomes living energy. As you complete exams, win duels, and level up, your personal digital biome evolves through seven evolutionary phases:

@@ -24,7 +24,7 @@ import {
   Settings2,
   Swords,
   Users,
-  Zap,
+  Zap, SettingsIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
@@ -100,7 +100,7 @@ function SettingsModal({open, onClose, group, onSaved}: {open: boolean; onClose:
   };
 
   return (
-    <Modal
+    <Modal icon={SettingsIcon} tone="nova"
       open={open}
       onClose={onClose}
       title="Group settings"

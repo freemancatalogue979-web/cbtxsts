@@ -8,8 +8,8 @@
  * Events tab is the only other door.
  */
 import {useCallback, useEffect, useState} from 'react';
-import {CalendarDays, Clock, Loader2, Pencil, Plus, Trash2, Trophy, Users, Zap} from 'lucide-react';
-import {Button, Card, Chip, Field, Modal, Select, TextInput} from '../components/ui';
+import {CalendarDays, Clock, Loader2, Pencil, Plus, Trash2, Trophy, Users, Zap, CalendarDaysIcon} from 'lucide-react';
+import {Button, Card, Chip, Field, Modal, Select, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {uiClick} from '../lib/sfx';
@@ -329,7 +329,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
       </div>
 
       {/* ------------------------------------------------------ creator */}
-      <Modal
+      <Modal icon={CalendarDaysIcon} tone="amber"
         open={creating}
         onClose={() => setCreating(false)}
         title={editing ? 'Edit event' : 'New arena event'}
@@ -430,7 +430,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
             <TextInput value={form.banner} maxLength={120} onChange={(e) => set('banner', e.target.value)} />
           </Field>
         </div>
-        <div className="mt-3 flex flex-wrap gap-4 border-t border-white/8 pt-3">
+        <div className="mt-4 grid gap-2 border-t border-white/8 pt-4 sm:grid-cols-2">
           {(
             [
               ['allow_join_during', 'Allow joining after the start'],
@@ -439,10 +439,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
               ['featured', '★ Featured on the events hub'],
             ] as const
           ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-[0.76rem] font-bold text-mist-300">
-              <input type="checkbox" checked={form[key]} onChange={(e) => set(key, e.target.checked)} className="size-4 accent-violet-500" />
-              {label}
-            </label>
+            <SwitchRow key={key} label={label} checked={form[key]} onChange={(on) => set(key, on)} />
           ))}
         </div>
       </Modal>

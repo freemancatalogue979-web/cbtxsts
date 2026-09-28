@@ -1,8 +1,8 @@
 /** Admin: announcements (live broadcast) and the prize vault. */
-import {Check, Gift, Megaphone, Pencil, Plus, Sparkles, Trash2} from 'lucide-react';
+import {Check, Gift, Megaphone, Pencil, Plus, Sparkles, Trash2, GiftIcon, MegaphoneIcon, Pin, Eye, Info, FileText, BarChart3, Swords, Trophy, Coins, Medal} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, PillSelect, SectionHeading, SwitchRow, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
@@ -11,6 +11,8 @@ import type {Notice, Prize} from '../lib/types';
 
 const KINDS = ['general', 'exam', 'result', 'duel', 'prize'] as const;
 const TIERS = ['bronze', 'silver', 'gold', 'platinum'] as const;
+const KIND_ICON: Record<(typeof KINDS)[number], typeof Info> = {general: Info, exam: FileText, result: BarChart3, duel: Swords, prize: Gift};
+const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const ICONS = ['gift', 'trophy', 'medal', 'crown', 'headphones', 'laptop', 'book', 'wallet', 'star', 'zap', 'sparkles', 'shopping'];
 
 const emptyNotice = {title: '', message: '', kind: 'general' as (typeof KINDS)[number], target_course: '', is_pinned: false};
@@ -137,7 +139,7 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
         </Button>
       </div>
 
-      <Modal
+      <Modal icon={MegaphoneIcon} tone="amber"
         open={Boolean(form)}
         onClose={() => setForm(null)}
         title="Broadcast an announcement"
@@ -155,32 +157,30 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
         {form && (
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <Field label="Title" className="sm:col-span-2">
-              <TextInput value={form.title} maxLength={180} onChange={(event) => setForm({...form, title: event.target.value})} />
+              <TextInput value={form.title} maxLength={180} placeholder="e.g. Mid-semester results are out" onChange={(event) => setForm({...form, title: event.target.value})} />
             </Field>
-            <Field label="Message" className="sm:col-span-2">
-              <TextArea rows={4} value={form.message} onChange={(event) => setForm({...form, message: event.target.value})} />
+            <Field label="Message" className="sm:col-span-2" aside={<span>{form.message.length} chars</span>}>
+              <TextArea rows={4} value={form.message} placeholder="What should every player know?" onChange={(event) => setForm({...form, message: event.target.value})} />
             </Field>
-            <Field label="Kind">
-              <Select value={form.kind} onChange={(event) => setForm({...form, kind: event.target.value as (typeof KINDS)[number]})}>
-                {KINDS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Kind" className="sm:col-span-2">
+              <PillSelect
+                aria-label="Kind"
+                value={form.kind}
+                onChange={(kind) => setForm({...form, kind})}
+                options={KINDS.map((kind) => ({value: kind, label: cap(kind), icon: KIND_ICON[kind]}))}
+              />
             </Field>
             <Field label="Target course code" hint="Optional — shown as a tag only.">
-              <TextInput value={form.target_course} onChange={(event) => setForm({...form, target_course: event.target.value.toUpperCase()})} />
+              <TextInput value={form.target_course} placeholder="LAW 411" onChange={(event) => setForm({...form, target_course: event.target.value.toUpperCase()})} />
             </Field>
-            <label className="flex items-center gap-3 sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={form.is_pinned}
-                onChange={(event) => setForm({...form, is_pinned: event.target.checked})}
-                className="size-5 accent-fuchsia-500"
-              />
-              <span className="text-[0.86rem] font-bold text-mist-200">Pin to the top of the feed</span>
-            </label>
+            <SwitchRow
+              className="sm:col-span-2"
+              icon={Pin}
+              label="Pin to the top of the feed"
+              description="Stays above newer posts until you unpin it."
+              checked={form.is_pinned}
+              onChange={(is_pinned) => setForm({...form, is_pinned})}
+            />
           </div>
         )}
       </Modal>
@@ -300,7 +300,7 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
         </ul>
       )}
 
-      <Modal
+      <Modal icon={GiftIcon} tone="gold"
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         title={editing?.id ? 'Edit prize' : 'New prize'}
@@ -317,43 +317,57 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
         }
       >
         {editing && (
-          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-            <Field label="Title">
-              <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} />
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <Field label="Title" className="col-span-2 sm:col-span-1">
+              <TextInput value={editing.title} placeholder="e.g. Wireless headphones" onChange={(event) => setEditing({...editing, title: event.target.value})} />
             </Field>
-            <Field label="Tier">
-              <Select value={editing.tier} onChange={(event) => setEditing({...editing, tier: event.target.value as (typeof TIERS)[number]})}>
-                {TIERS.map((tier) => (
-                  <option key={tier} value={tier}>
-                    {tier}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Tier" className="col-span-2 sm:col-span-1">
+              <PillSelect aria-label="Tier" value={editing.tier} onChange={(tier) => setEditing({...editing, tier})} options={TIERS.map((tier) => ({value: tier, label: cap(tier), icon: Medal}))} />
             </Field>
-            <Field label="Description" className="sm:col-span-2">
-              <TextArea rows={2} value={editing.description} onChange={(event) => setEditing({...editing, description: event.target.value})} />
+            <Field label="Description" className="col-span-2">
+              <TextArea rows={2} value={editing.description} placeholder="What the winner receives" onChange={(event) => setEditing({...editing, description: event.target.value})} />
             </Field>
-            <Field label="Type">
-              <Select value={editing.kind} onChange={(event) => setEditing({...editing, kind: event.target.value as 'rank' | 'coins'})}>
-                <option value="rank">Rank reward (top players only)</option>
-                <option value="coins">Coin purchase</option>
-              </Select>
+            <Field label="Type" className="col-span-2">
+              <PillSelect
+                aria-label="Type"
+                value={editing.kind}
+                onChange={(kind) => setEditing({...editing, kind})}
+                options={[
+                  {value: 'rank', label: 'Rank reward', icon: Trophy},
+                  {value: 'coins', label: 'Coin purchase', icon: Coins},
+                ]}
+              />
             </Field>
-            <Field label="Icon">
-              <Select value={editing.icon} onChange={(event) => setEditing({...editing, icon: event.target.value})}>
-                {ICONS.map((icon) => (
-                  <option key={icon} value={icon}>
-                    {icon}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Icon" className="col-span-2">
+              <div role="radiogroup" aria-label="Icon" className="grid grid-cols-6 gap-1.5 sm:grid-cols-12">
+                {ICONS.map((icon) => {
+                  const Glyph = iconFor(icon);
+                  const on = editing.icon === icon;
+                  return (
+                    <button
+                      key={icon}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={icon}
+                      title={cap(icon)}
+                      onClick={() => setEditing({...editing, icon})}
+                      className={`grid aspect-square place-items-center rounded-xl border transition active:scale-95 ${
+                        on ? 'border-gold-400/60 bg-gold-500/15 text-gold-200 shadow-[0_4px_16px_-8px_rgba(250,204,21,0.8)]' : 'border-white/10 bg-white/[0.03] text-mist-400 hover:border-white/20 hover:text-mist-100'
+                      }`}
+                    >
+                      <Glyph className="size-4.5" />
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
             {editing.kind === 'rank' ? (
               <>
                 <Field label="Min rank">
                   <TextInput type="number" min={1} value={editing.min_rank} onChange={(event) => setEditing({...editing, min_rank: Number(event.target.value)})} />
                 </Field>
-                <Field label="Max rank" hint="Same as min for a single place.">
+                <Field label="Max rank" hint="Same as min for one place.">
                   <TextInput type="number" min={1} value={editing.max_rank} onChange={(event) => setEditing({...editing, max_rank: Number(event.target.value)})} />
                 </Field>
               </>
@@ -367,18 +381,17 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
                 </Field>
               </>
             )}
-            <Field label="Sort order">
+            <Field label="Sort order" className="col-span-2 sm:col-span-1">
               <TextInput type="number" value={editing.sort_order} onChange={(event) => setEditing({...editing, sort_order: Number(event.target.value)})} />
             </Field>
-            <label className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={editing.is_active}
-                onChange={(event) => setEditing({...editing, is_active: event.target.checked})}
-                className="size-5 accent-fuchsia-500"
-              />
-              <span className="text-[0.86rem] font-bold text-mist-200">Visible in the vault</span>
-            </label>
+            <SwitchRow
+              className="col-span-2"
+              icon={Eye}
+              label="Visible in the vault"
+              description={editing.is_active ? 'Players can see and claim it.' : 'Hidden from players.'}
+              checked={editing.is_active}
+              onChange={(is_active) => setEditing({...editing, is_active})}
+            />
           </div>
         )}
       </Modal>

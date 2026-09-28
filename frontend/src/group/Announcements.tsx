@@ -5,7 +5,7 @@
  */
 import {ArrowLeft, Megaphone, Pin, Plus, Trash2} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Pager, SectionHeading, Segmented, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Pager, SectionHeading, Segmented, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {useGroup} from './context';
@@ -70,10 +70,7 @@ function CreateAnnouncement({onDone, onCancel}: {onDone: () => void; onCancel: (
             <TextInput type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} />
           </Field>
         </div>
-        <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-mist-300">
-          <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="size-4 accent-nova-400" />
-          Pin to the top
-        </label>
+        <SwitchRow label="Pin to the top" description="Keeps it above newer announcements." checked={pinned} onChange={setPinned} />
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => void submit()} disabled={busy} icon={<Megaphone className="size-4" />}>
             {busy ? 'Publishing…' : 'Publish'}

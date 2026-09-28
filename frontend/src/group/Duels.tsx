@@ -5,9 +5,9 @@
  * challenge is a small, focused action, so it lives in a modal — but the duel
  * itself opens the full duel arena page.
  */
-import {Eye, Lock, Search, Swords, Trophy} from 'lucide-react';
+import {Eye, Lock, Search, Swords, Trophy, SwordsIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Pager, SectionHeading, Segmented, Select, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Pager, SectionHeading, Segmented, Select, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {useGroup} from './context';
@@ -75,7 +75,7 @@ function ChallengeModal({open, onClose, presetOpponent}: {open: boolean; onClose
   };
 
   return (
-    <Modal
+    <Modal icon={SwordsIcon} tone="flare"
       open={open}
       onClose={onClose}
       title="Challenge a member"
@@ -138,10 +138,12 @@ function ChallengeModal({open, onClose, presetOpponent}: {open: boolean; onClose
           <TextInput value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Rematch me!" maxLength={240} />
         </Field>
 
-        <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-mist-300">
-          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="size-4 accent-nova-400" />
-          {isPublic ? 'Public to the group (shows in activity)' : 'Private (only you and your opponent see it)'}
-        </label>
+        <SwitchRow
+          label="Public to the group"
+          description={isPublic ? 'Shows in group activity.' : 'Private — only you and your opponent see it.'}
+          checked={isPublic}
+          onChange={setIsPublic}
+        />
         {selected && <p className="text-[0.72rem] font-medium text-mist-500">Challenging {selected.name} · {count * 20}s total clock.</p>}
       </div>
     </Modal>

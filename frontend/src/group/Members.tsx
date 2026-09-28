@@ -4,7 +4,7 @@
  * plus server-side search. Tapping a member opens their in-group dossier.
  * Owners assign moderators and remove members; anyone can challenge or invite.
  */
-import {Crown, Search, ShieldCheck, Swords, Trash2, UserPlus, Users} from 'lucide-react';
+import {Crown, Search, ShieldCheck, Swords, Trash2, UserPlus, Users, UserMinusIcon, UserPlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Avatar, Button, Card, EmptyState, IconButton, Modal, Pager, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -43,7 +43,7 @@ function InviteModal({open, onClose}: {open: boolean; onClose: () => void}) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Invite members" subtitle="Invite your friends into this group" size="md">
+    <Modal icon={UserPlusIcon} tone="mint" open={open} onClose={onClose} title="Invite members" subtitle="Invite your friends into this group" size="md">
       <ul className="grid max-h-[50vh] gap-1.5 overflow-y-auto overscroll-contain">
         {friends.map((friend) => (
           <li key={friend.id} className="flex items-center gap-2 rounded-xl border border-white/8 bg-ink-900/50 px-3 py-2">
@@ -209,7 +209,7 @@ export default function Members() {
       <ChallengeModal open={challengeFor !== null} onClose={() => setChallengeFor(null)} presetOpponent={challengeFor} />
       <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
 
-      <Modal
+      <Modal icon={UserMinusIcon} tone="flare"
         open={confirmRemove !== null}
         onClose={() => setConfirmRemove(null)}
         title="Remove member"

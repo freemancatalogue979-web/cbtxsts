@@ -6,7 +6,7 @@
  * Structure: Course → Topic → questions / notes / materials. Topics are the
  * course's curated list; content that already uses a topic label shows up too.
  */
-import {ArrowLeft, BookOpen, FileText, Hash, Library, MessageSquare, NotebookPen, Pencil, Plus, Shuffle, ScrollText, Trash2} from 'lucide-react';
+import {ArrowLeft, BookOpen, FileText, Hash, Library, MessageSquare, NotebookPen, Pencil, Plus, Shuffle, ScrollText, Trash2, TagIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, EmptyState, Field, Modal, Segmented, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -179,7 +179,7 @@ function TopicsSection({course, onChanged}: {course: Course; onChanged: () => vo
           ))}
         </ul>
       )}
-      <Modal
+      <Modal icon={TagIcon} tone="cyan"
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         title={editing?.id ? 'Edit topic' : 'New topic'}

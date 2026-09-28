@@ -25,7 +25,7 @@ import {
   Trophy,
   Users,
   X,
-  Zap,
+  Zap, SwordsIcon
 } from 'lucide-react';
 import {AnimatePresence, motion, useReducedMotion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -821,7 +821,7 @@ export default function GameArenaPanel() {
         </div>
       )}
 
-      <Modal open={challengeOpen} onClose={() => setChallengeOpen(false)} title="Challenge a friend" subtitle="They play a run and try to beat your target score.">
+      <Modal icon={SwordsIcon} tone="flare" open={challengeOpen} onClose={() => setChallengeOpen(false)} title="Challenge a friend" subtitle="They play a run and try to beat your target score.">
         <div className="min-w-0 space-y-2">
           {hub.friends.length ? (
             hub.friends.map((row) => (

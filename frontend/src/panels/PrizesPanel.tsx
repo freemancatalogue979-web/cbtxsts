@@ -1,5 +1,5 @@
 /** Prizes tab: the vault, eligibility, and coin/rank claims. */
-import {CheckCircle2, Coins, Crown, Gift, Lock, Medal, Sparkles, Tag} from 'lucide-react';
+import {CheckCircle2, Coins, Crown, Gift, Lock, Medal, Sparkles, Tag, GiftIcon} from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Skeleton, TextArea} from '../components/ui';
@@ -185,7 +185,7 @@ export default function PrizesPanel() {
         </motion.ul>
       )}
 
-      <Modal
+      <Modal icon={GiftIcon} tone="gold"
         open={Boolean(target)}
         onClose={() => setTarget(null)}
         title={target ? `Claim “${target.title}”` : ''}

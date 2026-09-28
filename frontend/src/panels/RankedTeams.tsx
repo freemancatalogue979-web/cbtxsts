@@ -24,7 +24,7 @@ import {
   UserPlus,
   Users,
   XCircle,
-  Zap,
+  Zap, DoorOpenIcon, UserPlusIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, Modal, ProgressBar, SectionHeading, Select, Skeleton, StatTile, TextInput} from '../components/ui';
@@ -530,7 +530,7 @@ function JoinScreen({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Join a ranked lobby" subtitle="Type a friend's code or grab an open public room." size="md"
+    <Modal icon={DoorOpenIcon} tone="pulse" open={open} onClose={onClose} title="Join a ranked lobby" subtitle="Type a friend's code or grab an open public room." size="md"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -696,7 +696,7 @@ function InviteModal({open, onClose, lobby, toast}: {open: boolean; onClose: () 
   const filtered = (rows?.friends ?? []).filter((friend) => !query || friend.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <Modal open={open} onClose={onClose} title="Invite a friend" subtitle={`They land straight in ${lobby.code} — only friends can be pulled in.`} size="md">
+    <Modal icon={UserPlusIcon} tone="mint" open={open} onClose={onClose} title="Invite a friend" subtitle={`They land straight in ${lobby.code} — only friends can be pulled in.`} size="md">
       <TextInput placeholder="Search your friends…" value={query} onChange={(event) => setQuery(event.target.value)} />
       <ul className="mt-3 grid max-h-64 gap-1.5 overflow-y-auto">
         {filtered.length === 0 && <li className="px-1 py-3 text-center text-[0.8rem] font-semibold text-mist-500">{rows ? 'No friend matches that name — friends can also join with the code.' : 'Loading…'}</li>}

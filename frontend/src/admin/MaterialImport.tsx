@@ -6,9 +6,9 @@
  * choose the basics: course, name, topic and whether it goes live. The content
  * is the document itself. Nothing is saved until "Import" is pressed.
  */
-import {CheckCircle2, FileText, FileUp, Loader2, TriangleAlert, X} from 'lucide-react';
+import {CheckCircle2, FileText, FileUp, Loader2, TriangleAlert, X, UploadIcon} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
-import {Button, Field, Modal, Select, TextInput} from '../components/ui';
+import {Button, Field, Modal, Select, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -153,7 +153,7 @@ export default function MaterialImport({
   };
 
   return (
-    <Modal
+    <Modal icon={UploadIcon} tone="cyan"
       open={open}
       onClose={busy ? () => undefined : onClose}
       title={`Import ${noun}s from files`}
@@ -294,14 +294,8 @@ export default function MaterialImport({
             </Select>
           </Field>
         </div>
-        <label className="flex min-w-0 cursor-pointer items-start gap-2.5 text-[0.8rem] font-semibold text-mist-300">
-          <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-nova-500" checked={keepFile} onChange={(event) => setKeepFile(event.target.checked)} />
-          <span className="min-w-0">Keep the original file so players can open or download it too</span>
-        </label>
-        <label className="flex min-w-0 cursor-pointer items-start gap-2.5 text-[0.8rem] font-semibold text-mist-300">
-          <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-nova-500" checked={fixSpelling} onChange={(event) => setFixSpelling(event.target.checked)} />
-          <span className="min-w-0">Fix obvious spelling mistakes while importing (names, British spelling and course terms are kept)</span>
-        </label>
+        <SwitchRow label="Keep the original file" description="Players can open or download it too." checked={keepFile} onChange={setKeepFile} />
+        <SwitchRow label="Fix obvious spelling mistakes" description="Names, British spelling and course terms are kept." checked={fixSpelling} onChange={setFixSpelling} />
       </div>
     </Modal>
   );

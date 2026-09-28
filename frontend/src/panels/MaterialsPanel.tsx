@@ -49,7 +49,7 @@ import {
   ChevronLeft,
   Maximize2,
   Minimize2,
-  CheckCircle2,
+  CheckCircle2, BookOpenIcon, CircleHelpIcon, HighlighterIcon, MessagesSquareIcon, StickyNoteIcon
 } from 'lucide-react';
 import {createPortal} from 'react-dom';
 import {AnimatePresence, motion} from 'motion/react';
@@ -549,7 +549,7 @@ function MyNotesTab({
       )}
 
       {/* read one note */}
-      <Modal
+      <Modal icon={BookOpenIcon} tone="cyan"
         open={Boolean(reading)}
         onClose={() => setReading(null)}
         title={reading ? titleOf(reading) : ''}
@@ -578,7 +578,7 @@ function MyNotesTab({
       </Modal>
 
       {/* write / edit */}
-      <Modal
+      <Modal icon={StickyNoteIcon} tone="amber"
         open={Boolean(form)}
         onClose={() => setForm(null)}
         title={form?.id ? 'Edit note' : 'New note'}
@@ -1254,7 +1254,7 @@ function Reader({
       ) : null}
 
       {/* confusion sheet */}
-      <Modal open={confusion.open} onClose={() => setConfusion({open: false, text: '', busy: false})} title="Confused here?" subtitle="Send it to the class — someone will explain it.">
+      <Modal icon={CircleHelpIcon} tone="amber" open={confusion.open} onClose={() => setConfusion({open: false, text: '', busy: false})} title="Confused here?" subtitle="Send it to the class — someone will explain it.">
         <div className="min-w-0 space-y-3">
           {highlightTarget ? (
             <p className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[0.8rem] text-mist-400 italic">“{highlightTarget}”</p>
@@ -1273,7 +1273,7 @@ function Reader({
       </Modal>
 
       {/* marks sheet */}
-      <Modal open={showMarks} onClose={() => setShowMarks(false)} title="My marks" subtitle={`${marks.highlights.length} highlights · ${marks.notes.length} notes · ${marks.bookmarks.length} bookmarks`}>
+      <Modal icon={HighlighterIcon} tone="gold" open={showMarks} onClose={() => setShowMarks(false)} title="My marks" subtitle={`${marks.highlights.length} highlights · ${marks.notes.length} notes · ${marks.bookmarks.length} bookmarks`}>
         <div className="min-w-0 space-y-3">
           {marks.bookmarks.length ? (
             <div className="min-w-0">
@@ -1320,7 +1320,7 @@ function Reader({
       </Modal>
 
       {/* discussion sheet */}
-      <Modal open={discussionOpen} onClose={() => setDiscussionOpen(false)} title="Class discussion" subtitle="Questions, answers and tips from everyone reading this material.">
+      <Modal icon={MessagesSquareIcon} tone="pulse" open={discussionOpen} onClose={() => setDiscussionOpen(false)} title="Class discussion" subtitle="Questions, answers and tips from everyone reading this material.">
         <div className="min-w-0 space-y-3">
           <div className="flex min-w-0 gap-2">
             <input

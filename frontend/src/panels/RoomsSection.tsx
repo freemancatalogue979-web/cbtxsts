@@ -5,7 +5,7 @@
  * joins with the six-character code. Rooms hold up to 15 players and keep a
  * live chat running from the lobby to the final standings.
  */
-import {Crown, DoorOpen, Gamepad2, Plus, Radio, Users} from 'lucide-react';
+import {Crown, DoorOpen, Gamepad2, Plus, Radio, Users, DoorOpenIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {motion} from 'motion/react';
 import {Button, Card, CopyCode, Field, Modal, SectionHeading, TextInput} from '../components/ui';
@@ -159,7 +159,7 @@ export default function RoomsSection({onOpenRoom}: {onOpenRoom: (roomId: number)
         </motion.ul>
       )}
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create a room">
+      <Modal icon={DoorOpenIcon} tone="nova" open={createOpen} onClose={() => setCreateOpen(false)} title="Create a room">
         <div className="space-y-3.5">
           <Field label="Room name" hint="Something your friends will recognise.">
             <TextInput placeholder="Friday Night Arena" value={title} maxLength={60} onChange={(event) => setTitle(event.target.value)} />

@@ -15,7 +15,7 @@ import {
   UserCheck,
   Users,
   X,
-  Zap,
+  Zap, CoinsIcon, GiftIcon, UserRoundIcon
 } from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
@@ -260,7 +260,7 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
         </Button>
       </div>
 
-      <Modal open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.name} subtitle={detail ? formatPhone(detail.phone) : ''} size="lg">
+      <Modal icon={UserRoundIcon} tone="nova" open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.name} subtitle={detail ? formatPhone(detail.phone) : ''} size="lg">
         {detail && (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -309,7 +309,7 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
         )}
       </Modal>
 
-      <Modal
+      <Modal icon={CoinsIcon} tone="gold"
         open={Boolean(adjusting)}
         onClose={() => setAdjusting(null)}
         title={`Adjust ${adjusting?.name ?? ''}`}
@@ -794,7 +794,7 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
         </Button>
       </div>
 
-      <Modal
+      <Modal icon={GiftIcon} tone="gold"
         open={Boolean(target)}
         onClose={() => setTarget(null)}
         title={`${status === 'rejected' ? 'Reject' : status === 'delivered' ? 'Deliver' : 'Approve'} claim`}

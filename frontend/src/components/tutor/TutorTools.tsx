@@ -4,11 +4,11 @@
  * student's library. Nothing is saved until the student taps Save.
  */
 import {
-  ArrowLeft, BookOpen, CalendarCheck, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, Download, FileText, HelpCircle, Layers, ListChecks,
+  ArrowLeft, BookOpen, CalendarCheck, ClipboardPaste, GraduationCap, MessageSquare, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, Download, FileText, HelpCircle, Layers, ListChecks,
   MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Save, Search, SkipForward, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
-import {Button, Chip, EmptyState, Field, Modal, Segmented, Select, Skeleton, TextArea, TextInput} from '../ui';
+import {Button, Chip, ChoiceCards, EmptyState, Field, Modal, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips} from '../ui';
 import {Markdown} from '../../lib/markdown';
 import {
   downloadText, materialToMarkdown, tutorApi, type Deck, type GenKind, type GenerateSource, type NotesDoc,
@@ -158,16 +158,17 @@ export function GenerateSheet({
       onClose={() => !busy && onClose()}
       title="Create with AI"
       subtitle="Nothing is saved until you choose Save."
+      icon={Sparkles}
       footer={
         <>
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button size="sm" icon={<Sparkles className="size-4" />} loading={busy} onClick={run}>
-            {busy ? 'Creating…' : 'Create'}
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button icon={<Sparkles className="size-4" />} loading={busy} onClick={run}>
+            {busy ? 'Creating…' : `Create ${kind === 'flashcards' ? 'flashcards' : kind === 'practice' ? 'practice' : kind === 'plan' ? 'plan' : 'material'}`}
           </Button>
         </>
       }
     >
-      <div className="space-y-3.5">
+      <div className="space-y-4">
         <Segmented<GenKind>
           value={kind}
           onChange={(value) => {
@@ -203,28 +204,25 @@ export function GenerateSheet({
                 <datalist id="tutor-gen-topics">{topics.map((t) => <option key={t.id} value={t.name} />)}</datalist>
               </Field>
             </div>
-            <p className="rounded-lg bg-white/[0.04] px-3 py-2 text-[0.74rem] text-mist-400">The plan uses your results — weak topics get more time, and the last day before the exam is for revision.</p>
+            <p className="flex gap-2.5 rounded-xl border border-nova-400/20 bg-nova-500/[0.08] px-3.5 py-2.5 text-[0.76rem] leading-snug text-mist-300">
+              <CalendarClock className="mt-0.5 size-4 shrink-0 text-nova-300" />
+              The plan uses your results — weak topics get more time, and the last day before the exam is for revision.
+            </p>
           </div>
         ) : (
-        <Field label="Source">
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {([
-              ['chat', 'This chat', !conversationId],
-              ['topic', 'Course / topic', false],
-              ['upload', 'My upload', !uploads.length],
-              ['text', 'Pasted text', false],
-            ] as [SourceChoice, string, boolean][]).map(([value, label, disabled]) => (
-              <button
-                key={value}
-                disabled={disabled}
-                onClick={() => setSource(value)}
-                className={`rounded-lg border px-2 py-2 text-[0.76rem] font-bold transition-colors disabled:opacity-35 ${source === value ? 'border-nova-400/70 bg-nova-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-mist-300 hover:bg-white/[0.07]'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </Field>
+        <div>
+          <p className="mb-1.5 text-[0.8rem] font-semibold text-mist-200">Make it from</p>
+          <ChoiceCards<SourceChoice>
+            value={source}
+            onChange={setSource}
+            options={[
+              {value: 'chat', label: 'This chat', description: conversationId ? 'What we just discussed' : 'Start a chat first', icon: MessageSquare, disabled: !conversationId},
+              {value: 'topic', label: 'Course / topic', description: 'Official course material', icon: GraduationCap},
+              {value: 'upload', label: 'My upload', description: uploads.length ? `${uploads.length} document${uploads.length === 1 ? '' : 's'}` : 'No uploads yet', icon: Upload, disabled: !uploads.length},
+              {value: 'text', label: 'Pasted text', description: 'Notes you paste in', icon: ClipboardPaste},
+            ]}
+          />
+        </div>
         )}
         {kind !== 'plan' && (source === 'topic' || source === 'upload') && (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -249,14 +247,14 @@ export function GenerateSheet({
           </div>
         )}
         {kind !== 'plan' && source === 'text' && (
-          <Field label="Text to use">
-            <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste notes, a paragraph from your material…" maxLength={6000} />
+          <Field label="Text to use" aside={`${text.length.toLocaleString()} / 6,000`}>
+            <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste notes, a paragraph from your material…" maxLength={6000} className="max-h-64 min-h-28 text-[0.86rem] leading-relaxed" />
           </Field>
         )}
         {kind !== 'material' && kind !== 'plan' && (
           <div className="grid gap-2 sm:grid-cols-2">
-            <Field label={`How many (${kind === 'flashcards' ? 5 : 3}–${max})`}>
-              <TextInput type="number" min={kind === 'flashcards' ? 5 : 3} max={max} value={count} onChange={(e) => setCount(Number(e.target.value) || 0)} />
+            <Field label="How many" aside={`${kind === 'flashcards' ? 5 : 3}–${max}`}>
+              <Stepper value={count} onChange={setCount} min={kind === 'flashcards' ? 5 : 3} max={max} suffix={kind === 'flashcards' ? 'cards' : 'questions'} aria-label="How many" />
             </Field>
             <Field label="Difficulty">
               <Select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
@@ -267,21 +265,18 @@ export function GenerateSheet({
         )}
         {kind === 'practice' && (
           <Field label="Question types">
-            <div className="flex flex-wrap gap-1.5">
-              {[['mcq', 'Multiple choice'], ['true_false', 'True / False'], ['short_answer', 'Short answer'], ['calculation', 'Calculation'], ['scenario', 'Scenario']].map(([value, label]) => {
-                const on = types.includes(value);
-                return (
-                  <button
-                    key={value}
-                    onClick={() => setTypes(on ? (types.length > 1 ? types.filter((t) => t !== value) : types) : [...types, value])}
-                    className={`rounded-full border px-3 py-1.5 text-[0.74rem] font-bold ${on ? 'border-nova-400/70 bg-nova-500/20 text-white' : 'border-white/10 text-mist-400'}`}
-                  >
-                    {on && <Check className="mr-1 inline size-3" />}
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <ToggleChips
+              values={types}
+              onChange={setTypes}
+              min={1}
+              options={[
+                {value: 'mcq', label: 'Multiple choice'},
+                {value: 'true_false', label: 'True / False'},
+                {value: 'short_answer', label: 'Short answer'},
+                {value: 'calculation', label: 'Calculation'},
+                {value: 'scenario', label: 'Scenario'},
+              ]}
+            />
           </Field>
         )}
         <Field label="Anything else? (optional)">

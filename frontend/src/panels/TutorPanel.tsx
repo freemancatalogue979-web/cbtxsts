@@ -9,10 +9,10 @@
 import {
   Archive, ArchiveRestore, ArrowDown, BarChart3, BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
   ListChecks, Lock, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, Search, Send, Settings2, ShieldCheck, Sparkles, Square,
-  Target, ThumbsDown, ThumbsUp, Trash2, X,
+  Target, ThumbsDown, ThumbsUp, Trash2, X, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText} from '../components/ui';
+import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, SwitchRow} from '../components/ui';
 import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, PlanView, QuizView, toolFromResult, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
 import {Markdown} from '../lib/markdown';
 import {formatRelative} from '../lib/format';
@@ -766,14 +766,14 @@ export default function TutorPanel() {
       <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { void onPickImage(e.target.files?.[0]); e.target.value = ''; }} />
       <input ref={docInput} type="file" accept=".pdf,.docx,.txt,.md,.pptx,.rtf,.odt,.html,.htm" className="hidden" onChange={(e) => void onPickDoc(e.target.files?.[0])} />
 
-      <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Your chats" size="sm">
+      <Modal icon={MessagesSquareIcon} tone="nova" open={historyOpen} onClose={() => setHistoryOpen(false)} title="Your chats" size="sm">
         <div className="flex h-[60dvh] flex-col">{chatList}</div>
       </Modal>
 
       <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} socratic={socratic} onSocratic={setSocratic} />
       <FeedbackModal message={feedbackFor} onClose={() => setFeedbackFor(null)} onSend={(reason, comment) => { if (feedbackFor) void rate(feedbackFor, -1, reason, comment); setFeedbackFor(null); }} />
 
-      <Modal open={summaryOpen} onClose={() => setSummaryOpen(false)} title="Summarize" subtitle="Summaries use the attached material, upload or this chat." size="sm">
+      <Modal icon={FileTextIcon} tone="cyan" open={summaryOpen} onClose={() => setSummaryOpen(false)} title="Summarize" subtitle="Summaries use the attached material, upload or this chat." size="sm">
         <div className="grid gap-2">
           {([
             ['quick', 'Quick summary', 'A few key points'],
@@ -1030,7 +1030,7 @@ function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onC
     }
   };
   return (
-    <Modal
+    <Modal icon={SlidersHorizontalIcon} tone="nova"
       open={open}
       onClose={onClose}
       title="How should the tutor explain?"
@@ -1065,13 +1065,7 @@ function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onC
           <Field label="My goals (optional)">
             <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Pass LAW 411 with an A, understand case law better" />
           </Field>
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2">
-            <span>
-              <span className="block text-[0.82rem] font-bold text-mist-100">Socratic mode for this chat</span>
-              <span className="block text-[0.72rem] text-mist-500">The tutor asks guiding questions before explaining.</span>
-            </span>
-            <input type="checkbox" checked={socratic} onChange={(e) => onSocratic(e.target.checked)} className="size-4 accent-[var(--color-nova-400,#7c83ff)]" />
-          </label>
+          <SwitchRow label="Socratic mode for this chat" description="The tutor asks guiding questions before explaining." checked={socratic} onChange={onSocratic} />
         </div>
       )}
     </Modal>
@@ -1099,7 +1093,7 @@ function FeedbackModal({message, onClose, onSend}: {message: TutorMessage | null
     }
   }, [message]);
   return (
-    <Modal
+    <Modal icon={FlagIcon} tone="flare"
       open={!!message}
       onClose={onClose}
       title="What went wrong?"

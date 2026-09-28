@@ -7,7 +7,7 @@
  */
 import {ArrowLeft, CalendarClock, ChevronRight, Play, Plus, Trophy, Users, Zap} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Pager, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Pager, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {useGroup} from './context';
@@ -151,10 +151,7 @@ function CreateQuiz({onDone, onCancel}: {onDone: () => void; onCancel: () => voi
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 text-[0.8rem] font-semibold text-mist-300">
-          <input type="checkbox" checked={randomize} onChange={(e) => setRandomize(e.target.checked)} className="size-4 accent-nova-400" />
-          Randomize question & option order per member
-        </label>
+        <SwitchRow label="Randomise order per member" description="Each member gets questions and options in a different order." checked={randomize} onChange={setRandomize} />
         <p className="text-[0.72rem] font-medium text-mist-600">Visibility: group members only. Leaving the start blank publishes it live immediately.</p>
 
         <div className="flex flex-wrap gap-2">

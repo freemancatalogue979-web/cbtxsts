@@ -7,7 +7,7 @@
  * open short steps for that exact browser (iPhone Safari, Firefox, Opera Mini,
  * or a plain-http link, which no browser can install from).
  */
-import {AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, EllipsisVertical, ExternalLink, Globe, Loader2, Lock, MonitorDown, Plus, RefreshCw, Share, Smartphone, SquarePlus, X, XCircle} from 'lucide-react';
+import {AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, EllipsisVertical, ExternalLink, Globe, Loader2, Lock, MonitorDown, Plus, RefreshCw, Share, Smartphone, SquarePlus, X, XCircle, DownloadIcon} from 'lucide-react';
 import {useEffect, useState, type ReactNode} from 'react';
 import {
   inAppBrowser,
@@ -438,7 +438,7 @@ export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void
         }
       : steps(platform);
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Takes about 10 seconds. No app store needed." size="sm" footer={<Button variant="outline" onClick={onClose}>Got it</Button>}>
+    <Modal icon={DownloadIcon} tone="nova" open={open} onClose={onClose} title={title} subtitle="Takes about 10 seconds. No app store needed." size="sm" footer={<Button variant="outline" onClick={onClose}>Got it</Button>}>
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
         <img src="/brand/ag-icon-192.png" alt="" className="size-12 shrink-0 rounded-xl" width={48} height={48} />
         <div className="min-w-0">

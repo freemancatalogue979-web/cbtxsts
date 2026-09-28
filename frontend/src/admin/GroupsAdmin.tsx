@@ -1,5 +1,5 @@
 /** Admin: a cross-group moderation list of every study group in the arena. */
-import {MessageSquare, Search, Users} from 'lucide-react';
+import {MessageSquare, Search, Users, UsersIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -162,7 +162,7 @@ export default function GroupsAdmin() {
         </Button>
       </div>
 
-      <Modal open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.name} subtitle={detail ? `Code ${detail.code}` : ''} size="lg">
+      <Modal icon={UsersIcon} tone="nova" open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.name} subtitle={detail ? `Code ${detail.code}` : ''} size="lg">
         {detail && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

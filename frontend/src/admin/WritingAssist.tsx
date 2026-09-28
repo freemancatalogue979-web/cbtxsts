@@ -10,7 +10,7 @@
  * Both hand the result back to the editor, where it is one Undo step and is
  * only saved when staff press Save / Publish.
  */
-import {AlertTriangle, CheckCheck, KeyRound, Laugh, ListChecks, SpellCheck, Sparkles, Target, Wand2} from 'lucide-react';
+import {AlertTriangle, CheckCheck, KeyRound, Laugh, ListChecks, SpellCheck, Sparkles, Target, Wand2, SpellCheckIcon, WandSparklesIcon} from 'lucide-react';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Button, EmptyState, Modal, ProgressBar, Segmented, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
@@ -85,7 +85,7 @@ export function SpellingReview({open, onClose, doc, onApply}: {open: boolean; on
   };
 
   return (
-    <Modal
+    <Modal icon={SpellCheckIcon} tone="mint"
       open={open}
       onClose={onClose}
       title="Fix spelling"
@@ -331,7 +331,7 @@ export function RewriteReview({
   );
 
   return (
-    <Modal
+    <Modal icon={WandSparklesIcon} tone="nova"
       open={open}
       onClose={() => (progress ? undefined : onClose())}
       title="Make it easy to read"

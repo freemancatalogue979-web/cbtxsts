@@ -34,10 +34,10 @@ import {
   SlidersHorizontal,
   X,
   SpellCheck,
-  Wand2,
+  Wand2, BookOpenIcon, HistoryIcon, Link2Icon, StickyNoteIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -776,10 +776,7 @@ function MaterialEditor({
                 <TextArea rows={3} value={draft.summary} onChange={(event) => setDraft({...draft, summary: event.target.value})} />
               </Field>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-[0.82rem] font-bold text-mist-300">
-              <input type="checkbox" checked={draft.allow_discussion} onChange={(event) => setDraft({...draft, allow_discussion: event.target.checked})} />
-              Let players discuss this {noun}
-            </label>
+            <SwitchRow className="mt-3" label={`Let players discuss this ${noun}`} checked={draft.allow_discussion} onChange={(on) => setDraft({...draft, allow_discussion: on})} />
           </Card>
           {materialId !== 'new' && (
             <Card className="min-w-0 p-3">
@@ -964,7 +961,7 @@ function MaterialEditor({
         }}
       />
 
-      <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title="Link questions" subtitle="Paste question IDs from the bank — the self-test draws from these first.">
+      <Modal icon={Link2Icon} tone="pulse" open={linkOpen} onClose={() => setLinkOpen(false)} title="Link questions" subtitle="Paste question IDs from the bank — the self-test draws from these first.">
         <div className="min-w-0 space-y-3">
           <TextArea rows={3} value={linkIds} onChange={(event) => setLinkIds(event.target.value)} placeholder="12, 44, 91" />
           <Button
@@ -1292,7 +1289,7 @@ function MaterialNotes({
         />
       )}
 
-      <Modal
+      <Modal icon={BookOpenIcon} tone="cyan"
         open={Boolean(reading)}
         onClose={() => setReading(null)}
         title={reading?.title}
@@ -1337,7 +1334,7 @@ function MaterialNotes({
         )}
       </Modal>
 
-      <Modal open={Boolean(history)} onClose={() => setHistory(null)} title={history ? `History · ${history.note.title}` : 'History'} subtitle="Restore any earlier version — restoring is saved too, so it can be undone.">
+      <Modal icon={HistoryIcon} tone="pulse" open={Boolean(history)} onClose={() => setHistory(null)} title={history ? `History · ${history.note.title}` : 'History'} subtitle="Restore any earlier version — restoring is saved too, so it can be undone.">
         {history && (
           <ul className="min-w-0 divide-y divide-white/6 rounded-2xl border border-white/8">
             {history.rows.map((row, index) => (
@@ -1461,7 +1458,7 @@ function NoteEditor({
     }
   };
   return (
-    <Modal
+    <Modal icon={StickyNoteIcon} tone="amber"
       open={Boolean(draft)}
       onClose={() => setDraft(null)}
       title={draft?.id ? 'Edit note' : 'New note'}
@@ -1939,7 +1936,7 @@ function MaterialsTab({
         }}
       />
 
-      <Modal open={Boolean(reading)} onClose={() => setReading(null)} title={reading?.title} subtitle={reading ? `${reading.topic || 'No topic'} · updated ${formatDate(reading.updated_at)}` : ''} size="lg">
+      <Modal icon={BookOpenIcon} tone="cyan" open={Boolean(reading)} onClose={() => setReading(null)} title={reading?.title} subtitle={reading ? `${reading.topic || 'No topic'} · updated ${formatDate(reading.updated_at)}` : ''} size="lg">
         {reading && (
           <div className="min-w-0 space-y-3">
             {(reading.sections ?? []).map((section) => (

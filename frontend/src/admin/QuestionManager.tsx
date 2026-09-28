@@ -13,11 +13,11 @@ import {
   ScrollText,
   Search,
   Trash2,
-  Upload,
+  Upload, ChartColumnIcon, FileQuestionIcon, HistoryIcon, UploadIcon
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Select, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -674,7 +674,7 @@ export default function QuestionManager({
         </div>
       )}
 
-      <Modal
+      <Modal icon={FileQuestionIcon} tone="nova"
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         title={editing?.id ? 'Edit question' : isBank ? 'New bank question' : 'New exam-specific question'}
@@ -875,22 +875,14 @@ export default function QuestionManager({
                 {key: 'duel_enabled' as const, label: 'Usable in duels'},
                 {key: 'practice_enabled' as const, label: 'Usable in practice / boss'},
               ].map((row) => (
-                <label key={row.key} className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(editing[row.key])}
-                    onChange={(event) => setEditing({...editing, [row.key]: event.target.checked})}
-                    className="size-5 accent-fuchsia-500"
-                  />
-                  <span className="text-[0.84rem] font-bold text-mist-200">{row.label}</span>
-                </label>
+                <SwitchRow key={row.key} label={row.label} checked={Boolean(editing[row.key])} onChange={(on) => setEditing({...editing, [row.key]: on})} />
               ))}
             </div>
           </div>
         )}
       </Modal>
 
-      <Modal
+      <Modal icon={UploadIcon} tone="cyan"
         open={bulkOpen}
         onClose={() => {
           setBulkOpen(false);
@@ -1053,7 +1045,7 @@ Explanation: Section 246(1)(a) of the 1999 Constitution.
         </div>
       </Modal>
 
-      <Modal
+      <Modal icon={HistoryIcon} tone="pulse"
         open={Boolean(historyFor)}
         onClose={() => setHistoryFor(null)}
         title={`Version history${historyFor ? ` · Q${historyFor.id}` : ''}`}
@@ -1091,7 +1083,7 @@ Explanation: Section 246(1)(a) of the 1999 Constitution.
         )}
       </Modal>
 
-      <Modal
+      <Modal icon={ChartColumnIcon} tone="pulse"
         open={Boolean(statsFor)}
         onClose={() => setStatsFor(null)}
         title="Question analytics"

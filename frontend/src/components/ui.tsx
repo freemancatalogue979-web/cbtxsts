@@ -1,6 +1,6 @@
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
-import {Check, CheckCircle2, Copy, Loader2, Phone, X} from 'lucide-react';
-import {AnimatePresence, motion} from 'motion/react';
+import {Check, CheckCircle2, Copy, Loader2, Minus, Phone, Plus, X} from 'lucide-react';
+import {AnimatePresence, motion, useDragControls} from 'motion/react';
 import type {ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
 import {createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
 import {avatarStyle, clamp} from '../lib/format';
@@ -485,29 +485,46 @@ export function Avatar({
 }
 
 /* ---------------------------------------------------------------- fields */
+/**
+ * A labelled form row. Labels read as sentences (not tiny all-caps), a trailing
+ * "(optional)" is quietened automatically, and `aside` puts a counter or a
+ * small action on the right of the label.
+ */
 export function Field({
   label,
   hint,
   error,
+  aside,
   children,
   className = '',
 }: {
   label?: string;
   hint?: string;
   error?: string;
+  aside?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
+  const optional = label ? /\s*\((optional[^)]*)\)\s*$/i.exec(label) : null;
+  const main = optional && label ? label.slice(0, optional.index) : label;
   return (
     <label className={`block ${className}`}>
-      {label && (
- <span className="mb-1.5 block text-[0.72rem] font-bold tracking-[0.14em] text-mist-500">{label}</span>
+      {(label || aside) && (
+        <span className="mb-1.5 flex min-w-0 items-baseline justify-between gap-2">
+          {label && (
+            <span className="min-w-0 truncate text-[0.8rem] font-semibold text-mist-200">
+              {main}
+              {optional && <span className="ml-1 font-medium text-mist-500">({optional[1]})</span>}
+            </span>
+          )}
+          {aside && <span className="shrink-0 text-[0.72rem] font-medium text-mist-500">{aside}</span>}
+        </span>
       )}
       {children}
       {error ? (
         <span className="mt-1.5 block text-[0.74rem] font-semibold text-flare-400">{error}</span>
       ) : hint ? (
-        <span className="mt-1.5 block text-[0.74rem] font-medium text-mist-500">{hint}</span>
+        <span className="mt-1.5 block text-[0.74rem] leading-snug font-medium text-mist-500">{hint}</span>
       ) : null}
     </label>
   );
@@ -517,9 +534,10 @@ const CONTROL =
   // NOTE: no responsive horizontal padding here on purpose. Tailwind emits
   // breakpoint variants after base utilities, so a `sm:px-*` would outrank the
   // `pl-*` that icon-prefixed fields rely on and slide text under the icon.
-  'w-full rounded-lg border border-white/12 bg-ink-950/80 px-3.5 py-2.5 text-base font-semibold text-mist-50 sm:text-[0.90rem] ' +
-  'placeholder:font-medium placeholder:text-mist-600 transition-colors ' +
-  'focus:border-nova-400/60 focus:bg-ink-900 focus:ring-2 focus:ring-nova-500/20 focus:outline-none';
+  'w-full rounded-xl border border-white/10 bg-white/[0.045] px-3.5 py-2.5 text-base font-medium text-mist-50 sm:text-[0.9rem] ' +
+  'shadow-[inset_0_1px_2px_rgba(0,0,0,0.28)] placeholder:font-normal placeholder:text-mist-500 transition-[border-color,background-color,box-shadow] ' +
+  'hover:border-white/20 focus:border-nova-400/70 focus:bg-white/[0.07] focus:ring-4 focus:ring-nova-500/15 focus:outline-none ' +
+  'disabled:cursor-not-allowed disabled:opacity-50';
 
 export function TextInput({className = '', ...rest}: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={`${CONTROL} ${className}`} {...rest} />;
@@ -577,7 +595,7 @@ export function TextArea({className = '', ...rest}: TextareaHTMLAttributes<HTMLT
 
 export function Select({className = '', children, ...rest}: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={`${CONTROL} appearance-none pr-10 ${className}`} {...rest}>
+    <select className={`${CONTROL} ag-select appearance-none pr-10 ${className}`} {...rest}>
       {children}
     </select>
   );
@@ -793,11 +811,64 @@ export function StatTile({
 }
 
 /* ---------------------------------------------------------------- modal */
+export type Tone = 'nova' | 'pulse' | 'flare' | 'gold' | 'mint' | 'cyan' | 'amber';
+
+/* Full class strings so Tailwind keeps them. */
+const TONE_CHIP: Record<Tone, string> = {
+  nova: 'from-nova-400/30 to-nova-600/10 border-nova-400/30 text-nova-200',
+  pulse: 'from-pulse-400/30 to-pulse-600/10 border-pulse-400/30 text-pulse-200',
+  flare: 'from-flare-400/30 to-flare-600/10 border-flare-400/30 text-flare-200',
+  gold: 'from-gold-400/30 to-gold-600/10 border-gold-400/30 text-gold-200',
+  mint: 'from-mint-400/30 to-mint-600/10 border-mint-400/30 text-mint-200',
+  cyan: 'from-cyan-400/30 to-cyan-600/10 border-cyan-400/30 text-cyan-200',
+  amber: 'from-amber-400/30 to-amber-600/10 border-amber-400/30 text-amber-200',
+};
+const TONE_GLOW: Record<Tone, string> = {
+  nova: 'bg-nova-500/30',
+  pulse: 'bg-pulse-500/28',
+  flare: 'bg-flare-500/26',
+  gold: 'bg-gold-500/22',
+  mint: 'bg-mint-500/24',
+  cyan: 'bg-cyan-500/24',
+  amber: 'bg-amber-500/22',
+};
+
+/** A tinted squircle holding an icon — the app-style icon used in headers and menus. */
+export function ToneIcon({tone = 'nova', icon, size = 'md', className = ''}: {tone?: Tone; icon: IconProp; size?: 'sm' | 'md' | 'lg'; className?: string}) {
+  const box = size === 'sm' ? 'size-8 rounded-[0.7rem]' : size === 'lg' ? 'size-12 rounded-[1rem]' : 'size-10 rounded-[0.85rem]';
+  const glyph = size === 'sm' ? 'size-4' : size === 'lg' ? 'size-6' : 'size-5';
+  return (
+    <span className={`grid shrink-0 place-items-center border bg-gradient-to-br shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${TONE_CHIP[tone]} ${box} ${className}`}>
+      {renderIcon(icon, glyph)}
+    </span>
+  );
+}
+
+function useSmallScreen() {
+  const query = '(max-width: 639px)';
+  const [small, setSmall] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const on = () => setSmall(media.matches);
+    media.addEventListener('change', on);
+    return () => media.removeEventListener('change', on);
+  }, []);
+  return small;
+}
+
+/**
+ * The popup used everywhere. Bottom sheet on phones (drag the header down to
+ * close), centred card from `sm` up. `icon` + `tone` give the header an
+ * app-style icon and a matching glow; the footer's buttons share the width on
+ * phones.
+ */
 export function Modal({
   open,
   onClose,
   title,
   subtitle,
+  icon,
+  tone = 'nova',
   children,
   footer,
   size = 'md',
@@ -806,10 +877,15 @@ export function Modal({
   onClose: () => void;
   title?: string;
   subtitle?: string;
+  icon?: IconProp;
+  tone?: Tone;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
+  const small = useSmallScreen();
+  const drag = useDragControls();
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
@@ -823,13 +899,16 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  const widths = {sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-3xl'};
+  const widths = {sm: 'sm:max-w-sm', md: 'sm:max-w-lg', lg: 'sm:max-w-3xl', xl: 'sm:max-w-5xl'};
+  const startDrag = (event: React.PointerEvent) => {
+    if (small) drag.start(event);
+  };
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-60 flex items-end justify-center overflow-y-auto scrim backdrop-blur-sm sm:grid sm:place-items-center sm:p-4"
+          className="fixed inset-0 z-60 flex items-end justify-center scrim backdrop-blur-sm sm:items-center sm:p-4"
           variants={overlayVariants}
           initial="hidden"
           animate="show"
@@ -838,30 +917,62 @@ export function Modal({
           role="presentation"
         >
           <motion.div
-            className={`panel-hero flex max-h-[94dvh] w-full flex-col rounded-t-[1.75rem] pb-[env(safe-area-inset-bottom,0px)] sm:max-h-[88dvh] sm:w-auto sm:rounded-[1.75rem] sm:pb-0 ${widths[size]}`}
-            variants={sheetVariants}
+            className={`panel-hero relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] pb-[env(safe-area-inset-bottom,0px)] sm:max-h-[88dvh] sm:rounded-[1.6rem] sm:pb-0 ${widths[size]}`}
+            {...(small
+              ? {
+                  initial: {y: '100%'},
+                  animate: {y: 0},
+                  exit: {y: '100%'},
+                  transition: {type: 'spring' as const, stiffness: 420, damping: 40},
+                }
+              : {variants: sheetVariants})}
+            drag={small ? 'y' : false}
+            dragListener={false}
+            dragControls={drag}
+            dragConstraints={{top: 0, bottom: 0}}
+            dragElastic={{top: 0, bottom: 0.6}}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 110 || info.velocity.y > 600) onClose();
+            }}
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-label={title}
           >
-            <div className="flex justify-center pt-2.5 sm:hidden">
-              <span className="sheet-handle" />
+            <div className="relative shrink-0 touch-none select-none sm:touch-auto sm:select-auto" onPointerDown={startDrag}>
+              {(title || subtitle) && (
+                <span aria-hidden className={`pointer-events-none absolute -top-16 -left-10 size-44 rounded-full blur-3xl ${TONE_GLOW[tone]}`} />
+              )}
+              <div className="relative flex justify-center pt-2.5 sm:hidden">
+                <span className="sheet-handle" />
+              </div>
+              {(title || subtitle) && (
+                <header className="relative flex items-center gap-3 px-4 pt-2.5 pb-3.5 sm:px-6 sm:pt-5 sm:pb-4">
+                  {icon && <ToneIcon tone={tone} icon={icon} />}
+                  <div className="min-w-0 flex-1">
+                    {title && (
+                      <h3 className="font-display text-[1.02rem] leading-snug font-bold text-mist-50 sm:text-[1.1rem]">{title}</h3>
+                    )}
+                    {subtitle && <p className="mt-0.5 text-[0.78rem] leading-snug font-medium text-mist-400 sm:text-[0.82rem]">{subtitle}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    aria-label="Close"
+                    className="grid size-9 shrink-0 place-items-center self-start rounded-full border border-white/10 bg-white/[0.05] text-mist-300 transition hover:bg-white/[0.09] hover:text-mist-50 active:scale-90"
+                  >
+                    <X className="size-[18px]" />
+                  </button>
+                </header>
+              )}
+              {(title || subtitle) && <div className="h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />}
             </div>
-            {(title || subtitle) && (
-              <header className="panel-band flex items-start justify-between gap-3 px-4 pt-3 pb-3.5 sm:gap-4 sm:px-5 sm:pt-4">
-                <div className="min-w-0">
-                  {title && <h3 className="text-[0.95rem] leading-snug font-extrabold text-mist-50 sm:text-base">{title}</h3>}
-                  {subtitle && <p className="mt-0.5 text-[0.78rem] font-medium text-mist-500 sm:text-[0.82rem]">{subtitle}</p>}
-                </div>
-                <IconButton label="Close" onClick={onClose}>
-                  <X className="size-5" />
-                </IconButton>
-              </header>
-            )}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">{children}</div>
             {footer && (
-              <footer className="flex flex-wrap justify-end gap-2 border-t border-white/8 px-4 pt-3 pb-3 sm:px-5 sm:py-4">{footer}</footer>
+              <footer className="relative flex flex-wrap items-center justify-end gap-2 border-t border-white/8 bg-black/20 px-4 py-3 max-sm:[&>button]:flex-1 sm:px-6 sm:py-3.5">
+                {footer}
+              </footer>
             )}
           </motion.div>
         </motion.div>
@@ -896,8 +1007,10 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   className?: string;
 }) {
+  // Four or five icon tabs: on phones stack icon over label so none scroll away.
+  const stacked = options.length >= 4 && options.length <= 5 && options.some((option) => option.icon);
   return (
-    <div className={`no-scrollbar flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-ink-950/80 p-1 ${className}`}>
+    <div className={`no-scrollbar flex gap-1 ${stacked ? '' : 'overflow-x-auto'} rounded-xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${className}`}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -907,14 +1020,18 @@ export function Segmented<T extends string>({
               uiClick('select');
               onChange(option.value);
             }}
- className={`relative flex shrink-0 items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[0.78rem] font-bold tracking-wide transition-colors ${
-              active ? 'text-white' : 'text-mist-400 hover:text-mist-100'
+            className={`relative isolate flex flex-1 items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors ${
+              stacked
+                ? 'min-w-0 flex-col gap-0.5 px-1.5 py-1.5 text-[0.7rem] sm:flex-row sm:gap-1.5 sm:px-3 sm:py-2 sm:text-[0.8rem]'
+                : 'min-w-max gap-1.5 px-3 py-2 text-[0.8rem]'
+            } ${
+              active ? 'text-white' : 'text-mist-400 hover:bg-white/[0.04] hover:text-mist-100'
             }`}
           >
             {active && (
               <motion.span
                 layoutId={`segment-${option.value}-${options.length}`}
-                className="brand-gradient absolute inset-0 -z-1 rounded-md"
+                className="brand-gradient absolute inset-0 -z-1 rounded-lg shadow-[0_6px_16px_-6px_rgba(124,58,237,0.7),inset_0_1px_0_rgba(255,255,255,0.25)]"
                 transition={{type: 'spring', stiffness: 420, damping: 32}}
               />
             )}
@@ -923,6 +1040,290 @@ export function Segmented<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- choice cards */
+export type ChoiceOption<T extends string> = {value: T; label: string; description?: string; icon?: IconProp; disabled?: boolean};
+
+/**
+ * Single choice shown as tappable cards (icon + label + optional line of
+ * description), with a check badge on the picked one. Replaces rows of plain
+ * look-alike buttons.
+ */
+export function ChoiceCards<T extends string>({
+  value,
+  options,
+  onChange,
+  columns = 2,
+  className = '',
+}: {
+  value: T;
+  options: ChoiceOption<T>[];
+  onChange: (value: T) => void;
+  columns?: 2 | 3 | 4;
+  className?: string;
+}) {
+  const grid = columns === 4 ? 'grid-cols-2 sm:grid-cols-4' : columns === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2';
+  return (
+    <div role="radiogroup" className={`grid gap-2 ${grid} ${className}`}>
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={option.disabled}
+            onClick={() => {
+              uiClick('select');
+              onChange(option.value);
+            }}
+            className={`relative flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition touch-manipulation active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${
+              active
+                ? 'border-nova-400/60 bg-nova-500/14 shadow-[0_0_0_1px_rgba(167,139,250,0.25),0_8px_20px_-12px_rgba(124,58,237,0.8)]'
+                : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+            }`}
+          >
+            {option.icon && (
+              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${active ? 'bg-nova-400/25 text-nova-100' : 'bg-white/[0.06] text-mist-300'}`}>
+                {renderIcon(option.icon, 'size-4')}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate text-[0.82rem] font-semibold ${active ? 'text-white' : 'text-mist-100'}`}>{option.label}</span>
+              {option.description && (
+                <span className="line-clamp-2 block text-[0.68rem] leading-tight font-medium text-mist-500">{option.description}</span>
+              )}
+            </span>
+            {active && (
+              <span className="absolute -top-1.5 -right-1.5 grid size-4.5 place-items-center rounded-full bg-nova-400 text-ink-950 shadow">
+                <Check className="size-3" strokeWidth={3} />
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Multi-select pills with a check on the picked ones. `min` keeps at least that many on. */
+export function ToggleChips<T extends string>({
+  values,
+  options,
+  onChange,
+  min = 0,
+  className = '',
+}: {
+  values: T[];
+  options: {value: T; label: string; icon?: IconProp}[];
+  onChange: (values: T[]) => void;
+  min?: number;
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${className}`}>
+      {options.map((option) => {
+        const on = values.includes(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={on}
+            onClick={() => {
+              uiClick('select');
+              if (on) {
+                if (values.length > min) onChange(values.filter((v) => v !== option.value));
+              } else onChange([...values, option.value]);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.76rem] font-semibold transition touch-manipulation active:scale-95 ${
+              on
+                ? 'border-nova-400/55 bg-nova-500/18 text-white'
+                : 'border-white/10 bg-white/[0.03] text-mist-300 hover:border-white/20 hover:text-mist-100'
+            }`}
+          >
+            <span className={`grid size-3.5 place-items-center rounded-full ${on ? 'bg-nova-400 text-ink-950' : 'border border-white/25'}`}>
+              {on && <Check className="size-2.5" strokeWidth={3.5} />}
+            </span>
+            {option.icon && renderIcon(option.icon, 'size-3.5')}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Single-choice pills — for short option lists that used to be a plain dropdown. */
+export function PillSelect<T extends string>({
+  value,
+  options,
+  onChange,
+  className = '',
+  'aria-label': ariaLabel,
+}: {
+  value: T;
+  options: {value: T; label: string; icon?: IconProp}[];
+  onChange: (value: T) => void;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={ariaLabel} className={`flex flex-wrap gap-1.5 ${className}`}>
+      {options.map((option) => {
+        const on = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => {
+              if (!on) uiClick('select');
+              onChange(option.value);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.78rem] font-semibold transition touch-manipulation active:scale-95 ${
+              on
+                ? 'border-nova-400/60 bg-gradient-to-r from-pulse-500/20 to-nova-500/25 text-white shadow-[0_4px_16px_-8px_rgba(139,92,246,0.8)]'
+                : 'border-white/10 bg-white/[0.03] text-mist-300 hover:border-white/20 hover:text-mist-100'
+            }`}
+          >
+            {option.icon && renderIcon(option.icon, `size-3.5 ${on ? 'text-nova-200' : 'text-mist-500'}`)}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- switch */
+/** An on/off switch. Use `SwitchRow` when it needs a label and description. */
+export function Switch({checked, onChange, disabled, 'aria-label': ariaLabel}: {checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; 'aria-label'?: string}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={() => {
+        uiClick('toggle');
+        onChange(!checked);
+      }}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-40 ${checked ? 'bg-gradient-to-r from-pulse-500 to-nova-500 shadow-[0_0_14px_-4px_rgba(139,92,246,0.9)]' : 'bg-white/15'}`}
+    >
+      <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? 'left-[1.375rem]' : 'left-0.5'}`} />
+    </button>
+  );
+}
+
+/** A full-width tappable row: title, optional description and a switch on the right. */
+export function SwitchRow({
+  label,
+  description,
+  checked,
+  onChange,
+  icon,
+  disabled,
+  className = '',
+}: {
+  label: ReactNode;
+  description?: ReactNode;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  icon?: IconProp;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="switch"
+      aria-checked={checked}
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : 0}
+      onClick={() => {
+        if (disabled) return;
+        uiClick('toggle');
+        onChange(!checked);
+      }}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        if (event.key === ' ' || event.key === 'Enter') {
+          event.preventDefault();
+          uiClick('toggle');
+          onChange(!checked);
+        }
+      }}
+      className={`flex cursor-pointer select-none items-center gap-3 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-nova-400 ${
+        checked ? 'border-nova-400/30 bg-nova-500/[0.07]' : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+      } ${disabled ? 'pointer-events-none opacity-50' : ''} ${className}`}
+    >
+      {icon && (
+        <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${checked ? 'bg-nova-500/20 text-nova-200' : 'bg-white/[0.05] text-mist-400'}`}>{renderIcon(icon, 'size-4.5')}</span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[0.86rem] font-bold text-white">{label}</span>
+        {description && <span className="mt-0.5 block text-[0.74rem] leading-snug text-mist-500">{description}</span>}
+      </span>
+      <span aria-hidden className={`relative h-6 w-11 shrink-0 rounded-full transition ${checked ? 'bg-gradient-to-r from-pulse-500 to-nova-500 shadow-[0_0_14px_-4px_rgba(139,92,246,0.9)]' : 'bg-white/15'}`}>
+        <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? 'left-[1.375rem]' : 'left-0.5'}`} />
+      </span>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- stepper */
+/** A number field with − / + buttons. Typing still works; the value is clamped on blur. */
+export function Stepper({
+  value,
+  onChange,
+  min = 0,
+  max = 999,
+  step = 1,
+  suffix,
+  className = '',
+  'aria-label': ariaLabel,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  const set = (next: number) => onChange(clamp(Math.round(next), min, max));
+  const btn =
+    'grid w-11 shrink-0 place-items-center text-mist-300 transition hover:bg-white/[0.06] hover:text-white active:scale-90 disabled:opacity-30 disabled:hover:bg-transparent';
+  return (
+    <div
+      className={`flex h-[2.8rem] items-stretch overflow-hidden rounded-xl border border-white/10 bg-white/[0.045] shadow-[inset_0_1px_2px_rgba(0,0,0,0.28)] transition focus-within:border-nova-400/70 focus-within:ring-4 focus-within:ring-nova-500/15 ${className}`}
+    >
+      <button type="button" className={btn} onClick={() => set(value - step)} disabled={value <= min} aria-label="Decrease">
+        <Minus className="size-4" />
+      </button>
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-1 border-x border-white/8">
+        <input
+          type="number"
+          inputMode="numeric"
+          value={Number.isFinite(value) ? value : ''}
+          min={min}
+          max={max}
+          aria-label={ariaLabel}
+          onChange={(event) => onChange(Number(event.target.value) || 0)}
+          onBlur={() => set(value)}
+          className="w-12 min-w-0 bg-transparent text-center text-base font-bold text-mist-50 tabular focus:outline-none sm:text-[0.95rem] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        {suffix && <span className="text-[0.74rem] font-medium text-mist-500">{suffix}</span>}
+      </div>
+      <button type="button" className={btn} onClick={() => set(value + step)} disabled={value >= max} aria-label="Increase">
+        <Plus className="size-4" />
+      </button>
     </div>
   );
 }

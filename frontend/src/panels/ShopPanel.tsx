@@ -24,7 +24,7 @@ import {
   Sparkles,
   Store,
   Timer,
-  TrendingUp,
+  TrendingUp, PackageOpenIcon, ShoppingBagIcon
 } from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
@@ -260,7 +260,7 @@ function Preview({
   };
 
   return (
-    <Modal open={Boolean(item)} onClose={onClose} title={item.name} subtitle={`${item.rarity_meta.label} · ${item.slot_label}`} size="md">
+    <Modal icon={ShoppingBagIcon} tone="gold" open={Boolean(item)} onClose={onClose} title={item.name} subtitle={`${item.rarity_meta.label} · ${item.slot_label}`} size="md">
       <div className="flex flex-col gap-3">
         {/* live preview: the actual aura / frame / portrait, not a picture of it */}
         <div className="relative grid place-items-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-ink-800/80 to-ink-950/90 py-6">
@@ -787,7 +787,7 @@ export default function ShopPanel() {
       <Preview item={preview} state={state} onClose={() => setPreview(null)} onBought={afterBuy} onEquipped={afterEquip} />
 
       {/* chest reward */}
-      <Modal open={Boolean(reward)} onClose={() => setReward(null)} title="Chest opened" subtitle={reward?.name}>
+      <Modal icon={PackageOpenIcon} tone="gold" open={Boolean(reward)} onClose={() => setReward(null)} title="Chest opened" subtitle={reward?.name}>
         {reward && (
           <div className="grid place-items-center gap-2 py-3 text-center">
             <span className="grid size-20 place-items-center rounded-3xl border-2 border-black/25 bg-gradient-to-br from-white/12 to-black/30 text-4xl">

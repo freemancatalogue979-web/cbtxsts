@@ -31,7 +31,7 @@ import {
   Timer,
   Trophy,
   Users,
-  Zap,
+  Zap, MapPinIcon
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
@@ -490,7 +490,7 @@ export default function WorldMapPanel({
       {/* ------------------------------------------------------- location card */}
       <AnimatePresence>
         {openNode && (
-          <Modal open onClose={() => setOpenNode(null)} title={openNode.topic} subtitle={`${world.code} · ${STATE_META[openNode.state].label}`}>
+          <Modal icon={MapPinIcon} tone="cyan" open onClose={() => setOpenNode(null)} title={openNode.topic} subtitle={`${world.code} · ${STATE_META[openNode.state].label}`}>
             <div className="min-w-0 space-y-3.5">
               <div className="grid min-w-0 grid-cols-3 gap-2">
                 <StatTile label="Questions" value={openNode.questions} icon={<Brain className="size-4" />} tone="nova" />

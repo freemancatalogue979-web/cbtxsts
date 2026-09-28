@@ -11,9 +11,9 @@
  * Bank size, exam length and exam-specific set size are three different
  * numbers and are always labelled separately.
  */
-import {BookOpen, Check, ChevronRight, FileText, Library, Pencil, Play, Plus, ScrollText, Shuffle, Trash2} from 'lucide-react';
+import {BookOpen, Check, ChevronRight, FileText, Library, Pencil, Play, Plus, ScrollText, Shuffle, Trash2, BookMarkedIcon, ClipboardListIcon, Eye} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -114,7 +114,7 @@ function CourseEditor({
     }
   };
   return (
-    <Modal
+    <Modal icon={BookMarkedIcon} tone="cyan"
       open={Boolean(editing)}
       onClose={() => setEditing(null)}
       title={editing?.id ? 'Edit course' : 'New course'}
@@ -130,43 +130,69 @@ function CourseEditor({
       }
     >
       {editing && (
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <Field label="Code">
-            <TextInput value={editing.code} maxLength={24} onChange={(event) => setEditing({...editing, code: event.target.value.toUpperCase()})} />
-          </Field>
-          <Field label="Title">
-            <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} />
-          </Field>
-          <Field label="Description" className="sm:col-span-2">
-            <TextArea rows={2} value={editing.description} onChange={(event) => setEditing({...editing, description: event.target.value})} />
+            <TextInput value={editing.code} maxLength={24} placeholder="LAW 411" onChange={(event) => setEditing({...editing, code: event.target.value.toUpperCase()})} />
           </Field>
           <Field label="Credit units">
             <TextInput type="number" min={0} max={12} value={editing.credit_units} onChange={(event) => setEditing({...editing, credit_units: Number(event.target.value)})} />
           </Field>
-          <Field label="Semester">
-            <TextInput value={editing.semester} onChange={(event) => setEditing({...editing, semester: event.target.value})} />
+          <Field label="Title" className="col-span-2">
+            <TextInput value={editing.title} placeholder="e.g. Nigerian Constitutional Law" onChange={(event) => setEditing({...editing, title: event.target.value})} />
           </Field>
-          <Field label="Lecturer">
-            <TextInput value={editing.lecturer} onChange={(event) => setEditing({...editing, lecturer: event.target.value})} />
+          <Field label="Description" className="col-span-2" aside={<span>{editing.description.length}/400</span>}>
+            <TextArea rows={2} maxLength={400} value={editing.description} placeholder="What players will learn in this course" onChange={(event) => setEditing({...editing, description: event.target.value})} />
           </Field>
-          <Field label="Accent colour">
-            <Select value={editing.accent} onChange={(event) => setEditing({...editing, accent: event.target.value as Course['accent']})}>
-              {ACCENTS.map((accent) => (
-                <option key={accent} value={accent}>
-                  {accent}
-                </option>
-              ))}
-            </Select>
+          <Field label="Semester" className="col-span-2 sm:col-span-1">
+            <TextInput value={editing.semester} list="ag-semesters" placeholder="First Semester" onChange={(event) => setEditing({...editing, semester: event.target.value})} />
+            <datalist id="ag-semesters">
+              <option value="First Semester" />
+              <option value="Second Semester" />
+            </datalist>
           </Field>
-          <label className="flex items-center gap-3 sm:col-span-2">
-            <input type="checkbox" checked={editing.is_active} onChange={(event) => setEditing({...editing, is_active: event.target.checked})} className="size-5 accent-fuchsia-500" />
-            <span className="text-[0.86rem] font-bold text-mist-200">Visible to players</span>
-          </label>
+          <Field label="Lecturer" className="col-span-2 sm:col-span-1">
+            <TextInput value={editing.lecturer} placeholder="Optional" onChange={(event) => setEditing({...editing, lecturer: event.target.value})} />
+          </Field>
+          <Field label="Accent colour" className="col-span-2">
+            <div role="radiogroup" aria-label="Accent colour" className="flex flex-wrap gap-2">
+              {ACCENTS.map((accent) => {
+                const active = editing.accent === accent;
+                return (
+                  <button
+                    key={accent}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setEditing({...editing, accent})}
+                    className={`flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-[0.8rem] font-bold capitalize transition ${active ? 'border-white/40 bg-white/[0.08] text-white' : 'border-white/10 bg-white/[0.02] text-mist-400 hover:border-white/20 hover:text-mist-200'}`}
+                  >
+                    <span className={`grid size-6 place-items-center rounded-full ${ACCENT_SWATCH[accent]}`}>{active && <Check className="size-3.5 text-white" strokeWidth={3} />}</span>
+                    {accent}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+          <SwitchRow
+            className="col-span-2"
+            icon={Eye}
+            label="Visible to players"
+            description={editing.is_active ? 'Players can see and open this course.' : 'Hidden while you prepare it.'}
+            checked={editing.is_active}
+            onChange={(is_active) => setEditing({...editing, is_active})}
+          />
         </div>
       )}
     </Modal>
   );
 }
+
+const ACCENT_SWATCH: Record<Course['accent'], string> = {
+  red: 'bg-gradient-to-br from-rose-400 to-red-600',
+  violet: 'bg-gradient-to-br from-violet-400 to-fuchsia-600',
+  blue: 'bg-gradient-to-br from-sky-400 to-blue-600',
+  amber: 'bg-gradient-to-br from-amber-300 to-orange-500',
+};
 
 function CoursesTab({onChanged, openCourseId, onOpenCourse}: {onChanged: () => void; openCourseId: number | null; onOpenCourse: (id: number | null) => void}) {
   const {toast} = useSession();
@@ -432,7 +458,7 @@ function ExamEditor({
   };
 
   return (
-    <Modal
+    <Modal icon={ClipboardListIcon} tone="nova"
       open
       onClose={() => setEditing(null)}
       title={editing.id ? 'Edit exam' : 'New exam'}
@@ -560,10 +586,7 @@ function ExamEditor({
                   </div>
                 )}
 
-                <label className="mt-3 flex items-center gap-2 text-[0.78rem] font-bold text-mist-300">
-                  <input type="checkbox" checked={mixOn} onChange={(event) => setMixOn(event.target.checked)} className="size-4 accent-fuchsia-500" />
-                  Control the difficulty mix
-                </label>
+                <SwitchRow className="mt-3" label="Control the difficulty mix" description="Set how many easy, medium and hard questions each player gets." checked={mixOn} onChange={setMixOn} />
                 {mixOn && (
                   <div className="mt-2 grid min-w-0 grid-cols-3 gap-2">
                     {(['easy', 'medium', 'hard'] as const).map((level) => (
@@ -626,18 +649,14 @@ function ExamEditor({
           />
         </Field>
         <div className="flex min-w-0 flex-col justify-end gap-2">
-          <label className="flex items-center gap-2.5">
-            <input type="checkbox" checked={editing.shuffle_questions} onChange={(event) => setEditing({...editing, shuffle_questions: event.target.checked})} className="size-5 accent-fuchsia-500" />
-            <span className="text-[0.84rem] font-bold text-mist-200">Shuffle question order</span>
-          </label>
-          <label className="flex items-center gap-2.5" title="Each student sees options A–D in a different order, so neighbours can't share letters. Grading is unaffected.">
-            <input type="checkbox" checked={editing.shuffle_options} onChange={(event) => setEditing({...editing, shuffle_options: event.target.checked})} className="size-5 accent-fuchsia-500" />
-            <span className="text-[0.84rem] font-bold text-mist-200">Shuffle answer options (A–D)</span>
-          </label>
-          <label className="flex items-center gap-2.5">
-            <input type="checkbox" checked={editing.allow_duel} onChange={(event) => setEditing({...editing, allow_duel: event.target.checked})} className="size-5 accent-fuchsia-500" />
-            <span className="text-[0.84rem] font-bold text-mist-200">Usable in duels</span>
-          </label>
+          <SwitchRow label="Shuffle question order" checked={editing.shuffle_questions} onChange={(on) => setEditing({...editing, shuffle_questions: on})} />
+          <SwitchRow
+            label="Shuffle answer options (A–D)"
+            description="Neighbours can't share letters. Grading is unaffected."
+            checked={editing.shuffle_options}
+            onChange={(on) => setEditing({...editing, shuffle_options: on})}
+          />
+          <SwitchRow label="Usable in duels" checked={editing.allow_duel} onChange={(on) => setEditing({...editing, allow_duel: on})} />
         </div>
         <Field label="Instructions" className="sm:col-span-2">
           <TextArea rows={3} value={editing.instructions} onChange={(event) => setEditing({...editing, instructions: event.target.value})} />

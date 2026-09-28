@@ -5,7 +5,7 @@
  *   ItemAnalysisModal — per-question correct rate, option picks and
  *     discrimination, with plain-language flags ("check the answer key").
  */
-import {AlertTriangle, CheckCircle2, Clock, CloudOff, Copy, Eye, KeyRound, Smartphone, TrendingDown, TrendingUp} from 'lucide-react';
+import {AlertTriangle, CheckCircle2, Clock, CloudOff, Copy, Eye, KeyRound, Smartphone, TrendingDown, TrendingUp, ChartColumnIcon, ShieldCheckIcon} from 'lucide-react';
 import {useEffect, useMemo, useState, type ReactNode} from 'react';
 import {Button, Chip, EmptyState, Modal, Segmented, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
@@ -82,7 +82,7 @@ export function IntegrityModal({attemptId, onClose}: {attemptId: number | null; 
   }, [attemptId]);
   const s = data?.summary;
   return (
-    <Modal open={attemptId !== null} onClose={onClose} title="Exam integrity" subtitle={data ? `${data.student.name} · ${data.quiz.title}` : undefined}>
+    <Modal icon={ShieldCheckIcon} tone="mint" open={attemptId !== null} onClose={onClose} title="Exam integrity" subtitle={data ? `${data.student.name} · ${data.quiz.title}` : undefined}>
       {error ? (
         <p className="text-[0.84rem] text-flare-300">{error}</p>
       ) : !data || !s ? (
@@ -260,7 +260,7 @@ export function ItemAnalysisModal({
   }, [target, scope]);
   const rows = useMemo(() => (data ? (filter === 'flagged' ? data.questions.filter((r) => r.flags.length) : data.questions) : []), [data, filter]);
   return (
-    <Modal
+    <Modal icon={ChartColumnIcon} tone="pulse"
       open={target !== null}
       onClose={onClose}
       size="lg"

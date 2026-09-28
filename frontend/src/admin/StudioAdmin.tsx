@@ -5,7 +5,7 @@
  * is the single source of truth for answer integrity: answers are only ever
  * written by the server, and this screen can never invent one.
  */
-import {Activity, AlertTriangle, BarChart3, BookOpen, Boxes, Check, Copy, Eye, Flag, Gem, History, Layers, ListChecks, RefreshCw, Search, ShieldCheck, Sparkles, Upload, X} from 'lucide-react';
+import {Activity, AlertTriangle, BarChart3, BookOpen, Boxes, Check, Copy, Eye, Flag, Gem, History, Layers, ListChecks, RefreshCw, Search, ShieldCheck, Sparkles, Upload, X, EyeIcon, FileQuestionIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, EmptyState, Modal, SectionHeading, Segmented, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -402,7 +402,7 @@ function Bank() {
         </ul>
       )}
 
-      <Modal open={Boolean(detail)} onClose={() => setDetail(null)} title={`Question ${detail?.id ?? ''}`} subtitle="Where this question is used and how it behaves.">
+      <Modal icon={FileQuestionIcon} tone="nova" open={Boolean(detail)} onClose={() => setDetail(null)} title={`Question ${detail?.id ?? ''}`} subtitle="Where this question is used and how it behaves.">
         {detail && (
           <div className="space-y-2 text-[0.82rem] font-semibold text-mist-300">
             <p className="break-words text-mist-100">{detail.text}</p>
@@ -418,7 +418,7 @@ function Bank() {
         )}
       </Modal>
 
-      <Modal open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview as player" subtitle="Exactly what a student sees, answer revealed.">
+      <Modal icon={EyeIcon} tone="cyan" open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview as player" subtitle="Exactly what a student sees, answer revealed.">
         {preview && (() => {
           const shown = (preview.with_answer ?? preview.as_player ?? {}) as Record<string, unknown>;
           return (
@@ -835,7 +835,7 @@ function Builders() {
         )}
       </Card>
 
-      <Modal open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview" subtitle="Read-only — the answer key is shown for staff only.">
+      <Modal icon={EyeIcon} tone="cyan" open={Boolean(preview)} onClose={() => setPreview(null)} title="Preview" subtitle="Read-only — the answer key is shown for staff only.">
         {preview && (
           <pre className="keep-dark max-h-80 overflow-auto rounded-2xl border border-white/10 bg-ink-950/70 p-3 font-mono text-[0.7rem] leading-relaxed whitespace-pre-wrap text-mist-300 [overflow-wrap:anywhere]">
             {JSON.stringify(preview, null, 2).slice(0, 6000)}

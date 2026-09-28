@@ -3,7 +3,7 @@
  * Both read shared arena state, so a group quiz, a duel or an exam all move
  * the same leaderboards.
  */
-import {Crown, Flag, Plus, Search, Swords, Trophy, Users} from 'lucide-react';
+import {Crown, Flag, Plus, Search, Swords, Trophy, Users, TrophyIcon, UsersIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, CopyCode, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -126,7 +126,7 @@ export function TournamentsPanel() {
         </Card>
       )}
 
-      <Modal open={openId !== null} onClose={() => setOpenId(null)} title="Bracket" subtitle="Live standings and matches" size="lg">
+      <Modal icon={TrophyIcon} tone="gold" open={openId !== null} onClose={() => setOpenId(null)} title="Bracket" subtitle="Live standings and matches" size="lg">
         {!detail && <Skeleton className="h-40 w-full" />}
         {detail && (
           <div className="grid gap-4">
@@ -345,7 +345,7 @@ export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, secti
         </div>
       )}
 
-      <Modal
+      <Modal icon={UsersIcon} tone="nova"
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Create a study group"

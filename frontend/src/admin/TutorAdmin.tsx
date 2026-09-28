@@ -1,7 +1,7 @@
 /** Staff: AI Tutor control room — overview, settings, usage, costs, users,
  * conversations (titles only), models, limits, logs and feature switches.
  * Everything is enforced by the API; this screen only edits and reports. */
-import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, X, Eye, EyeOff, Trash2} from 'lucide-react';
+import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {formatNumber, formatRelative} from '../lib/format';
@@ -553,7 +553,7 @@ function UserModal({id, onClose, onChanged}: {id: number | null; onClose: () => 
     }
   };
   return (
-    <Modal open={!!id} onClose={onClose} title={user ? user.name : 'Student'} subtitle={user ? `@${user.username} · private chat text is never shown here` : undefined}>
+    <Modal icon={UserRoundIcon} tone="nova" open={!!id} onClose={onClose} title={user ? user.name : 'Student'} subtitle={user ? `@${user.username} · private chat text is never shown here` : undefined}>
       {!user ? <Skeleton className="h-48" /> : (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2 text-center">
@@ -861,7 +861,7 @@ function LogsTab({range}: {range: AdminRange}) {
           <button disabled={page >= pages} onClick={() => setPage(page + 1)} className="grid size-8 place-items-center rounded-lg border border-white/10 text-mist-300 disabled:opacity-30" aria-label="Next page"><ChevronRight className="size-4" /></button>
         </div>
       )}
-      <Modal open={!!open} onClose={() => setOpen(null)} title="Request details" subtitle="Prompts and answers are never logged." size="sm">
+      <Modal icon={FileTextIcon} tone="cyan" open={!!open} onClose={() => setOpen(null)} title="Request details" subtitle="Prompts and answers are never logged." size="sm">
         {open && (
           <div className="space-y-0.5">
             {([

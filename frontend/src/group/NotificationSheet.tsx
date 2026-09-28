@@ -4,7 +4,7 @@
  * announcement, member joined…), each tappable to jump to the right section.
  * Paginated, with a one-tap "mark all read".
  */
-import {Bell, CheckCheck} from 'lucide-react';
+import {Bell, CheckCheck, BellIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Chip, EmptyState, Modal, Pager, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
@@ -59,7 +59,7 @@ export default function NotificationSheet({open, onClose, onRead}: {open: boolea
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Group notifications" subtitle="What's new in this study group" size="md">
+    <Modal icon={BellIcon} tone="amber" open={open} onClose={onClose} title="Group notifications" subtitle="What's new in this study group" size="md">
       <div className="grid gap-2">
         <div className="flex justify-end">
           <Button size="sm" variant="ghost" icon={<CheckCheck className="size-4" />} onClick={() => void markAll()}>

@@ -18,7 +18,7 @@ import {
   Timer,
   Trash2,
   Trophy,
-  X,
+  X, LayersIcon, StickyNoteIcon
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -494,7 +494,7 @@ function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a' | 'a_
         </Chip>
       </div>
 
-      <Modal
+      <Modal icon={StickyNoteIcon} tone="amber"
         open={notesOpen}
         onClose={() => setNotesOpen(false)}
         title="Card note"
@@ -742,7 +742,7 @@ export default function FlashcardsPanel() {
         </Card>
       )}
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New deck" subtitle="Build it from the question bank." size="sm"
+      <Modal icon={LayersIcon} tone="nova" open={createOpen} onClose={() => setCreateOpen(false)} title="New deck" subtitle="Build it from the question bank." size="sm"
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)} icon={<X className="size-4" />}>Cancel</Button>

@@ -5,7 +5,7 @@
  * threaded chat. Staff replies ping your bell (inbox + websocket, same rails
  * as everything else) and the full history stays attached to the ticket.
  */
-import {ArrowLeft, CheckCircle2, CircleHelp, LifeBuoy, Paperclip, Plus, Send} from 'lucide-react';
+import {ArrowLeft, CheckCircle2, CircleHelp, LifeBuoy, Paperclip, Plus, Send, LifeBuoyIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
@@ -199,7 +199,7 @@ function NewTicketModal({
   };
 
   return (
-    <Modal
+    <Modal icon={LifeBuoyIcon} tone="mint"
       open={open}
       onClose={onClose}
       title="New support request"

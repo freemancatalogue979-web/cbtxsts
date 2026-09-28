@@ -9,7 +9,7 @@
  * Friends can also be nudged with one tap and messages arrive live over the
  * arena socket.
  */
-import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X} from 'lucide-react';
+import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X, CalendarPlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Avatar, Button, Card, EmptyState, Modal, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
@@ -1095,7 +1095,7 @@ export default function FriendsPanel({
           scroll and the action bar stays pinned in its footer: the Send button
           can never escape the panel on tall screens, and a mobile keyboard can
           never push it out of reach. */}
-      <Modal
+      <Modal icon={CalendarPlusIcon} tone="pulse"
         open={Boolean(planFor && selected)}
         onClose={() => setPlanFor(null)}
         title={selected ? `Plan a quiz with ${selected.name.split(' ')[0]}` : 'Plan a quiz'}
