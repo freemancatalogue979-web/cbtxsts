@@ -1653,7 +1653,8 @@
 /* -------------------------------------------------- low-end device profile */
 /* Set by lib/fx.ts when the device reports reduced motion, few cores or little
    memory: keep the art direction, drop the expensive parts. */
-[data-fx='low'] .gbtn,
+/* Only solid buttons get the ledge — on ghost/outline ones it reads as a stray dark box. */
+[data-fx='low'] .gbtn:has(> .gbtn-face[data-solid]),
 [data-fx='low'] .gpress,
 [data-fx='low'] .card,
 [data-fx='low'] .panel-hero {

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, Select, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PillSelect, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -753,18 +753,12 @@ export default function QuestionManager({
                 label="Correct answer"
                 hint={editing.correct ? `Saved as ${editing.correct}` : 'Required — no default is ever assumed'}
               >
-                <Select
+                <PillSelect
+                  aria-label="Correct answer"
                   value={editing.correct}
-                  onChange={(event) => setEditing({...editing, correct: event.target.value as OptionKey})}
-                  className={editing.correct ? '' : 'border-flare-500/45'}
-                >
-                  <option value="">Select the correct answer…</option>
-                  {LETTERS.map((letter) => (
-                    <option key={letter} value={letter}>
-                      {letter}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(correct) => setEditing({...editing, correct})}
+                  options={LETTERS.map((letter) => ({value: letter, label: letter}))}
+                />
               </Field>
               <Field label="Points">
                 <TextInput
@@ -776,16 +770,12 @@ export default function QuestionManager({
                 />
               </Field>
               <Field label="Difficulty">
-                <Select
+                <PillSelect
+                  aria-label="Difficulty"
                   value={editing.difficulty}
-                  onChange={(event) => setEditing({...editing, difficulty: event.target.value as (typeof DIFFICULTIES)[number]})}
-                >
-                  {DIFFICULTIES.map((level) => (
-                    <option key={level} value={level}>
-                      {level}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(difficulty) => setEditing({...editing, difficulty})}
+                  options={DIFFICULTIES.map((level) => ({value: level, label: level.charAt(0).toUpperCase() + level.slice(1)}))}
+                />
               </Field>
             </div>
 
@@ -873,7 +863,7 @@ export default function QuestionManager({
                 {key: 'visible' as const, label: 'Visible to players'},
                 {key: 'flashcard_enabled' as const, label: 'Usable in flashcards'},
                 {key: 'duel_enabled' as const, label: 'Usable in duels'},
-                {key: 'practice_enabled' as const, label: 'Usable in practice / boss'},
+                {key: 'practice_enabled' as const, label: 'Usable in practice'},
               ].map((row) => (
                 <SwitchRow key={row.key} label={row.label} checked={Boolean(editing[row.key])} onChange={(on) => setEditing({...editing, [row.key]: on})} />
               ))}
