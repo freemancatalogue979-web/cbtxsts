@@ -31,11 +31,93 @@ export function Section({title, description, action, children, className = ''}: 
   );
 }
 
-export function Metric({label, value, sub, tone}: {label: string; value: ReactNode; sub?: ReactNode; tone?: 'success' | 'warning' | 'danger'}) {
+/* ------------------------------------------------------------ colour
+ * One accent drives actions; six muted hues give sections and courses an
+ * identity (icon tiles, rings, course marks) without turning into neon. */
+export type Hue = 'blue' | 'green' | 'amber' | 'violet' | 'rose' | 'teal';
+const COURSE_HUES: Record<string, Hue> = {
+  violet: 'violet', purple: 'violet', indigo: 'violet', blue: 'blue', sky: 'blue', cyan: 'teal', teal: 'teal',
+  emerald: 'green', green: 'green', lime: 'green', amber: 'amber', yellow: 'amber', orange: 'amber', gold: 'amber',
+  rose: 'rose', red: 'rose', pink: 'rose', fuchsia: 'violet',
+};
+const HUE_ORDER: Hue[] = ['blue', 'violet', 'teal', 'amber', 'green', 'rose'];
+/** A course keeps the same hue everywhere: its own accent when set, else a stable pick from its id. */
+export function hueForCourse(course?: {id?: number | null; accent?: string | null} | null): Hue {
+  const named = course?.accent ? COURSE_HUES[course.accent.toLowerCase()] : undefined;
+  return named ?? HUE_ORDER[Math.abs(Number(course?.id ?? 0)) % HUE_ORDER.length];
+}
+
+/** Tinted icon square — the small splash of colour that keeps Pro lively. */
+export function Tile({hue = 'blue', size = 'md', children, className = ''}: {hue?: Hue; size?: 'sm' | 'md' | 'lg'; children: ReactNode; className?: string}) {
+  return (
+    <span className={`pro-tile ${className}`} data-hue={hue} data-size={size} aria-hidden>
+      {children}
+    </span>
+  );
+}
+
+/** Circular progress. Pure SVG; animates its sweep once (150–250ms territory, skipped on reduced motion). */
+export function Ring({value, size = 56, stroke = 5, hue, tone, children, label}: {value: number; size?: number; stroke?: number; hue?: Hue; tone?: 'success' | 'warning' | 'danger'; children?: ReactNode; label?: string}) {
+  const pct = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const color = tone ? `var(--pro-${tone})` : hue ? `var(--pro-h-${hue})` : 'var(--pro-accent)';
+  return (
+    <span className="pro-ring" style={{width: size, height: size}} role="img" aria-label={label ?? `${Math.round(pct)}%`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--pro-track)" strokeWidth={stroke} />
+        <circle
+          className="pro-ring-arc"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct / 100)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      {children != null && <span className="pro-ring-label">{children}</span>}
+    </span>
+  );
+}
+
+/** Segmented choice (sizes, durations, filters). Keyboard: native radio semantics via buttons + aria. */
+export function Seg<T extends string | number>({value, options, onChange, label, size = 'md', fill = false}: {value: T; options: {value: T; label: ReactNode; disabled?: boolean}[]; onChange: (value: T) => void; label: string; size?: 'sm' | 'md'; fill?: boolean}) {
+  return (
+    <div className={`pro-seg ${fill ? 'pro-seg-fill' : ''}`} data-size={size} role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          disabled={option.disabled}
+          onClick={() => onChange(option.value)}
+          className="pro-seg-item"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Metric({label, value, sub, tone, icon, hue = 'blue'}: {label: string; value: ReactNode; sub?: ReactNode; tone?: 'success' | 'warning' | 'danger'; icon?: ReactNode; hue?: Hue}) {
   const color = tone === 'success' ? 'var(--pro-success)' : tone === 'warning' ? 'var(--pro-warning)' : tone === 'danger' ? 'var(--pro-danger)' : 'var(--pro-text-2)';
   return (
-    <div className="pro-card min-w-0 p-4">
-      <p className="pro-eyebrow truncate">{label}</p>
+    <div className="pro-card pro-metric min-w-0 p-4">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="pro-eyebrow truncate">{label}</p>
+        {icon && (
+          <Tile hue={hue} size="sm">
+            {icon}
+          </Tile>
+        )}
+      </div>
       <p className="pro-metric-value mt-2">{value}</p>
       {sub != null && (
         <p className="pro-meta mt-1 truncate" style={{color}}>
@@ -63,9 +145,14 @@ export function Badge({children, tone}: {children: ReactNode; tone?: 'accent' | 
   );
 }
 
-export function Empty({title, body, action}: {title: string; body?: ReactNode; action?: ReactNode}) {
+export function Empty({title, body, action, icon, hue = 'blue'}: {title: string; body?: ReactNode; action?: ReactNode; icon?: ReactNode; hue?: Hue}) {
   return (
     <div className="grid place-items-center gap-2 px-4 py-10 text-center">
+      {icon && (
+        <Tile hue={hue} size="lg" className="mb-1">
+          {icon}
+        </Tile>
+      )}
       <p className="pro-h3">{title}</p>
       {body && <p className="pro-secondary max-w-md">{body}</p>}
       {action && <div className="mt-2">{action}</div>}

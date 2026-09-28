@@ -9,7 +9,7 @@ import {Suspense, lazy} from 'react';
 import {ErrorBoundary} from '../components/ErrorBoundary';
 import type {Tab} from '../lib/nav';
 import type {Quiz} from '../lib/types';
-import {LoadingRows, PageHeader} from './ui';
+import {LoadingRows} from './ui';
 
 const ProDashboard = lazy(() => import('./ProDashboard'));
 const ProStudy = lazy(() => import('./ProStudy'));
@@ -17,9 +17,9 @@ const ProCourses = lazy(() => import('./ProCourses'));
 const ProExams = lazy(() => import('./ProExams'));
 const ProAnalytics = lazy(() => import('./ProAnalytics'));
 const ProSettings = lazy(() => import('./ProSettings'));
-const MaterialsPanel = lazy(() => import('../panels/MaterialsPanel'));
-const PracticePanel = lazy(() => import('../panels/PracticePanel'));
-const FlashcardsPanel = lazy(() => import('../panels/FlashcardsPanel'));
+const ProMaterials = lazy(() => import('./ProMaterials'));
+const ProBank = lazy(() => import('./ProBank'));
+const ProFlashcards = lazy(() => import('./ProFlashcards'));
 const TutorPanel = lazy(() => import('../panels/TutorPanel'));
 
 function Loading() {
@@ -69,36 +69,16 @@ export default function ProRoutes({
       body = <ProSettings onSignOut={onSignOut} />;
       break;
     case 'materials':
-      body = (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <PageHeader title="Materials" description="Course reading, with your own notes alongside." />
-          <MaterialsPanel />
-        </div>
-      );
+      body = <ProMaterials />;
       break;
     case 'bank':
-      body = (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <PageHeader title="Question Bank" description="Practise from your courses' question banks by topic, size and time limit. Explanations follow every answer." />
-          <PracticePanel />
-        </div>
-      );
+      body = <ProBank />;
       break;
     case 'flashcards':
-      body = (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <PageHeader title="Flashcards" description="Spaced review of the ideas you need to keep." />
-          <FlashcardsPanel />
-        </div>
-      );
+      body = <ProFlashcards />;
       break;
     case 'tutor':
-      body = (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <PageHeader eyebrow="AI Study Assistant" title="AI Assistant" description="Your academic assistant for understanding, practising and mastering your subjects. Answers cite your course materials." />
-          <TutorPanel />
-        </div>
-      );
+      body = <TutorPanel />;
       break;
     default:
       body = fallback;

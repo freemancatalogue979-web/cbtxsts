@@ -636,7 +636,7 @@ function MyNotesTab({
   );
 }
 
-function Reader({
+export function Reader({
   material,
   onBack,
   onToast,
@@ -902,10 +902,11 @@ function Reader({
           <span className="hidden sm:inline">Ask AI</span>
         </Button>
         <Button variant="soft" size="sm" icon={<Maximize2 className="size-4" />} onClick={() => setFocus(true)} aria-label="Read in full screen">
-          Focus
+          <span className="max-[380px]:hidden">Focus</span>
         </Button>
         <Button variant="ghost" size="sm" icon={<BookmarkCheck className="size-4" />} onClick={() => setShowMarks(true)}>
-          My marks ({marks.highlights.length + marks.notes.length})
+          <span className="hidden sm:inline">My marks </span>
+          <span className="sm:hidden">Marks </span>({marks.highlights.length + marks.notes.length})
         </Button>
       </div>
 

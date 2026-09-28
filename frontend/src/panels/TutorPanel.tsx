@@ -23,6 +23,7 @@ import {
 } from '../lib/tutor';
 import {ActionCards, ToolTrail, mergeTool} from '../components/tutor/AgentBits';
 import {useSession} from '../store/session';
+import {useExperience} from '../lib/mode';
 
 const LAST_CHAT_KEY = 'arena.tutor.chat';
 /** The open temporary chat (per browser tab) — reopened when coming back to the tutor, never in the history. */
@@ -82,6 +83,7 @@ interface Attached {
 
 export default function TutorPanel() {
   const {toast} = useSession();
+  const {pro} = useExperience();
   const [status, setStatus] = useState<TutorStatus | null>(null);
   const [courses, setCourses] = useState<TutorCourse[]>([]);
   const [uploads, setUploads] = useState<TutorUpload[]>([]);
@@ -597,14 +599,22 @@ export default function TutorPanel() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-2.5 flex flex-wrap items-center gap-2">
-        <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-[inset_0_2px_0_rgba(255,255,255,0.3)]">
-          <Sparkles className="size-5" />
-        </span>
+    <div className={`mx-auto w-full max-w-6xl ${pro ? 'pro-tutor' : ''}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${pro ? 'mb-4' : 'mb-2.5'}`}>
+        {pro ? (
+          <span className="pro-tile" data-hue="violet" data-size="md" aria-hidden>
+            <Sparkles />
+          </span>
+        ) : (
+          <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-[inset_0_2px_0_rgba(255,255,255,0.3)]">
+            <Sparkles className="size-5" />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-[1.05rem] leading-tight font-extrabold text-mist-50 sm:text-lg">AI Tutor</h1>
-          <p className="truncate text-[0.74rem] font-medium text-mist-500">Patient help that teaches, not just tells.</p>
+          <h1 className={pro ? 'pro-h2 leading-tight' : 'text-[1.05rem] leading-tight font-extrabold text-mist-50 sm:text-lg'}>{pro ? 'AI Assistant' : 'AI Tutor'}</h1>
+          <p className={pro ? 'pro-meta truncate' : 'truncate text-[0.74rem] font-medium text-mist-500'}>
+            {pro ? 'Academic help grounded in your course materials.' : 'Patient help that teaches, not just tells.'}
+          </p>
         </div>
         {remaining !== null && status?.configured && (
           <span className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${remaining <= 3 ? 'border-flare-400/40 text-flare-200' : 'border-white/10 text-mist-300'}`} title={`${status.usage.today} used today · ${status.usage.month} this month`}>
@@ -642,9 +652,9 @@ export default function TutorPanel() {
       )}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="card hidden h-[calc(100dvh-11rem)] min-h-[28rem] flex-col p-2.5 lg:flex">{chatList}</aside>
+        <aside className="tutor-side card hidden h-[calc(100dvh-11rem)] min-h-[28rem] flex-col p-2.5 lg:flex">{chatList}</aside>
 
-        <section className="card flex min-w-0 h-[calc(100dvh-12.5rem)] min-h-[26rem] flex-col p-2.5 sm:p-3 lg:h-[calc(100dvh-11rem)]">
+        <section className="tutor-main card flex min-w-0 h-[calc(100dvh-12.5rem)] min-h-[26rem] flex-col p-2.5 sm:p-3 lg:h-[calc(100dvh-11rem)]">
           {library ? (
             <LibraryView
               uploads={uploads}
@@ -731,13 +741,19 @@ export default function TutorPanel() {
                   <div className="space-y-3 p-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
                 ) : messages.length === 0 ? (
                   <div className="mx-auto flex max-w-2xl flex-col items-center px-1 py-5 text-center sm:py-8">
-                    <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Bot className="size-6" /></span>
-                    <h2 className="mt-3 text-[1.08rem] font-extrabold text-mist-50 sm:text-xl">Ask anything about what you're learning.</h2>
-                    <p className="mt-1 max-w-md text-[0.8rem] text-mist-500">Pick a course or topic above for sharper answers — or attach a document or photo of a question.</p>
+                    {pro ? (
+                      <span className="pro-tile" data-hue="violet" data-size="lg" aria-hidden><Sparkles /></span>
+                    ) : (
+                      <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Bot className="size-6" /></span>
+                    )}
+                    <h2 className={pro ? 'pro-h2 mt-4' : 'mt-3 text-[1.08rem] font-extrabold text-mist-50 sm:text-xl'}>{pro ? 'What would you like to understand today?' : "Ask anything about what you're learning."}</h2>
+                    <p className={pro ? 'pro-secondary mt-1.5 max-w-md' : 'mt-1 max-w-md text-[0.8rem] text-mist-500'}>
+                      {pro ? 'Choose a course and topic for answers grounded in your materials, or attach a document or a photo of a question.' : 'Pick a course or topic above for sharper answers — or attach a document or photo of a question.'}
+                    </p>
                     {dashboard && <StudyCards dashboard={dashboard} onAsk={(prompt, mode, t) => { if (t) setTopic(t); void send(prompt, mode); }} onPlan={() => setGen({kind: 'plan'})} onResources={() => setLibrary(true)} />}
-                    <div className="mt-4 grid w-full grid-cols-2 gap-1.5">
+                    <div className="tutor-examples mt-4 grid w-full grid-cols-2 gap-1.5">
                       {EXAMPLES.filter((row) => !row.gen || genOn(row.gen)).map((row) => (
-                        <button key={row.label} disabled={!!locked || !!unavailable} onClick={() => runExample(row)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-[0.74rem] leading-tight font-bold sm:px-3 sm:py-2.5 sm:text-[0.8rem] text-mist-200 transition-colors enabled:hover:border-nova-400/40 enabled:hover:bg-nova-500/10 disabled:opacity-40">
+                        <button key={row.label} disabled={!!locked || !!unavailable} onClick={() => runExample(row)} className="tutor-example flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-[0.74rem] leading-tight font-bold sm:px-3 sm:py-2.5 sm:text-[0.8rem] text-mist-200 transition-colors enabled:hover:border-nova-400/40 enabled:hover:bg-nova-500/10 disabled:opacity-40">
                           <row.icon className="size-4 shrink-0 text-nova-300" />
                           <span className="min-w-0">{row.label}</span>
                         </button>
@@ -773,7 +789,7 @@ export default function TutorPanel() {
 
               {/* quick actions */}
               {messages.length > 0 && !locked && (
-                <div className="no-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pt-2">
+                <div className="tutor-chips no-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pt-2">
                   {QUICK.map((q) => (
                     <button key={q.label} disabled={streaming} onClick={() => void send(q.prompt, q.mode)} className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[0.72rem] font-bold text-mist-300 hover:bg-white/[0.06] disabled:opacity-40">
                       {q.label}
@@ -795,7 +811,7 @@ export default function TutorPanel() {
                     <button className="text-[0.74rem] font-bold text-mist-400 hover:text-flare-300" onClick={() => setImage(null)}>Remove image</button>
                   </div>
                 )}
-                <div className="flex items-end gap-1.5 rounded-2xl border border-white/12 bg-ink-950/70 p-1.5 focus-within:border-nova-400/60">
+                <div className="tutor-composer flex items-end gap-1.5 rounded-2xl border border-white/12 bg-ink-950/70 p-1.5 focus-within:border-nova-400/60">
                   <ComposerMenu
                     disabled={!!locked || !!unavailable || streaming}
                     uploading={uploading}
@@ -977,7 +993,7 @@ function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onP
             <Paperclip className="size-3" /> {[label, message.meta.image ? 'image' : ''].filter(Boolean).join(' · ')}
           </span>
         )}
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-nova-600/35 px-3.5 py-2 text-[0.9rem] whitespace-pre-wrap text-mist-50">{message.content}</div>
+        <div className="tutor-user max-w-[85%] rounded-2xl rounded-br-md bg-nova-600/35 px-3.5 py-2 text-[0.9rem] whitespace-pre-wrap text-mist-50 [overflow-wrap:anywhere]">{message.content}</div>
       </div>
     );
   }
@@ -987,13 +1003,14 @@ function MessageBubble({message, last, busy, onFollow, onSave, onFlashcards, onP
   const runningTool = message.pending ? tools.find((tool) => tool.status === 'running') : undefined;
   return (
     <div className="flex gap-2">
-      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Sparkles className="size-3.5" /></span>
+      <span className="tutor-avatar mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Sparkles className="size-3.5" /></span>
       <div className="min-w-0 flex-1">
-        <div className={`rounded-2xl rounded-tl-md border px-3.5 py-2.5 ${message.failed ? 'border-flare-400/30 bg-flare-500/[0.07]' : 'border-white/8 bg-white/[0.03]'}`}>
+        <div className={`tutor-bot rounded-2xl rounded-tl-md border px-3.5 py-2.5 ${message.failed ? 'border-flare-400/30 bg-flare-500/[0.07]' : 'border-white/8 bg-white/[0.03]'}`}>
           {tools.length > 0 && <ToolTrail tools={tools} live={message.pending && !message.content} />}
           {message.pending && !message.content ? (
             <span className="flex items-center gap-1.5 py-1 text-[0.8rem] text-mist-400">
-              <span className="flex gap-1">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-nova-300" style={{animationDelay: `${i * 0.15}s`}} />)}</span>
+              <span className="tutor-dots flex gap-1">{[0, 1, 2].map((i) => <span key={i} className="size-1.5 animate-bounce rounded-full bg-nova-300" style={{animationDelay: `${i * 0.15}s`}} />)}</span>
+              <span className="tutor-spin hidden size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
               {runningTool ? `${runningTool.label}…` : tools.length ? 'Putting it together…' : 'Thinking…'}
             </span>
           ) : (

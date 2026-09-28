@@ -449,6 +449,8 @@ def practice_history(
                 "id": row.id,
                 "mode": row.mode,
                 "label": MODES.get(row.mode, {}).get("label", CUSTOM_LABEL if row.mode == CUSTOM_MODE else row.mode),
+                "course_id": row.course_id,
+                "topic": row.topic or "",
                 "score": row.score,
                 "correct": row.correct,
                 "total": row.total,
@@ -904,6 +906,9 @@ async def finish_practice(
     run = PracticeRun(
         student_id=student.id,
         mode=mode,
+        # the ledger remembers what was practised (course + topic)
+        course_id=state.get("course_id") or None,
+        topic=str(state.get("topic") or "")[:120],
         score=score,
         correct=correct,
         total=total,

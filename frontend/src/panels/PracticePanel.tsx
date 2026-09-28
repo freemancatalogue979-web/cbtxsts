@@ -589,11 +589,11 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
 
 /* --------------------------------------------------------- custom practice */
 type CatalogTopic = {topic: string; key: string; count: number};
-type CatalogCourse = {id: number; code: string; title: string; accent: string; available: number; topics: CatalogTopic[]};
-type PracticeCatalog = {courses: CatalogCourse[]; count_choices: number[]; duration_choices_minutes: number[]};
+export type CatalogCourse = {id: number; code: string; title: string; accent: string; available: number; topics: CatalogTopic[]};
+export type PracticeCatalog = {courses: CatalogCourse[]; count_choices: number[]; duration_choices_minutes: number[]};
 type RunStats = {answered: number; correct: number; wrong: number; remaining: number};
 
-type CustomRunPayload = {
+export type CustomRunPayload = {
   token: string;
   questions: QuestionPayload[];
   ends_at: string | null;
@@ -780,7 +780,7 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
 }
 
 /** One custom run: timed, refresh-proof, graded by the server. */
-function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expired: boolean; onNewPractice: () => void}) {
+export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expired: boolean; onNewPractice: () => void}) {
   const {toast, pushRewards, setProfile, profile} = useSession();
   const [index, setIndex] = useState(() => Math.max(0, Math.min(run.index ?? 0, run.questions.length - 1)));
   const [picked, setPicked] = useState<string | null>(null);

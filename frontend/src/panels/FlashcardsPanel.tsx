@@ -55,7 +55,7 @@ type CardPayload = {
   hint: string;
 };
 
-type DeckPayload = {
+export type DeckPayload = {
   id: number;
   name: string;
   description: string;
@@ -65,7 +65,7 @@ type DeckPayload = {
   stats: {total: number; mastered: number; due: number; mastery: number; new?: number; learning?: number; reviewing?: number; bookmarked?: number};
 };
 
-type Progress = {
+export type Progress = {
   goal: number;
   reviewed_today: number;
   goal_percent: number;
@@ -76,7 +76,7 @@ type Progress = {
   mastery: number;
 };
 
-const DECK_PRESETS: {kind: string; name: string; blurb: string; config?: Record<string, unknown>}[] = [
+export const DECK_PRESETS: {kind: string; name: string; blurb: string; config?: Record<string, unknown>}[] = [
   {kind: 'wrong', name: 'Questions I got wrong', blurb: 'Everything you missed in exams, in one deck.'},
   {kind: 'weakness', name: 'Weakness drill', blurb: 'Your most-missed questions first.'},
   {kind: 'favorites', name: 'Bookmarked', blurb: 'Cards you starred for later.'},
@@ -98,7 +98,7 @@ const STATE_STYLE: Record<string, string> = {
   mastered: 'border-mint-500/30 bg-mint-500/12 text-mint-200',
 };
 
-function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a' | 'a_to_q'; onExit: () => void}) {
+export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a' | 'a_to_q'; onExit: () => void}) {
   const {toast, pushRewards, setProfile} = useSession();
   const [payload, setPayload] = useState<{deck: DeckPayload; cards: CardPayload[]; next_due?: Record<string, number>} | null>(null);
   const [index, setIndex] = useState(0);
