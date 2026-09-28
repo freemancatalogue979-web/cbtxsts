@@ -69,7 +69,7 @@ export function AnswerTile({
       <span className={`grid size-9 shrink-0 place-items-center rounded-md border text-[0.88rem] font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] sm:size-10 ${badges[state]}`}>
         {letter}
       </span>
-      <span className="min-w-0 flex-1 text-[0.88rem] leading-snug font-semibold break-words text-mist-100 sm:text-[0.92rem]">
+      <span className="min-w-0 flex-1 text-[0.88rem] leading-snug font-semibold break-words text-mist-100 [overflow-wrap:anywhere] sm:text-[0.92rem]">
         {text}
       </span>
       {state === 'correct' && <CheckCircle2 className="size-5 shrink-0 text-emerald-400" />}

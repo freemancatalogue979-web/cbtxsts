@@ -299,7 +299,7 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
         progress={((index + (feedback ? 1 : 0)) / run.questions.length) * 100}
       />
 
-      <Card className="relative overflow-hidden p-4 sm:p-5">
+      <Card className="relative min-w-0 overflow-hidden p-4 sm:p-5 [overflow-wrap:anywhere]">
         {/* The hero watches the drill: cheering a hit, wincing a miss. */}
         <Character
           mood={feedback ? (feedback.correct ? 'cheer' : 'sad') : 'idle'}
@@ -328,7 +328,7 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
         <p className="mt-3 text-[0.98rem] leading-relaxed font-extrabold text-mist-50">{question.text}</p>
         {question.media?.audio && <audio className="mt-3 w-full" controls src={question.media.audio} />}
 
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2">
           {question.display_order.map((key, position) => {
             const label = 'ABCD'[position] ?? '';
             const state: 'idle' | 'correct' | 'wrong' =
@@ -388,13 +388,13 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
 
       <div className="flex gap-2">
         {feedback ? (
-          <Button variant="primary" className="flex-1" onClick={next} disabled={index + 1 >= run.questions.length && !summary}>
+          <div className="min-w-0 flex-1"><Button variant="primary" block onClick={next} disabled={index + 1 >= run.questions.length && !summary}>
             {index + 1 >= run.questions.length ? 'Finish run' : 'Next question'}
-          </Button>
+          </Button></div>
         ) : (
-          <Button variant="ghost" className="flex-1" onClick={() => void finish((index + 1) * 1000)}>
+          <div className="min-w-0 flex-1"><Button variant="ghost" block onClick={() => void finish((index + 1) * 1000)}>
             End run early
-          </Button>
+          </Button></div>
         )}
       </div>
     </div>
@@ -531,9 +531,9 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="min-w-0 p-4 sm:p-5 [overflow-wrap:anywhere]">
         <p className="text-[0.98rem] leading-relaxed font-extrabold text-mist-50">{question.text}</p>
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2">
           {question.display_order.map((key, position) => {
             const label = 'ABCD'[position] ?? '';
             return (
@@ -565,9 +565,9 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
 
       <div className="flex gap-2">
         {feedback ? (
-          <Button
+          <div className="min-w-0 flex-1"><Button
             variant="primary"
-            className="flex-1"
+            block
             onClick={() => {
               setFeedback(null);
               setPicked(null);
@@ -576,7 +576,7 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
             }}
           >
             Next attack
-          </Button>
+          </Button></div>
         ) : (
           <p className="flex-1 text-center text-[0.78rem] font-semibold text-mist-500">
             Correct answers deal damage — answer inside 5 seconds for a critical hit.
@@ -946,9 +946,9 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="min-w-0 p-4 [overflow-wrap:anywhere]">
           <SectionHeading title="Review your answers" subtitle="Every question, your pick, the right answer and why." icon={<ListChecks className="size-4" />} />
-          <ul className="mt-3 grid gap-2">
+          <ul className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2">
             {summary.review.map((row, position) => (
               <li
                 key={row.id}
@@ -1022,11 +1022,11 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
         <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-mist-400">{stats.remaining} remaining</span>
       </div>
 
-      <Card className="relative overflow-hidden p-4 sm:p-5">
-        <div className="flex items-center gap-2">
-          <Chip className="border-white/12 bg-white/6 text-mist-400">{question.topic || 'Practice'}</Chip>
+      <Card className="relative min-w-0 overflow-hidden p-4 sm:p-5 [overflow-wrap:anywhere]">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Chip className="max-w-full min-w-0 truncate border-white/12 bg-white/6 text-mist-400">{question.topic || 'Practice'}</Chip>
           <Chip className="border-white/12 bg-white/6 text-mist-400">{question.difficulty || 'medium'}</Chip>
- <span className="ml-auto text-[0.7rem] font-black tracking-wider text-mist-500">
+          <span className="ml-auto text-[0.7rem] font-black tracking-wider whitespace-nowrap text-mist-500">
             Question {index + 1} of {total}
           </span>
         </div>
@@ -1036,7 +1036,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
         <p className="mt-3 text-[0.98rem] leading-relaxed font-extrabold text-mist-50">{question.text}</p>
         {question.media?.audio && <audio className="mt-3 w-full" controls src={question.media.audio} />}
 
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2">
           {question.display_order.map((key, position) => {
             const label = 'ABCD'[position] ?? '';
             const state: 'idle' | 'picked' | 'correct' | 'wrong' | 'muted' = feedback
@@ -1086,17 +1086,17 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
 
       <div className="flex gap-2">
         {feedback ? (
-          <Button variant="primary" className="flex-1" onClick={next} disabled={index + 1 >= total}>
+          <div className="min-w-0 flex-1"><Button variant="primary" block onClick={next} disabled={index + 1 >= total}>
             {index + 1 >= total ? 'Finishing…' : 'Next question'}
-          </Button>
+          </Button></div>
         ) : (
           <>
-            <Button variant="ghost" className="flex-1" onClick={() => void endEarly()} disabled={submitting}>
+            <div className="min-w-0 flex-1"><Button variant="ghost" block onClick={() => void endEarly()} disabled={submitting}>
               End practice
-            </Button>
-            <Button variant="primary" className="flex-1" onClick={() => void submit()} disabled={!picked || submitting}>
+            </Button></div>
+            <div className="min-w-0 flex-1"><Button variant="primary" block onClick={() => void submit()} disabled={!picked || submitting}>
               {submitting ? 'Checking…' : 'Submit answer'}
-            </Button>
+            </Button></div>
           </>
         )}
       </div>
