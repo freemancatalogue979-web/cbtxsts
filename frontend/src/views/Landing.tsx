@@ -14,6 +14,7 @@ import HeroReel, {type HeroSlide} from '../components/HeroReel';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
+import InstallApp, {InstallBanner} from '../components/InstallApp';
 import type {Bootstrap} from '../lib/types';
 
 const SLIDES: HeroSlide[] = [
@@ -146,6 +147,8 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
             >
               Staff
             </Button>
+            <InstallApp variant="icon" className="sm:hidden" />
+            <InstallApp variant="pill" className="hidden sm:inline-flex" />
             <Button size="sm" onClick={onSignIn}>
               Sign in
             </Button>
@@ -173,6 +176,7 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
               Top players
             </Button>
           </div>
+          <InstallBanner className="mt-2.5 sm:mt-3" />
         </section>
 
         {/* ----------------------------------------------------- live stats */}

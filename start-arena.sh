@@ -73,6 +73,7 @@ start_api() {
 start_web() {
   cd "$ROOT/frontend"
   log "Web  → http://localhost:$WEB_PORT  (proxies /api and /ws to :$API_PORT)"
+  log "Install → open http://localhost:$WEB_PORT in Chrome/Edge and click \"Install app\" (phones need an https link, see README)"
   exec npx vite --host 0.0.0.0 --port "$WEB_PORT"
 }
 

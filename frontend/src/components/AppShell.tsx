@@ -19,6 +19,7 @@ import {jumpToMaterial} from '../lib/palette';
 import type {Tab} from '../lib/nav';
 import {formatNumber, formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
+import InstallApp, {InstallBanner} from './InstallApp';
 
 const SEEN_KEY = 'arena.notices.seen';
 
@@ -625,6 +626,7 @@ export function AppShell({
                     <VolumeX className="size-[17px] text-mist-500" />
                   )}
                 </IconButton>
+                <InstallApp variant="icon" className="float-chip hidden sm:grid" />
                 <NoticeBell className="inline-flex" />
                 {role === 'admin' && (
                   <IconButton label="Admin console" variant="outline" className="hidden lg:inline-flex" onClick={onAdmin}>
@@ -639,7 +641,10 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="w-full px-3 pt-3.5 pb-24 sm:px-5 sm:pt-5 lg:px-8 lg:pb-10">{children}</main>
+      <main className="w-full px-3 pt-3.5 pb-24 sm:px-5 sm:pt-5 lg:px-8 lg:pb-10">
+        {tab === 'play' && <InstallBanner className="mb-3" />}
+        {children}
+      </main>
 
       <MusicStartPill />
 
@@ -768,6 +773,7 @@ export function AppShell({
               </button>
             );
           })}
+          <InstallApp variant="tile" />
         </div>
 
         {profile && (

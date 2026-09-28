@@ -259,13 +259,24 @@ Players get an **AI Tutor** tab ("Ask anything about what you're learning.") pow
 
 ---
 
+## Install as an app
+
+Quiz Arena installs like a normal app: home-screen icon, full screen, its own window on a computer, no app store.
+
+- **Where the buttons are:** "Install app" in the landing header, an install banner on Home, the download icon in the top bar (tablet/desktop), an "Install app" tile in the Menu, and a card in Profile. Where the browser offers its prompt (Chrome, Edge, Samsung Internet, Opera on Android and desktop) one tap installs. Elsewhere the same buttons open steps for that exact browser (iPhone Safari → Share → Add to Home Screen, Firefox, Opera Mini → use Chrome).
+- **HTTPS is required by every browser.** Installing works from an `https://` address, or from `http://localhost` on the same computer. A phone opening `http://192.168.x.x:5173` over Wi-Fi can never install (the app says so and explains why).
+- **Phones while running it yourself:** put an HTTPS tunnel in front of the web port, then open the `https://` link it prints on the phone, e.g. `npx cloudflared tunnel --url http://localhost:5173` (free, no account), or `ngrok http 5173`. The dev server already accepts tunnel hostnames.
+- **For real students:** deploy the built site (`cd frontend && npm run build`, serve `dist/`) on any HTTPS host and proxy `/api`, `/ws` and `/live` to the API. The production build also keeps every opened screen for offline use.
+- Works with the dev server too (`start-arena`): it registers the service worker in a dev mode that never caches dev files, so hot reload is unaffected.
+- Manifest: `frontend/public/manifest.webmanifest` (icons, maskable icon, screenshots for Chrome's richer install sheet, and long-press shortcuts to Exams, Materials and Study Lab).
+
 ## Offline, low data and exam integrity
 
 Built for players on weak or expensive networks.
 
 - **Answers save on the phone first.** `frontend/src/lib/examSync.ts` keeps an outbox per attempt and delivers it in batches to `POST /api/exams/attempts/{id}/sync`, retrying when the network returns. Submitting offline queues the submission; the server accepts it within `EXAM_SYNC_GRACE_SECONDS` after the clock ends.
 - **Exams reopen offline.** A saved copy of the paper (questions and the player's answers, never the answer key) lets a reload continue with no network. Signing in survives a dropped connection: only a rejected login (401) signs a player out.
-- **Installable app.** `public/manifest.webmanifest` plus `public/sw.js` (production builds only). The service worker keeps the app shell and every screen already opened; it never caches `/api`, websockets or music. Bump `VERSION` in `sw.js` to drop old caches. Profile shows an "Install Quiz Arena" card when the phone supports it.
+- **Installable app.** See “Install as an app” above. `public/sw.js` caches the shell in production builds. The service worker keeps the app shell and every screen already opened; it never caches `/api`, websockets or music. Bump `VERSION` in `sw.js` to drop old caches.
 - **Smaller first download.** Staff console, duels, groups, results and most tabs load on first open (`src/lib/lazy.ts`); first load is about 230 KB gzipped. Common tabs are fetched when idle, except on Data Saver or 2G. Slow devices get lighter effects (`src/lib/fx.ts`).
 - **One device at a time.** A second phone must choose "Continue here" (takeover); the first phone then stops saving.
 - **Integrity review, never auto-penalty.** Leaving the screen, time away, offline spells, copy/paste and device moves are recorded. Staff see a Review/Check chip, a "Needs review" filter and a timeline under Results. Scores are never changed.

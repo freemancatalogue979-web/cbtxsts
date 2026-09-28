@@ -159,9 +159,12 @@ export function Button({
   const {title, ...others} = rest;
   const name = label ?? title ?? (rest as {'aria-label'?: string})['aria-label'];
   const passthrough = iconOnly ? others : rest;
+  /* A caller's base display class (e.g. "hidden lg:inline-flex") must win;
+     Tailwind emits inline-flex after hidden, so drop our default instead. */
+  const ownDisplay = /(^|\s)(hidden|flex|grid|block|inline-grid|inline-block)(\s|$)/.test(className);
   return (
     <button
-      className={`gbtn inline-flex shrink-0 items-center justify-center touch-manipulation p-0 focus-visible:outline-none
+      className={`gbtn ${ownDisplay ? '' : 'inline-flex'} shrink-0 items-center justify-center touch-manipulation p-0 focus-visible:outline-none
         ${block ? 'w-full' : ''} ${SIZES[size]} ${iconOnly ? SQUARE[size] : ''} ${className}`}
       data-shape={angular ? 'angular' : undefined}
       data-tip={iconOnly && name ? name : undefined}
@@ -206,7 +209,7 @@ export function IconButton({
         uiClick('nav');
         onClick?.(e);
       }}
-      className={`gbtn inline-grid shrink-0 place-items-center touch-manipulation p-0 focus-visible:outline-none ${box} ${className}`}
+      className={`gbtn ${/(^|\s)(hidden|flex|grid|block|inline-flex|inline-block)(\s|$)/.test(className) ? '' : 'inline-grid'} shrink-0 place-items-center touch-manipulation p-0 focus-visible:outline-none ${box} ${className}`}
       {...rest}
     >
       <span

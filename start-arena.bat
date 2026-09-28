@@ -45,6 +45,8 @@ echo.
 echo   API docs : http://localhost:3000/docs
 echo   Web app  : http://localhost:5173
 echo   Staff    : admin@quizarena.ng / arena2026
+echo   Install  : open http://localhost:5173 in Chrome or Edge, click "Install app".
+echo              Phones need an https link (see README, "Install as an app").
 echo.
 echo   Closing the two terminal windows stops the servers.
 echo.

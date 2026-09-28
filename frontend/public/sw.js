@@ -16,7 +16,11 @@
  *
  * Bump VERSION to drop every old cache on the next visit.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
+/* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
+   makes the app installable and gives an offline fallback page; it never
+   caches dev modules, so hot reload behaves exactly as before. */
+const DEV = new URL(self.location.href).searchParams.get('mode') === 'dev';
 const SHELL = `arena-shell-${VERSION}`;
 const ASSETS = `arena-assets-${VERSION}`;
 const STATIC = `arena-static-${VERSION}`;
@@ -85,6 +89,7 @@ async function handleNavigation(request) {
     });
   const cached = await shell.match(SHELL_URL, MATCH);
   if (!cached) return network;
+  if (DEV) return network.catch(() => cached);
   // Slow network: answer from the saved shell, let the fetch finish in the background.
   const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_TIMEOUT_MS));
   try {
@@ -135,6 +140,8 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(handleNavigation(request));
+  } else if (DEV) {
+    return; // dev modules (/src, /@vite, /node_modules) always come from Vite
   } else if (path.startsWith('/assets/')) {
     event.respondWith(handleAsset(request));
   } else if (/^\/(brand|fonts|arena)\//.test(path) || path === '/manifest.webmanifest') {
