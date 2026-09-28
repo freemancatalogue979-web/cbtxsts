@@ -9,11 +9,15 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  CloudCheck,
+  CloudUpload,
   Flag,
   Grid3x3,
   MoveVertical,
   ScrollText,
   Send,
+  Smartphone,
+  WifiOff,
   X,
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
@@ -22,6 +26,16 @@ import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
 import {Button, Card, Chip, ProgressBar} from '../components/ui';
 import {api, ApiError} from '../lib/api';
+import {
+  cachedPaper,
+  cachedPaperForQuiz,
+  cachedRemaining,
+  cachePaper,
+  ExamSync,
+  isTransient,
+  pendingAnswers,
+  type SyncStatus,
+} from '../lib/examSync';
 import {HAPTICS} from '../lib/haptics';
 import {DifficultyChip, QuestionCard} from '../components/QuestionCard';
 import {sfx} from '../lib/sfx';
@@ -83,30 +97,68 @@ export default function Exam({
     return () => window.clearTimeout(timer);
   }, [swipeHint]);
   const [direction, setDirection] = useState(1);
+  /* Offline-first delivery + integrity (see lib/examSync.ts). */
+  const syncRef = useRef<ExamSync | null>(null);
+  const [sync, setSync] = useState<SyncStatus>({kind: 'saved', pending: 0});
+  const [deviceConflict, setDeviceConflict] = useState(false);
+  const [offlinePaper, setOfflinePaper] = useState(false);
+  const [submitQueued, setSubmitQueued] = useState(false);
+  const [awayNotice, setAwayNotice] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const takeoverRef = useRef(false);
+  const awayWarned = useRef(false);
+  const indexRef = useRef(0);
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
 
   const startedRef = useRef<number>(Date.now());
   /* Which attempt this component already has open. Naming the attempt in the
      URL re-renders with a new `attemptId` prop, and that must not throw away
      the paper the player is working on. */
   const loadedId = useRef<number | null>(null);
-  const timersRef = useRef<Record<number, number>>({});
   const submittedRef = useRef(false);
 
   /* ------------------------------------------------------------- load */
   useEffect(() => {
-    if (attemptId && loadedId.current === attemptId) return undefined;
+    const takeover = takeoverRef.current;
+    if (attemptId && loadedId.current === attemptId && !takeover) return undefined;
+    takeoverRef.current = false;
     let alive = true;
     (async () => {
       setLoading(true);
+      setDeviceConflict(false);
       try {
-        const loaded = reviewOnly && attemptId
-          ? await api.review(attemptId)
-          : attemptId
-            ? await api.attempt(attemptId)
-            : await api.startExam(quiz!.id);
+        let loaded: AttemptState;
+        let fromCache = false;
+        let cachedLeft = 0;
+        try {
+          const knownId = attemptId ?? (quiz ? cachedPaperForQuiz(quiz.id)?.state.id : undefined);
+          if (knownId && !reviewOnly) {
+            // Deliver anything this phone queued (maybe even a submit) before reading.
+            const pre = new ExamSync(knownId);
+            await pre.flush().catch(() => null);
+            pre.dispose();
+          }
+          loaded = reviewOnly && attemptId
+            ? await api.review(attemptId)
+            : attemptId
+              ? await api.attempt(attemptId, takeover)
+              : await api.startExam(quiz!.id, takeover);
+        } catch (err) {
+          // No network: reopen the copy of this paper saved on the phone.
+          const paper = !reviewOnly && isTransient(err)
+            ? attemptId ? cachedPaper(attemptId) : quiz ? cachedPaperForQuiz(quiz.id) : null
+            : null;
+          if (!paper) throw err;
+          loaded = paper.state;
+          fromCache = true;
+          cachedLeft = cachedRemaining(paper);
+        }
         if (!alive) return;
         loadedId.current = loaded.id;
         setState(loaded);
+        setOfflinePaper(fromCache);
         onAttempt?.(loaded.id);
         const map: Record<number, AnswerState> = {};
         loaded.answers.forEach((row) => {
@@ -117,15 +169,26 @@ export default function Exam({
             dirty: false,
           };
         });
+        // Answers still waiting on this phone are newer than the server's copy.
+        if (loaded.status === 'in_progress' && !reviewOnly) {
+          Object.entries(pendingAnswers(loaded.id)).forEach(([id, row]) => {
+            map[Number(id)] = {selected: row.selected, flagged: row.flagged, seconds: row.seconds, dirty: true};
+          });
+          if (!fromCache) cachePaper(loaded);
+        }
         loaded.questions.forEach((question) => {
           if (!map[question.id]) map[question.id] = {selected: null, flagged: false, seconds: 0, dirty: false};
         });
         setAnswers(map);
-        setRemaining(Math.max(0, Math.round(loaded.time_remaining)));
+        setRemaining(fromCache ? cachedLeft : Math.max(0, Math.round(loaded.time_remaining)));
         const firstUnanswered = loaded.questions.findIndex((q) => !map[q.id]?.selected);
         setIndex(firstUnanswered >= 0 ? firstUnanswered : 0);
       } catch (err) {
         if (!alive) return;
+        if (err instanceof ApiError && err.status === 423) {
+          setDeviceConflict(true);
+          return;
+        }
         const message = err instanceof ApiError ? err.message : 'Could not open this exam.';
         setError(message);
         if (err instanceof ApiError && err.status === 409) {
@@ -139,7 +202,17 @@ export default function Exam({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptId, quiz?.id, reviewOnly, onAttempt]);
+  }, [attemptId, quiz?.id, reviewOnly, onAttempt, reloadTick]);
+
+  /** Move the paper to this device (the other one is locked out and staff see the move). */
+  const continueHere = useCallback(() => {
+    takeoverRef.current = true;
+    loadedId.current = null;
+    submittedRef.current = false;
+    setSubmitQueued(false);
+    setError(null);
+    setReloadTick((tick) => tick + 1);
+  }, []);
 
   /* ------------------------------------------------------------ timer */
   const submit = useCallback(
@@ -148,10 +221,22 @@ export default function Exam({
       submittedRef.current = true;
       setSubmitting(true);
       try {
-        await api.submitExam(state.id, type);
-        onFinished(state.id);
+        const engine = syncRef.current;
+        if (!engine) {
+          await api.submitExam(state.id, type);
+          onFinished(state.id);
+          return;
+        }
+        // Answers and the submit travel together; onSubmitted finishes the flow.
+        const result = await engine.submit(type);
+        if (!result || result.status === 'in_progress') {
+          // Offline (or locked): the submit waits on this phone and goes out on reconnect.
+          setSubmitQueued(true);
+          setConfirmOpen(false);
+        }
       } catch (err) {
         submittedRef.current = false;
+        setSubmitQueued(false);
         toast('error', 'Submission failed', (err as Error).message);
       } finally {
         setSubmitting(false);
@@ -176,6 +261,111 @@ export default function Exam({
     return () => window.clearInterval(id);
   }, [state, reviewOnly, submit]);
 
+  /* ------------------------------------------ delivery engine lifetime */
+  const liveId = state && !reviewOnly && state.status === 'in_progress' ? state.id : null;
+  // Latest callbacks via refs: the engine must live exactly as long as the attempt,
+  // never be rebuilt because a parent re-rendered with new function identities.
+  const finishedRef = useRef(onFinished);
+  const toastRef = useRef(toast);
+  useEffect(() => {
+    finishedRef.current = onFinished;
+    toastRef.current = toast;
+  });
+  useEffect(() => {
+    if (!liveId) return undefined;
+    const engine = new ExamSync(liveId);
+    syncRef.current = engine;
+    const off = engine.subscribe(setSync);
+    engine.onSubmitted = (result) => {
+      setSubmitQueued(false);
+      if (result.late) {
+        toastRef.current('info', 'Paper closed at the deadline', 'Some answers reached the server too late to count.');
+      }
+      finishedRef.current(liveId);
+    };
+    if (engine.submitQueued) {
+      submittedRef.current = true;
+      setSubmitQueued(true);
+    }
+    if (engine.pending) engine.retryNow();
+    return () => {
+      off();
+      engine.dispose();
+      if (syncRef.current === engine) syncRef.current = null;
+    };
+  }, [liveId]);
+
+  /* A paper reopened from the phone's copy: refresh from the server once it is reachable. */
+  useEffect(() => {
+    if (!offlinePaper) return undefined;
+    const retry = () => {
+      if (sync.kind === 'offline') return;
+      loadedId.current = null;
+      setReloadTick((tick) => tick + 1);
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [offlinePaper, sync.kind]);
+
+  /* ------------------------------------------------ integrity signals */
+  /* Recorded for staff review, never used to fail anyone automatically. */
+  useEffect(() => {
+    if (!liveId) return undefined;
+    const engine = () => syncRef.current;
+    let awaySince: number | null = null;
+    let offlineSince: number | null = navigator.onLine ? null : Date.now();
+    const leave = () => {
+      if (awaySince === null) awaySince = Date.now();
+    };
+    const back = () => {
+      if (awaySince === null || document.visibilityState !== 'visible') return;
+      const seconds = Math.round((Date.now() - awaySince) / 1000);
+      awaySince = null;
+      if (seconds < 1) return; // notification shade, rotation — not a leave
+      engine()?.addEvent({type: 'away', seconds, question: indexRef.current + 1});
+      if (!awayWarned.current) {
+        awayWarned.current = true;
+        setAwayNotice(true);
+      }
+    };
+    const onVisibility = () => (document.visibilityState === 'hidden' ? leave() : back());
+    const onOffline = () => {
+      if (offlineSince === null) offlineSince = Date.now();
+    };
+    const onOnline = () => {
+      if (offlineSince !== null) {
+        engine()?.addEvent({type: 'offline', seconds: Math.round((Date.now() - offlineSince) / 1000)});
+        offlineSince = null;
+      }
+      engine()?.retryNow();
+    };
+    const onCopy = () => engine()?.addEvent({type: 'copy', question: indexRef.current + 1});
+    const onPaste = () => engine()?.addEvent({type: 'paste', question: indexRef.current + 1});
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', leave);
+    window.addEventListener('focus', back);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', leave);
+      window.removeEventListener('focus', back);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, [liveId]);
+
+  /* The first leave gets one calm heads-up; it hides itself. */
+  useEffect(() => {
+    if (!awayNotice) return undefined;
+    const timer = window.setTimeout(() => setAwayNotice(false), 7000);
+    return () => window.clearTimeout(timer);
+  }, [awayNotice]);
+
   /* --------------------------------------------- per-question seconds */
   useEffect(() => {
     if (reviewOnly || !state) return undefined;
@@ -194,33 +384,26 @@ export default function Exam({
   const persist = useCallback(
     (questionId: number, patch: Partial<AnswerState>) => {
       if (!state || reviewOnly) return;
-      setAnswers((current) => {
-        const row = current[questionId] ?? {selected: null, flagged: false, seconds: 0, dirty: false};
-        return {...current, [questionId]: {...row, ...patch, dirty: true}};
-      });
-
-      window.clearTimeout(timersRef.current[questionId]);
-      timersRef.current[questionId] = window.setTimeout(async () => {
-        try {
-          const snapshot = answersRef.current[questionId];
-          if (!snapshot) return;
-          await api.saveAnswer(state.id, {
-            question_id: questionId,
-            selected: snapshot.selected,
-            flagged: snapshot.flagged,
-            seconds_spent: snapshot.seconds,
-          });
-          setAnswers((current) => ({...current, [questionId]: {...current[questionId], dirty: false}}));
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 409) {
-            toast('info', 'Time is up', 'Your exam was submitted automatically.');
-            void submit('auto_timer');
-          }
-        }
-      }, 420);
+      const base = answersRef.current[questionId] ?? {selected: null, flagged: false, seconds: 0, dirty: false};
+      const next = {...base, ...patch, dirty: true};
+      answersRef.current = {...answersRef.current, [questionId]: next};
+      setAnswers((current) => ({...current, [questionId]: {...(current[questionId] ?? base), ...patch, dirty: true}}));
+      // Saved on this phone first, then delivered (batched, retried until it lands).
+      syncRef.current?.putAnswer(questionId, {selected: next.selected, flagged: next.flagged, seconds: next.seconds});
     },
-    [state, reviewOnly, submit, toast],
+    [state, reviewOnly],
   );
+
+  /* Everything confirmed by the server → nothing is "dirty" any more. */
+  useEffect(() => {
+    if (sync.kind !== 'saved') return;
+    setAnswers((current) => {
+      if (!Object.values(current).some((row) => row.dirty)) return current;
+      const next: Record<number, AnswerState> = {};
+      Object.entries(current).forEach(([id, row]) => (next[Number(id)] = {...row, dirty: false}));
+      return next;
+    });
+  }, [sync.kind]);
 
   const answersRef = useRef(answers);
   useEffect(() => {
@@ -228,7 +411,8 @@ export default function Exam({
   }, [answers]);
 
   const pick = (question: QuestionPublic, key: OptionKey) => {
-    if (reviewOnly || state?.status !== 'in_progress') return;
+    // No taps after 0:00 or once the submit is on its way (even while offline).
+    if (reviewOnly || state?.status !== 'in_progress' || remaining <= 0 || submitQueued || sync.kind === 'locked') return;
     const row = answers[question.id];
     sfx.play('tap');
     // Selecting is sticky: re-clicking the same option never blanks an answer.
@@ -290,6 +474,31 @@ export default function Exam({
   const percentAnswered = total ? (answeredCount / total) * 100 : 0;
   const urgent = remaining <= 60;
   const critical = remaining <= 15;
+
+  if (deviceConflict) {
+    return (
+      <div className="w-full py-12 sm:py-16">
+        <Card className="mx-auto max-w-md p-6 text-center sm:p-7">
+          <span className="mx-auto grid size-12 place-items-center rounded-2xl border border-gold-400/30 bg-gold-500/12 text-gold-300">
+            <Smartphone className="size-6" />
+          </span>
+          <h2 className="mt-4 text-lg font-black text-mist-50 sm:text-xl">This exam is open on another device</h2>
+          <p className="mt-2 text-[0.84rem] font-medium leading-relaxed text-mist-400">
+            To keep the exam fair, a paper can only be open on one device at a time. Continue here to move it to this
+            device. The other device will stop taking answers, and your lecturer will see that the exam was moved.
+          </p>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            <Button variant="outline" onClick={onExit} icon={<ArrowLeft className="size-4" />}>
+              Go back
+            </Button>
+            <Button onClick={continueHere} icon={<Smartphone className="size-4" />}>
+              Continue here
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -427,6 +636,7 @@ export default function Exam({
           </p>
         </div>
 
+        {!finished && <SaveStatus status={sync} />}
         {finished ? (
           <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-300" icon={<CheckCircle2 className="size-3.5" />}>
             Submitted · {state.grade}
@@ -462,6 +672,19 @@ export default function Exam({
         </div>
         <ProgressBar value={percentAnswered} className="h-1.5 sm:h-2" />
       </div>
+
+      {!finished && (
+        <DeliveryNotices
+          sync={sync}
+          offlinePaper={offlinePaper}
+          submitQueued={submitQueued}
+          awayNotice={awayNotice}
+          onDismissAway={() => setAwayNotice(false)}
+          onRetry={() => syncRef.current?.retryNow()}
+          onContinueHere={continueHere}
+          onExit={onExit}
+        />
+      )}
 
       <ExamStatus
         className="mb-3 sm:mb-4"
@@ -930,6 +1153,118 @@ function ExamStatus({
             <span className="block truncate text-[0.8rem] font-black text-mint-200">Submit</span>
           </span>
         </button>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ delivery UI */
+/** Small, calm indicator beside the clock: are my answers safe? */
+function SaveStatus({status}: {status: SyncStatus}) {
+  const view =
+    status.kind === 'offline'
+      ? {icon: <WifiOff className="size-3.5" />, text: `Offline · ${status.pending} on phone`, short: `${status.pending}`, tone: 'border-gold-500/40 bg-gold-500/12 text-gold-200'}
+      : status.kind === 'saving'
+        ? {icon: <CloudUpload className="size-3.5 animate-pulse" />, text: 'Saving…', short: '', tone: 'border-white/12 bg-white/6 text-mist-300'}
+        : status.kind === 'locked'
+          ? {icon: <Smartphone className="size-3.5" />, text: 'Moved', short: '', tone: 'border-flare-500/40 bg-flare-500/12 text-flare-200'}
+          : {icon: <CloudCheck className="size-3.5" />, text: 'Saved', short: '', tone: 'border-mint-500/25 bg-mint-500/10 text-mint-300'};
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      title={status.kind === 'offline' ? 'No connection. Your answers are saved on this phone and will be sent automatically.' : view.text}
+      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-[0.72rem] font-bold sm:h-10 sm:px-3 ${view.tone}`}
+    >
+      {view.icon}
+      <span className="hidden sm:inline">{view.text}</span>
+      {view.short && <span className="tabular sm:hidden">{view.short}</span>}
+      <span className="sr-only sm:hidden">{view.text}</span>
+    </span>
+  );
+}
+
+function DeliveryNotices({
+  sync,
+  offlinePaper,
+  submitQueued,
+  awayNotice,
+  onDismissAway,
+  onRetry,
+  onContinueHere,
+  onExit,
+}: {
+  sync: SyncStatus;
+  offlinePaper: boolean;
+  submitQueued: boolean;
+  awayNotice: boolean;
+  onDismissAway: () => void;
+  onRetry: () => void;
+  onContinueHere: () => void;
+  onExit: () => void;
+}) {
+  if (sync.kind === 'locked') {
+    return (
+      <div className="print-hide fixed inset-0 z-80 grid place-items-center scrim p-4 backdrop-blur-sm">
+        <Card className="w-full max-w-md p-6 text-center">
+          <span className="mx-auto grid size-12 place-items-center rounded-2xl border border-flare-400/30 bg-flare-500/12 text-flare-300">
+            <Smartphone className="size-6" />
+          </span>
+          <h2 className="mt-4 text-lg font-black text-mist-50">This exam moved to another device</h2>
+          <p className="mt-2 text-[0.84rem] font-medium leading-relaxed text-mist-400">
+            Answers can only be given on one device at a time.
+            {sync.pending > 0 ? ` ${sync.pending} answer${sync.pending === 1 ? '' : 's'} from this device will be sent if you continue here.` : ''}
+          </p>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            <Button variant="outline" onClick={onExit} icon={<ArrowLeft className="size-4" />}>
+              Leave
+            </Button>
+            <Button onClick={onContinueHere} icon={<Smartphone className="size-4" />}>
+              Continue here
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-3 grid gap-2 empty:hidden sm:mb-4">
+      {submitQueued && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-gold-500/35 bg-gold-500/10 p-3 sm:p-3.5">
+          <CloudUpload className="mt-0.5 size-5 shrink-0 text-gold-300" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.84rem] font-extrabold text-gold-100">Submit is waiting for a connection</p>
+            <p className="mt-0.5 text-[0.76rem] font-medium leading-relaxed text-gold-100/75">
+              Your answers are saved on this phone. They'll be submitted as soon as you're back online. Keep this page open.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {!submitQueued && sync.kind === 'offline' && (
+        <div role="status" className="flex items-start gap-3 rounded-2xl border border-gold-500/30 bg-gold-500/[0.07] p-3">
+          <WifiOff className="mt-0.5 size-4.5 shrink-0 text-gold-300" />
+          <p className="min-w-0 flex-1 text-[0.78rem] font-semibold leading-relaxed text-gold-100/85">
+            You're offline. Keep going: your answers are saved on this phone and will be sent automatically.
+          </p>
+          <Button size="sm" variant="ghost" onClick={onRetry} label="Try to send now" icon={<CloudUpload className="size-4" />} />
+        </div>
+      )}
+      {offlinePaper && sync.kind !== 'offline' && !submitQueued && (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.76rem] font-semibold text-mist-400">
+          Opened from this phone's saved copy. The clock is kept by this phone until the connection returns.
+        </p>
+      )}
+      {awayNotice && (
+        <div role="status" className="flex items-center gap-3 rounded-2xl border border-nova-400/25 bg-nova-500/10 px-3 py-2.5">
+          <AlertTriangle className="size-4 shrink-0 text-nova-200" />
+          <p className="min-w-0 flex-1 text-[0.76rem] font-semibold leading-relaxed text-nova-100/90">
+            Heads up: leaving the exam screen is recorded for your lecturer.
+          </p>
+          <Button size="sm" variant="ghost" onClick={onDismissAway} label="Dismiss" icon={<X className="size-4" />} />
+        </div>
       )}
     </div>
   );

@@ -181,6 +181,29 @@ interface RequestOptions {
   raw?: boolean;
 }
 
+/** Random, per-browser id. The exam server lets one device hold a paper at a
+ *  time; a second device must explicitly "continue here". Not personal data. */
+const DEVICE_KEY = 'arena.device';
+let deviceMemo: string | null = null;
+export function deviceId(): string {
+  if (deviceMemo) return deviceMemo;
+  try {
+    const saved = localStorage.getItem(DEVICE_KEY);
+    if (saved && /^[A-Za-z0-9_-]{8,64}$/.test(saved)) return (deviceMemo = saved);
+  } catch {
+    /* private mode */
+  }
+  const bytes = new Uint8Array(12);
+  (globalThis.crypto ?? window.crypto).getRandomValues(bytes);
+  deviceMemo = 'd' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  try {
+    localStorage.setItem(DEVICE_KEY, deviceMemo);
+  } catch {
+    /* session-only id is still consistent for this tab */
+  }
+  return deviceMemo;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const {method = 'GET', body, token = tokenStore.get(), raw = false} = options;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -188,6 +211,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // FormData must set its own multipart boundary.
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (path.startsWith('/api/exams/')) headers['X-Arena-Device'] = deviceId();
 
   let response: Response;
   try {
@@ -220,6 +244,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
   if (!readable) throw new ApiError('The server sent an unexpected reply. Refresh the page and try again.', response.status);
   return payload as T;
+}
+
+export interface ExamSyncBody {
+  answers: {question_id: number; selected: string | null; flagged?: boolean | null; seconds_spent?: number}[];
+  events: {type: string; seconds?: number; question?: number}[];
+  submit?: 'early' | 'auto_timer' | null;
+}
+export interface ExamSyncResult {
+  ok: boolean;
+  attempt_id: number;
+  status: 'in_progress' | 'submitted' | 'expired';
+  late: boolean;
+  accepted: number[];
+  rejected: {question_id: number; reason: string}[];
+  answered?: number;
+  total?: number;
+  time_remaining: number;
 }
 
 const query = (params: Record<string, string | number | boolean | undefined | null>) => {
@@ -457,8 +498,13 @@ export const api = {
     request<{ok: boolean; prize: Prize; coins: number}>(`/api/prizes/${id}/claim`, {method: 'POST', body: {note}}),
 
   /* ---------------------------------------------------------------- exams */
-  startExam: (quizId: number) => request<AttemptState>(`/api/exams/${quizId}/start`, {method: 'POST'}),
-  attempt: (attemptId: number) => request<AttemptState>(`/api/exams/attempts/${attemptId}`),
+  startExam: (quizId: number, takeover = false) =>
+    request<AttemptState>(`/api/exams/${quizId}/start${takeover ? '?takeover=true' : ''}`, {method: 'POST'}),
+  attempt: (attemptId: number, takeover = false) =>
+    request<AttemptState>(`/api/exams/attempts/${attemptId}${takeover ? '?takeover=true' : ''}`),
+  /** Offline-friendly delivery: queued answers + integrity events (+ optional submit) in one call. */
+  syncExam: (attemptId: number, body: ExamSyncBody) =>
+    request<ExamSyncResult>(`/api/exams/attempts/${attemptId}/sync`, {method: 'POST', body}),
   saveAnswer: (
     attemptId: number,
     body: {question_id: number; selected: string | null; seconds_spent?: number; flagged?: boolean},
