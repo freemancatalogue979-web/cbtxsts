@@ -1243,9 +1243,8 @@
      .gbtn-face  painted surface — shape, fill, border, sheen
 
    Shape: soft rounded corners everywhere (they fit any width, any size, any
-   place). The angular cut is kept only for big solid call-to-action buttons
-   (data-shape="angular" — "Enter now", "Start exam"), with a cut that scales
-   with the button instead of a fixed 16px. Icon-only buttons are squares. */
+   place). The angular cut is an explicit opt-in only (shape="angular" →
+   data-shape="angular"), with a small 12px cut. Icon-only buttons are squares. */
 .gbtn {
   position: relative;
   border-radius: var(--qa-btn-radius, 12px);

@@ -134,7 +134,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   /** Accessible name + tooltip. Required in practice for icon-only buttons. */
   label?: string;
-  /** "auto" = angular only for big solid call-to-action buttons, rounded elsewhere. */
+  /** Rounded everywhere by default; "angular" is an explicit opt-in for special art-directed spots. */
   shape?: 'auto' | 'rounded' | 'angular';
 }
 
@@ -154,7 +154,7 @@ export function Button({
 }: ButtonProps) {
   const iconOnly = !!icon && (children === undefined || children === null || children === false || children === '');
   const solid = SOLID.has(variant);
-  const angular = shape === 'angular' || (shape === 'auto' && size === 'lg' && solid && !iconOnly);
+  const angular = shape === 'angular' && !iconOnly;
   // Icon-only buttons are named by `label`, falling back to an existing title / aria-label.
   const {title, ...others} = rest;
   const name = label ?? title ?? (rest as {'aria-label'?: string})['aria-label'];
