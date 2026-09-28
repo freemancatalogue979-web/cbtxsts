@@ -5,6 +5,7 @@ Staff     /api/admin/ai/agent        the staff assistant (tool-using, proposal-o
           /api/admin/ai/proposals…   review AI proposals (approve / reject)
           /api/admin/ai/tool-calls   audit trail of every tool the AI used
           /api/admin/ai/usage        cost + cache-hit tracking (students + staff)
+          /api/admin/ai/insights     course health from the staff tools — no AI call, no cost
 """
 
 from __future__ import annotations
@@ -21,12 +22,12 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import require_admin, require_student
-from ..models import Admin, AIProposal, AIStaffUsage, AIToolCall, AIUsageEvent, Config, Course, Student
+from ..models import Admin, AIProposal, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, Config, Course, CourseTopic, Material, Question, Quiz, Student
 from ..services import ai_core
 from ..services import ai_providers as providers
 from ..services import ai_tutor as tutor
 from ..services import mini_exam
-from ..services.ai_core import proposals, registry
+from ..services.ai_core import admin_tools, proposals, registry
 
 log = logging.getLogger("arena.ai")
 
@@ -196,6 +197,26 @@ def _record_staff(db: Session, admin: Admin, *, request_id: str, model: str, pro
     return {"input": tokens_in, "output": tokens_out, "cached": cached, "cost": cost}
 
 
+def _spend(db: Session, cfg: Config | None) -> dict:
+    """Students + staff spend today and this month (UTC), against the monthly budget."""
+    now = tutor.utcnow()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month = midnight.replace(day=1)
+
+    def total(since) -> float:
+        a = db.execute(select(func.coalesce(func.sum(AIUsageEvent.estimated_cost), 0.0)).where(AIUsageEvent.created_at >= since)).scalar_one()
+        b = db.execute(select(func.coalesce(func.sum(AIStaffUsage.estimated_cost), 0.0)).where(AIStaffUsage.created_at >= since)).scalar_one()
+        return round(float(a or 0) + float(b or 0), 4)
+
+    requests_today = db.execute(select(func.count(AIUsageEvent.id)).where(AIUsageEvent.created_at >= midnight)).scalar_one()
+    staff_today = db.execute(select(func.count(AIStaffUsage.id)).where(AIStaffUsage.created_at >= midnight)).scalar_one()
+    return {
+        "cost_today": total(midnight), "cost_month": total(month),
+        "budget_month": float(getattr(cfg, "ai_monthly_budget_usd", 0) or 0) if cfg else 0.0,
+        "requests_today": int(requests_today or 0) + int(staff_today or 0),
+    }
+
+
 @admin_router.get("/status")
 def staff_ai_status(db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
     impl, model = tutor.ai_target(db)
@@ -205,6 +226,7 @@ def staff_ai_status(db: Session = Depends(get_db), admin: Admin = Depends(requir
         "configured": impl.configured(), "provider": impl.label, "model": model,
         "agent_enabled": bool(getattr(cfg, "ai_agent_enabled", True)) if cfg else True,
         "pending_proposals": pending, "used_today": _staff_today(db, admin), "daily_limit": int(getattr(cfg, "ai_staff_daily_limit", 200) or 0) if cfg else 200,
+        **_spend(db, cfg),
         "tools": {"student": registry.names_for(registry.STUDENT), "staff": registry.names_for(_role(admin))},
     }
 
@@ -326,4 +348,125 @@ def ai_usage(days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db),
         "days": days, "features": sorted(features, key=lambda r: -r["cost"]),
         "total_cost": round(sum(r["cost"] for r in features), 4),
         "daily": [{"day": str(d), "cost": round(float(c or 0), 4), "requests": int(n or 0)} for d, c, n in daily],
+    }
+
+
+# ================================================================ insights
+_SEVERITY_WEIGHT = {"high": 14, "medium": 7, "low": 3}
+
+
+def _issue(out: list, key: str, severity: str, title: str, detail: str, prompt: str, action: str, count: int | None = None) -> None:
+    out.append({"id": key, "severity": severity, "title": title, "detail": detail, "prompt": prompt, "action": action, "count": count})
+
+
+def _course_cards(db: Session) -> list[dict]:
+    courses = db.execute(select(Course).order_by(Course.code)).scalars().all()
+    bank = dict(db.execute(select(Question.course_id, func.count(Question.id)).where(Question.source_id.is_(None), Question.exam_only.is_(False)).group_by(Question.course_id)).all())
+    topics = dict(db.execute(select(CourseTopic.course_id, func.count(CourseTopic.id)).group_by(CourseTopic.course_id)).all())
+    materials = dict(db.execute(select(Material.course_id, func.count(Material.id)).where(Material.kind != "folder").group_by(Material.course_id)).all())
+    pending = dict(db.execute(select(AIProposal.course_id, func.count(AIProposal.id)).where(AIProposal.status == "pending").group_by(AIProposal.course_id)).all())
+    attempts = dict(db.execute(select(Quiz.course_id, func.count(Attempt.id)).join(Quiz, Quiz.id == Attempt.quiz_id).where(Attempt.status != "in_progress").group_by(Quiz.course_id)).all())
+    return [{
+        "id": c.id, "code": c.code, "title": c.title, "active": c.is_active, "bank": int(bank.get(c.id, 0)), "topics": int(topics.get(c.id, 0)),
+        "materials": int(materials.get(c.id, 0)), "pending": int(pending.get(c.id, 0)), "attempts": int(attempts.get(c.id, 0)),
+    } for c in courses]
+
+
+@admin_router.get("/insights")
+def insights(course_id: int | None = None, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """What needs attention in a course, straight from the staff tools (no AI, free).
+
+    Every issue carries a ready-made prompt so the console can hand it to the
+    assistant ("Fix with AI") — which still only *proposes* changes."""
+    cards = _course_cards(db)
+    if not course_id:
+        return {"courses": cards}
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
+    ctx = ai_core.ToolContext(db=db, role=_role(admin), request_id="insights", admin=admin, course_hint=course.id)
+    overview = admin_tools.get_course_overview(ctx, {"course_id": course.id})
+    health = admin_tools.analyze_question_bank(ctx, {"course_id": course.id})
+    try:
+        performance = admin_tools.get_class_performance(ctx, {"course_id": course.id})
+    except Exception:  # noqa: BLE001 — results are optional context
+        log.exception("insights: class performance failed")
+        performance = {"attempts": 0, "average_percentage": 0, "topics": [], "flagged_questions": [], "summary": {}}
+
+    warn = health.get("warnings", {})
+    total = int(health.get("total") or 0)
+    code = course.code
+    issues: list[dict] = []
+    if total == 0:
+        _issue(issues, "empty_bank", "high", "The question bank is empty", "Exams drawn from the bank can't run until it has questions.",
+               f"Read the materials for {code} and draft 12 good questions across the main topics, with explanations.", "Draft questions")
+    elif total < 30:
+        _issue(issues, "small_bank", "medium", f"Only {total} questions in the bank", "Random-draw exams repeat questions quickly below ~30.",
+               f"Draft 10 more questions for {code}, focusing on the topics with the fewest questions. Include explanations.", "Grow the bank", total)
+    if warn.get("broken"):
+        _issue(issues, "broken", "high", f"{warn['broken']} broken question{'s' if warn['broken'] != 1 else ''}", "Missing options or an answer key that doesn't match an option.",
+               f"Find the broken questions in {code} (missing options or invalid answer key) and propose fixes.", "Propose fixes", warn["broken"])
+    flagged = performance.get("flagged_questions") or []
+    wrong_key = [q for q in flagged if any("key" in str(f).lower() for f in (q.get("flags") or []))]
+    if wrong_key:
+        _issue(issues, "wrong_key", "high", f"{len(wrong_key)} question{'s' if len(wrong_key) != 1 else ''} may have the wrong answer", "Strong students keep choosing a different option.",
+               f"Check the flagged questions in {code} that may have a wrong answer key. Explain the evidence for each and tell me what to change.", "Investigate", len(wrong_key))
+    if warn.get("untagged"):
+        _issue(issues, "untagged", "medium", f"{warn['untagged']} question{'s' if warn['untagged'] != 1 else ''} without a topic", "Untagged questions don't count towards topic coverage or weak-topic practice.",
+               f"Classify the questions in {code} that have no topic (topic + difficulty) and propose the classification.", "Classify with AI", warn["untagged"])
+    if warn.get("no_explanation"):
+        n = int(warn["no_explanation"])
+        _issue(issues, "no_explanation", "medium" if n > 5 else "low", f"{n} question{'s' if n != 1 else ''} without an explanation", "Students only see right/wrong, not why.",
+               f"Which questions in {code} have no explanation? Draft short, accurate explanations for up to 10 of them as a proposal.", "Draft explanations", n)
+    dup = health.get("duplicates") or []
+    if dup:
+        _issue(issues, "duplicates", "medium", f"{len(dup)} likely duplicate pair{'s' if len(dup) != 1 else ''}", "Duplicates inflate the bank and repeat in random draws.",
+               f"List the near-duplicate questions in {code} and recommend which of each pair to keep and why.", "Review duplicates", len(dup))
+    empty_topics = health.get("curated_without_questions") or []
+    if empty_topics:
+        _issue(issues, "empty_topics", "medium", f"{len(empty_topics)} topic{'s' if len(empty_topics) != 1 else ''} with no questions", ", ".join(empty_topics[:4]) + ("…" if len(empty_topics) > 4 else ""),
+               f"Draft 5 questions each for these {code} topics that have none yet: {', '.join(empty_topics[:5])}.", "Fill the gaps", len(empty_topics))
+    thin = [t for t in (warn.get("low_pool_topics") or []) if t.get("topic") not in empty_topics]
+    if thin:
+        _issue(issues, "thin_topics", "low", f"{len(thin)} thin topic{'s' if len(thin) != 1 else ''}", ", ".join(f"{t['topic']} ({t['count']})" for t in thin[:4]),
+               f"Draft 4 more questions each for the thinnest topics in {code}: {', '.join(t['topic'] for t in thin[:4])}.", "Strengthen", len(thin))
+    if not overview["topics"] and (overview["materials"] or total):
+        source = "course materials" if overview["materials"] else "topics already used by the question bank"
+        _issue(issues, "no_topics", "medium", "No curated topic list", "Topics organise materials, questions and students' weak-topic reports.",
+               f"Using the {source} for {code}, propose a clean topic list with short descriptions.", "Propose topics")
+    stray = health.get("question_topics_not_curated") or []
+    if stray and overview["topics"]:
+        _issue(issues, "stray_topics", "low", f"{len(stray)} question topic{'s' if len(stray) != 1 else ''} not in the topic list", ", ".join(stray[:4]),
+               f"These question topics in {code} aren't in the curated topic list: {', '.join(stray[:8])}. Propose whether to add them as topics or reclassify the questions.", "Tidy topics", len(stray))
+    levels = health.get("by_difficulty") or {}
+    if total >= 20:
+        low = [lvl for lvl in ("easy", "medium", "hard") if levels.get(lvl, 0) / total < 0.12]
+        if low:
+            _issue(issues, "difficulty", "low", f"Few {' & '.join(low)} questions", "A balanced bank gives fairer random draws.",
+                   f"Draft 6 {low[0]} questions for {code} spread across its topics.", f"Add {low[0]}")
+    if not overview["materials"]:
+        _issue(issues, "no_materials", "low", "No materials yet", "The AI grounds answers and new questions in course materials first.",
+               f"What materials would you recommend for {code} — {course.title}? Suggest a reading structure by topic.", "Plan materials")
+    weak_topics = [t for t in performance.get("topics") or [] if t.get("accuracy") is not None and t["accuracy"] < 50 and t.get("answers", 0) >= 5]
+    if weak_topics:
+        _issue(issues, "weak_class", "medium", f"Class struggles with {weak_topics[0]['topic']}", f"{weak_topics[0]['accuracy']}% accuracy" + (f" · +{len(weak_topics) - 1} more weak topic(s)" if len(weak_topics) > 1 else ""),
+               f"How is the class doing in {code}? Explain why students struggle with {weak_topics[0]['topic']} and draft 6 practice questions that target the misconceptions.", "Plan a fix", len(weak_topics))
+
+    order = {"high": 0, "medium": 1, "low": 2}
+    issues.sort(key=lambda i: order[i["severity"]])
+    score = max(0, min(100, 100 - sum(_SEVERITY_WEIGHT[i["severity"]] for i in issues)))
+    topic_counts = {row["topic"]: row["count"] for row in health.get("by_topic") or []}
+    coverage = [{"topic": t["name"], "questions": int(topic_counts.get(t["name"], 0)), "curated": True} for t in overview["topics"]]
+    curated_lower = {t["name"].lower() for t in overview["topics"]}
+    coverage += [{"topic": k, "questions": int(v), "curated": False} for k, v in topic_counts.items() if k.lower() not in curated_lower]
+    return {
+        "course": overview["course"], "courses": cards, "score": score, "issues": issues,
+        "bank": {"total": total, "by_difficulty": levels, "by_status": health.get("by_status") or {}, "drafts": int(warn.get("drafts") or 0), "flagged": int(warn.get("flagged") or 0)},
+        "coverage": sorted(coverage, key=lambda r: (-r["questions"], r["topic"]))[:24],
+        "materials": {"total": len(overview["materials"]), "published": sum(1 for m in overview["materials"] if m["status"] == "published")},
+        "exams": {"total": len(overview["exams"]), "live": sum(1 for e in overview["exams"] if e["status"] in {"published", "live", "active"})},
+        "topics": len(overview["topics"]),
+        "performance": {"attempts": int(performance.get("attempts") or 0), "average": performance.get("average_percentage") or 0,
+                        "topics": (performance.get("topics") or [])[:8], "flagged": flagged[:6]},
+        "weakest": health.get("weakest", [])[:5], "most_missed": health.get("most_missed", [])[:5], "duplicates": dup[:5],
     }

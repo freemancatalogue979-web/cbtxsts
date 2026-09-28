@@ -1,12 +1,12 @@
 /** Staff: AI Tutor control room — overview, settings, usage, costs, users,
  * conversations (titles only), models, limits, logs and feature switches.
  * Everything is enforced by the API; this screen only edits and reports. */
-import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, Wand2, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
+import {Activity, AlertTriangle, ArrowRight, Ban, Bot, Check, CheckCircle2, CircleDashed, ClipboardCheck, Radar, ShieldCheck, Sparkles, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ThumbsUp, ToggleRight, Users, Wand2, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, StatTile, TextInput} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {formatNumber, formatRelative} from '../lib/format';
 import {
-  tutorAdminApi, type AdminRange, type ProviderInfo, type TutorAdminSettings, type TutorAdminUser, type TutorAdminUserDetail, type TutorLog,
+  aiStaffApi, type AIStaffStatus, tutorAdminApi, type AdminRange, type ProviderInfo, type TutorAdminSettings, type TutorAdminUser, type TutorAdminUserDetail, type TutorLog,
   type TutorOverview, type TutorQuality,
 } from '../lib/tutor';
 import {useSession} from '../store/session';
@@ -26,6 +26,13 @@ const TABS: {id: Tab; label: string; icon: typeof Bot}[] = [
   {id: 'logs', label: 'Logs', icon: ScrollText},
   {id: 'features', label: 'Features', icon: ToggleRight},
 ];
+
+const GROUPS: {label: string; tabs: Tab[]}[] = [
+  {label: 'Work', tabs: ['overview', 'assistant']},
+  {label: 'Monitor', tabs: ['usage', 'costs', 'users', 'conversations', 'logs']},
+  {label: 'Configure', tabs: ['settings', 'models', 'limits', 'features']},
+];
+const TAB_BY_ID = Object.fromEntries(TABS.map((t) => [t.id, t])) as Record<Tab, (typeof TABS)[number]>;
 
 const LIMITS: {key: keyof TutorAdminSettings; label: string; hint: string}[] = [
   {key: 'ai_daily_limit', label: 'Requests per day', hint: 'Per student. Resets at midnight UTC.'},
@@ -104,29 +111,50 @@ export default function TutorAdmin() {
 
   return (
     <div className="space-y-3">
-      <SectionHeading
-        title="AI Tutor"
-        subtitle="Control, limits, spend and quality for the players' AI Tutor."
-        icon={<Bot className="size-4" />}
-        action={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Chip className={active?.configured ? 'border-mint-400/40 bg-mint-500/12 text-mint-200' : 'border-flare-400/40 bg-flare-500/12 text-flare-200'}>
-              {active ? (active.configured ? `${active.name} connected` : `${active.name}: no key`) : '…'}
-            </Chip>
-            {settings && !settings.ai_enabled && <Chip className="border-gold-400/40 bg-gold-500/12 text-gold-200">Switched off</Chip>}
+      <header className="flex min-w-0 flex-wrap items-center gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-[0_8px_24px_-8px_rgba(168,85,247,0.7),inset_0_1px_0_rgba(255,255,255,0.3)]">
+          <Bot className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display truncate text-[1.1rem] leading-tight font-extrabold text-mist-50">AI Tutor & Assistant</h2>
+          <p className="truncate text-[0.74rem] text-mist-400">Control, limits, spend and quality for the players' tutor and the staff assistant.</p>
+        </div>
+        <div className="flex basis-full flex-wrap items-center gap-1.5 sm:basis-auto">
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-extrabold ${active?.configured ? 'border-mint-400/35 bg-mint-500/10 text-mint-200' : 'border-flare-400/35 bg-flare-500/10 text-flare-200'}`}>
+            <span className={`size-1.5 rounded-full ${active?.configured ? 'bg-mint-400' : 'bg-flare-400'}`} />
+            {active ? (active.configured ? `${active.name} connected` : `${active.name}: no key`) : 'Checking…'}
+          </span>
+          {settings && (
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-extrabold ${settings.ai_enabled ? 'border-white/10 bg-white/[0.04] text-mist-200' : 'border-gold-400/40 bg-gold-500/12 text-gold-200'}`}>
+              {settings.ai_enabled ? 'Tutor on' : 'Tutor switched off'}
+            </span>
+          )}
+        </div>
+      </header>
+      <nav className="no-scrollbar -mx-1 flex min-w-0 items-end gap-3 overflow-x-auto px-1 pb-0.5" aria-label="AI Tutor sections">
+        {GROUPS.map((group, gi) => (
+          <div key={group.label} className={`flex shrink-0 flex-col gap-1 ${gi ? 'border-l border-white/8 pl-3' : ''}`}>
+            <span className="hidden px-1 text-[0.56rem] font-extrabold tracking-[0.18em] text-mist-600 uppercase sm:block">{group.label}</span>
+            <div className="flex gap-1">
+              {group.tabs.map((id) => {
+                const t = TAB_BY_ID[id];
+                const on = tab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={(e) => { setTab(id); e.currentTarget.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}); }}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.76rem] font-bold transition ${
+                      on ? 'bg-gradient-to-b from-nova-500/35 to-nova-600/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] ring-1 ring-nova-400/50' : 'text-mist-400 hover:bg-white/[0.05] hover:text-mist-200'
+                    }`}
+                    aria-current={on ? 'page' : undefined}
+                  >
+                    <t.icon className="size-3.5" /> {t.label}
+                    {id === 'assistant' && !on && <span className="rounded-full bg-gradient-to-r from-nova-400 to-pulse-500 px-1.5 py-px text-[0.52rem] font-black tracking-wide text-white uppercase">AI</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        }
-      />
-      <nav className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5" aria-label="AI Tutor sections">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={(e) => { setTab(t.id); e.currentTarget.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'}); }}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.76rem] font-bold transition-colors ${tab === t.id ? 'bg-nova-500/20 text-white ring-1 ring-nova-400/50' : 'text-mist-400 hover:bg-white/[0.05] hover:text-mist-200'}`}
-            aria-current={tab === t.id ? 'page' : undefined}
-          >
-            <t.icon className="size-3.5" /> {t.label}
-          </button>
         ))}
       </nav>
 
@@ -231,15 +259,27 @@ function Panel({title, icon, children, action}: {title: string; icon?: React.Rea
 }
 
 function Bars({rows, value, label}: {rows: {day: string}[]; value: (r: never) => number; label: (r: never) => string}) {
+  const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...rows.map((r) => value(r as never)));
   if (!rows.length) return <p className="py-6 text-center text-[0.8rem] text-mist-500">No requests in this period.</p>;
+  const short = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
+  const shown = hover != null ? rows[hover] : null;
   return (
-    <div className="flex h-28 items-end gap-1">
-      {rows.map((r) => (
-        <div key={r.day} className="flex min-w-0 flex-1 flex-col items-center justify-end" title={label(r as never)}>
-          <div className="brand-gradient w-full max-w-6 rounded-t" style={{height: `${Math.max(4, (value(r as never) / max) * 100)}%`}} />
-        </div>
-      ))}
+    <div className="min-w-0">
+      <p className="mb-1.5 h-4 truncate text-[0.7rem] font-bold text-mist-400">{shown ? label(shown as never) : `Peak ${formatNumber(Math.round(max * 10000) / 10000)} · hover a bar for details`}</p>
+      <div className="relative flex h-32 items-end gap-1 border-b border-white/8" onMouseLeave={() => setHover(null)}>
+        {[0.5, 1].map((f) => <span key={f} aria-hidden className="pointer-events-none absolute inset-x-0 border-t border-dashed border-white/[0.06]" style={{bottom: `${f * 100}%`}} />)}
+        {rows.map((r, i) => (
+          <button key={r.day} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onClick={() => setHover(i)} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" aria-label={label(r as never)}>
+            <span className={`w-full max-w-7 rounded-t-md transition ${hover === i ? 'bg-gradient-to-t from-nova-400 to-pulse-300' : 'bg-gradient-to-t from-nova-600/80 to-pulse-500/80'}`} style={{height: `${Math.max(3, (value(r as never) / max) * 100)}%`}} />
+          </button>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[0.62rem] font-bold text-mist-500">
+        <span>{short(rows[0].day)}</span>
+        {rows.length > 2 && <span>{short(rows[Math.floor(rows.length / 2)].day)}</span>}
+        {rows.length > 1 && <span>{short(rows[rows.length - 1].day)}</span>}
+      </div>
     </div>
   );
 }
@@ -262,8 +302,64 @@ function OverviewTab({range, providers, settings, onGo}: {range: AdminRange; pro
   const [quality] = useLoad(() => tutorAdminApi.quality(range), [range.range, range.start, range.end]);
   const active = providers.find((p) => p.active);
   const t = ov?.totals;
+  const [staff, setStaff] = useState<AIStaffStatus | null>(null);
+  useEffect(() => { aiStaffApi.status().then(setStaff).catch(() => undefined); }, []);
+  const checks: {label: string; ok: boolean; hint: string; go: Tab}[] = [
+    {label: 'AI key connected', ok: !!active?.configured, hint: active?.configured ? `${active.name} · ${active.model}` : 'Add a key so the AI can answer', go: 'models'},
+    {label: 'Tutor switched on', ok: settings.ai_enabled, hint: settings.ai_enabled ? 'Players can use the tutor' : 'Paused for every player', go: 'settings'},
+    {label: 'Exam protection', ok: settings.ai_exam_safe, hint: EXAM_MODES[settings.ai_exam_mode]?.[0] ?? 'Mode applied during exams', go: 'settings'},
+    {label: 'Monthly budget cap', ok: settings.ai_monthly_budget_usd > 0, hint: settings.ai_monthly_budget_usd > 0 ? `${money(settings.ai_monthly_budget_usd, 2)} per month` : 'No cap: set one to protect your balance', go: 'costs'},
+    {label: 'Platform tools', ok: settings.ai_agent_enabled, hint: settings.ai_agent_enabled ? 'Tutor can build mini exams & read progress' : 'Tutor answers without platform data', go: 'features'},
+  ];
+  const done = checks.filter((c) => c.ok).length;
   return (
     <div className="space-y-3">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <button onClick={() => onGo('assistant')} className="panel-hero group flex min-w-0 flex-col p-4 text-left sm:p-5">
+          <div aria-hidden className="pointer-events-none absolute -top-20 -right-12 size-56 rounded-full bg-pulse-500/20 blur-3xl" />
+          <div className="relative flex min-w-0 items-start gap-3">
+            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 via-pulse-500 to-flare-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><Wand2 className="size-6" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.6rem] font-extrabold tracking-[0.18em] text-nova-200/80 uppercase">Staff AI</p>
+              <p className="font-display text-[1.1rem] font-extrabold text-mist-50">AI Command Center</p>
+              <p className="mt-0.5 text-[0.76rem] text-mist-400">Course health checks, bank analysis, drafting and class insights. Every change waits for your approval.</p>
+            </div>
+            <ArrowRight className="size-5 shrink-0 text-mist-400 transition group-hover:translate-x-0.5 group-hover:text-white" />
+          </div>
+          <div className="relative mt-3 grid grid-cols-3 gap-2 lg:mt-auto">
+            {[['Health checks', 'Score every course, free'], ['Draft & classify', 'Questions, topics, tags'], ['Class insight', 'Weak topics, bad keys']].map(([k, v]) => (
+              <span key={k} className="min-w-0 rounded-xl border border-white/8 bg-black/20 px-2.5 py-2">
+                <span className="block truncate text-[0.72rem] font-extrabold text-mist-100">{k}</span>
+                <span className="block truncate text-[0.62rem] text-mist-500">{v}</span>
+              </span>
+            ))}
+          </div>
+          <div className="relative mt-2.5 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-[0.68rem] font-bold text-mist-200"><Radar className="size-3.5 text-cyan-300" /> Free insights</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-[0.68rem] font-bold text-mist-200"><Sparkles className="size-3.5 text-nova-300" /> {staff?.tools.staff.length ?? '…'} safe tools</span>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.68rem] font-bold ${staff?.pending_proposals ? 'bg-amber-400 text-ink-950' : 'bg-white/[0.06] text-mist-200'}`}><ClipboardCheck className="size-3.5" /> {staff?.pending_proposals ?? 0} awaiting approval</span>
+          </div>
+        </button>
+        <Card className="min-w-0 p-3 sm:p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-[0.8rem] font-extrabold text-mist-200"><ShieldCheck className="size-3.5 text-mint-300" /> Setup checklist</p>
+            <span className="text-[0.7rem] font-extrabold text-mist-400 tabular-nums">{done}/{checks.length}</span>
+          </div>
+          <span className="mb-2 block h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><span className="block h-full rounded-full bg-gradient-to-r from-mint-400 to-cyan-400" style={{width: `${(done / checks.length) * 100}%`}} /></span>
+          <div className="space-y-0.5">
+            {checks.map((c) => (
+              <button key={c.label} onClick={() => onGo(c.go)} className="flex w-full min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-white/[0.04]">
+                {c.ok ? <CheckCircle2 className="size-4 shrink-0 text-mint-400" /> : <CircleDashed className="size-4 shrink-0 text-amber-300" />}
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-[0.78rem] font-bold ${c.ok ? 'text-mist-200' : 'text-mist-50'}`}>{c.label}</span>
+                  <span className="block truncate text-[0.66rem] text-mist-500">{c.hint}</span>
+                </span>
+                {!c.ok && <span className="shrink-0 text-[0.66rem] font-extrabold text-nova-300">Fix</span>}
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
       {active && !active.configured && (
         <Card className="border-flare-400/30 p-3 text-[0.8rem] text-mist-300">
           <p className="flex items-center gap-1.5 font-bold text-flare-200"><KeyRound className="size-4" /> No AI key on the server</p>
@@ -308,8 +404,8 @@ function OverviewTab({range, providers, settings, onGo}: {range: AdminRange; pro
         <Panel title="Quality" icon={<ThumbsDown className="size-3.5" />} action={<button className="text-[0.72rem] font-bold text-nova-300" onClick={() => onGo('usage')}>Details</button>}>
           {!quality ? <Skeleton className="h-24" /> : (
             <div className="space-y-1">
-              <Row left="👍 Helpful" right={quality.feedback.helpful} />
-              <Row left="👎 Not helpful" right={`${quality.feedback.not_helpful} (${pct(quality.feedback.negative_rate)})`} />
+              <Row left={<span className="inline-flex items-center gap-1.5"><ThumbsUp className="size-3.5 text-mint-300" /> Helpful</span>} right={quality.feedback.helpful} />
+              <Row left={<span className="inline-flex items-center gap-1.5"><ThumbsDown className="size-3.5 text-flare-300" /> Not helpful</span>} right={`${quality.feedback.not_helpful} (${pct(quality.feedback.negative_rate)})`} />
               <Row left="Invalid AI JSON" right={`${quality.invalid_json} (${pct(quality.invalid_json_rate)})`} />
               <Row left="Most reported" right={quality.reported_topics[0]?.topic ?? '—'} />
             </div>

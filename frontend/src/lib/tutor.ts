@@ -643,7 +643,7 @@ export const miniExamApi = {
 
 /* ------------------------------------------------------- staff assistant */
 export interface StaffToolInfo {name: string; label: string; status: string; summary?: string; ms?: number}
-export interface AgentTurn {role: 'user' | 'assistant'; content: string; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean}
+export interface AgentTurn {role: 'user' | 'assistant'; content: string; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean; meta?: {cost?: number; ms?: number; at?: string}}
 export interface Proposal {
   id: number;
   kind: string;
@@ -666,7 +666,28 @@ export interface AIStaffStatus {
   pending_proposals: number;
   used_today: number;
   daily_limit: number;
+  cost_today?: number;
+  cost_month?: number;
+  budget_month?: number;
+  requests_today?: number;
   tools: {student: string[]; staff: string[]};
+}
+export interface AICourseCard {id: number; code: string; title: string; active: boolean; bank: number; topics: number; materials: number; pending: number; attempts: number}
+export interface AIInsightIssue {id: string; severity: 'high' | 'medium' | 'low'; title: string; detail: string; prompt: string; action: string; count: number | null}
+export interface AIInsights {
+  courses: AICourseCard[];
+  course?: {id: number; code: string; title: string; active: boolean};
+  score?: number;
+  issues?: AIInsightIssue[];
+  bank?: {total: number; by_difficulty: Record<string, number>; by_status: Record<string, number>; drafts: number; flagged: number};
+  coverage?: {topic: string; questions: number; curated: boolean}[];
+  materials?: {total: number; published: number};
+  exams?: {total: number; live: number};
+  topics?: number;
+  performance?: {attempts: number; average: number; topics: {topic: string; accuracy: number | null; answers: number}[]; flagged: {id: number; text: string; topic: string; correct: string; correct_rate: number; flags: string[]}[]};
+  weakest?: {id: number; text: string; accuracy: number}[];
+  most_missed?: {id: number; text: string; wrong: number}[];
+  duplicates?: unknown[];
 }
 export interface ToolCallRow {id: number; tool: string; role: string; status: string; summary: string; ms: number; at: string; student_id: number | null; admin_id: number | null; arguments?: Record<string, unknown>}
 export interface AIUsageReport {
@@ -685,6 +706,7 @@ export const aiStaffApi = {
   approve: (id: number, body: {selected?: number[]; items?: Record<string, unknown>[]}) => call<Proposal>(`/api/admin/ai/proposals/${id}/approve`, 'POST', body),
   reject: (id: number, reason: string) => call<Proposal>(`/api/admin/ai/proposals/${id}/reject`, 'POST', {reason}),
   usage: (days = 30) => call<AIUsageReport>(`/api/admin/ai/usage?days=${days}`),
+  insights: (courseId?: number | null) => call<AIInsights>(`/api/admin/ai/insights${courseId ? `?course_id=${courseId}` : ''}`),
   toolCalls: (limit = 100) => call<{calls: ToolCallRow[]}>(`/api/admin/ai/tool-calls?limit=${limit}`),
 };
 
