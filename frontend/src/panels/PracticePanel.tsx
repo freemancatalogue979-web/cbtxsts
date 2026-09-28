@@ -134,15 +134,21 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
       .catch((error: Error) => toast('error', 'Could not start', error.message));
   }, [mode, toast]);
 
+  // Deadline-based clock: phones throttle timers in the background, so
+  // counting ticks drifts — measuring against a fixed deadline never does.
+  // Freeze pushes the deadline back and holds the display still meanwhile.
+  const deadlineRef = useRef(0);
+  const frozenUntilRef = useRef(0);
   useEffect(() => {
     if (!run || !run.seconds || summary) return undefined;
-    const timer = window.setInterval(() => {
-      setFrozen((value) => {
-        if (value > 0) return value - 1;
-        setRemaining((seconds) => Math.max(0, seconds - 1));
-        return 0;
-      });
-    }, 1000);
+    if (!deadlineRef.current) deadlineRef.current = Date.now() + run.seconds * 1000;
+    const update = () => {
+      const now = Date.now();
+      setFrozen(Math.max(0, Math.ceil((frozenUntilRef.current - now) / 1000)));
+      setRemaining(Math.max(0, Math.ceil((deadlineRef.current - Math.max(now, frozenUntilRef.current)) / 1000)));
+    };
+    update();
+    const timer = window.setInterval(update, 250);
     return () => window.clearInterval(timer);
   }, [run, summary]);
 
@@ -221,7 +227,13 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
       const data = result as unknown as {hidden?: string[]; hint?: string; freeze_seconds?: number; powerups?: Record<string, number>};
       if (data.powerups) setPowerups(data.powerups);
       if (data.hidden) setHidden(data.hidden);
-      if (data.freeze_seconds) setFrozen(data.freeze_seconds);
+      if (data.freeze_seconds) {
+        const now = Date.now();
+        const from = Math.max(now, frozenUntilRef.current);
+        frozenUntilRef.current = from + data.freeze_seconds * 1000;
+        deadlineRef.current += data.freeze_seconds * 1000;
+        setFrozen(Math.ceil((frozenUntilRef.current - now) / 1000));
+      }
       if (data.hint) setFeedback((current) => ({...(current ?? {correct: false}), explanation: data.hint}));
     } catch (error) {
       toast('error', 'Power-up failed', (error as Error).message);
@@ -779,9 +791,13 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
   const askedAt = useRef(Date.now());
   const finishing = useRef(false);
   const skew = useRef(0);
+  const skewFor = useRef<string | null>(null);
 
-  if (run.server_now) {
+  // Client − server clock difference, measured once when this run arrives.
+  // (Re-measuring on every render against the old server_now froze the clock.)
+  if (run.server_now && skewFor.current !== run.token) {
     skew.current = Date.now() - Date.parse(run.server_now);
+    skewFor.current = run.token;
   }
 
   const finish = useCallback(async () => {
