@@ -269,7 +269,7 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
 
   if (!run || !question) {
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-12 w-full" />
       </div>
@@ -277,7 +277,7 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Chip className="border-white/12 bg-white/6 text-mist-300">{label}</Chip>
         <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200" icon={<Zap className="size-3.5" />}>
@@ -308,8 +308,8 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
           className="absolute -top-2 right-1 hidden opacity-95 sm:block"
           label="Arena hero"
         />
-        <div className="flex items-center gap-2">
-          <Chip className="border-white/12 bg-white/6 text-mist-400">{question.topic || 'Practice'}</Chip>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span title={question.topic || 'Practice'} className="btag max-w-full min-w-0 border-white/12 bg-white/6 text-mist-400"><span className="min-w-0 truncate">{question.topic || 'Practice'}</span></span>
           <Chip className="border-white/12 bg-white/6 text-mist-400">{question.difficulty || 'medium'}</Chip>
           <button
             type="button"
@@ -481,7 +481,7 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
 
   if (!fight || !question) {
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <Skeleton className="h-28 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -489,7 +489,7 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <Card className="relative overflow-hidden p-4">
         <div className="relative flex items-start gap-3">
         <div className="min-w-0 flex-1">
@@ -903,7 +903,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
   /* ------------------------------------------------------------ the result */
   if (summary) {
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <Card className="relative overflow-hidden p-5 text-center">
           <div className="relative mx-auto grid size-16 place-items-center rounded-3xl brand-gradient text-white">
             {summary.perfect ? <Trophy className="size-7" /> : <Target className="size-7" />}
@@ -1000,7 +1000,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <RunHud
         clock={<PracticeClock endsAt={run.ends_at} totalSeconds={run.duration_seconds} startedAt={run.started_at} skewRef={skew} />}
         title={
@@ -1024,7 +1024,7 @@ function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload; expire
 
       <Card className="relative min-w-0 overflow-hidden p-4 sm:p-5 [overflow-wrap:anywhere]">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Chip className="max-w-full min-w-0 truncate border-white/12 bg-white/6 text-mist-400">{question.topic || 'Practice'}</Chip>
+          <span title={question.topic || 'Practice'} className="btag max-w-full min-w-0 border-white/12 bg-white/6 text-mist-400"><span className="min-w-0 truncate">{question.topic || 'Practice'}</span></span>
           <Chip className="border-white/12 bg-white/6 text-mist-400">{question.difficulty || 'medium'}</Chip>
           <span className="ml-auto text-[0.7rem] font-black tracking-wider whitespace-nowrap text-mist-500">
             Question {index + 1} of {total}
@@ -1176,7 +1176,7 @@ function CustomPractice() {
 
   if (phase === 'loading' || (phase === 'setup' && !catalog)) {
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-12 w-full" />
@@ -1216,7 +1216,7 @@ export default function PracticePanel() {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Segmented
         value={tab}
         onChange={setTab}
@@ -1231,7 +1231,7 @@ export default function PracticePanel() {
 
       {tab === 'practice' && (
         <>
-          <div className="grid gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
             <SectionHeading title="Practice modes" subtitle="Sprints, survival runs and daily challenges." icon={<Play className="size-4" />} />
             {!modes && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
