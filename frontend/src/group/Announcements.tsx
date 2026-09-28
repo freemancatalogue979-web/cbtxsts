@@ -52,7 +52,7 @@ function CreateAnnouncement({onDone, onCancel}: {onDone: () => void; onCancel: (
   return (
     <div className="grid gap-3 p-3 sm:p-4">
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onCancel} icon={<ArrowLeft className="size-4" />}>Back</Button>
+        <Button size="sm" variant="outline" onClick={onCancel} icon={<ArrowLeft className="size-4" />} label="Back" />
         <h2 className="text-[1rem] font-extrabold text-mist-50">Publish announcement</h2>
       </div>
       <Card className="grid gap-3 p-4">

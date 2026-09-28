@@ -67,9 +67,7 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
       {onBack ? (
-        <Button variant="ghost" size="sm" icon={<ChevronLeft className="size-4" />} onClick={onBack} className="-ml-1">
-          Back
-        </Button>
+        <Button variant="ghost" size="sm" icon={<ChevronLeft className="size-4" />} onClick={onBack} className="-ml-1" label="Back" />
       ) : null}
 
       {/* ---------------------------------------------------------- header */}

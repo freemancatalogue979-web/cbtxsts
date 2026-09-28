@@ -602,12 +602,8 @@ function MaterialEditor({
             **double stars**.
           </p>
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} disabled={!past.length} onClick={undoEdit}>
-              Undo
-            </Button>
-            <Button size="sm" variant="ghost" icon={<Redo2 className="size-4" />} disabled={!future.length} onClick={redoEdit}>
-              Redo
-            </Button>
+            <Button size="sm" variant="outline" icon={<Undo2 className="size-4" />} disabled={!past.length} onClick={undoEdit} label="Undo" />
+            <Button size="sm" variant="ghost" icon={<Redo2 className="size-4" />} disabled={!future.length} onClick={redoEdit} label="Redo" />
             <span className="min-w-0 flex-1 truncate text-[0.72rem] font-semibold text-mist-500">
               {past.length ? `${past.length} change${past.length === 1 ? '' : 's'} you can undo` : 'Edits here can be undone until you save'}
             </span>
@@ -1245,12 +1241,8 @@ function MaterialNotes({
                   {row.topic || 'No topic'} · updated {formatDate(row.updated_at)}
                 </p>
                 <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
-                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')}>
-                    Read
-                  </Button>
-                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')}>
-                    Edit
-                  </Button>
+                  <Button size="sm" variant="outline" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')} label="Read note" />
+                  <Button size="sm" variant="ghost" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')} label="Edit note" />
                   <Button size="sm" variant="ghost" title="History & undo" aria-label={`History of ${row.title}`} icon={<History className="size-3.5" />} onClick={() => void openHistory(row)} />
                   <Button size="sm" variant="ghost" title="Delete note" aria-label={`Delete ${row.title}`} icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(row)} />
                 </div>
@@ -1855,12 +1847,8 @@ function MaterialsTab({
                   {row.topic || 'No topic'} · updated {formatDate(row.updated_at)}
                 </p>
                 <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
-                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')}>
-                    Open
-                  </Button>
-                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')}>
-                    Edit
-                  </Button>
+                  <Button size="sm" variant="outline" icon={<Eye className="size-3.5" />} onClick={() => void openNote(row, 'read')} label="Open note" />
+                  <Button size="sm" variant="ghost" icon={<Pencil className="size-3.5" />} onClick={() => void openNote(row, 'edit')} label="Edit note" />
                   <Button size="sm" variant="ghost" title="Delete note" icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(row)} />
                 </div>
               </Card>

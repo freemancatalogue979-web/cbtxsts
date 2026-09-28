@@ -460,7 +460,7 @@ function CreateScreen({
     <div className="mx-auto w-full max-w-md">
       <Card className="!p-5">
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={onCancel} icon={<ArrowLeft className="size-4" />}>Back</Button>
+          <Button size="sm" variant="ghost" onClick={onCancel} icon={<ArrowLeft className="size-4" />} label="Back" />
           <p className="min-w-0 flex-1 text-[1rem] font-black text-mist-50">Create a ranked lobby</p>
         </div>
         <p className="mt-1 text-[0.78rem] font-semibold text-mist-400">Pick a team size — every player on your side answers their own dealt set.</p>

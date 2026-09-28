@@ -18,13 +18,11 @@ import {
   Eye,
   Gift,
   LogOut,
-  Play,
   Radio,
   Timer,
   Trophy,
   Users,
-  Zap,
-} from 'lucide-react';
+  Zap, RefreshCw} from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Segmented, Skeleton, StatTile} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber} from '../lib/format';
@@ -425,9 +423,7 @@ export default function EventsPanel() {
                   <p className="mt-3 flex items-center gap-2 text-[0.72rem] font-bold text-mist-400">Locked — on to the next one.</p>
                 )}
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={resumeRun} icon={<Play className="size-3.5" />}>
-                    Refresh
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={resumeRun} icon={<RefreshCw className="size-3.5" />} label="Refresh" />
                   {event.allow_leave && (
                     <Button variant="ghost" size="sm" onClick={leaveEvent} icon={<LogOut className="size-3.5" />}>
                       Leave (progress saved)

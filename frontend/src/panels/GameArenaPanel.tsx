@@ -576,9 +576,7 @@ export default function GameArenaPanel() {
         <Card className="min-w-0 p-4">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <SectionHeading title="Leaderboards" subtitle="Daily, weekly, friends and your own best runs." />
-            <Button size="sm" variant="ghost" icon={<ArrowLeft className="size-4" />} onClick={() => setView('hub')}>
-              Back
-            </Button>
+            <Button size="sm" variant="ghost" label="Back" icon={<ArrowLeft className="size-4" />} onClick={() => setView('hub')} />
           </div>
           <Segmented
             className="mt-3"
@@ -624,9 +622,7 @@ export default function GameArenaPanel() {
         <Card className="min-w-0 p-4">
           <div className="flex min-w-0 items-center gap-2">
             <SectionHeading title="Locker" subtitle="Characters and trails unlock as your Study XP grows." />
-            <Button size="sm" variant="ghost" icon={<ArrowLeft className="size-4" />} onClick={() => setView('hub')}>
-              Back
-            </Button>
+            <Button size="sm" variant="ghost" label="Back" icon={<ArrowLeft className="size-4" />} onClick={() => setView('hub')} />
           </div>
           <div className="mt-3 min-w-0 space-y-3">
             <div className="min-w-0">

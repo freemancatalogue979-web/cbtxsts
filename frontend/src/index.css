@@ -1238,56 +1238,76 @@
 }
 
 /* ---------------------------------------------------------------- buttons */
-/* ---------------------------------------------------------------- buttons */
-/* CHAMFER TILE — a hexagonal-ish control with cut top-left & bottom-right
-   corners, a violet→indigo→magenta gradient ring that flows around its
-   perimeter, and a press beam that sweeps the face on tap.
+/* Two layers so focus rings and press motion are never clipped:
+     .gbtn       outer <button> — press / focus host, sets the height
+     .gbtn-face  painted surface — shape, fill, border, sheen
 
-   Three layers:
-     .gbtn       outer <button>      — press/focus host + outer violet halo
-                                       (must not be clipped so the halo spills)
-     .gbtn-face  inner painted slab  — the chamfered silhouette + sheen
-     .gbtn-ring  conic gradient halo — clipped to the same silhouette, but only
-                                       the 1.5px "frame" shows because we
-                                       inset the surface inside the clip
-
-   Conic-gradient + clip-path + a slow rotation = the live HUD ring. */
+   Shape: soft rounded corners everywhere (they fit any width, any size, any
+   place). The angular cut is kept only for big solid call-to-action buttons
+   (data-shape="angular" — "Enter now", "Start exam"), with a cut that scales
+   with the button instead of a fixed 16px. Icon-only buttons are squares. */
 .gbtn {
   position: relative;
-  border-radius: 0;
+  border-radius: var(--qa-btn-radius, 12px);
   background: transparent;
   border: 0;
   cursor: pointer;
   transition: transform var(--qa-press), filter 0.2s ease;
-  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
 }
 /* Hover lift only on real pointers — on phones :hover "sticks" after a tap.
    No coloured glow: some browsers paint drop-shadow filters as a smeared halo. */
 @media (hover: hover) and (pointer: fine) {
   .gbtn:hover:not(:disabled) {
     transform: translateY(-1px);
-    filter: brightness(1.08);
+    filter: brightness(1.06);
   }
 }
 .gbtn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(0.985);
 }
 .gbtn:disabled {
-  filter: grayscale(0.5) brightness(0.7);
+  filter: grayscale(0.45) brightness(0.72);
   cursor: not-allowed;
 }
 
-/* The chamfered silhouette: top-left + bottom-right corners sliced at 16px,
-   every other corner stays at 90°. The cut on the same diagonal axis as the
-   variant gradient gives the button a clear "this side faces up" stance. */
 .gbtn-face {
-  --qa-chamfer: 16px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
+  border-radius: var(--qa-btn-radius, 12px);
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow 0.2s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.gbtn-face > * {
+  position: relative;
+  z-index: 2;
+}
+/* Solid fills get a top highlight and a short, soft shadow — depth without glow. */
+.gbtn-face[data-solid] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 6px 14px -8px rgba(0, 0, 0, 0.8);
+}
+.gbtn:active:not(:disabled) .gbtn-face[data-solid] {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.4),
+    0 2px 6px -4px rgba(0, 0, 0, 0.7);
+}
+
+/* Angular call-to-action: cut top-left and bottom-right corners, sized to the
+   button (about a quarter of its height), never the whole side. */
+.gbtn[data-shape='angular'],
+.gbtn[data-shape='angular'] .gbtn-face {
+  border-radius: 0;
+}
+.gbtn[data-shape='angular'] .gbtn-face {
+  --qa-chamfer: 12px;
   clip-path: polygon(
     var(--qa-chamfer) 0,
     100% 0,
@@ -1296,72 +1316,14 @@
     0 100%,
     0 var(--qa-chamfer)
   );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
-    0 6px 14px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
-  isolation: isolate;
-  transition: box-shadow 0.2s ease, filter 0.2s ease;
-}
-.gbtn-face > * {
-  position: relative;
-  z-index: 2;
 }
 
-/* Animated gradient ring: a conic-gradient disk behind the face, clipped to
-   the same chamfered silhouette, with a hard center cut so only the outer
-   rim (≈1.5px) shows. It rotates slowly — the lit section travels around the
-   perimeter like a HUD scanning the control.
-
-   The gradient uses a static conic-gradient; we rotate the element itself so
-   every browser (including ones that don't animate custom properties in
-   conic-gradients) gets the same live HUD effect. */
-.gbtn-ring {
-  /* The ring lives inside .gbtn-face, whose own chamfered clip-path is static.
-     `overflow: hidden` on the face is enough to constrain the ring's bounding
-     box; the ring itself is a square (we use a larger inset) so the rotation
-     keeps it the same shape and the gradient sweeps around the centre. */
-  position: absolute;
-  inset: -50%;                                  /* oversized square = conic gradient fills the rim */
-  z-index: 1;
-  pointer-events: none;
-  background: conic-gradient(
-    from 0deg,
-    rgba(168, 85, 247, 0)    0deg,
-    rgba(168, 85, 247, 0)    30deg,
-    rgba(217, 188, 255, 0.95) 70deg,
-    rgba(236, 61, 146, 0.95)  140deg,
-    rgba(91, 63, 214, 0.95)   210deg,
-    rgba(168, 85, 247, 0)    280deg,
-    rgba(168, 85, 247, 0)    360deg
-  );
-  /* Inner mask cuts the centre out so only the outer rim stays lit. */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  padding: 1.5px;
-  opacity: 0.9;
-  transform-origin: 50% 50%;
-  animation: gbtn-ring-spin 4.2s linear infinite;
-}
-@keyframes gbtn-ring-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Press beam: a single violet flash that crosses the face when the button is
-   held. It rides on a separate ::before and runs on a transform so it can
-   replay cheaply without re-painting the gradient. */
-.gbtn-face::before {
+/* Sheen that crosses solid buttons on hover / tap. */
+.gbtn-face[data-solid]::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.45) 50%,
-    transparent 70%);
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.32) 50%, transparent 70%);
   background-size: 260% 100%;
   background-position: 200% 0;
   opacity: 0;
@@ -1370,50 +1332,68 @@
   z-index: 3;
 }
 @media (hover: hover) and (pointer: fine) {
-  .gbtn:hover:not(:disabled) .gbtn-face::before {
-  opacity: 1;
-  background-position: 0 0;
-  transition-delay: 0.05s;
+  .gbtn:hover:not(:disabled) .gbtn-face[data-solid]::before {
+    opacity: 1;
+    background-position: 0 0;
+    transition-delay: 0.05s;
+  }
 }
-}
-.gbtn:active:not(:disabled) .gbtn-face::before {
-  /* Quicker flash on tap so the press feels mechanical. */
+.gbtn:active:not(:disabled) .gbtn-face[data-solid]::before {
   transition: opacity 0.08s ease, background-position 0.35s ease;
   background-position: -100% 0;
 }
-
-/* Press the surface a touch deeper on tap, so the chamfer's top edge catches
-   the highlight. The inner shadow flips to feel pressed. */
-.gbtn:active:not(:disabled) .gbtn-face {
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.55),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 2px 4px rgba(0, 0, 0, 0.45);
-}
-
-/* Focus gets the same love as hover: the ring brightens, the beam sweeps. */
-.gbtn:focus-visible .gbtn-face {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
-    0 6px 18px rgba(91, 63, 214, 0.5);
-}
-.gbtn:focus-visible .gbtn-ring {
-  opacity: 1;
-}
-
-/* The disabled state kills motion + ring so the button reads inert. */
-.gbtn:disabled .gbtn-ring,
 .gbtn:disabled .gbtn-face::before {
-  animation: none;
   opacity: 0;
 }
 
-/* Reduced motion: keep the chamfered shape, drop the spin & beam so the
-   control still looks alive but doesn't move. */
+/* Keyboard focus: a clear ring that follows the shape. */
+.gbtn:focus-visible {
+  outline: 2px solid var(--qa-nova-400, #c9a8fc);
+  outline-offset: 2px;
+}
+.gbtn[data-shape='angular']:focus-visible {
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .gbtn-ring { animation: none; }
-  .gbtn-face::before { transition: none; }
+  .gbtn,
+  .gbtn-face::before {
+    transition: none;
+  }
+}
+
+/* Icon-only buttons: the label lives in aria-label / title; this tooltip shows
+   it on desktop hover and keyboard focus (phones use long-press / the icon). */
+.gbtn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translate(-50%, 4px);
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(12, 10, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #eceaf6;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 40;
+}
+@media (hover: hover) and (pointer: fine) {
+  .gbtn[data-tip]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 0.35s;
+  }
+}
+.gbtn[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 /* Card as a tappable control (tactical press feedback instead of bouncy hover). */

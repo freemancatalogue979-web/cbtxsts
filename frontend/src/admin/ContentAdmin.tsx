@@ -786,9 +786,7 @@ function QuizzesTab({onChanged, onManageQuestions, onOpenBank}: {onChanged: () =
                         Questions
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => edit(quiz)} icon={<Pencil className="size-3.5" />}>
-                      Edit
-                    </Button>
+                    <Button size="sm" variant="ghost" label="Edit exam" onClick={() => edit(quiz)} icon={<Pencil className="size-3.5" />} />
                     <Button size="sm" variant="ghost" title="Delete exam" onClick={() => remove(quiz)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
                   </div>
                 </Card>

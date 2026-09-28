@@ -11,14 +11,12 @@ import {
   Crown,
   Megaphone,
   MessageCircleQuestion,
-  Plus,
   Radio,
   Swords,
   TrendingUp,
   UserPlus,
   Users,
-  Zap,
-} from 'lucide-react';
+  Zap, RefreshCw} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import type {ReactNode} from 'react';
 import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Skeleton, StatTile} from '../components/ui';
@@ -315,9 +313,7 @@ export default function Overview() {
                 <p className="text-[0.95rem] font-black tabular text-mist-50">{formatNumber(data.member_count)}</p>
               </div>
             </div>
-            <Button size="sm" variant="ghost" icon={<Plus className="size-4" />} onClick={refresh} className="self-start">
-              Refresh
-            </Button>
+            <Button size="sm" variant="ghost" icon={<RefreshCw className="size-4" />} onClick={refresh} className="self-start" label="Refresh" />
           </div>
         </Card>
       </div>

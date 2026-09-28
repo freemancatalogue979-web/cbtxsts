@@ -225,7 +225,7 @@ function Workspace({
       {/* ------------------------------------------------------------ header */}
       <header className="print-hide safe-top relative z-30 shrink-0 border-b border-white/8 bg-ink-950/70 backdrop-blur">
         <div className="flex min-h-14 items-center gap-2 px-2 py-1.5 sm:gap-3 sm:px-4">
-          <IconButton label="Back" variant="outline" className="size-9 shrink-0" onClick={onExit}>
+          <IconButton label="Back" variant="outline" size="sm" onClick={onExit}>
             <ChevronLeft className="size-5" />
           </IconButton>
 
@@ -263,7 +263,7 @@ function Workspace({
             </button>
 
             <div className="relative" ref={menuRef}>
-              <IconButton label="More" variant="outline" className="size-9" onClick={() => setMenuOpen((v) => !v)}>
+              <IconButton label="More" variant="outline" size="sm" onClick={() => setMenuOpen((v) => !v)}>
                 <MoreHorizontal className="size-5" />
               </IconButton>
               <AnimatePresence>

@@ -538,12 +538,8 @@ function MyNotesTab({
                   {note.updated_at ? formatDate(note.updated_at) : 'Just now'}
                 </p>
                 <div className="mt-auto flex min-w-0 gap-1.5 pt-2.5">
-                  <Button size="sm" variant="outline" className="flex-1" icon={<Eye className="size-3.5" />} onClick={() => setReading(note)}>
-                    Open
-                  </Button>
-                  <Button size="sm" variant="ghost" className="flex-1" icon={<Pencil className="size-3.5" />} onClick={() => edit(note)}>
-                    Edit
-                  </Button>
+                  <Button size="sm" variant="outline" icon={<Eye className="size-3.5" />} onClick={() => setReading(note)} label="Open note" />
+                  <Button size="sm" variant="ghost" icon={<Pencil className="size-3.5" />} onClick={() => edit(note)} label="Edit note" />
                   <Button size="sm" variant="ghost" aria-label={`Delete ${titleOf(note)}`} title="Delete" icon={<Trash2 className="size-3.5 text-flare-400" />} onClick={() => void remove(note)} />
                 </div>
               </div>
@@ -1563,9 +1559,7 @@ function FocusReader({
             <p className="text-[0.82rem] font-bold text-mist-400">
               {material.progress?.status === 'completed' ? 'You have finished this material.' : "That's the end of this material."}
             </p>
-            <Button size="sm" variant="soft" icon={<Minimize2 className="size-4" />} onClick={onExit}>
-              Exit focus
-            </Button>
+            <Button size="sm" variant="soft" icon={<Minimize2 className="size-4" />} onClick={onExit} label="Exit focus" />
           </div>
         </article>
       </div>

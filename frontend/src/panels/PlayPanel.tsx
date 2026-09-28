@@ -464,9 +464,7 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
             title={filter === 'all' ? 'No exams published yet' : 'Nothing in this filter'}
             detail="Staff can publish exams from the admin console — they appear here instantly."
             action={
-              <Button variant="outline" size="sm" onClick={load} icon={<RotateCcw className="size-3.5" />}>
-                Refresh
-              </Button>
+              <Button variant="outline" size="sm" onClick={load} icon={<RotateCcw className="size-3.5" />} label="Refresh" />
             }
           />
         ) : (

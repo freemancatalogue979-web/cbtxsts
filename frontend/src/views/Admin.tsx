@@ -1,5 +1,5 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {Activity, Award, Bot, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
+import {Activity, Award, LogOut, Bot, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
@@ -469,7 +469,7 @@ function AdminProfile({onSettings, onExit, onSwitch}: {onSettings: () => void; o
               }}
               className="flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2.5 text-left text-[0.82rem] font-bold text-flare-300 transition-colors touch-manipulation hover:bg-white/8"
             >
-              <Activity className="size-4" /> Sign out
+              <LogOut className="size-4" /> Sign out
             </button>
           </motion.div>
         )}
@@ -506,7 +506,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
 
       <header className="sticky top-0 z-50 bg-ink-950/85 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl safe-top">
         <div className="mx-auto flex w-full items-center gap-1 px-2 py-1.5 sm:gap-3 sm:px-5 sm:py-2">
-          <IconButton label="Open console menu" className="rounded-2xl lg:hidden" onClick={() => setNavOpen(true)}>
+          <IconButton label="Open console menu" variant="outline" className="lg:hidden" onClick={() => setNavOpen(true)}>
             <Menu className="size-5 text-mist-200" />
           </IconButton>
           <Wordmark size="header" className="hidden sm:block" />
@@ -521,9 +521,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
             <span className="hidden sm:block">
               <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
-            <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={onExit} icon={<Activity className="size-4" />}>
-              Sign out
-            </Button>
+            <Button size="sm" variant="ghost" className="hidden lg:inline-flex" label="Sign out" onClick={onExit} icon={<LogOut className="size-4" />} />
             <span className="sm:hidden">
               <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
@@ -588,7 +586,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                 ))}
               </nav>
               <div className="border-t border-white/8 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-                <Button size="sm" variant="outline" className="w-full justify-center" onClick={onExit} icon={<Activity className="size-4" />}>
+                <Button size="sm" variant="outline" className="w-full justify-center" onClick={onExit} icon={<LogOut className="size-4" />}>
                   Sign out
                 </Button>
               </div>

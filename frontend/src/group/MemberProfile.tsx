@@ -56,9 +56,7 @@ export default function MemberProfile({studentId, onBack}: {studentId: number; o
   return (
     <div className="grid h-full min-h-0 gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-4">
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onBack} icon={<ArrowLeft className="size-4" />}>
-          Back
-        </Button>
+        <Button size="sm" variant="outline" onClick={onBack} icon={<ArrowLeft className="size-4" />} label="Back" />
       </div>
 
       {/* Identity card */}

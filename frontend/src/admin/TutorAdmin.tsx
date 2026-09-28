@@ -1,10 +1,7 @@
 /** Staff: AI Tutor control room — overview, settings, usage, costs, users,
  * conversations (titles only), models, limits, logs and feature switches.
  * Everything is enforced by the API; this screen only edits and reports. */
-import {
-  Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter,
-  MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, X,
-} from 'lucide-react';
+import {Activity, AlertTriangle, Ban, Bot, Check, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ToggleRight, Users, X, Eye, EyeOff, Trash2} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {formatNumber, formatRelative} from '../lib/format';
@@ -750,7 +747,7 @@ function KeyRow({provider: p, onProviders}: {provider: ProviderInfo; onProviders
         </span>
         <span className="ml-auto flex gap-1.5">
           {p.key_source === 'admin' && (
-            <Button size="sm" variant="ghost" loading={busy === 'remove'} onClick={remove}>Remove</Button>
+            <Button size="sm" variant="ghost" label="Remove saved key" loading={busy === 'remove'} onClick={remove} icon={<Trash2 className="size-4 text-flare-300" />} />
           )}
           <Button size="sm" variant="soft" icon={<KeyRound className="size-4" />} onClick={() => { setOpen((o) => !o); setResult(null); }}>
             {p.configured ? 'Change key' : 'Add key'}
@@ -782,12 +779,12 @@ function KeyRow({provider: p, onProviders}: {provider: ProviderInfo; onProviders
                 maxLength={400}
                 autoFocus
               />
-              <Button type="button" size="sm" variant="ghost" onClick={() => setShow((s) => !s)}>{show ? 'Hide' : 'Show'}</Button>
+              <Button type="button" size="md" variant="outline" label={show ? 'Hide key' : 'Show key'} onClick={() => setShow((s) => !s)} icon={show ? <EyeOff className="size-4" /> : <Eye className="size-4" />} />
             </div>
           </Field>
           <div className="flex items-end gap-1.5">
             <Button type="submit" size="sm" icon={<Save className="size-4" />} loading={busy === 'save'} disabled={!value.trim()}>Save &amp; test</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => { setOpen(false); setValue(''); }}>Cancel</Button>
+            <Button type="button" size="sm" variant="ghost" label="Cancel" onClick={() => { setOpen(false); setValue(''); }} icon={<X className="size-4" />} />
           </div>
         </form>
       )}

@@ -1045,7 +1045,7 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <p className="text-[0.8rem] font-extrabold tracking-wide text-mist-300">My uploads</p>
-            <Button size="sm" variant="ghost" icon={<Upload className="size-4" />} loading={uploading} onClick={onUpload}>Upload</Button>
+            <Button size="sm" variant="ghost" icon={<Upload className="size-4" />} loading={uploading} onClick={onUpload} label="Upload a file" />
           </div>
           <div className="space-y-1.5">
             {uploads.length ? uploads.map((u) => (

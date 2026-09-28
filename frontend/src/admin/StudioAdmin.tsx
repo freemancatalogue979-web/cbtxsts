@@ -94,9 +94,7 @@ function Pulse() {
               Broken answers, missing explanations and thin topic pools — surfaced before players see them.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={load} icon={<RefreshCw className="size-3.5" />}>
-            Refresh
-          </Button>
+          <Button size="sm" variant="outline" onClick={load} icon={<RefreshCw className="size-3.5" />} label="Refresh" />
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -296,9 +294,7 @@ function Bank() {
           >
             Flagged only
           </button>
-          <Button size="sm" variant="outline" onClick={load} icon={<RefreshCw className="size-3.5" />}>
-            Refresh
-          </Button>
+          <Button size="sm" variant="outline" onClick={load} icon={<RefreshCw className="size-3.5" />} label="Refresh" />
           <Chip>{rows?.length ?? 0} shown</Chip>
           {facets && typeof facets.status === 'object' && (
             <Chip className="border-white/10 bg-white/5 text-mist-400">

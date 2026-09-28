@@ -98,45 +98,32 @@ export function XpFloat({
 type Variant = 'primary' | 'ghost' | 'outline' | 'danger' | 'gold' | 'mint' | 'soft';
 type Size = 'sm' | 'md' | 'lg';
 
-/* CHAMFER VARIANTS
-   Each variant is just a surface (gradient + text colour). The chamfered
-   silhouette, bevel, animated ring and press beam live on .gbtn-face / .gbtn-ring
-   in the stylesheet — that way one shape system drives every variant and the
-   outline / shadow stay consistent. Hover/focus states tune the gradient only. */
+/* VARIANTS — each is only a surface (fill, border, text colour). Shape, sheen and
+   press feel live on .gbtn / .gbtn-face in the stylesheet, so one system drives
+   every button. Solid variants get depth; quiet ones get a hairline border. */
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    'bg-gradient-to-b from-nova-400 to-nova-700 text-white hover:from-nova-300 hover:to-nova-600',
-  gold:
-    'bg-gradient-to-b from-amber-400 to-amber-600 text-ink-950 hover:from-amber-300 hover:to-amber-500',
-  mint:
-    'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white hover:from-emerald-300 hover:to-emerald-500',
-  danger:
-    'bg-gradient-to-b from-flare-500 to-flare-700 text-white hover:from-flare-400 hover:to-flare-600',
-  outline:
-    'bg-ink-800 text-mist-100 hover:bg-ink-700 hover:text-mist-50',
-  ghost:
-    'bg-white/[0.04] text-mist-300 hover:bg-nova-500/12 hover:text-mist-50',
-  soft:
-    'bg-nova-950/45 text-nova-200 hover:bg-nova-900/55 hover:text-nova-100',
+  primary: 'bg-gradient-to-b from-nova-400 to-nova-600 text-white hover:from-nova-300 hover:to-nova-500',
+  gold: 'bg-gradient-to-b from-amber-300 to-amber-500 text-ink-950 hover:from-amber-200 hover:to-amber-400',
+  mint: 'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white hover:from-emerald-300 hover:to-emerald-500',
+  danger: 'bg-gradient-to-b from-flare-500 to-flare-700 text-white hover:from-flare-400 hover:to-flare-600',
+  outline: 'border border-white/14 bg-white/[0.03] text-mist-100 hover:border-white/24 hover:bg-white/[0.07] hover:text-mist-50',
+  ghost: 'border border-transparent bg-transparent text-mist-300 hover:bg-white/[0.07] hover:text-mist-50',
+  soft: 'border border-nova-400/20 bg-nova-500/12 text-nova-100 hover:border-nova-400/35 hover:bg-nova-500/20 hover:text-white',
 };
+const SOLID = new Set<Variant>(['primary', 'gold', 'mint', 'danger']);
 
-/* SIZE on the outer button = height only. Padding & radius live on the face so
-   the diagonal clip-path always wins (border-radius would otherwise re-round
-   the corners on inner variants; clip-path ignores it, but we drop it anyway
-   so there's no surprise). */
+/* SIZE on the outer button: height, type and corner radius. */
 const SIZES: Record<Size, string> = {
-  sm: 'h-9 text-[0.76rem] gap-1.5 font-bold tracking-wide',
-  md: 'h-11 text-[0.82rem] gap-2 font-bold tracking-wider',
-  lg: 'h-13 text-[0.90rem] gap-2.5 font-extrabold tracking-widest sm:h-14 sm:text-[0.94rem]',
+  sm: 'h-9 text-[0.78rem] font-bold [--qa-btn-radius:10px]',
+  md: 'h-11 text-[0.84rem] font-bold [--qa-btn-radius:12px]',
+  lg: 'h-13 text-[0.92rem] font-extrabold tracking-wide [--qa-btn-radius:14px] sm:h-14 sm:text-[0.96rem]',
 };
-
-/* Inner padding & radius — kept in lockstep with the old SIZES so existing
-   layouts keep their rhythm. Slightly looser on lg so the shard's diagonal
-   tips don't crowd the label. */
+/* Icon-only buttons are squares of the same height. */
+const SQUARE: Record<Size, string> = {sm: 'w-9', md: 'w-11', lg: 'w-13 sm:w-14'};
 const FACE_SIZES: Record<Size, string> = {
-  sm: 'px-3',
-  md: 'px-4 sm:px-5',
-  lg: 'px-5 sm:px-7',
+  sm: 'px-3 gap-1.5',
+  md: 'px-4 gap-2 sm:px-5',
+  lg: 'px-5 gap-2.5 sm:px-7',
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -145,6 +132,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   block?: boolean;
   icon?: ReactNode;
+  /** Accessible name + tooltip. Required in practice for icon-only buttons. */
+  label?: string;
+  /** "auto" = angular only for big solid call-to-action buttons, rounded elsewhere. */
+  shape?: 'auto' | 'rounded' | 'angular';
 }
 
 export function Button({
@@ -153,34 +144,39 @@ export function Button({
   loading = false,
   block = false,
   icon,
+  label,
+  shape = 'auto',
   children,
   className = '',
   disabled,
   onClick,
   ...rest
 }: ButtonProps) {
+  const iconOnly = !!icon && (children === undefined || children === null || children === false || children === '');
+  const solid = SOLID.has(variant);
+  const angular = shape === 'angular' || (shape === 'auto' && size === 'lg' && solid && !iconOnly);
+  // Icon-only buttons are named by `label`, falling back to an existing title / aria-label.
+  const {title, ...others} = rest;
+  const name = label ?? title ?? (rest as {'aria-label'?: string})['aria-label'];
+  const passthrough = iconOnly ? others : rest;
   return (
-    /* Two layers: the outer <button> hosts the press / outer-glow / focus ring
-       (which would be clipped if we put it on the shard), the inner <span>
-       carries the diagonal clip-path and the painted surface so the shard's
-       corners stay sharp and the violet halo glows around the full silhouette. */
     <button
-      className={`gbtn inline-flex shrink-0 items-center justify-center touch-manipulation p-0
-        focus-visible:ring-2 focus-visible:ring-nova-400/80 focus-visible:outline-none
-        ${block ? 'w-full' : ''} ${SIZES[size]} ${className}`}
+      className={`gbtn inline-flex shrink-0 items-center justify-center touch-manipulation p-0 focus-visible:outline-none
+        ${block ? 'w-full' : ''} ${SIZES[size]} ${iconOnly ? SQUARE[size] : ''} ${className}`}
+      data-shape={angular ? 'angular' : undefined}
+      data-tip={iconOnly && name ? name : undefined}
+      aria-label={name}
       disabled={disabled || loading}
       onClick={(e) => {
         uiClick(variant === 'danger' ? 'cancel' : variant === 'mint' ? 'confirm' : 'tap');
         onClick?.(e);
       }}
-      {...(rest as object)}
+      {...(passthrough as object)}
     >
       <span
-        className={`gbtn-face flex w-full items-center justify-center gap-2 ${FACE_SIZES[size]} ${VARIANTS[variant]}`}
+        data-solid={solid ? '' : undefined}
+        className={`gbtn-face flex w-full items-center justify-center ${iconOnly ? 'px-0' : FACE_SIZES[size]} ${VARIANTS[variant]}`}
       >
-        {/* The animated gradient ring sits inside the face so it inherits the
-            chamfered clip and only its outer rim (the mask punches out the
-            centre) is visible — that's the live HUD line around the tile. */}
         {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
         {children}
       </span>
@@ -188,28 +184,37 @@ export function Button({
   );
 }
 
+/** A square, icon-only button with a tooltip — same shape language as Button. */
 export function IconButton({
   label,
   className = '',
   variant = 'ghost',
+  size,
+  active = false,
   children,
   onClick,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & {label: string; variant?: Variant}) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {label: string; variant?: Variant; size?: Size; active?: boolean}) {
+  // Default footprint stays 40px so headers and chat rows keep their rhythm.
+  const box = size ? `${SIZES[size]} ${SQUARE[size]}` : 'h-10 w-10 [--qa-btn-radius:12px]';
   return (
     <button
       aria-label={label}
-      title={label}
+      aria-pressed={active || undefined}
+      data-tip={label}
       onClick={(e) => {
         uiClick('nav');
         onClick?.(e);
       }}
-      className={`grid size-10 shrink-0 place-items-center transition-colors touch-manipulation ${
-        variant === 'outline' ? 'border border-nova-500/30 bg-white/[0.04]' : ''
-      } hover:bg-nova-500/15 ${className}`}
+      className={`gbtn inline-grid shrink-0 place-items-center touch-manipulation p-0 focus-visible:outline-none ${box} ${className}`}
       {...rest}
     >
-      {children}
+      <span
+        data-solid={SOLID.has(variant) ? '' : undefined}
+        className={`gbtn-face grid place-items-center ${active ? VARIANTS.soft : VARIANTS[variant]}`}
+      >
+        {children}
+      </span>
     </button>
   );
 }

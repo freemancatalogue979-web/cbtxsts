@@ -88,9 +88,7 @@ function CreateQuiz({onDone, onCancel}: {onDone: () => void; onCancel: () => voi
   return (
     <div className="grid gap-3 p-3 sm:p-4">
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onCancel} icon={<ArrowLeft className="size-4" />}>
-          Back
-        </Button>
+        <Button size="sm" variant="outline" onClick={onCancel} icon={<ArrowLeft className="size-4" />} label="Back" />
         <h2 className="text-[1rem] font-extrabold text-mist-50">Set a group quiz</h2>
       </div>
 
