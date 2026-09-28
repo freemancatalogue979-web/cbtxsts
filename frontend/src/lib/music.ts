@@ -102,6 +102,32 @@ function rememberUnlocked(): void {
   }
 }
 
+/**
+ * The player's own pause, remembered across refreshes: music the player
+ * stopped stays stopped until they press play again (tab-switch pauses are
+ * automatic and are not stored).
+ */
+const HELD_KEY = 'arena.music.held';
+/** True after a refresh that came back paused: nothing is loaded yet, so play means a full start. */
+let coldPaused = false;
+
+function setHeld(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(HELD_KEY, '1');
+    else window.localStorage.removeItem(HELD_KEY);
+  } catch {
+    /* private mode — the pause just won't survive a refresh */
+  }
+}
+
+function isHeld(): boolean {
+  try {
+    return window.localStorage.getItem(HELD_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function wasUnlocked(): boolean {
   try {
     return Number(window.localStorage.getItem(UNLOCK_KEY) || 0) > 0;
@@ -452,11 +478,15 @@ export const music = {
   },
   setEnabled(on: boolean): void {
     setMusicOn(on);
+    setHeld(false);
     saveSession();
     if (on) {
       unlocked = true; // the toggle click is itself a gesture
-      if (state === 'paused') resume();
-      else start(false);
+      if (state === 'paused' && !coldPaused) resume();
+      else {
+        coldPaused = false;
+        start(false);
+      }
     } else {
       stop();
       setState('off');
@@ -465,18 +495,26 @@ export const music = {
   /** Hold the music where it is; `resume()` picks it back up from there. */
   pause(): void {
     pausedByVisibility = false;
+    setHeld(true);
     pause();
   },
   resume(): void {
     unlocked = true;
-    if (state === 'paused') resume();
-    else start(false);
+    setHeld(false);
+    if (state === 'paused' && !coldPaused) resume();
+    else {
+      coldPaused = false;
+      start(false);
+    }
   },
   /** Pause if playing, resume if paused — what the header button calls. */
   toggle(): void {
     if (state === 'playing') music.pause();
     else if (state === 'paused') music.resume();
-    else if (state === 'blocked') music.unlock();
+    else if (state === 'blocked') {
+      setHeld(false);
+      music.unlock();
+    }
     else music.setEnabled(true);
   },
   isPaused(): boolean {
@@ -513,7 +551,7 @@ export const music = {
   },
   /** Called from the first pointer/key gesture. */
   unlock(): void {
-    if (!musicOn()) return;
+    if (!musicOn() || isHeld()) return;
     unlocked = true;
     if (state === 'paused') return; // a paused player stays paused until asked
     start(false);
@@ -522,6 +560,12 @@ export const music = {
   autoplay(): void {
     if (!musicOn()) {
       setState('off');
+      return;
+    }
+    if (isHeld()) {
+      // Paused by the player last time: come back paused, never auto-start.
+      coldPaused = true;
+      setState('paused');
       return;
     }
     primeTracksLocally();
