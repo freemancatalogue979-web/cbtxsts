@@ -106,6 +106,35 @@ def main():
         check("empty file refused", upload(staff, "empty.txt", b"")[0] == 400)
         check("expired / unknown job → 404", call("GET", "/admin/materials/import/uploads/nope", token=staff)[0] == 404)
 
+        print("styled PDFs with broken characters still save (RPC companion regression)")
+        from app.services import import_jobs, material_import
+
+        real_pdf_text = material_import._pdf_text
+        styled = ("RULE 1: DUTY OF CANDOUR \ud83d\udcd8\n\n\uf0b7 A lawyer shall not mislead the court \ud83d broken icon.\x00\n\n"
+                  "RULE 2: CONFLICT OF INTEREST\n\n\uf0b7 Act for one side only \udc4d in any matter.\n\n") * 30
+        material_import._pdf_text = lambda data: (styled, 12)
+        try:
+            code, sj, _ = upload(staff, "RPC Study Companion - Rule by Rule (Blue Edition).pdf", b"%PDF-1.7 styled")
+            code, sj = wait(staff, sj["id"], {"ready", "error"})
+        finally:
+            material_import._pdf_text = real_pdf_text
+        preview = json.dumps(sj.get("preview") or {}, ensure_ascii=False)
+        check("styled PDF reads", sj.get("state") == "ready", sj.get("error"))
+        check("preview has no broken characters (emoji kept, icon bullets → •)", not any("\ud800" <= ch <= "\udfff" for ch in preview) and "📘" in preview and "\uf0b7" not in preview, preview[:200])
+        call("POST", f"/admin/materials/import/uploads/{sj['id']}/commit", {"course_id": course_id, "status": "draft"}, staff)
+        code, sj = wait(staff, sj["id"], {"done", "ready", "error"})
+        check("styled PDF saves as a material", sj.get("state") == "done" and (sj.get("material") or {}).get("id"), sj.get("error"))
+        # safety net: a draft that still holds broken characters (read by older code) saves too
+        code, nj, _ = upload(staff, "notes.txt", ("RULE 9\n\nIntegrity in all dealings. " * 40).encode())
+        code, nj = wait(staff, nj["id"], {"ready", "error"})
+        draft = import_jobs._jobs[nj["id"]]["draft"]
+        draft["sections"][0]["title"] = "Rule \ud83d 9"
+        draft["sections"][0]["blocks"][0]["text"] = "Broken \udcd8 half " + draft["sections"][0]["blocks"][0].get("text", "")
+        call("POST", f"/admin/materials/import/uploads/{nj['id']}/commit", {"course_id": course_id, "title": "Title with \ud83d glitch"}, staff)
+        code, nj = wait(staff, nj["id"], {"done", "ready", "error"})
+        check("save cleans leftover broken characters", nj.get("state") == "done" and (nj.get("material") or {}).get("title") == "Title with  glitch", (nj.get("state"), nj.get("error")))
+        check("save errors never say the file 'could not be read'", "could not be read" not in import_jobs._save_message(ValueError("x")) and "could not be read" not in import_jobs._save_message(RuntimeError()), import_jobs._save_message(ValueError("x")))
+
         print("old one-shot endpoints still work")
         b = uuid.uuid4().hex
         small = ("TOPIC\n\nA short note about nuisance. " * 20).encode()

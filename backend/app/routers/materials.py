@@ -1440,8 +1440,14 @@ def _import_draft(db: Session, admin: Admin, *, filename: str, data: bytes, draf
     from ..models import Course as CourseModel
     from ..services.questions import audit
 
+    from ..services.material_import import clean_tree, clean_unicode
+
     if db.get(CourseModel, course_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Choose a course for this material.")
+    # Safety net: drafts read before the clean-up (or from odd files) never
+    # reach the validators / database with broken characters.
+    draft = clean_tree(draft)
+    title, topic, description = clean_unicode(title), clean_unicode(topic), clean_unicode(description)
     kind = kind if kind in {"material", "note"} else "material"
     publish = status_value if status_value in {"draft", "published", "archived"} else "draft"
     link = _store_original(filename, data) if keep_file else ""
@@ -1449,14 +1455,21 @@ def _import_draft(db: Session, admin: Admin, *, filename: str, data: bytes, draf
     if fix_spelling:
         # Only "sure" fixes (well-known misspellings, clear one-letter typos);
         # anything uncertain is left for staff to review with Fix spelling.
-        doc = {"title": "" if title.strip() else draft["title"], "description": "", "summary": [], "sections": draft["sections"]}
-        extra = _assist_extra_words(db, course_id, topic)
-        sure = [row["id"] for row in spelling.find_changes(doc, extra) if row["confidence"] == "sure"]
-        if sure:
-            doc, spelling_fixed = spelling.apply_changes(doc, sure, extra)
-            draft["sections"] = doc["sections"]
-            if doc["title"]:
-                draft["title"] = doc["title"]
+        # Optional polish: a spelling hiccup must never stop the material saving.
+        try:
+            doc = {"title": "" if title.strip() else draft["title"], "description": "", "summary": [], "sections": draft["sections"]}
+            extra = _assist_extra_words(db, course_id, topic)
+            sure = [row["id"] for row in spelling.find_changes(doc, extra) if row["confidence"] == "sure"]
+            if sure:
+                doc, spelling_fixed = spelling.apply_changes(doc, sure, extra)
+                draft["sections"] = doc["sections"]
+                if doc["title"]:
+                    draft["title"] = doc["title"]
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger("arena").exception("auto spelling fix skipped during import")
+            spelling_fixed = 0
     payload = MaterialIn(
         title=(title.strip() or draft["title"])[:200],
         course_id=course_id,

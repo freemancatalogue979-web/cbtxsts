@@ -68,6 +68,22 @@ def _message(error: Exception) -> str:
     return str(detail or "That file could not be read.")[:400]
 
 
+def _save_message(error: Exception) -> str:
+    """Staff-facing reason a save failed (never the misleading "could not be read")."""
+    detail = getattr(error, "detail", None) or getattr(error, "message", None)
+    if detail:
+        return str(detail)[:400]
+    errors = getattr(error, "errors", None)
+    if callable(errors):  # pydantic ValidationError → first problem, in plain words
+        try:
+            first = errors()[0]
+            where = " → ".join(str(p) for p in first.get("loc", ()) if not isinstance(p, int)) or "the document"
+            return f"Couldn't save this material ({where}: {first.get('msg', 'invalid value')}). Edit the title or try again; if it keeps failing, save the file as PDF or Word and re-upload."[:400]
+        except Exception:  # noqa: BLE001
+            pass
+    return f"Couldn't save this material ({type(error).__name__}). Please try again — the file is kept, no need to re-upload."[:400]
+
+
 def _read(job_id: str) -> None:
     from ..services.material_import import DocumentError, read_document
 
@@ -109,7 +125,7 @@ def _create(job_id: str, fields: dict) -> None:
         if not isinstance(error, JobError) and not hasattr(error, "detail"):
             log.exception("import create failed (%s)", job.get("filename"))
         # back to "ready" so staff can fix the problem (e.g. pick a course) and retry without re-uploading
-        _set(job_id, state="ready", error=_message(error))
+        _set(job_id, state="ready", error=_save_message(error))
 
 
 def start(filename: str, data: bytes, *, owner: int) -> dict:

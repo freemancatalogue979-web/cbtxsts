@@ -355,7 +355,10 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
       setUploads((u) => [...u, {key, name: file.name, stage: 'Uploading', fraction: 0}]);
       attachFile(file, course.id, (stage, fraction) => setUploads((u) => u.map((x) => (x.key === key ? {...x, stage, fraction} : x))))
         .then((material) => setUploads((u) => u.map((x) => (x.key === key ? {...x, material, stage: 'Attached'} : x))))
-        .catch((e) => setUploads((u) => u.map((x) => (x.key === key ? {...x, error: errText(e)} : x))));
+        .catch((e) => {
+          setUploads((u) => u.map((x) => (x.key === key ? {...x, error: errText(e)} : x)));
+          toast('error', `Couldn't attach ${file.name}`, errText(e));
+        });
     }
     if (fileInput.current) fileInput.current.value = '';
   };

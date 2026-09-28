@@ -48,6 +48,46 @@ class DocumentError(ValueError):
 Element = tuple
 
 
+# Symbol / Wingdings bullets that PDF and Office text extraction hand back as
+# private-use characters (they render as boxes everywhere else).
+_PUA_BULLETS = {"\uf0b7", "\uf0a7", "\uf076", "\uf0d8", "\uf0fc", "\uf0e0", "\uf06e", "\uf0a8", "\uf0de", "\uf0f0", "\uf09f", "\uf0a1"}
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_LONE_SURROGATE = re.compile(r"[\ud800-\udfff]")
+_PRIVATE_USE = re.compile(r"[\ue000-\uf8ff]")
+
+
+def clean_unicode(text: str) -> str:
+    """Make extracted text safe to store and display.
+
+    Styled PDFs (icon fonts, emoji, odd ToUnicode maps) often yield broken
+    UTF-16 halves ("lone surrogates") and control bytes. They show fine in a
+    JSON preview but the database and validators reject them, so saving the
+    material failed. Valid surrogate pairs are re-joined into real characters
+    (emoji survive); anything still broken is dropped."""
+    if not text or text.isascii():
+        return _CONTROL.sub("", text or "")
+    if _LONE_SURROGATE.search(text):
+        try:  # re-join valid pairs (e.g. "\ud83d\udcd8" → 📘)
+            text = text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+        except UnicodeError:
+            pass
+        text = _LONE_SURROGATE.sub("", text)
+    text = "".join("•" if ch in _PUA_BULLETS else ch for ch in text) if _PRIVATE_USE.search(text) else text
+    text = _PRIVATE_USE.sub("", text).replace("\ufffd", "")
+    return _CONTROL.sub("", text)
+
+
+def clean_tree(value: Any) -> Any:
+    """clean_unicode() applied to every string in a draft (dicts / lists)."""
+    if isinstance(value, str):
+        return clean_unicode(value)
+    if isinstance(value, list):
+        return [clean_tree(v) for v in value]
+    if isinstance(value, dict):
+        return {k: clean_tree(v) for k, v in value.items()}
+    return value
+
+
 def _tidy(text: str) -> str:
     text = (text or "").replace("\u00a0", " ").replace("\u200b", "")
     text = re.sub(r"[ \t\f\v]+", " ", text)
@@ -807,7 +847,7 @@ def _pdf_text(data: bytes) -> tuple[str, int]:
                 reader.decrypt("")
             except Exception as error:  # noqa: BLE001
                 raise DocumentError("That PDF is password-protected. Remove the password and upload it again.", 415) from error
-        pages = [(page.extract_text() or "") for page in reader.pages]
+        pages = [clean_unicode(page.extract_text() or "") for page in reader.pages]
     except DocumentError:
         raise
     except Exception as error:  # noqa: BLE001 - any malformed PDF lands here
@@ -1154,8 +1194,10 @@ def read_document(filename: str, data: bytes) -> dict[str, Any]:
     else:
         outline, fmt = _text_outline(_decode(data)), "Text"
 
-    fallback = title_from_filename(filename)
+    fallback = clean_unicode(title_from_filename(filename))
     doc_title, sections = build_sections(outline, fallback_title=fallback)
+    sections = clean_tree(sections)
+    doc_title = clean_unicode(doc_title or "")
     # Numbering written into the text ("a When… b Vagueness…") becomes real points
     # here too, so the preview and the description read the way the material will.
     from .materials import regroup_points
