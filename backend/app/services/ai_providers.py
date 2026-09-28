@@ -245,7 +245,7 @@ class AIProvider:
     def _parse_complete(self, payload: dict) -> tuple[str, dict, str]:  # pragma: no cover
         raise NotImplementedError
 
-    def _open_any(self, messages: list[dict], *, model: str, max_tokens: int, temperature: float, json_mode: bool, stream: bool):
+    def _open_any(self, messages: list[dict], *, model: str, max_tokens: int, temperature: float, json_mode: bool, stream: bool, tools: list[dict] | None = None):
         if not self.configured():
             raise ProviderError(f"{self.name}: no API key configured", 503, "not_configured")
         s = self.settings()
@@ -253,7 +253,7 @@ class AIProvider:
         tried = []
         for candidate in self.models(model):
             def attempt(thinking: bool, name: str = candidate):
-                return self._open(model=name, messages=messages, max_tokens=max_tokens, temperature=temperature, json_mode=json_mode, stream=stream, timeout=timeout, thinking=thinking)
+                return self._open(model=name, messages=messages, max_tokens=max_tokens, temperature=temperature, json_mode=json_mode, stream=stream, timeout=timeout, thinking=thinking, tools=tools)
 
             try:
                 try:
@@ -282,6 +282,32 @@ class AIProvider:
         text, usage, finish = self._parse_complete(payload)
         return text, usage, finish, used
 
+    # ------------------------------------------------------------ tool calls
+    def complete_tools(self, messages: list[dict], tools: list[dict], *, model: str = "", max_tokens: int = 1500, temperature: float = 0.3) -> dict:
+        """One model turn that may request tools.
+
+        ``tools`` are OpenAI-style function specs (``{"name", "description",
+        "parameters"}``). Messages stay OpenAI-style too: an assistant turn with
+        ``tool_calls`` and ``{"role": "tool", "tool_call_id", "name", "content"}``
+        replies. Returns ``{"text", "tool_calls": [{"id","name","arguments"}],
+        "usage", "finish", "model", "assistant"}`` where ``assistant`` is the
+        message to append to the history before the tool replies."""
+        response, used = self._open_any(messages, model=model, max_tokens=max_tokens, temperature=temperature, json_mode=False, stream=False, tools=tools)
+        try:
+            payload = json.loads(response.read() or b"{}")
+        except (TimeoutError, socket.timeout) as error:
+            raise ProviderError(f"{self.name}: read timed out", 504, "timeout") from error
+        except json.JSONDecodeError as error:
+            raise ProviderError(f"{self.name}: non-JSON response", 502, "upstream") from error
+        finally:
+            response.close()
+        out = self._parse_tools(payload)
+        out["model"] = used
+        return out
+
+    def _parse_tools(self, payload: dict) -> dict:  # pragma: no cover - overridden
+        raise NotImplementedError
+
 
 # ---------------------------------------------------------------- DeepSeek
 class DeepSeekProvider(AIProvider):
@@ -292,9 +318,12 @@ class DeepSeekProvider(AIProvider):
     def settings(self) -> dict:
         return deepseek_settings()
 
-    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking):
+    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None):
         s = self.settings()
         body: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": stream}
+        if tools:
+            body["tools"] = [{"type": "function", "function": t} for t in tools]
+            body["tool_choice"] = "auto"
         if thinking:
             body["thinking"] = {"type": "disabled"}
         if stream:
@@ -328,6 +357,19 @@ class DeepSeekProvider(AIProvider):
         finish = choices[0].get("finish_reason") if choices else ""
         return text, self._usage(payload.get("usage")), finish or ""
 
+    def _parse_tools(self, payload: dict) -> dict:
+        choices = payload.get("choices") or []
+        message = (choices[0].get("message") or {}) if choices else {}
+        calls = []
+        for call in message.get("tool_calls") or []:
+            fn = call.get("function") or {}
+            calls.append({"id": call.get("id") or f"call_{len(calls)}", "name": fn.get("name") or "", "arguments": fn.get("arguments") or "{}"})
+        text = message.get("content") or ""
+        assistant: dict[str, Any] = {"role": "assistant", "content": text}
+        if calls:
+            assistant["tool_calls"] = [{"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]
+        return {"text": text, "tool_calls": calls, "usage": self._usage(payload.get("usage")), "finish": (choices[0].get("finish_reason") if choices else "") or "", "assistant": assistant}
+
 
 # ------------------------------------------------------------------ Gemini
 _DATA_URL = re.compile(r"^data:(image/[a-z+]+);base64,(.+)$", re.S)
@@ -340,8 +382,28 @@ def to_gemini(messages: list[dict]) -> tuple[str, list[dict]]:
         if role == "system":
             system_parts.append(content if isinstance(content, str) else json.dumps(content))
             continue
-        parts = []
-        if isinstance(content, str):
+        parts: list[dict] = []
+        if role == "tool":
+            try:
+                result = json.loads(content) if isinstance(content, str) else content
+            except json.JSONDecodeError:
+                result = {"text": content}
+            parts.append({"functionResponse": {"name": message.get("name") or "tool", "response": result if isinstance(result, dict) else {"result": result}}})
+            role = "user"
+        elif role == "assistant" and message.get("tool_calls"):
+            if content:
+                parts.append({"text": content})
+            for call in message["tool_calls"]:
+                fn = call.get("function") or {}
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                parts.append({"functionCall": {"name": fn.get("name") or "", "args": args}})
+            content = None
+        if content is None:
+            pass
+        elif isinstance(content, str):
             parts.append({"text": content})
         else:
             for part in content or []:
@@ -369,7 +431,7 @@ class GeminiProvider(AIProvider):
     def settings(self) -> dict:
         return gemini_settings()
 
-    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking):
+    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None):
         s = self.settings()
         system, contents = to_gemini(messages)
         config: dict[str, Any] = {"maxOutputTokens": max_tokens, "temperature": temperature}
@@ -380,6 +442,8 @@ class GeminiProvider(AIProvider):
         body: dict[str, Any] = {"contents": contents, "generationConfig": config}
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
+        if tools:
+            body["tools"] = [{"functionDeclarations": [{"name": t["name"], "description": t.get("description", ""), "parameters": _gemini_schema(t.get("parameters") or {"type": "object", "properties": {}})} for t in tools]}]
         action = "streamGenerateContent?alt=sse" if stream else "generateContent"
         request = urllib.request.Request(
             f"{s['base']}/models/{model}:{action}", method="POST", data=json.dumps(body).encode(),
@@ -414,6 +478,36 @@ class GeminiProvider(AIProvider):
             text = "".join(p.get("text", "") for p in (candidates[0].get("content") or {}).get("parts") or [] if not p.get("thought"))
             finish = self._finish(candidates[0].get("finishReason"))
         return text, self._usage(payload.get("usageMetadata")), finish
+
+    def _parse_tools(self, payload: dict) -> dict:
+        candidates = payload.get("candidates") or []
+        parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
+        text = "".join(p.get("text", "") for p in parts if p.get("text") and not p.get("thought"))
+        calls = []
+        for part in parts:
+            fc = part.get("functionCall")
+            if fc:
+                calls.append({"id": f"call_{len(calls)}", "name": fc.get("name") or "", "arguments": json.dumps(fc.get("args") or {})})
+        assistant: dict[str, Any] = {"role": "assistant", "content": text}
+        if calls:
+            assistant["tool_calls"] = [{"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]
+        return {"text": text, "tool_calls": calls, "usage": self._usage(payload.get("usageMetadata")), "finish": self._finish(candidates[0].get("finishReason") if candidates else ""), "assistant": assistant}
+
+
+def _gemini_schema(schema: dict) -> dict:
+    """Gemini accepts an OpenAPI subset: drop keys it rejects (additionalProperties, defaults…)."""
+    allowed = {"type", "description", "properties", "required", "items", "enum", "minimum", "maximum", "nullable", "format"}
+    out: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key not in allowed:
+            continue
+        if key == "properties":
+            out[key] = {k: _gemini_schema(v) for k, v in value.items()}
+        elif key == "items":
+            out[key] = _gemini_schema(value)
+        else:
+            out[key] = value
+    return out
 
 
 PROVIDERS: dict[str, AIProvider] = {"deepseek": DeepSeekProvider(), "gemini": GeminiProvider()}

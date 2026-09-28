@@ -250,7 +250,8 @@ def run() -> None:
 
     code, admin = call("POST", "/auth/admin", {"email": "admin@quizarena.ng", "password": "arena2026"})
     staff = admin["token"]
-    code, _ = call("PUT", "/admin/tutor/settings", {"ai_per_minute": 100, "ai_daily_limit": 200}, staff)
+    # classic streaming path; the tool-using agent is covered by verify_ai_core.py
+    code, _ = call("PUT", "/admin/tutor/settings", {"ai_per_minute": 100, "ai_daily_limit": 200, "ai_agent_enabled": False}, staff)
     check("staff can change tutor limits", code == 200, _)
 
     print("access & status")

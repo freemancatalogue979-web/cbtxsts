@@ -925,6 +925,12 @@ class Config(Base):
     ai_retention_deleted_days: Mapped[int] = mapped_column(Integer, default=30)
     ai_retention_logs_days: Mapped[int] = mapped_column(Integer, default=180)
     ai_retention_unsaved_days: Mapped[int] = mapped_column(Integer, default=7)
+    # AI core: platform tools for the tutor, the staff assistant and mini exams
+    ai_agent_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_agent_max_steps: Mapped[int] = mapped_column(Integer, default=5)
+    ai_staff_daily_limit: Mapped[int] = mapped_column(Integer, default=200)
+    ai_mini_exam_daily_limit: Mapped[int] = mapped_column(Integer, default=20)
+    ai_exam_feedback: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -2571,3 +2577,118 @@ class AIStudyPlanItem(Base):
     status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|completed|skipped
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ===========================================================================
+# AI Core — mini exams, tool audit, staff proposals, staff usage
+# ===========================================================================
+class AIMiniExam(Base):
+    """A personal practice exam built from the course bank (by the AI or the
+    student). A real backend record: the server owns the timer, the question
+    list, grading and the result — the AI only chooses and later explains."""
+
+    __tablename__ = "ai_mini_exams"
+    __table_args__ = (Index("ix_ai_mini_exams_user_status", "user_id", "status"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(12), default="ai")  # ai|student
+    title: Mapped[str] = mapped_column(String(160), default="Mini exam")
+    topics: Mapped[list] = mapped_column(JSON, default=list)
+    difficulty: Mapped[str] = mapped_column(String(12), default="mixed")
+    question_count: Mapped[int] = mapped_column(Integer, default=10)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    status: Mapped[str] = mapped_column(String(16), default="ready")  # ready|in_progress|submitted|expired
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    percentage: Mapped[float] = mapped_column(Float, default=0.0)
+    # Deterministic analysis (topic / difficulty / time) plus the AI's words once written.
+    analysis: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    items: Mapped[list["AIMiniExamItem"]] = relationship(cascade="all, delete-orphan", order_by="AIMiniExamItem.position")
+
+
+class AIMiniExamItem(Base):
+    """One question in a mini exam and the student's answer to it."""
+
+    __tablename__ = "ai_mini_exam_items"
+    __table_args__ = (UniqueConstraint("exam_id", "question_id", name="uq_mini_exam_question"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("ai_mini_exams.id", ondelete="CASCADE"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    marks: Mapped[int] = mapped_column(Integer, default=1)
+    selected: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    seconds_spent: Mapped[float] = mapped_column(Float, default=0.0)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AIToolCall(Base):
+    """Audit trail: every tool the AI asked for, who it acted for, and the outcome."""
+
+    __tablename__ = "ai_tool_calls"
+    __table_args__ = (Index("ix_ai_tool_calls_time", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(40), default="", index=True)
+    actor_role: Mapped[str] = mapped_column(String(12), default="student")  # student|staff|owner
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), nullable=True, index=True)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True, index=True)
+    tool: Mapped[str] = mapped_column(String(60))
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="ok")  # ok|denied|invalid|error
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AIProposal(Base):
+    """AI-generated staff changes waiting for review. Nothing here touches the
+    official course content until a staff member approves it."""
+
+    __tablename__ = "ai_proposals"
+    __table_args__ = (Index("ix_ai_proposals_status", "status", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24))  # topics|questions|classification
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    summary: Mapped[str] = mapped_column(String(600), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|approved|rejected
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    decided_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AIStaffUsage(Base):
+    """AI requests made by staff (the student tables are keyed to students)."""
+
+    __tablename__ = "ai_staff_usage"
+    __table_args__ = (Index("ix_ai_staff_usage_admin_time", "admin_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(40), default="")
+    kind: Mapped[str] = mapped_column(String(24), default="ADMIN_AGENT")
+    provider: Mapped[str] = mapped_column(String(24), default="")
+    model: Mapped[str] = mapped_column(String(60), default="")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_hit_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_miss_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="ok")
+    error: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

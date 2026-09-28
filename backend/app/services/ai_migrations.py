@@ -25,6 +25,7 @@ from ..db import engine, init_db, session_scope
 V2_TABLES = [
     "ai_flashcard_reviews", "ai_flashcards", "ai_flashcard_decks", "ai_generated_questions", "ai_practice_sets",
     "ai_generated_materials", "ai_study_plan_items", "ai_study_plans", "ai_feedback", "ai_user_settings", "ai_learning_profiles",
+    "ai_mini_exam_items", "ai_mini_exams", "ai_tool_calls", "ai_proposals", "ai_staff_usage",
 ]
 V2_COLUMNS = {
     "ai_conversations": ["archived_at", "context_type", "title_final"],

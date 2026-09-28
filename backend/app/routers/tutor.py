@@ -49,6 +49,7 @@ from ..models import (
     Question,
     Student,
 )
+from ..services import ai_core
 from ..services import ai_library as library
 from ..services import ai_providers as providers
 from ..services import ai_tutor as tutor
@@ -411,6 +412,134 @@ def _stream_reply(db: Session, student: Student, conv: AIConversation, *, messag
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
+# ------------------------------------------------------------ agent replies
+AGENT_MODES = {"CHAT", "WHAT_TO_STUDY", "PROGRESS", "EXAM_REVISION"}
+
+
+def agent_available(db: Session, lim: dict, *, mode: str, image: str | None) -> bool:
+    """Tool-using replies: staff switch on, a key configured, plain text, and no
+    exam running (during an exam the tutor stays in its restricted plain mode)."""
+    cfg = db.get(Config, 1)
+    if cfg is not None and not getattr(cfg, "ai_agent_enabled", True):
+        return False
+    if image or mode not in AGENT_MODES or lim["policy"].get("active"):
+        return False
+    return tutor.ai_target(db)[0].configured()
+
+
+def _pieces(text: str, size: int = 48):
+    """Split a finished answer into small chunks so it still arrives 'typed'."""
+    for start in range(0, len(text), size):
+        yield text[start:start + size]
+
+
+def _agent_reply(db: Session, student: Student, conv: AIConversation, *, messages: list[dict], meta: dict, mode: str, lim: dict, user_msg_id: int) -> StreamingResponse:
+    """Like _stream_reply, but the model may call platform tools first.
+    SSE: meta → tool… → delta… → actions? → done (or error / cancelled)."""
+    slot = tutor.concurrency_slot(student.id, lim["concurrent"])
+    try:
+        slot.__enter__()
+    except tutor.TutorError as error:
+        db.rollback()
+        raise _http(error) from error
+    started = time.monotonic()
+    request_id = uuid.uuid4().hex[:16]
+    course_id = meta.get("course_id") or conv.course_id
+    cfg = db.get(Config, 1)
+    max_steps = int(getattr(cfg, "ai_agent_max_steps", 5) or 5)
+    impl, planned_model = tutor.ai_target(db)
+    db.commit()
+    conv_id, student_id, conv_title = conv.id, student.id, conv.title
+    policy = lim["policy"]
+    cancel = threading.Event()
+    with _cancels_lock:
+        _cancels[request_id] = cancel
+    # Stable rules first (cache-friendly prefix): system → platform rules → tool rules → the rest.
+    system = messages[0]["content"]
+    messages = [{"role": "system", "content": system.replace(tutor.PLATFORM_RULES, tutor.PLATFORM_RULES + "\n\n" + ai_core.STUDENT_AGENT_RULES, 1) if tutor.PLATFORM_RULES in system else ai_core.STUDENT_AGENT_RULES + "\n\n" + system}, *messages[1:]]
+
+    def events():
+        text, usage, model = "", None, planned_model
+        tools: list[dict] = []
+        actions: list[dict] = []
+        settled = False
+        try:
+            yield _sse("meta", {"conversation_id": conv_id, "user_message_id": user_msg_id, "request_id": request_id, "title": conv_title, "model": planned_model, "context": meta, "agent": True})
+            with session_scope() as s:
+                me = s.get(Student, student_id)
+                ctx = ai_core.ToolContext(db=s, role=ai_core.STUDENT, request_id=request_id, student=me, conversation_id=conv_id, course_hint=course_id, policy=policy)
+                try:
+                    for kind, value in ai_core.run(ctx, messages, max_steps=max_steps, max_tokens=lim["max_response_tokens"]):
+                        if cancel.is_set():
+                            break
+                        if kind in {"tool", "tool_done"}:
+                            if kind == "tool_done":
+                                tools.append(value)
+                            yield _sse("tool", value)
+                        elif kind == "usage":
+                            usage = value
+                        elif kind == "model":
+                            model = value
+                        elif kind == "final":
+                            text = value
+                finally:
+                    actions = list(ctx.actions)  # a mini exam created before a failure still gets its card
+            stored_meta = {"mode": mode, "model": model, "agent": True, **({"tools": tools} if tools else {}), **({"actions": actions} if actions else {}), **({"passages": meta["passages"]} if meta.get("passages") else {})}
+            if cancel.is_set():
+                settled = True
+                with session_scope() as s:
+                    tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage or _estimate(messages, ""), latency_ms=int((time.monotonic() - started) * 1000), status="cancelled", conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id)
+                    message_id = None
+                    if actions:
+                        msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content="_(stopped)_", message_type="chat", meta={**stored_meta, "partial": True})
+                        s.add(msg)
+                        s.flush()
+                        message_id = msg.id
+                yield _sse("cancelled", {"message_id": message_id})
+                return
+            for piece in _pieces(text):
+                yield _sse("delta", {"text": piece})
+            if actions:
+                yield _sse("actions", {"actions": actions})
+            latency = int((time.monotonic() - started) * 1000)
+            with session_scope() as s:
+                convo = s.get(AIConversation, conv_id)
+                usage = usage or _estimate(messages, text)
+                msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text, message_type=tutor.MESSAGE_TYPE.get(mode, "chat"), meta=stored_meta, token_input=int(usage.get("input") or 0), token_output=int(usage.get("output") or 0))
+                s.add(msg)
+                convo.last_message_at = tutor.utcnow()
+                cost = tutor.record_usage(s, student_id, kind="AGENT" if tools else mode, model=model, usage=usage, latency_ms=latency, conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id, output_chars=len(text))
+                s.flush()
+                message_id = msg.id
+                remaining = tutor.remaining(tutor.limits(s, student_id), tutor.usage_counts(s, student_id))
+            settled = True
+            yield _sse("done", {"message_id": message_id, "finish": "stop", "usage": cost, "remaining_today": remaining})
+            tutor.run_background("after-reply", tutor.after_reply_jobs, conv_id)
+        except (tutor.TutorError, providers.ProviderError) as error:
+            settled = True
+            technical = getattr(error, "technical", str(error))
+            log.warning("agent reply failed: %s", technical)
+            with session_scope() as s:
+                tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=technical, conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id)
+                if actions:
+                    s.add(AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content="Your mini exam is ready below, but I couldn't finish my reply.", message_type="chat", meta={"mode": mode, "agent": True, "actions": actions, "tools": tools, "partial": True}))
+            if actions:
+                yield _sse("actions", {"actions": actions})
+            yield _sse("error", {"detail": tutor.FRIENDLY, "status": 503, "partial": bool(actions)})
+        except Exception:  # noqa: BLE001
+            settled = True
+            log.exception("agent reply crashed")
+            yield _sse("error", {"detail": tutor.FRIENDLY, "status": 500, "partial": False})
+        finally:
+            slot.__exit__(None, None, None)
+            with _cancels_lock:
+                _cancels.pop(request_id, None)
+            if not settled:
+                log.info("agent reply abandoned by client (%s)", request_id)
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+
 @core.post("/conversations/{conversation_id}/messages")
 def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_db), student: Student = Depends(require_student)):
     """Streams the answer (SSE). Plain requests like "make 10 flashcards" are
@@ -426,6 +555,12 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Type a message first.")
     if mode == "CHAT" and not image and payload.get("route", True) is not False:
         intent = tutor.detect_intent(content)
+        if intent and intent["route"] == "agent":
+            # "give me a 20-question test…": the agent builds a real mini exam;
+            # without the agent, fall back to the practice generator.
+            if not agent_available(db, {"policy": tutor.exam_policy(db, student)}, mode="CHAT", image=None):
+                return JSONResponse({"route": "generate", "kind": "practice", "count": intent.get("count"), "text": content})
+            intent = None
         if intent and intent["route"] == "generate":
             return JSONResponse({"route": "generate", "kind": intent["kind"], "count": intent.get("count"), "text": content})
         if intent and intent["route"] == "mode":
@@ -448,6 +583,8 @@ def send_message(conversation_id: int, payload: dict, db: Session = Depends(get_
     if (conv.context_type or "general") == "general":
         conv.context_type = tutor.context_type_for({**context, "course_id": conv.course_id}, mode)
     db.flush()
+    if agent_available(db, lim, mode=mode, image=image):
+        return _agent_reply(db, student, conv, messages=messages, meta=meta, mode=mode, lim=lim, user_msg_id=user_msg.id)
     return _stream_reply(db, student, conv, messages=messages, meta=meta, mode=mode, lim=lim, user_msg_id=user_msg.id)
 
 
@@ -974,11 +1111,13 @@ SETTING_FIELDS: dict[str, type] = {
     "ai_provider": str, "ai_model": str, "ai_exam_mode": str, "ai_monthly_budget_usd": float,
     "ai_retention_deleted_days": int, "ai_retention_logs_days": int, "ai_retention_unsaved_days": int,
     **{f"ai_feat_{name}": bool for name in tutor.FEATURES},
+    "ai_agent_enabled": bool, "ai_agent_max_steps": int, "ai_staff_daily_limit": int, "ai_mini_exam_daily_limit": int, "ai_exam_feedback": bool,
 }
 SETTING_RANGES = {
     "ai_daily_limit": (0, 10000), "ai_monthly_limit": (0, 100000), "ai_per_minute": (1, 120), "ai_max_concurrent": (1, 10),
     "ai_max_message_chars": (200, 20000), "ai_max_response_tokens": (200, 8000), "ai_max_conversations": (1, 5000),
     "ai_monthly_budget_usd": (0, 100000), "ai_retention_deleted_days": (1, 3650), "ai_retention_logs_days": (7, 3650), "ai_retention_unsaved_days": (1, 365),
+    "ai_agent_max_steps": (1, 8), "ai_staff_daily_limit": (0, 10000), "ai_mini_exam_daily_limit": (0, 500),
 }
 
 

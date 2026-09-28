@@ -560,6 +560,16 @@ def refresh_topic_progress(db: Session, student: Student) -> list[StudentTopicPr
     for run in db.execute(select(PracticeRun).where(PracticeRun.student_id == student.id, PracticeRun.topic != "")).scalars():
         if run.total:
             add(run.course_id, run.topic, run.correct or 0, run.total, run.created_at)
+    # AI mini exams (finished ones only; skipped questions don't count as attempts)
+    from ..models import AIMiniExam, AIMiniExamItem
+
+    mini = db.execute(
+        select(AIMiniExamItem.is_correct, AIMiniExam.finished_at, Question.topic, Question.course_id, AIMiniExam.course_id)
+        .join(AIMiniExam, AIMiniExam.id == AIMiniExamItem.exam_id).join(Question, Question.id == AIMiniExamItem.question_id)
+        .where(AIMiniExam.user_id == student.id, AIMiniExam.status == "submitted", AIMiniExamItem.selected.is_not(None))
+    ).all()
+    for is_correct, when, topic, q_course, exam_course in mini:
+        add(q_course or exam_course, topic, 1 if is_correct else 0, 1, when)
 
     existing = {(r.course_id, r.topic): r for r in db.execute(select(StudentTopicProgress).where(StudentTopicProgress.user_id == student.id)).scalars()}
     topic_ids = {(t.course_id, t.name.lower()): t.id for t in db.execute(select(CourseTopic)).scalars()}
@@ -1040,6 +1050,7 @@ def validate_image(data_url: str) -> str:
 # ---------------------------------------------------------- intent routing
 _NUM = r"(?:(\d{1,2})\s+)?"
 INTENTS: list[tuple[re.Pattern, dict]] = [
+    (re.compile(r"\b(mini[- ]?exam|mock (?:exam|test)|timed (?:test|quiz|exam)|(\d{1,2})[- ]?questions? (?:test|exam|mock))\b|\b(?:give me|set(?: me)?|create|make|build|prepare|start)\b[^.?!]{0,60}\b(?:test|exam|mock)\b", re.I), {"route": "agent"}),
     (re.compile(rf"\b(make|create|generate|give me|build)\b.*?{_NUM}(flash ?cards?)\b", re.I), {"route": "generate", "kind": "flashcards"}),
     (re.compile(rf"\b(quiz me|test me|give me a quiz|start a quiz)\b", re.I), {"route": "generate", "kind": "quiz"}),
     (re.compile(rf"\b(make|create|generate|give me|set)\b.*?{_NUM}(practice|mcqs?|questions|quiz)\b", re.I), {"route": "generate", "kind": "practice"}),
