@@ -105,6 +105,8 @@ import type {
   GroupNotificationRow,
   GroupDuelRow,
   AdminGroupRow,
+  IntegrityDetail,
+  ItemAnalysis,
 } from './types';
 
 /** Shapes returned by the newer arena engines — documented in ``types.ts``. */
@@ -909,6 +911,9 @@ export const api = {
         `/api/admin/results${query(params)}`,
       ),
     deleteResult: (id: number) => request<{ok: boolean}>(`/api/admin/results/${id}`, {method: 'DELETE'}),
+    resultIntegrity: (id: number) => request<IntegrityDetail>(`/api/admin/results/${id}/integrity`),
+    quizItemAnalysis: (quizId: number) => request<ItemAnalysis>(`/api/admin/quizzes/${quizId}/item-analysis`),
+    courseItemAnalysis: (courseId: number) => request<ItemAnalysis>(`/api/admin/courses/${courseId}/item-analysis`),
     clearResults: (quizId: number) => request<{ok: boolean; deleted: number}>(`/api/admin/results${query({quiz_id: quizId})}`, {method: 'DELETE'}),
     exportUrl: (quizId: number) => `/api/admin/results/export${query({quiz_id: quizId})}`,
 

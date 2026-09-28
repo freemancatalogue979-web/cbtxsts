@@ -2040,3 +2040,52 @@ export interface MaterialImportPreview {
   sections: {title: string; words: number; blocks: number; excerpt: string}[];
   notes: string[];
 }
+
+/* ------------------------------------------------------ exam insights (staff) */
+export interface IntegritySummary {
+  level: 'clean' | 'review' | 'high';
+  reasons: string[];
+  focus_lost: number;
+  away_seconds: number;
+  offline_spells: number;
+  offline_seconds: number;
+  device_switches: number;
+  clipboard: number;
+  fullscreen_exits: number;
+}
+
+export interface IntegrityDetail {
+  attempt_id: number;
+  quiz: {id: number; title: string};
+  student: {id: number; name: string; phone: string};
+  status: string;
+  started_at: string | null;
+  submitted_at: string | null;
+  submission_type: string;
+  summary: IntegritySummary;
+  events: {type: string; at: string; seconds?: number; question?: number; from?: string; to?: string}[];
+}
+
+export interface ItemAnalysisRow {
+  id: number;
+  text: string;
+  topic: string;
+  difficulty: string;
+  correct: string;
+  options: Record<string, string>;
+  seen: number;
+  answered: number;
+  blank: number;
+  correct_rate: number;
+  picks: Record<string, number>;
+  discrimination: number | null;
+  avg_seconds: number | null;
+  flags: string[];
+}
+
+export interface ItemAnalysis {
+  scope: 'quiz' | 'course';
+  attempts: number;
+  questions: ItemAnalysisRow[];
+  summary: {questions: number; flagged: number; check_key: number};
+}

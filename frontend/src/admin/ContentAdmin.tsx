@@ -42,6 +42,8 @@ const emptyQuiz = {
   scheduled_at: '',
   end_at: '',
   shuffle_questions: true,
+  /** A–D order differs per student (answers are mapped back before grading). */
+  shuffle_options: true,
   allow_duel: true,
   pass_score: 50,
   question_source: 'course_random' as QuestionSource,
@@ -405,6 +407,7 @@ function ExamEditor({
       duration_minutes: editing.duration_minutes,
       status: editing.status,
       shuffle_questions: editing.shuffle_questions,
+      shuffle_options: editing.shuffle_options,
       allow_duel: editing.allow_duel,
       pass_score: editing.pass_score,
       question_source: editing.question_source,
@@ -627,6 +630,10 @@ function ExamEditor({
             <input type="checkbox" checked={editing.shuffle_questions} onChange={(event) => setEditing({...editing, shuffle_questions: event.target.checked})} className="size-5 accent-fuchsia-500" />
             <span className="text-[0.84rem] font-bold text-mist-200">Shuffle question order</span>
           </label>
+          <label className="flex items-center gap-2.5" title="Each student sees options A–D in a different order, so neighbours can't share letters. Grading is unaffected.">
+            <input type="checkbox" checked={editing.shuffle_options} onChange={(event) => setEditing({...editing, shuffle_options: event.target.checked})} className="size-5 accent-fuchsia-500" />
+            <span className="text-[0.84rem] font-bold text-mist-200">Shuffle answer options (A–D)</span>
+          </label>
           <label className="flex items-center gap-2.5">
             <input type="checkbox" checked={editing.allow_duel} onChange={(event) => setEditing({...editing, allow_duel: event.target.checked})} className="size-5 accent-fuchsia-500" />
             <span className="text-[0.84rem] font-bold text-mist-200">Usable in duels</span>
@@ -702,6 +709,7 @@ function QuizzesTab({onChanged, onManageQuestions, onOpenBank}: {onChanged: () =
       scheduled_at: quiz.scheduled_at ? quiz.scheduled_at.slice(0, 16) : '',
       end_at: quiz.end_at ? String(quiz.end_at).slice(0, 16) : '',
       shuffle_questions: quiz.shuffle_questions,
+      shuffle_options: quiz.shuffle_options ?? false,
       allow_duel: quiz.allow_duel,
       pass_score: quiz.pass_score ?? 50,
       question_source: quiz.question_source ?? 'exam_specific',

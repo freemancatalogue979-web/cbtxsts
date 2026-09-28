@@ -1,5 +1,6 @@
 /** Admin: players, results (with CSV export) and prize claims. */
 import {
+  AlertTriangle,
   Award,
   Ban,
   BarChart3,
@@ -22,7 +23,8 @@ import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Se
 import {api, tokenStore} from '../lib/api';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES} from '../lib/format';
 import {useSession} from '../store/session';
-import type {AttemptSummary, PlayerSummary, PrizeClaim, Profile, Quiz} from '../lib/types';
+import {IntegrityChip, IntegrityModal, ItemAnalysisModal} from './ExamInsights';
+import type {AttemptSummary, IntegritySummary, PlayerSummary, PrizeClaim, Profile, Quiz} from '../lib/types';
 
 interface ResultRow {
   id?: number;
@@ -365,7 +367,16 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
   const [offset, setOffset] = useState(0);
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [integrityFor, setIntegrityFor] = useState<number | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [reviewOnly, setReviewOnly] = useState(false);
   const limit = 50;
+  const statsTarget = useMemo(() => {
+    const quiz = quizzes.find((q) => q.id === quizId);
+    return statsOpen && quiz
+      ? {kind: 'quiz' as const, id: quiz.id, title: quiz.title, course: quiz.course ? {id: quiz.course.id, title: `${quiz.course.code} ${quiz.course.title}`} : null}
+      : null;
+  }, [statsOpen, quizzes, quizId]);
 
   useEffect(() => {
     api.admin
@@ -406,7 +417,10 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
     grade: row.result?.grade ?? row.grade ?? '—',
     submittedAt: row.result?.submitted_at ?? row.submitted_at ?? null,
     quizTitle: row.quiz?.title,
+    integrity: (row as {integrity?: IntegritySummary}).integrity,
   });
+  const flaggedCount = (rows ?? []).filter((row) => ((row as {integrity?: IntegritySummary}).integrity?.level ?? 'clean') !== 'clean').length;
+  const visibleRows = reviewOnly ? (rows ?? []).filter((row) => ((row as {integrity?: IntegritySummary}).integrity?.level ?? 'clean') !== 'clean') : rows;
 
   const exportCsv = async () => {
     if (!quizId) {
@@ -464,10 +478,15 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
     <div className="space-y-4">
       <SectionHeading
         title="Results"
-        subtitle="Per-exam leaderboards, CSV export and attempt cleanup."
+        subtitle="Per-exam leaderboards, integrity review, question stats and CSV export."
         icon={<BarChart3 className="size-4" />}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {quizId && (
+              <Button size="sm" variant="soft" onClick={() => setStatsOpen(true)} icon={<BarChart3 className="size-3.5" />}>
+                Question stats
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={exportCsv} loading={exporting} icon={<Download className="size-3.5" />}>
               Export CSV
             </Button>
@@ -495,16 +514,36 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
           <TextInput placeholder="Name or phone" value={query} onChange={(event) => setQuery(event.target.value)} />
         </Field>
       </div>
+      {quizId && rows && rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-[0.74rem] font-semibold text-mist-400">
+          <button
+            type="button"
+            onClick={() => setReviewOnly((v) => !v)}
+            aria-pressed={reviewOnly}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 font-bold transition-colors ${
+              reviewOnly ? 'border-gold-500/40 bg-gold-500/14 text-gold-100' : 'border-white/12 bg-white/[0.03] text-mist-300 hover:bg-white/[0.07]'
+            }`}
+          >
+            <AlertTriangle className="size-3.5" />
+            Needs review ({flaggedCount})
+          </button>
+          <span className="text-mist-500">Integrity signals are recorded for review. They never change a score.</span>
+        </div>
+      )}
 
-      {!rows ? (
+      {!rows || !visibleRows ? (
         <Skeleton className="h-56" />
-      ) : rows.length === 0 ? (
-        <EmptyState icon={<BarChart3 className="size-6" />} title="No submissions yet" detail="Results appear the moment players submit." />
+      ) : visibleRows.length === 0 ? (
+        reviewOnly ? (
+          <EmptyState icon={<CheckCircle2 className="size-6" />} title="Nothing to review" detail="No paper on this page has integrity signals." />
+        ) : (
+          <EmptyState icon={<BarChart3 className="size-6" />} title="No submissions yet" detail="Results appear the moment players submit." />
+        )
       ) : (
         <Card className="overflow-hidden">
           {/* Phones get stacked result cards; sm and up keep the full table. */}
           <ul className="divide-y divide-white/6 sm:hidden">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const data = normalize(row);
               return (
                 <li key={`${data.id}-${data.name}`} className="px-3 py-3">
@@ -531,7 +570,8 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
                     <span className="min-w-0 flex-1 truncate text-[0.7rem] font-semibold text-mist-500">
                       {formatDate(data.submittedAt, true)}
                     </span>
-                    <Button size="sm" variant="ghost" onClick={() => removeRow(row)} icon={<X className="size-3.5 text-flare-400" />} />
+                    <IntegrityChip summary={data.integrity} onOpen={() => setIntegrityFor(data.id)} />
+                    <Button size="sm" variant="ghost" label="Delete attempt" onClick={() => removeRow(row)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
                   </div>
                 </li>
               );
@@ -548,11 +588,12 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
                   <th className="px-2.5 py-2 text-right sm:px-4 sm:py-3">%</th>
                   <th className="px-2.5 py-2 sm:px-4 sm:py-3">Grade</th>
                   <th className="px-2.5 py-2 sm:px-4 sm:py-3">Submitted</th>
+                  {quizId && <th className="px-2.5 py-2 sm:px-4 sm:py-3">Integrity</th>}
                   <th className="px-2.5 py-2 sm:px-4 sm:py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/6">
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const data = normalize(row);
                   return (
                     <tr key={`${data.id}-${data.name}`} className="transition-colors hover:bg-white/[0.04]">
@@ -579,8 +620,13 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
                         <Chip className={GRADE_STYLES[data.grade] ?? 'border-white/12 bg-white/6 text-mist-400'}>{data.grade}</Chip>
                       </td>
                       <td className="px-4 py-2.5 text-[0.76rem] font-semibold text-mist-500">{formatDate(data.submittedAt, true)}</td>
+                      {quizId && (
+                        <td className="px-2.5 py-2 sm:px-4 sm:py-2.5">
+                          <IntegrityChip summary={data.integrity} onOpen={() => setIntegrityFor(data.id)} />
+                        </td>
+                      )}
                       <td className="px-2.5 py-2 text-right sm:px-4 sm:py-2.5">
-                        <Button size="sm" variant="ghost" onClick={() => removeRow(row)} icon={<X className="size-3.5 text-flare-400" />} />
+                        <Button size="sm" variant="ghost" label="Delete attempt" onClick={() => removeRow(row)} icon={<Trash2 className="size-3.5 text-flare-400" />} />
                       </td>
                     </tr>
                   );
@@ -590,6 +636,9 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
           </div>
         </Card>
       )}
+
+      <IntegrityModal attemptId={integrityFor} onClose={() => setIntegrityFor(null)} />
+      <ItemAnalysisModal target={statsTarget} onClose={() => setStatsOpen(false)} />
 
       <div className="flex items-center justify-between gap-3">
         <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
