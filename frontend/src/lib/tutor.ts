@@ -653,7 +653,123 @@ export const miniExamApi = {
 
 /* ------------------------------------------------------- staff assistant */
 export interface StaffToolInfo {name: string; label: string; status: string; summary?: string; ms?: number}
-export interface AgentTurn {role: 'user' | 'assistant'; content: string; display?: string; files?: {id: number; title: string; words?: number}[]; tools?: StaffToolInfo[]; actions?: AgentAction[]; failed?: boolean; meta?: {cost?: number; ms?: number; at?: string}}
+/** One entry in the assistant's visible work log, in the order it happened. */
+export type WorkStep =
+  | {kind: 'thought'; step: number; text: string}
+  | {kind: 'note'; text: string}
+  | {kind: 'tool'; tool: StaffToolInfo};
+export interface AgentTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  display?: string;
+  files?: {id: number; title: string; words?: number}[];
+  tools?: StaffToolInfo[];
+  actions?: AgentAction[];
+  failed?: boolean;
+  /** stopped by the staff member before it finished */
+  stopped?: boolean;
+  /** thinking mode was on for this turn */
+  thinking?: boolean;
+  /** model reasoning, replayed with the history (DeepSeek requires it in thinking mode) */
+  reasoning?: string;
+  work?: WorkStep[];
+  meta?: {cost?: number; ms?: number; at?: string};
+}
+
+export interface StaffStreamHandlers {
+  onMeta?: (meta: {request_id: string; model: string; thinking: boolean}) => void;
+  onStatus?: (text: string) => void;
+  onThinking?: (thought: {step: number; text: string}) => void;
+  onNote?: (text: string) => void;
+  onTool?: (tool: StaffToolInfo) => void;
+  onActions?: (actions: AgentAction[]) => void;
+  onDelta?: (text: string) => void;
+  onDone?: (done: {usage?: {cost?: number}; tools?: StaffToolInfo[]; model?: string; ms?: number}) => void;
+  onCancelled?: () => void;
+  onError?: (detail: string) => void;
+}
+
+/** POST to the staff assistant and read its server-sent events live. Errors
+ * before the stream starts (limits, no key) throw ApiError. Abort the signal
+ * to stop reading (also call aiStaffApi.stopAgent so the server stops work). */
+export async function streamStaffAgent(
+  body: {messages: {role: 'user' | 'assistant'; content: string; reasoning?: string}[]; course_id?: number | null; thinking?: boolean},
+  handlers: StaffStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = tokenStore.get();
+  let response: Response;
+  try {
+    response = await fetch('/api/admin/ai/agent/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') return;
+    throw new ApiError('Cannot reach the arena server. Check your connection and try again.', 0);
+  }
+  if (!response.ok || !response.body) {
+    await readJson(response);
+    throw new ApiError('The assistant did not answer. Try again.', response.status);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finished = false;
+  const handle = (block: string) => {
+    let event = 'message';
+    let data = '';
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    if (event === 'meta') handlers.onMeta?.(parsed as never);
+    else if (event === 'status') handlers.onStatus?.(String(parsed.text ?? ''));
+    else if (event === 'thinking') handlers.onThinking?.(parsed as never);
+    else if (event === 'note') handlers.onNote?.(String(parsed.text ?? ''));
+    else if (event === 'tool') handlers.onTool?.(parsed as never);
+    else if (event === 'actions') handlers.onActions?.((parsed.actions as AgentAction[]) ?? []);
+    else if (event === 'delta') handlers.onDelta?.(String(parsed.text ?? ''));
+    else if (event === 'done') {
+      finished = true;
+      handlers.onDone?.(parsed as never);
+    } else if (event === 'cancelled') {
+      finished = true;
+      handlers.onCancelled?.();
+    } else if (event === 'error') {
+      finished = true;
+      handlers.onError?.(String(parsed.detail ?? 'Something went wrong.'));
+    }
+  };
+  try {
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true}).replace(/\r\n/g, '\n');
+      let cut = buffer.indexOf('\n\n');
+      while (cut >= 0) {
+        handle(buffer.slice(0, cut));
+        buffer = buffer.slice(cut + 2);
+        cut = buffer.indexOf('\n\n');
+      }
+    }
+    if (buffer.trim()) handle(buffer);
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') return;
+    if (!finished) handlers.onError?.('The connection dropped while the assistant was working. Try again.');
+    return;
+  }
+  if (!finished && !signal?.aborted) handlers.onError?.('The reply stopped early. Try again.');
+}
 export interface Proposal {
   id: number;
   kind: string;
@@ -767,6 +883,7 @@ export const aiStaffApi = {
   status: () => call<AIStaffStatus>('/api/admin/ai/status'),
   chat: (messages: {role: 'user' | 'assistant'; content: string}[], course_id?: number | null) =>
     call<{reply: string; tools: StaffToolInfo[]; actions: AgentAction[]; usage: {cost: number}; request_id: string}>('/api/admin/ai/agent', 'POST', {messages, course_id}),
+  stopAgent: (requestId: string) => call<{ok: boolean; stopped: boolean}>(`/api/admin/ai/agent/${requestId}/stop`, 'POST'),
   proposals: (status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') => call<{proposals: Proposal[]}>(`/api/admin/ai/proposals?status=${status}`),
   proposal: (id: number) => call<Proposal>(`/api/admin/ai/proposals/${id}`),
   approve: (id: number, body: {selected?: number[]; items?: Record<string, unknown>[]}) => call<Proposal>(`/api/admin/ai/proposals/${id}/approve`, 'POST', body),

@@ -12,17 +12,20 @@ Staff     /api/admin/ai/agent        the staff assistant (tool-using, proposal-o
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
 import time
 import uuid
 from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..db import get_db
+from ..db import get_db, session_scope
 from ..deps import require_admin, require_student
 from ..models import Admin, AIProposal, AITask, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, Config, Course, CourseTopic, Material, Question, Quiz, Student
 from ..services import ai_core
@@ -233,10 +236,8 @@ def staff_ai_status(db: Session = Depends(get_db), admin: Admin = Depends(requir
     }
 
 
-@admin_router.post("/agent")
-def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
-    """One assistant turn. The console keeps the visible thread and sends the
-    recent turns back (max 12); the server adds the rules and the tools."""
+def _staff_prepare(payload: dict, db: Session, admin: Admin) -> tuple[Any, Config | None, list[dict], Course | None, bool]:
+    """Shared checks + prompt for the JSON and streaming assistant endpoints."""
     impl, _model = tutor.ai_target(db)
     if not impl.configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Add an AI key in AI Tutor settings first.")
@@ -247,16 +248,34 @@ def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Dep
     turns = [m for m in (payload.get("messages") or []) if isinstance(m, dict) and m.get("role") in {"user", "assistant"} and str(m.get("content") or "").strip()][-12:]
     if not turns or turns[-1]["role"] != "user":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Type a request first.")
+    thinking = bool(payload.get("thinking"))
     course_id = int(payload.get("course_id") or 0) or None
     course = db.get(Course, course_id) if course_id else None
     system = ai_core.ADMIN_SYSTEM + (f"\n\nCURRENT COURSE\nThe staff member is working in {course.code} — {course.title} (course_id {course.id})." if course else "")
-    messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *({"role": m["role"], "content": str(m["content"])[:6000]} for m in turns)]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    for m in turns:
+        row: dict[str, Any] = {"role": m["role"], "content": str(m["content"])[:6000]}
+        if thinking and m["role"] == "assistant":
+            row["reasoning_content"] = str(m.get("reasoning") or "")[:20000]
+        messages.append(row)
+    return impl, cfg, messages, course, thinking
+
+
+def _staff_steps(cfg: Config | None) -> int:
+    return max(3, int(getattr(cfg, "ai_agent_max_steps", 5) or 5) + 1)
+
+
+@admin_router.post("/agent")
+def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+    """One assistant turn. The console keeps the visible thread and sends the
+    recent turns back (max 12); the server adds the rules and the tools."""
+    impl, cfg, messages, course, thinking = _staff_prepare(payload, db, admin)
     request_id = uuid.uuid4().hex[:16]
     ctx = ai_core.ToolContext(db=db, role=_role(admin), request_id=request_id, admin=admin, course_hint=course.id if course else None)
     started = time.monotonic()
     text, usage, model, tools = "", None, "", []
     try:
-        for kind, value in ai_core.run(ctx, messages, max_steps=max(3, int(getattr(cfg, "ai_agent_max_steps", 5) or 5) + 1), max_tokens=3000, temperature=0.3):
+        for kind, value in ai_core.run(ctx, messages, max_steps=_staff_steps(cfg), max_tokens=8000 if thinking else 3000, temperature=0.3, reasoning=thinking):
             if kind == "tool_done":
                 tools.append(value)
             elif kind == "usage":
@@ -275,6 +294,122 @@ def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Dep
     if any(a.get("type") == "task" for a in ctx.actions):
         tasks.kick()
     return {"reply": text, "tools": tools, "actions": ctx.actions, "usage": cost, "request_id": request_id}
+
+
+_staff_stops: dict[str, threading.Event] = {}
+_staff_stops_lock = threading.Lock()
+
+
+def _sse(event: str, data: dict) -> bytes:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
+
+
+@admin_router.post("/agent/stream")
+def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> StreamingResponse:
+    """Same turn as /agent, streamed as server-sent events so the console can
+    show the work live and stop it:
+
+        meta → (status | thinking | note | tool)… → actions? → delta… → done
+        or cancelled / error
+    """
+    impl, cfg, messages, course, thinking = _staff_prepare(payload, db, admin)
+    request_id = uuid.uuid4().hex[:16]
+    admin_id, role, course_hint = admin.id, _role(admin), course.id if course else None
+    max_steps = _staff_steps(cfg)
+    _impl2, planned_model = tutor.ai_target(db)
+    db.commit()
+    stop = threading.Event()
+    with _staff_stops_lock:
+        _staff_stops[request_id] = stop
+
+    def record(s: Session, *, model: str, usage: dict | None, status_: str = "ok", error: str = "") -> dict:
+        me = s.get(Admin, admin_id)
+        return _record_staff(s, me, request_id=request_id, model=model, provider=impl.name, usage=usage, latency=int((time.monotonic() - started) * 1000), status_=status_, error=error) if me else {}
+
+    started = time.monotonic()
+
+    def events():
+        text, usage, model = "", None, planned_model
+        tools: list[dict] = []
+        actions: list[dict] = []
+        settled = False
+        try:
+            yield _sse("meta", {"request_id": request_id, "model": planned_model, "thinking": thinking})
+            with session_scope() as s:
+                me = s.get(Admin, admin_id)
+                ctx = ai_core.ToolContext(db=s, role=role, request_id=request_id, admin=me, course_hint=course_hint)
+                try:
+                    for kind, value in ai_core.run(ctx, messages, max_steps=max_steps, max_tokens=8000 if thinking else 3000, temperature=0.3, reasoning=thinking, should_stop=stop.is_set):
+                        if kind in {"tool", "tool_done"}:
+                            if kind == "tool_done":
+                                tools.append(value)
+                            yield _sse("tool", value)
+                        elif kind == "status":
+                            yield _sse("status", {"text": value})
+                        elif kind == "thinking":
+                            yield _sse("thinking", value)
+                        elif kind == "note":
+                            yield _sse("note", {"text": value})
+                        elif kind == "usage":
+                            usage = value
+                        elif kind == "model":
+                            model = value
+                        elif kind == "final":
+                            text = value
+                        if stop.is_set():
+                            break
+                finally:
+                    actions = list(ctx.actions)
+            if actions:
+                yield _sse("actions", {"actions": actions})
+                if any(a.get("type") == "task" for a in actions):
+                    tasks.kick()
+            if stop.is_set():
+                settled = True
+                with session_scope() as s:
+                    record(s, model=model, usage=usage, status_="cancelled")
+                yield _sse("cancelled", {"tools": tools})
+                return
+            for n in range(0, len(text), 160):
+                yield _sse("delta", {"text": text[n:n + 160]})
+            with session_scope() as s:
+                cost = record(s, model=model, usage=usage)
+            settled = True
+            yield _sse("done", {"usage": cost, "tools": tools, "model": model, "ms": int((time.monotonic() - started) * 1000)})
+        except tutor.TutorError as error:
+            settled = True
+            log.warning("staff agent failed: %s", error.technical)
+            with session_scope() as s:
+                record(s, model=model, usage=usage, status_="error", error=error.technical)
+            if actions:
+                yield _sse("actions", {"actions": actions})
+            yield _sse("error", {"detail": str(error), "status": error.status})
+        except Exception:  # noqa: BLE001
+            settled = True
+            log.exception("staff agent crashed")
+            yield _sse("error", {"detail": "The assistant hit an unexpected error. Try again.", "status": 500})
+        finally:
+            with _staff_stops_lock:
+                _staff_stops.pop(request_id, None)
+            if not settled:
+                stop.set()
+                log.info("staff agent abandoned by client (%s)", request_id)
+                try:
+                    with session_scope() as s:
+                        record(s, model=model, usage=usage, status_="cancelled")
+                except Exception:  # noqa: BLE001
+                    log.exception("could not record abandoned staff request")
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+
+@admin_router.post("/agent/{request_id}/stop")
+def staff_agent_stop(request_id: str, admin: Admin = Depends(require_admin)) -> dict:
+    with _staff_stops_lock:
+        event = _staff_stops.get(request_id)
+    if event:
+        event.set()
+    return {"ok": True, "stopped": event is not None}
 
 
 @admin_router.get("/proposals")

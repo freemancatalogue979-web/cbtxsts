@@ -23,6 +23,7 @@ million tokens) so cost estimates are changed in one place.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -31,6 +32,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
+import uuid
 from typing import Any, Iterator
 
 from ..config import deepseek_settings, gemini_settings
@@ -173,6 +175,59 @@ def _urlopen(request: urllib.request.Request, timeout: float, provider: str):
         raise ProviderError(f"{provider}: unreachable ({error})", 503, "unreachable", retryable=True) from error
 
 
+# ------------------------------------------------------- model text cleanup
+_BAR = r"[\uff5c|]+"
+_DSML_TAG = re.compile(rf"</?\s*{_BAR}\s*DSML\s*{_BAR}[^>]*>", re.I)
+_DSML_INVOKE = re.compile(rf"<\s*{_BAR}\s*DSML\s*{_BAR}\s*invoke\s+name=\"([^\"]+)\"[^>]*>", re.I)
+_DSML_PARAM = re.compile(rf"<\s*{_BAR}\s*DSML\s*{_BAR}\s*parameter\s+name=\"([^\"]+)\"([^>]*)>(.*?)(?:</\s*{_BAR}\s*DSML\s*{_BAR}\s*parameter\s*>|(?=<\s*{_BAR}\s*DSML)|$)", re.I | re.S)
+_SPECIAL_TOKEN = re.compile(r"<\s*[\uff5c|][^<>\n]{1,60}[\uff5c|]\s*>")
+
+
+def _param_value(raw: str, attrs: str) -> Any:
+    raw = raw.strip()
+    if 'string="true"' in attrs:
+        return raw
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return raw
+
+
+def split_dsml(text: str) -> tuple[str, list[dict]]:
+    """Pull DSML tool-call markup out of model text.
+
+    Returns ``(clean_text, calls)`` where calls look like parsed tool_calls
+    (``{"id", "name", "arguments": <json string>}``). Also decodes the HTML
+    entities models emit in that mode (``&lt;``, ``&amp;``) and drops stray
+    special tokens, so users never see raw markup."""
+    if not text:
+        return "", []
+    if "&lt;" in text or "&gt;" in text or "&amp;" in text or "&quot;" in text or "&#" in text:
+        text = html.unescape(text)
+    calls: list[dict] = []
+    tags = list(_DSML_TAG.finditer(text))
+    if tags:
+        starts = list(_DSML_INVOKE.finditer(text))
+        for n, start in enumerate(starts):
+            end = starts[n + 1].start() if n + 1 < len(starts) else len(text)
+            body = text[start.end():end]
+            args = {m.group(1): _param_value(m.group(3), m.group(2)) for m in _DSML_PARAM.finditer(body)}
+            calls.append({"id": f"dsml_{n}_{uuid.uuid4().hex[:6]}", "name": start.group(1).strip(), "arguments": json.dumps(args, ensure_ascii=False)})
+        text = text[:tags[0].start()] + text[tags[-1].end():]
+    text = _SPECIAL_TOKEN.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip(), calls
+
+
+def clean_model_text(text: str) -> str:
+    return split_dsml(text)[0]
+
+
+def strip_reasoning(messages: list[dict]) -> list[dict]:
+    if not any("reasoning_content" in m for m in messages):
+        return messages
+    return [{k: v for k, v in m.items() if k != "reasoning_content"} for m in messages]
+
+
 class StreamHandle:
     """Iterate for events; ``close()`` aborts the upstream request."""
 
@@ -245,20 +300,26 @@ class AIProvider:
     def _parse_complete(self, payload: dict) -> tuple[str, dict, str]:  # pragma: no cover
         raise NotImplementedError
 
-    def _open_any(self, messages: list[dict], *, model: str, max_tokens: int, temperature: float, json_mode: bool, stream: bool, tools: list[dict] | None = None):
+    def _open_any(self, messages: list[dict], *, model: str, max_tokens: int, temperature: float, json_mode: bool, stream: bool, tools: list[dict] | None = None, reasoning: bool = False):
         if not self.configured():
             raise ProviderError(f"{self.name}: no API key configured", 503, "not_configured")
         s = self.settings()
         timeout = float(os.getenv("TUTOR_STREAM_TIMEOUT", "45")) if stream else float(s.get("timeout", 60))
         tried = []
         for candidate in self.models(model):
-            def attempt(thinking: bool, name: str = candidate):
-                return self._open(model=name, messages=messages, max_tokens=max_tokens, temperature=temperature, json_mode=json_mode, stream=stream, timeout=timeout, thinking=thinking, tools=tools)
+            def attempt(thinking: bool, think: bool = False, name: str = candidate):
+                sent = messages if think else strip_reasoning(messages)
+                return self._open(model=name, messages=sent, max_tokens=max_tokens, temperature=temperature, json_mode=json_mode, stream=stream, timeout=timeout, thinking=thinking, tools=tools, reasoning=think)
 
             try:
                 try:
-                    return with_retries(lambda: attempt(True)), candidate
+                    return with_retries(lambda: attempt(True, reasoning)), candidate
                 except _ThinkingUnsupported:
+                    if reasoning:  # e.g. "reasoning_content must be passed back": answer without thinking instead of failing
+                        try:
+                            return with_retries(lambda: attempt(True, False)), candidate
+                        except _ThinkingUnsupported:
+                            pass
                     return with_retries(lambda: attempt(False)), candidate
             except ModelMissing as missing:
                 tried.append(f"{candidate} ({missing})")
@@ -283,7 +344,7 @@ class AIProvider:
         return text, usage, finish, used
 
     # ------------------------------------------------------------ tool calls
-    def complete_tools(self, messages: list[dict], tools: list[dict], *, model: str = "", max_tokens: int = 1500, temperature: float = 0.3) -> dict:
+    def complete_tools(self, messages: list[dict], tools: list[dict], *, model: str = "", max_tokens: int = 1500, temperature: float = 0.3, reasoning: bool = False) -> dict:
         """One model turn that may request tools.
 
         ``tools`` are OpenAI-style function specs (``{"name", "description",
@@ -292,7 +353,7 @@ class AIProvider:
         replies. Returns ``{"text", "tool_calls": [{"id","name","arguments"}],
         "usage", "finish", "model", "assistant"}`` where ``assistant`` is the
         message to append to the history before the tool replies."""
-        response, used = self._open_any(messages, model=model, max_tokens=max_tokens, temperature=temperature, json_mode=False, stream=False, tools=tools)
+        response, used = self._open_any(messages, model=model, max_tokens=max_tokens, temperature=temperature, json_mode=False, stream=False, tools=tools, reasoning=reasoning)
         try:
             payload = json.loads(response.read() or b"{}")
         except (TimeoutError, socket.timeout) as error:
@@ -318,14 +379,17 @@ class DeepSeekProvider(AIProvider):
     def settings(self) -> dict:
         return deepseek_settings()
 
-    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None):
+    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None, reasoning=False):
         s = self.settings()
+        if reasoning:
+            # Thinking + tools: DeepSeek wants every earlier assistant turn's reasoning replayed.
+            messages = [{**m, "reasoning_content": m.get("reasoning_content") or ""} if m.get("role") == "assistant" else m for m in messages]
         body: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": stream}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
             body["tool_choice"] = "auto"
         if thinking:
-            body["thinking"] = {"type": "disabled"}
+            body["thinking"] = {"type": "enabled" if reasoning else "disabled"}
         if stream:
             body["stream_options"] = {"include_usage": True}
         if json_mode:
@@ -364,11 +428,18 @@ class DeepSeekProvider(AIProvider):
         for call in message.get("tool_calls") or []:
             fn = call.get("function") or {}
             calls.append({"id": call.get("id") or f"call_{len(calls)}", "name": fn.get("name") or "", "arguments": fn.get("arguments") or "{}"})
-        text = message.get("content") or ""
+        # Sometimes the model writes its tool call as DSML markup inside the text
+        # instead of a real tool_call. Recover those calls and never show the markup.
+        text, leaked = split_dsml(message.get("content") or "")
+        if not calls:
+            calls = leaked
+        reasoning = message.get("reasoning_content") or ""
         assistant: dict[str, Any] = {"role": "assistant", "content": text}
+        if reasoning:
+            assistant["reasoning_content"] = reasoning
         if calls:
             assistant["tool_calls"] = [{"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]
-        return {"text": text, "tool_calls": calls, "usage": self._usage(payload.get("usage")), "finish": (choices[0].get("finish_reason") if choices else "") or "", "assistant": assistant}
+        return {"text": text, "tool_calls": calls, "reasoning": reasoning, "usage": self._usage(payload.get("usage")), "finish": (choices[0].get("finish_reason") if choices else "") or "", "assistant": assistant}
 
 
 # ------------------------------------------------------------------ Gemini
@@ -431,13 +502,13 @@ class GeminiProvider(AIProvider):
     def settings(self) -> dict:
         return gemini_settings()
 
-    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None):
+    def _open(self, *, model, messages, max_tokens, temperature, json_mode, stream, timeout, thinking, tools=None, reasoning=False):
         s = self.settings()
         system, contents = to_gemini(messages)
         config: dict[str, Any] = {"maxOutputTokens": max_tokens, "temperature": temperature}
         if json_mode:
             config["responseMimeType"] = "application/json"
-        if thinking:
+        if thinking and not reasoning:
             config["thinkingConfig"] = {"thinkingBudget": 0}
         body: dict[str, Any] = {"contents": contents, "generationConfig": config}
         if system:

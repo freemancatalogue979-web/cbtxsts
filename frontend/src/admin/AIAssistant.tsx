@@ -20,12 +20,13 @@ import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type 
 import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone} from '../components/ui';
 import {ToolTrail} from '../components/tutor/AgentBits';
 import TasksView, {attachFile, TaskInline, type AttachedMaterial} from './AITasks';
+import {StopButton, ThinkToggle, WorkLog} from './AssistantBits';
 import {IMPORT_ACCEPT} from './MaterialImport';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {Markdown} from '../lib/markdown';
 import {
-  aiStaffApi, type AgentTurn, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type TaskCard, type ToolCallRow, type ToolEvent,
+  aiStaffApi, streamStaffAgent, type AgentTurn, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type TaskCard, type ToolCallRow, type ToolEvent,
 } from '../lib/tutor';
 import type {Course} from '../lib/types';
 import {useSession} from '../store/session';
@@ -33,6 +34,7 @@ import {useSession} from '../store/session';
 type View = 'assistant' | 'insights' | 'tasks' | 'review' | 'activity';
 const THREAD_KEY = 'ag.staff.assistant';
 const COURSE_KEY = 'ag.staff.course';
+const THINK_KEY = 'ag.staff.think';
 const KIND: Record<string, {label: string; icon: typeof Tags; tone: Tone}> = {
   questions: {label: 'Questions', icon: FileQuestion, tone: 'nova'},
   topics: {label: 'Topics', icon: ListTree, tone: 'cyan'},
@@ -320,6 +322,13 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
   });
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [think, setThink] = useState(() => localStorage.getItem(THINK_KEY) !== '0');
+  const [live, setLive] = useState<AgentTurn | null>(null);
+  const [liveStatus, setLiveStatus] = useState('');
+  const liveRef = useRef<AgentTurn | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const requestRef = useRef<string | null>(null);
+  const startedRef = useRef(0);
   const [student, setStudent] = useState('');
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -332,7 +341,9 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
     sessionStorage.setItem(THREAD_KEY, JSON.stringify(turns.slice(-30)));
     const el = scroller.current;
     if (el) el.scrollTo({top: el.scrollHeight, behavior: 'smooth'});
-  }, [turns, busy]);
+  }, [turns, busy, live]);
+  useEffect(() => { localStorage.setItem(THINK_KEY, think ? '1' : '0'); }, [think]);
+  useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
     const el = input.current;
     if (!el) return;
@@ -377,18 +388,83 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
     setDraft('');
     if (files.length) setUploads((u) => u.filter((x) => !x.material));
     setBusy(true);
-    const started = performance.now();
+    startedRef.current = performance.now();
+    const turn: AgentTurn = {role: 'assistant', content: '', work: [], thinking: think, meta: {at: new Date().toISOString()}};
+    liveRef.current = turn;
+    setLive(turn);
+    setLiveStatus(think ? 'Thinking…' : 'Working…');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const patch = (fn: (t: AgentTurn) => AgentTurn) => {
+      if (!liveRef.current || abortRef.current !== controller) return;
+      liveRef.current = fn(liveRef.current);
+      setLive(liveRef.current);
+    };
+    const thread = next.filter((t) => !t.failed && t.content.trim()).slice(-12).map(({role, content: c, reasoning}) => ({role, content: c, ...(reasoning ? {reasoning} : {})}));
     try {
-      const res = await aiStaffApi.chat(next.filter((t) => !t.failed).slice(-12).map(({role, content: c}) => ({role, content: c})), course?.id ?? null);
-      setTurns((list) => [...list, {role: 'assistant', content: res.reply, tools: res.tools, actions: res.actions, meta: {cost: res.usage?.cost, ms: Math.round(performance.now() - started), at: new Date().toISOString()}}]);
+      await streamStaffAgent({messages: thread, course_id: course?.id ?? null, thinking: think}, {
+        onMeta: (m) => { requestRef.current = m.request_id; },
+        onStatus: (text) => setLiveStatus(text),
+        onThinking: (th) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'thought', step: th.step, text: th.text}]})),
+        onNote: (text) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'note', text}]})),
+        onTool: (tool) => patch((t) => {
+          const work = [...(t.work ?? [])];
+          if (tool.status !== 'running') {
+            const at = work.findIndex((w) => w.kind === 'tool' && w.tool.name === tool.name && w.tool.status === 'running');
+            if (at >= 0) {
+              work[at] = {kind: 'tool', tool};
+              return {...t, work};
+            }
+          }
+          return {...t, work: [...work, {kind: 'tool', tool}]};
+        }),
+        onActions: (actions) => patch((t) => ({...t, actions})),
+        onDelta: (text) => { setLiveStatus('Writing the answer…'); patch((t) => ({...t, content: t.content + text})); },
+        onDone: (done) => finishLive(controller, {meta: {cost: done.usage?.cost, ms: done.ms}}),
+        onCancelled: () => finishLive(controller, {stopped: true}),
+        onError: (detail) => {
+          toast('error', 'Assistant unavailable', detail);
+          const partial = liveRef.current?.content.trim();
+          finishLive(controller, partial ? {stopped: true} : {failed: true, content: detail});
+        },
+      }, controller.signal);
+      finishLive(controller, {stopped: true}); // stream ended without a final event (aborted / dropped)
     } catch (e) {
-      setTurns((list) => [...list, {role: 'assistant', content: errText(e), failed: true}]);
       toast('error', 'Assistant unavailable', errText(e));
-    } finally {
-      setBusy(false);
-      onUsed();
+      finishLive(controller, {failed: true, content: errText(e)});
     }
-  }, [busy, turns, course, toast, onUsed]);
+  }, [busy, turns, course, toast, think]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Move the live turn into the thread (once per request). */
+  function finishLive(controller: AbortController, extra: Partial<AgentTurn>) {
+    const turn = liveRef.current;
+    if (!turn || abortRef.current !== controller) return;
+    liveRef.current = null;
+    abortRef.current = null;
+    requestRef.current = null;
+    const work = turn.work ?? [];
+    const final: AgentTurn = {
+      ...turn,
+      ...extra,
+      tools: work.flatMap((w) => (w.kind === 'tool' && w.tool.status !== 'running' ? [w.tool] : [])),
+      reasoning: work.flatMap((w) => (w.kind === 'thought' ? [w.text] : [])).join('\n\n') || undefined,
+      meta: {...turn.meta, ...extra.meta, ms: extra.meta?.ms ?? Math.round(performance.now() - startedRef.current)},
+    };
+    setLive(null);
+    setLiveStatus('');
+    setTurns((list) => [...list, final]);
+    setBusy(false);
+    onUsed();
+  }
+
+  const stop = () => {
+    const controller = abortRef.current;
+    const id = requestRef.current;
+    if (!controller) return;
+    if (id) void aiStaffApi.stopAgent(id).catch(() => undefined);
+    finishLive(controller, {stopped: true});
+    controller.abort();
+  };
   const submit = () => { if (!uploading) void send(draft, undefined, attached); };
 
   useEffect(() => {
@@ -408,6 +484,62 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text).then(() => toast('success', 'Copied'), () => toast('error', "Couldn't copy"));
   };
+  const renderAssistant = (turn: AgentTurn, i: number, isLive = false) => {
+    const key = isLive ? 'live' : i;
+    return (
+          <div key={key} className="flex min-w-0 gap-2.5">
+            <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl text-white ${turn.failed ? 'bg-flare-500/70' : 'bg-gradient-to-br from-nova-400 to-pulse-500'}`}>
+              {turn.failed ? <AlertTriangle className="size-4" /> : <Bot className="size-4" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={`min-w-0 rounded-2xl rounded-tl-md border px-3.5 py-2.5 ${turn.failed ? 'border-flare-400/30 bg-flare-500/[0.07]' : 'border-white/8 bg-white/[0.035]'}`}>
+                {turn.work ? (
+                  <WorkLog steps={turn.work} live={isLive} status={liveStatus} startedAt={isLive ? Date.now() - (performance.now() - startedRef.current) : undefined} ms={turn.meta?.ms} thinking={turn.thinking} stopped={turn.stopped} />
+                ) : turn.tools && turn.tools.length > 0 ? <ToolTrail tools={turn.tools as ToolEvent[]} /> : null}
+                {turn.content ? (
+                  <div className="min-w-0 text-[0.86rem] [overflow-wrap:anywhere]">
+                    <Markdown text={turn.content} />
+                    {isLive && <span aria-hidden className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-nova-300 align-middle" />}
+                  </div>
+                ) : turn.stopped ? (
+                  <p className="text-[0.8rem] font-semibold text-mist-500 italic">You stopped this reply{turn.work?.some((w) => w.kind === 'tool') ? ' — anything it already did is kept.' : '.'}</p>
+                ) : null}
+              </div>
+              {(turn.actions ?? []).filter((a): a is TaskCard => a.type === 'task').map((t) => <TaskInline key={`t${t.id}`} id={t.id} onOpen={onTask} />)}
+              {(turn.actions ?? []).filter((a): a is ProposalCard => a.type === 'proposal').map((p) => {
+                const K = KIND[p.kind] ?? {label: p.kind, icon: Sparkles, tone: 'nova' as Tone};
+                return (
+                  <button key={p.id} onClick={() => onProposal(p.id)} className="mt-2 flex w-full min-w-0 items-center gap-3 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/[0.10] to-amber-500/[0.03] px-3 py-2.5 text-left transition hover:border-amber-400/50">
+                    <ToneIcon tone="amber" icon={K.icon} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.6rem] font-extrabold tracking-[0.14em] text-amber-200/85 uppercase">Needs approval · {p.count} {K.label.toLowerCase()}</span>
+                      <span className="block truncate text-[0.84rem] font-bold text-mist-50">{p.title}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-amber-400 px-3 py-1 text-[0.7rem] font-black text-ink-950">Review</span>
+                  </button>
+                );
+              })}
+              {!isLive && (
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 pl-1 text-[0.64rem] font-bold text-mist-500">
+                {turn.failed ? (
+                  <button onClick={() => retry(i)} disabled={busy} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-flare-200 hover:bg-white/[0.06]"><RotateCcw className="size-3" /> Try again</button>
+                ) : (
+                  <>
+                    {turn.stopped && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-amber-200">Stopped</span>}
+                    {turn.thinking && <span className="rounded-full bg-pulse-500/15 px-1.5 py-0.5 text-pulse-200">Deep thinking</span>}
+                    {!!turn.tools?.length && <span>{turn.tools.length} tool{turn.tools.length === 1 ? '' : 's'}</span>}
+                    {turn.meta?.ms != null && <span>{(turn.meta.ms / 1000).toFixed(1)}s</span>}
+                    {turn.meta?.cost != null && <span>{money(turn.meta.cost, 4)}</span>}
+                    {turn.content.trim() && <button onClick={() => copy(turn.content)} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 hover:bg-white/[0.06] hover:text-mist-200" aria-label="Copy reply"><Copy className="size-3" /> Copy</button>}
+                  </>
+                )}
+              </div>
+              )}
+            </div>
+          </div>
+    );
+  };
+
   const lastAssistant = turns.length > 0 && turns[turns.length - 1].role === 'assistant' && !turns[turns.length - 1].failed;
   const scope = course ? course.code : 'all courses';
 
@@ -428,7 +560,7 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
         <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"><Sparkles className="size-4" /></span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.84rem] font-extrabold text-mist-50">Staff assistant</p>
-          <p className="truncate text-[0.66rem] font-semibold text-mist-500">{busy ? 'Working through the platform tools…' : `Scoped to ${scope}`}</p>
+          <p className="truncate text-[0.66rem] font-semibold text-mist-500">{busy ? (liveStatus || 'Working…') : `Scoped to ${scope}${think ? ' · deep thinking on' : ''}`}</p>
         </div>
         {turns.length > 0 && (
           <Button size="sm" variant="ghost" icon={<MessageSquarePlus className="size-4" />} label="New conversation" onClick={() => setTurns([])} disabled={busy} />
@@ -504,57 +636,9 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
               {turn.display ?? turn.content}
             </div>
           </div>
-        ) : (
-          <div key={i} className="flex min-w-0 gap-2.5">
-            <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl text-white ${turn.failed ? 'bg-flare-500/70' : 'bg-gradient-to-br from-nova-400 to-pulse-500'}`}>
-              {turn.failed ? <AlertTriangle className="size-4" /> : <Bot className="size-4" />}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className={`min-w-0 rounded-2xl rounded-tl-md border px-3.5 py-2.5 ${turn.failed ? 'border-flare-400/30 bg-flare-500/[0.07]' : 'border-white/8 bg-white/[0.035]'}`}>
-                {turn.tools && turn.tools.length > 0 && <ToolTrail tools={turn.tools as ToolEvent[]} />}
-                <div className="min-w-0 text-[0.86rem] [overflow-wrap:anywhere]"><Markdown text={turn.content} /></div>
-              </div>
-              {(turn.actions ?? []).filter((a): a is TaskCard => a.type === 'task').map((t) => <TaskInline key={`t${t.id}`} id={t.id} onOpen={onTask} />)}
-              {(turn.actions ?? []).filter((a): a is ProposalCard => a.type === 'proposal').map((p) => {
-                const K = KIND[p.kind] ?? {label: p.kind, icon: Sparkles, tone: 'nova' as Tone};
-                return (
-                  <button key={p.id} onClick={() => onProposal(p.id)} className="mt-2 flex w-full min-w-0 items-center gap-3 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/[0.10] to-amber-500/[0.03] px-3 py-2.5 text-left transition hover:border-amber-400/50">
-                    <ToneIcon tone="amber" icon={K.icon} size="sm" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[0.6rem] font-extrabold tracking-[0.14em] text-amber-200/85 uppercase">Needs approval · {p.count} {K.label.toLowerCase()}</span>
-                      <span className="block truncate text-[0.84rem] font-bold text-mist-50">{p.title}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-amber-400 px-3 py-1 text-[0.7rem] font-black text-ink-950">Review</span>
-                  </button>
-                );
-              })}
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 pl-1 text-[0.64rem] font-bold text-mist-500">
-                {turn.failed ? (
-                  <button onClick={() => retry(i)} disabled={busy} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-flare-200 hover:bg-white/[0.06]"><RotateCcw className="size-3" /> Try again</button>
-                ) : (
-                  <>
-                    {!!turn.tools?.length && <span>{turn.tools.length} tool{turn.tools.length === 1 ? '' : 's'}</span>}
-                    {turn.meta?.ms != null && <span>{(turn.meta.ms / 1000).toFixed(1)}s</span>}
-                    {turn.meta?.cost != null && <span>{money(turn.meta.cost, 4)}</span>}
-                    <button onClick={() => copy(turn.content)} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 hover:bg-white/[0.06] hover:text-mist-200" aria-label="Copy reply"><Copy className="size-3" /> Copy</button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
+        ) : renderAssistant(turn, i))}
 
-        {busy && (
-          <div className="flex gap-2.5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white"><Loader2 className="size-4 animate-spin" /></span>
-            <div className="rounded-2xl rounded-tl-md border border-white/8 bg-white/[0.035] px-3.5 py-2.5">
-              <p className="text-[0.78rem] font-bold text-mist-300">Checking the platform…</p>
-              <div className="mt-1.5 flex gap-1">
-                {[0, 1, 2].map((d) => <span key={d} className="size-1.5 animate-bounce rounded-full bg-nova-300" style={{animationDelay: `${d * 140}ms`}} />)}
-              </div>
-            </div>
-          </div>
-        )}
+        {live && renderAssistant(live, turns.length, true)}
 
         {lastAssistant && !busy && (
           <div className="flex flex-wrap gap-1.5 pl-10">
@@ -594,9 +678,10 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
             disabled={!ready}
             aria-label="Message the assistant"
           />
-          <Button type="submit" icon={<ArrowUp className="size-4" />} label="Send" disabled={(!draft.trim() && !attached.length) || busy || !ready || uploading} loading={busy} />
+          <ThinkToggle on={think} onChange={setThink} disabled={!ready} />
+          {busy ? <StopButton onClick={stop} /> : <Button type="submit" icon={<ArrowUp className="size-4" />} label="Send" disabled={(!draft.trim() && !attached.length) || !ready || uploading} />}
         </div>
-        <p className="mt-1 hidden px-1 text-[0.62rem] font-semibold text-mist-600 sm:block">Enter to send · Attach or drop files (PDF, Word, slides) · Big jobs run as background tasks · Drafts wait for your approval.</p>
+        <p className="mt-1 hidden px-1 text-[0.62rem] font-semibold text-mist-600 sm:block">Enter to send · Think = slower, more careful reasoning · Stop any time · Big jobs run as background tasks · Drafts wait for your approval.</p>
       </form>
     </Card>
     </div>

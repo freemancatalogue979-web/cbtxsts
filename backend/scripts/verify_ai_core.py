@@ -303,6 +303,89 @@ def main() -> None:
             check("rejected topic not created", code == 200 and res["status"] == "rejected" and not db.query(CourseTopic).filter(CourseTopic.course_id == course_id, CourseTopic.name == "Vicarious Liability").count(), res)
             check("proposals stored separately with status", {p.status for p in db.query(AIProposal)} >= {"approved", "rejected"})
 
+        print("staff assistant: leaked tool markup, final round, streaming, thinking, stop")
+        dsml = ('Checking the course first.\n\n&lt;｜｜DSML｜｜ calls&gt;\n&lt;｜｜DSML｜｜ invoke name="get_course_overview"&gt;\n'
+                f'&lt;｜｜DSML｜｜ parameter name="course_id" string="false"&gt;{course_id}&lt;/｜｜DSML｜｜ parameter&gt;\n'
+                '&lt;/｜｜DSML｜｜ invoke&gt;\n&lt;/｜｜DSML｜｜ calls&gt;')
+        SEEN.clear()
+        SCRIPT[:] = [reply(dsml), reply("**Done** — rights &amp; duties reviewed.")]
+        code, out = call("POST", "/admin/ai/agent", {"messages": [{"role": "user", "content": "overview please"}], "course_id": course_id}, staff)
+        check("DSML tool markup in text is run as a real tool call", code == 200 and [t["name"] for t in out["tools"]] == ["get_course_overview"] and out["tools"][0]["status"] == "ok", out)
+        check("reply never shows DSML markup or HTML entities", code == 200 and "DSML" not in out["reply"] and "&amp;" not in out["reply"] and "rights & duties" in out["reply"], out.get("reply"))
+        check("recovered call replayed to the model as a proper tool turn", any(m.get("role") == "tool" for m in SEEN[-1][0]) and any(m.get("tool_calls") for m in SEEN[-1][0] if m.get("role") == "assistant"), SEEN[-1][0][-3:])
+
+        SEEN.clear()
+        rounds = 6  # ai_agent_max_steps default 5 → 6 tool rounds, then a no-tools final round
+        SCRIPT[:] = [calls(("get_course_overview", {"course_id": course_id})) for _ in range(rounds)] + [reply("Wrapping up.\n" + dsml.split("\n\n", 1)[1])]
+        code, out = call("POST", "/admin/ai/agent", {"messages": [{"role": "user", "content": "do everything"}], "course_id": course_id}, staff)
+        last_msgs, last_tools = SEEN[-1]
+        check("final round offers no tools and tells the model to wrap up", last_tools == [] and "TOOL BUDGET USED UP" in str(last_msgs[-1].get("content")), (last_tools, last_msgs[-1]))
+        check("tool the model still wrote in the final round runs and is summarised", code == 200 and len(out["tools"]) == rounds + 1 and "DSML" not in out["reply"] and out["reply"].startswith("Wrapping up.") and "Here's what I did" in out["reply"], out)
+
+        def stream(body, token, on_event=None):
+            req = urllib.request.Request(base + "/admin/ai/agent/stream", data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}", "Accept": "text/event-stream"})
+            events, block = [], []
+            with urllib.request.urlopen(req, timeout=60) as r:
+                for raw in r:
+                    line = raw.decode().rstrip("\n")
+                    if line:
+                        block.append(line)
+                        continue
+                    ev = next((b[6:].strip() for b in block if b.startswith("event:")), "message")
+                    data = json.loads("".join(b[5:].strip() for b in block if b.startswith("data:")) or "{}")
+                    block = []
+                    events.append((ev, data))
+                    if on_event:
+                        on_event(ev, data)
+            return events
+
+        KW: list = []
+        orig = impl.complete_tools
+
+        def spy(messages, tools, **kw):
+            KW.append(kw)
+            return orig(messages, tools, **kw)
+
+        impl.complete_tools = spy  # type: ignore[method-assign]
+        think_step = calls(("get_course_overview", {"course_id": course_id}))
+        think_step["reasoning"] = "The staff member wants an overview; read the course first."
+        think_step["text"] = "Let me look at the course."
+        SCRIPT[:] = [think_step, reply("## Overview\n- **Topics:** fine")]
+        history = [{"role": "user", "content": "earlier"}, {"role": "assistant", "content": "earlier answer", "reasoning": "earlier thoughts"}, {"role": "user", "content": "overview, think it through"}]
+        evs = stream({"messages": history, "course_id": course_id, "thinking": True}, staff)
+        kinds = [e for e, _ in evs]
+        check("stream: meta → status → thinking → note → tool → delta → done", kinds[0] == "meta" and "status" in kinds and "thinking" in kinds and "note" in kinds and "tool" in kinds and "delta" in kinds and kinds[-1] == "done"
+              and kinds.index("thinking") < kinds.index("tool") < kinds.index("delta"), kinds)
+        check("stream: reply text arrives as deltas", "".join(d["text"] for e, d in evs if e == "delta").startswith("## Overview"), evs)
+        check("thinking mode requested from the provider", KW and all(k.get("reasoning") for k in KW), KW)
+        check("earlier reasoning replayed with the history", any(m.get("reasoning_content") == "earlier thoughts" for m in SEEN[-1][0] if m.get("role") == "assistant"), [m for m in SEEN[-1][0] if m.get("role") == "assistant"])
+        KW.clear()
+        SCRIPT[:] = [reply("Quick answer.")]
+        stream({"messages": [{"role": "user", "content": "hi"}], "course_id": course_id}, staff)
+        check("thinking off unless asked", KW and not any(k.get("reasoning") for k in KW), KW)
+
+        def slow(messages, tools):
+            time.sleep(1.2)
+            return calls(("get_course_overview", {"course_id": course_id}))
+
+        SCRIPT[:] = [slow, slow, slow, reply("should not get here")]
+        before_tools = len(SEEN)
+
+        def on_event(ev, data):
+            if ev == "meta":
+                threading.Timer(0.3, lambda: call("POST", f"/admin/ai/agent/{data['request_id']}/stop", {}, staff)).start()
+
+        started_at = time.monotonic()
+        evs = stream({"messages": [{"role": "user", "content": "long job"}], "course_id": course_id}, staff, on_event)
+        kinds = [e for e, _ in evs]
+        check("stop mid-run → cancelled event, no final reply", kinds[-1] == "cancelled" and "delta" not in kinds and "done" not in kinds, kinds)
+        check("stop halts before further model rounds", len(SEEN) - before_tools <= 1 and time.monotonic() - started_at < 4, (len(SEEN) - before_tools, time.monotonic() - started_at))
+        SCRIPT.clear()
+        impl.complete_tools = orig  # type: ignore[method-assign]
+        with SessionLocal() as db:
+            check("stopped request logged as cancelled", db.query(AIStaffUsage).filter(AIStaffUsage.status == "cancelled").count() >= 1)
+        check("students can't use the streaming assistant", call("POST", "/admin/ai/agent/stream", {"messages": [{"role": "user", "content": "hi"}]}, me)[0] in (401, 403))
+
         print("audit + usage + settings")
         code, log = call("GET", "/admin/ai/tool-calls", token=staff)
         check("tool audit log for staff", code == 200 and any(x["tool"] == "create_mini_exam" for x in log["calls"]), code)
