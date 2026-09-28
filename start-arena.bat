@@ -28,10 +28,16 @@ if not defined GEMINI_API_KEY if not defined DEEPSEEK_API_KEY (
   findstr /b /r /c:"GEMINI_API_KEY=." /c:"DEEPSEEK_API_KEY=." "backend\.env" >nul 2>nul || call :askkey
 )
 
-if not exist "frontend\node_modules" (
+REM Install on first run AND whenever the dependency list changes (a pulled
+REM update that adds a package would otherwise fail with a 500 on main.tsx).
+set "NEED_NPM=0"
+if not exist "frontend\node_modules" set "NEED_NPM=1"
+if not exist "frontend\node_modules\.arena-lock" set "NEED_NPM=1"
+if "%NEED_NPM%"=="0" fc /b "frontend\package-lock.json" "frontend\node_modules\.arena-lock" >nul 2>nul || set "NEED_NPM=1"
+if "%NEED_NPM%"=="1" (
   echo [*] Installing frontend dependencies...
   pushd frontend
-  call npm install
+  call npm install && copy /y package-lock.json node_modules\.arena-lock >nul
   popd
 )
 

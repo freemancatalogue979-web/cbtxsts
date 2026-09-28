@@ -59,9 +59,11 @@ ensure_gemini_key() {
 
 setup_frontend() {
   cd "$ROOT/frontend"
-  if [ ! -d node_modules ]; then
+  # Install on first run AND whenever the dependency list changes (a pulled
+  # update that adds a package would otherwise fail with a 500 on main.tsx).
+  if [ ! -d node_modules ] || ! cmp -s package-lock.json node_modules/.arena-lock 2>/dev/null; then
     log "Installing frontend dependencies…"
-    npm install
+    npm install && cp package-lock.json node_modules/.arena-lock
   fi
 }
 
