@@ -7,9 +7,18 @@
  * open short steps for that exact browser (iPhone Safari, Firefox, Opera Mini,
  * or a plain-http link, which no browser can install from).
  */
-import {CheckCircle2, Download, EllipsisVertical, Globe, Lock, MonitorDown, Plus, Share, Smartphone, SquarePlus, X} from 'lucide-react';
-import {useState, type ReactNode} from 'react';
-import {installPlatform, useInstallPrompt, type InstallPlatform} from '../lib/pwa';
+import {AlertTriangle, CheckCircle2, ChevronDown, Download, EllipsisVertical, ExternalLink, Globe, Loader2, Lock, MonitorDown, Plus, RefreshCw, Share, Smartphone, SquarePlus, X, XCircle} from 'lucide-react';
+import {useEffect, useState, type ReactNode} from 'react';
+import {
+  inAppBrowser,
+  inFrame,
+  installPlatform,
+  openInChromeUrl,
+  runInstallChecks,
+  useInstallPrompt,
+  type InstallCheck,
+  type InstallPlatform,
+} from '../lib/pwa';
 import {useSession} from '../store/session';
 import {Button, IconButton, IconOrb, Modal} from './ui';
 
@@ -299,9 +308,118 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
   }
 }
 
+/** Live "why can't I install?" checklist, run on the player's own device. */
+function InstallChecks({open}: {open: boolean}) {
+  const [checks, setChecks] = useState<InstallCheck[] | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const run = () => {
+    setChecks(null);
+    runInstallChecks()
+      .then(setChecks)
+      .catch(() => setChecks([]));
+  };
+  useEffect(() => {
+    if (open) run();
+  }, [open]);
+  const failing = checks?.filter((check) => check.state === 'fail') ?? [];
+  useEffect(() => {
+    if (failing.length > 0) setExpanded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failing.length]);
+  const icon = (state: InstallCheck['state']) =>
+    state === 'ok' ? (
+      <CheckCircle2 className="size-4 shrink-0 text-mint-400" />
+    ) : state === 'fail' ? (
+      <XCircle className="size-4 shrink-0 text-flare-400" />
+    ) : state === 'warn' ? (
+      <AlertTriangle className="size-4 shrink-0 text-gold-300" />
+    ) : (
+      <Loader2 className="size-4 shrink-0 animate-spin text-mist-400" />
+    );
+  return (
+    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02]">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left" aria-expanded={expanded}>
+        {checks === null ? (
+          <Loader2 className="size-4 animate-spin text-mist-400" />
+        ) : failing.length ? (
+          <XCircle className="size-4 text-flare-400" />
+        ) : (
+          <CheckCircle2 className="size-4 text-mint-400" />
+        )}
+        <span className="min-w-0 flex-1 text-[0.8rem] font-black text-mist-100">
+          Install check{checks === null ? '…' : failing.length ? ` · ${failing.length} problem${failing.length === 1 ? '' : 's'} found` : ' · this device can install'}
+        </span>
+        <ChevronDown className={`size-4 text-mist-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="border-t border-white/8 px-3 pt-2 pb-3">
+          <ul className="space-y-2">
+            {(checks ?? []).map((check) => (
+              <li key={check.id} className="flex items-start gap-2">
+                <span className="pt-0.5">{icon(check.state)}</span>
+                <span className="min-w-0">
+                  <span className="block text-[0.76rem] font-extrabold text-mist-100">{check.label}</span>
+                  <span className="block break-words text-[0.72rem] font-semibold leading-snug text-mist-400">{check.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={run} icon={<RefreshCw className="size-3.5" />}>
+              Check again
+            </Button>
+          </div>
+          <p className="mt-2 text-[0.66rem] font-semibold text-mist-600">Still stuck? Screenshot this list and send it to your admin.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void}) {
   const platform = installPlatform();
-  const {title, body} = steps(platform);
+  const iab = inAppBrowser();
+  const framed = inFrame();
+  const android = /android/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const {title, body} = iab
+    ? {
+        title: 'Open in Chrome first',
+        body: (
+          <>
+            <p className="text-[0.84rem] font-semibold leading-relaxed text-mist-300">
+              You opened the link inside <b className="text-mist-100">{iab}</b>. Apps can’t be installed from there. Open it in Chrome, then tap Install app.
+            </p>
+            {android && (
+              <a href={openInChromeUrl()} className="mt-3 inline-flex">
+                <Button size="sm" icon={<ExternalLink className="size-3.5" />}>
+                  Open in Chrome
+                </Button>
+              </a>
+            )}
+            <ol className="mt-3 space-y-2.5">
+              <Step n={1} icon={<EllipsisVertical className="size-3.5" />}>Or tap the menu ⋮ at the top right</Step>
+              <Step n={2}>Choose <b>Open in Chrome</b> (or <b>Open in browser</b>)</Step>
+            </ol>
+          </>
+        ),
+      }
+    : framed
+      ? {
+          title: 'Open in its own tab',
+          body: (
+            <>
+              <p className="text-[0.84rem] font-semibold leading-relaxed text-mist-300">
+                Quiz Arena is showing inside another page (a preview frame). Browsers only install a site opened in its own tab.
+              </p>
+              <a href={location.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex">
+                <Button size="sm" icon={<ExternalLink className="size-3.5" />}>
+                  Open in new tab
+                </Button>
+              </a>
+            </>
+          ),
+        }
+      : steps(platform);
   return (
     <Modal open={open} onClose={onClose} title={title} subtitle="Takes about 10 seconds. No app store needed." size="sm" footer={<Button variant="outline" onClick={onClose}>Got it</Button>}>
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
@@ -314,6 +432,7 @@ export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void
         </div>
       </div>
       <div className="mt-4">{body}</div>
+      <InstallChecks open={open} />
     </Modal>
   );
 }

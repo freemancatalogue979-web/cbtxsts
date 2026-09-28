@@ -4,6 +4,7 @@
 #   ./start-arena.sh            # both servers
 #   ./start-arena.sh api        # backend only
 #   ./start-arena.sh web        # frontend only
+#   ./start-arena.sh share      # both + a public https link (install on phones)
 #
 # First run: creates backend/.venv, installs both dependency sets, and seeds
 # the SQLite database from backend/app/seed_data (356 students, 93 questions).
@@ -92,8 +93,28 @@ case "$TARGET" in
     sleep 2
     start_web
     ;;
+  share)
+    # Phones can only install from a public https:// address; a Wi-Fi
+    # http://192.168.x.x link only ever makes a shortcut. A Cloudflare quick
+    # tunnel gives a free https://....trycloudflare.com link (no account).
+    setup_backend
+    ensure_gemini_key
+    setup_frontend
+    ( cd "$ROOT/backend" && ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
+    API_PID=$!
+    ( cd "$ROOT/frontend" && npx vite --host 0.0.0.0 --port "$WEB_PORT" ) &
+    WEB_PID=$!
+    trap 'kill $API_PID $WEB_PID 2>/dev/null || true' EXIT INT TERM
+    sleep 3
+    log "Opening a public https link… open the https://….trycloudflare.com address it prints on your phone, then tap Install app."
+    if command -v cloudflared >/dev/null 2>&1; then
+      cloudflared tunnel --no-autoupdate --url "http://localhost:$WEB_PORT"
+    else
+      npx --yes cloudflared tunnel --no-autoupdate --url "http://localhost:$WEB_PORT"
+    fi
+    ;;
   *)
-    echo "usage: ./start-arena.sh [all|api|web]" >&2
+    echo "usage: ./start-arena.sh [all|api|web|share]" >&2
     exit 2
     ;;
 esac
