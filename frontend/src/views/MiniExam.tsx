@@ -214,7 +214,7 @@ function StartCard({exam, busy, onStart, onExit}: {exam: Exam; busy: boolean; on
         </div>
       )}
 
-      <ol className="mt-5 grid gap-2 rounded-2xl border border-white/8 bg-ink-900/60 p-3 sm:grid-cols-3 sm:gap-3">
+      <ol className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-2 rounded-2xl border border-white/8 bg-ink-900/60 p-3 sm:grid-cols-3 sm:gap-3">
         {[
           {icon: <Clock className="size-3.5" />, text: 'The clock starts when you press Start — and keeps running if you leave.'},
           {icon: <Check className="size-3.5" />, text: 'Every answer saves instantly. Change it any time before you submit.'},
@@ -374,7 +374,7 @@ function Runner({exam, onFinished, onReload}: {exam: Exam; onFinished: (e: Exam)
         </div>
         <p className="relative mt-4 text-[1.02rem] leading-relaxed font-semibold whitespace-pre-wrap text-mist-50 sm:text-[1.1rem]">{q.text}</p>
         {q.image_url && <img src={q.image_url} alt="" className="relative mt-3 max-h-72 rounded-xl border border-white/10 object-contain" />}
-        <div className="relative mt-5 grid gap-2">
+        <div className="relative mt-5 grid grid-cols-[minmax(0,1fr)] gap-2">
           {q.options.map((o) => {
             const on = picks[q.question_id] === o.key;
             return (
@@ -583,20 +583,20 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
           {!feedback && <div className="order-last w-full sm:order-none sm:w-auto"><Button size="sm" block onClick={() => void getFeedback()} loading={loadingFeedback} icon={<Sparkles className="size-3.5" />}>Get feedback</Button></div>}
         </div>
         {feedback ? (
-          <div className="relative mt-3.5 grid gap-3">
+          <div className="relative mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-3">
             <p className="text-[0.95rem] leading-snug font-black text-mist-50">{feedback.headline}</p>
             {feedback.summary && <p className="text-[0.84rem] leading-relaxed text-mist-300">{feedback.summary}</p>}
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
               {feedback.mistake_patterns.length > 0 && (
                 <div className="rounded-2xl border border-flare-400/20 bg-flare-500/[0.06] p-3">
                   <p className="text-[0.6rem] font-black tracking-[0.14em] text-flare-300 uppercase">Mistake patterns</p>
-                  <ul className="mt-1.5 grid gap-1.5">{feedback.mistake_patterns.map((m) => <li key={m} className="flex gap-2 text-[0.8rem] leading-snug text-mist-200"><X className="mt-0.5 size-3.5 shrink-0 text-flare-300" />{m}</li>)}</ul>
+                  <ul className="mt-1.5 grid grid-cols-[minmax(0,1fr)] gap-1.5">{feedback.mistake_patterns.map((m) => <li key={m} className="flex gap-2 text-[0.8rem] leading-snug text-mist-200"><X className="mt-0.5 size-3.5 shrink-0 text-flare-300" />{m}</li>)}</ul>
                 </div>
               )}
               {feedback.recommended_actions.length > 0 && (
                 <div className="rounded-2xl border border-mint-400/20 bg-mint-500/[0.06] p-3">
                   <p className="text-[0.6rem] font-black tracking-[0.14em] text-mint-300 uppercase">Do this next</p>
-                  <ul className="mt-1.5 grid gap-1.5">{feedback.recommended_actions.map((m) => <li key={m} className="flex gap-2 text-[0.8rem] leading-snug text-mist-200"><ArrowRight className="mt-0.5 size-3.5 shrink-0 text-mint-300" />{m}</li>)}</ul>
+                  <ul className="mt-1.5 grid grid-cols-[minmax(0,1fr)] gap-1.5">{feedback.recommended_actions.map((m) => <li key={m} className="flex gap-2 text-[0.8rem] leading-snug text-mist-200"><ArrowRight className="mt-0.5 size-3.5 shrink-0 text-mint-300" />{m}</li>)}</ul>
                 </div>
               )}
             </div>
@@ -610,7 +610,7 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
       {a && a.topics.length > 0 && (
         <Card className="p-4 sm:p-5">
           <SectionTitle icon={<Target className="size-4" />} title="By topic" hint={a.weak_topics.length ? `Focus on: ${a.weak_topics.slice(0, 3).join(', ')}` : 'How you did in each area'} />
-          <div className="mt-3.5 grid gap-3">
+          <div className="mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-3">
             {a.topics.map((t) => {
               const weak = a.weak_topics.includes(t.topic);
               const strong = a.strong_topics.includes(t.topic);
@@ -618,10 +618,10 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
               return (
                 <div key={t.topic}>
                   <div className="flex items-center gap-2 text-[0.8rem]">
-                    <span className="min-w-0 flex-1 truncate font-bold text-mist-100">{t.topic}</span>
-                    {weak && <span className="rounded-full bg-flare-500/15 px-2 py-0.5 text-[0.58rem] font-black tracking-wider text-flare-200 uppercase">Weak</span>}
-                    {strong && <span className="rounded-full bg-mint-500/15 px-2 py-0.5 text-[0.58rem] font-black tracking-wider text-mint-200 uppercase">Strong</span>}
-                    <span className="w-14 text-right font-black text-mist-300 tabular">{t.correct}/{t.total}</span>
+                    <span className="min-w-0 flex-1 leading-snug font-bold text-mist-100 [overflow-wrap:anywhere]">{t.topic}</span>
+                    {weak && <span className="shrink-0 rounded-full bg-flare-500/15 px-2 py-0.5 text-[0.58rem] font-black tracking-wider text-flare-200 uppercase">Weak</span>}
+                    {strong && <span className="shrink-0 rounded-full bg-mint-500/15 px-2 py-0.5 text-[0.58rem] font-black tracking-wider text-mint-200 uppercase">Strong</span>}
+                    <span className="w-14 shrink-0 text-right font-black text-mist-300 tabular">{t.correct}/{t.total}</span>
                   </div>
                   <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/[0.06]">
                     <div className={`h-full rounded-full bg-gradient-to-r ${tone}`} style={{width: `${Math.max(4, t.percentage)}%`}} />
@@ -637,7 +637,7 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
       {a && a.recommended_actions.length > 0 && (
         <Card className="p-4 sm:p-5">
           <SectionTitle icon={<ArrowRight className="size-4" />} title="Next steps" hint="One tap — your tutor sets it up" />
-          <div className="mt-3.5 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
             {a.recommended_actions.map((action) => {
               const look = action.type === 'review'
                 ? {icon: <BookOpen className="size-4" />, tone: 'bg-sky-500/15 text-sky-200', kind: 'Lesson'}
@@ -681,7 +681,7 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
               </div>
             }
           />
-          <div className="mt-3.5 grid gap-2">
+          <div className="mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-2">
             {questions.length === 0 && (
               <div className="grid place-items-center gap-1.5 rounded-2xl border border-dashed border-mint-400/25 py-6 text-center">
                 <Trophy className="size-6 text-mint-300" />
@@ -774,7 +774,7 @@ function ReviewItem({q, number, course}: {q: MiniExamQuestion; number: number; c
         <ChevronDown className={`mt-1 size-4 shrink-0 text-mist-500 transition ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="grid gap-1.5 pr-3 pb-3 pl-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5 pr-3 pb-3 pl-4">
           {q.options.map((o) => {
             const right = o.key === q.correct;
             const mine = o.key === q.selected;
