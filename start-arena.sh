@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quiz Arena — start the API (port 3000) and the web app (port 5173) together.
+# Absolute Genesis — start the API (port 3000) and the web app (port 5173) together.
 #
 #   ./start-arena.sh            # both servers
 #   ./start-arena.sh api        # backend only

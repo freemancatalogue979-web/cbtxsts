@@ -492,7 +492,7 @@ export function AppShell({
             </button>
 
             <LogoMark size={null} className="hidden size-10 shrink-0 lg:block" />
-            <span className="sr-only">Quiz Arena</span>
+            <span className="sr-only">Absolute Genesis</span>
 
             {/* Phones keep just the menu up top — the LV pill only joins from
                 lg where the row has room (level also lives in the account menu). */}

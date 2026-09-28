@@ -1,4 +1,4 @@
-"""End-to-end smoke test for the Quiz Arena API (REST + websockets).
+"""End-to-end smoke test for the Absolute Genesis API (REST + websockets).
 
 Every run registers two throwaway players so it is repeatable against a
 persistent database::

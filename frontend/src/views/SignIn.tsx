@@ -427,7 +427,7 @@ export default function SignIn({
         </button>
 
         <p className="mt-4 text-center text-[0.68rem] font-semibold text-mist-600">
-          {config?.campus || 'Enugu, Nigeria'} · Powered by the Quiz Arena engine
+          {config?.campus || 'Enugu, Nigeria'} · Powered by the Absolute Genesis engine
         </p>
       </main>
     </div>

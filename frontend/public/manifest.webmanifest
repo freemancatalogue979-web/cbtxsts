@@ -1,7 +1,7 @@
 {
-  "name": "Quiz Arena",
-  "short_name": "Quiz Arena",
-  "description": "CBT exams, practice, duels and study materials. Answers save on your phone even when the network drops.",
+  "name": "Absolute Genesis",
+  "short_name": "Genesis",
+  "description": "A completely new beginning. CBT exams, practice, duels and study materials. Answers save on your phone even when the network drops.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -91,7 +91,7 @@
       "sizes": "1280x800",
       "type": "image/jpeg",
       "form_factor": "wide",
-      "label": "Quiz Arena on a computer"
+      "label": "Absolute Genesis on a computer"
     }
   ]
 }

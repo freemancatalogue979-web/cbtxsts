@@ -92,7 +92,7 @@ export default function Overview() {
               <h2 className="text-[1.05rem] font-black text-mist-50">{group.name}</h2>
               <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
             </div>
-            <p className="mt-1 text-[0.8rem] font-medium text-mist-400">{group.description || group.goal || 'A study community inside Quiz Arena.'}</p>
+            <p className="mt-1 text-[0.8rem] font-medium text-mist-400">{group.description || group.goal || 'A study community inside Absolute Genesis.'}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.74rem] font-semibold text-mist-500">
               {owner && (
                 <span className="inline-flex items-center gap-1">

@@ -72,7 +72,7 @@ async function main() {
   window.eval(readFileSync(BUNDLE, 'utf8'));
   await wait(1600);
 
-  check('app mounts on the branded landing page', text().includes('Quiz Arena'), text().slice(0, 120));
+  check('app mounts on the branded landing page', text().includes('Absolute Genesis'), text().slice(0, 120));
   check('hero reel plays its first caption', text().includes('Every answer earns glory.'), text().slice(0, 160));
   const heroFrames = [...window.document.querySelectorAll('img[src^="/arena/"]')];
   check('hero reel carries four captioned frames', heroFrames.length === 4, `${heroFrames.length} frames`);

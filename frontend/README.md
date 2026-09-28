@@ -1,4 +1,4 @@
-# Quiz Arena — frontend
+# Absolute Genesis — frontend
 
 React 19 + Vite 6 + Tailwind v4 + `motion`, Montserrat throughout, red → purple → blue arena theme.
 

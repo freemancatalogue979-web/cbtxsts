@@ -1,9 +1,9 @@
 {
-  "name": "quiz-arena-frontend",
+  "name": "absolute-genesis-frontend",
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "Quiz Arena — real-time CBT, duels, leaderboards and prizes (React + Vite + Tailwind v4)",
+  "description": "Absolute Genesis — real-time CBT, duels, leaderboards and prizes (React + Vite + Tailwind v4)",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",

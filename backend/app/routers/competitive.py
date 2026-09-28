@@ -1275,15 +1275,15 @@ def build_share(kind: str, db: Session = Depends(get_db), student: Student = Dep
             select(Attempt).where(Attempt.student_id == student.id, Attempt.status == "submitted").order_by(Attempt.percentage.desc())
         )
         text = (
-            f"I scored {best.percentage:.0f}% ({best.grade}) on {best.quiz.title} in Quiz Arena!"
+            f"I scored {best.percentage:.0f}% ({best.grade}) on {best.quiz.title} in Absolute Genesis!"
             if best
-            else "I'm training for my next exam on Quiz Arena."
+            else "I'm training for my next exam on Absolute Genesis."
         )
     elif kind == "streak":
-        text = f"{student.streak}-day study streak on Quiz Arena 🔥"
+        text = f"{student.streak}-day study streak on Absolute Genesis 🔥"
     elif kind == "rank":
         rank = int(db.scalar(select(func.count(Student.id)).where(Student.xp > student.xp, Student.is_banned.is_(False))) or 0) + 1
-        text = f"I'm rank #{rank} on the Quiz Arena leaderboard."
+        text = f"I'm rank #{rank} on the Absolute Genesis leaderboard."
     elif kind == "achievement":
         badge = db.execute(
             select(Badge, StudentBadge)
@@ -1292,11 +1292,11 @@ def build_share(kind: str, db: Session = Depends(get_db), student: Student = Dep
             .order_by(StudentBadge.id.desc())
             .limit(1)
         ).first()
-        text = f"I unlocked “{badge[0].name}” on Quiz Arena 🏆" if badge else "Chasing achievements on Quiz Arena."
+        text = f"I unlocked “{badge[0].name}” on Absolute Genesis 🏆" if badge else "Chasing achievements on Absolute Genesis."
     elif kind == "perfect":
-        text = f"{int(student.best_percentage)}% perfect-score chasing on Quiz Arena."
+        text = f"{int(student.best_percentage)}% perfect-score chasing on Absolute Genesis."
     else:
-        text = "Come duel me on Quiz Arena."
+        text = "Come duel me on Absolute Genesis."
     return {"kind": kind, "text": text, "url": "/", "player_code": student.player_code}
 
 

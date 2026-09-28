@@ -1,5 +1,5 @@
 @echo off
-REM Quiz Arena - Windows launcher. Starts the API (:3000) and the web app (:5173).
+REM Absolute Genesis - Windows launcher. Starts the API (:3000) and the web app (:5173).
 REM   start-arena.bat         both servers
 REM   start-arena.bat share   both servers + a public https link for installing on phones
 REM First run creates backend\.venv, installs both dependency sets and seeds the DB.
@@ -36,15 +36,15 @@ if not exist "frontend\node_modules" (
 )
 
 echo [*] Starting the API on http://localhost:3000 ...
-start "Quiz Arena API :3000" cmd /k "cd /d %~dp0backend && .venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 3000 --reload --reload-dir app"
+start "Absolute Genesis API :3000" cmd /k "cd /d %~dp0backend && .venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 3000 --reload --reload-dir app"
 
 timeout /t 3 /nobreak >nul
 
 echo [*] Starting the web app on http://localhost:5173 ...
-start "Quiz Arena Web :5173" cmd /k "cd /d %~dp0frontend && npx vite --host 0.0.0.0 --port 5173"
+start "Absolute Genesis Web :5173" cmd /k "cd /d %~dp0frontend && npx vite --host 0.0.0.0 --port 5173"
 
 REM "start-arena.bat share": a free public https link (Cloudflare quick tunnel)
-REM so phones can install Quiz Arena as a real app. Plain http://192.168.x.x
+REM so phones can install Absolute Genesis as a real app. Plain http://192.168.x.x
 REM links can only ever make a shortcut on Android.
 if /i "%~1"=="share" call :share
 
@@ -69,11 +69,11 @@ where cloudflared >nul 2>nul || (
   winget install -e --id Cloudflare.cloudflared --accept-source-agreements --accept-package-agreements >nul 2>nul
 )
 where cloudflared >nul 2>nul && (
-  start "Quiz Arena public link" cmd /k "echo Open the https://....trycloudflare.com link below on your phone, then tap Install app. & cloudflared tunnel --no-autoupdate --url http://localhost:5173"
+  start "Absolute Genesis public link" cmd /k "echo Open the https://....trycloudflare.com link below on your phone, then tap Install app. & cloudflared tunnel --no-autoupdate --url http://localhost:5173"
 ) || (
-  start "Quiz Arena public link" cmd /k "echo Open the https://....trycloudflare.com link below on your phone, then tap Install app. & npx --yes cloudflared tunnel --no-autoupdate --url http://localhost:5173"
+  start "Absolute Genesis public link" cmd /k "echo Open the https://....trycloudflare.com link below on your phone, then tap Install app. & npx --yes cloudflared tunnel --no-autoupdate --url http://localhost:5173"
 )
-echo [*] Look in the "Quiz Arena public link" window for your https://....trycloudflare.com address.
+echo [*] Look in the "Absolute Genesis public link" window for your https://....trycloudflare.com address.
 echo     If winget is missing: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
 exit /b 0
 

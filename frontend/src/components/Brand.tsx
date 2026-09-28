@@ -1,8 +1,8 @@
-/** Quiz Arena brand mark: gradient badge, arena ring and bolt, red → purple → blue. */
+/** Absolute Genesis brand mark: the AG crest under a rising star, violet and gold. */
 import {useIsDesktop} from '../lib/viewport';
 
 /**
- * The uploaded Quiz Arena crest — crown, shield and bolt — as the brand mark.
+ * The Absolute Genesis crest — rising star, AG shield and open book — as the brand mark.
  * Pass a number for a fixed pixel size, or `size={null}` to size the crest with
  * responsive utility classes (used by the app header so it scales per breakpoint).
  */
@@ -44,14 +44,27 @@ export function Wordmark({
   // The header brand block is desktop-only. On phones the crest + wordmark
   // crowd the chrome; we leave the right-side controls to own the top bar.
   const desktop = useIsDesktop();
-  if (!desktop) return null;
+  if (!desktop) {
+    // Public pages on a phone: a compact crest + name so the brand is never missing
+    // (the hero art carries no lettering). In-app headers stay clean on phones.
+    if (size !== 'brand') return null;
+    return (
+      <div className={`flex min-w-0 shrink items-center gap-2 ${className}`}>
+        <img src="/brand/crest.webp" alt="" width={36} height={34} draggable={false} className="h-9 w-auto shrink-0 object-contain" />
+        <span className="min-w-0 leading-tight">
+          <span className="block truncate font-display text-[0.9rem] font-black tracking-[0.06em] text-mist-50">Absolute Genesis</span>
+          {tagline && <span className="block truncate text-[0.6rem] font-bold tracking-[0.08em] text-mist-500">A completely new beginning</span>}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={`flex min-w-0 shrink items-center gap-2 sm:gap-3 ${className}`}>
       <LogoMark size={s.mark} className={s.markClass} />
-      <span className="sr-only">Quiz Arena</span>
+      <span className="sr-only">Absolute Genesis</span>
       {tagline && (
  <p className={`${s.tag} min-w-0 truncate font-bold tracking-[0.26em] text-mist-500 ${taglineClassName}`}>
-          Compete · Conquer · Climb
+          A completely new beginning
         </p>
       )}
     </div>

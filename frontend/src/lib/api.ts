@@ -1,5 +1,5 @@
 /**
- * Typed REST client for the Quiz Arena API.
+ * Typed REST client for the Absolute Genesis API.
  *
  * The dev server proxies ``/api`` to the FastAPI backend on localhost:3000, so
  * every path here is relative — no CORS, no hard-coded host, works in preview.

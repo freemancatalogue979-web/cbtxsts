@@ -557,7 +557,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[0.88rem] font-black tracking-tight text-mist-50">Staff console</p>
-                  <p className="truncate text-[0.68rem] font-bold text-mist-500">Quiz Arena admin</p>
+                  <p className="truncate text-[0.68rem] font-bold text-mist-500">Absolute Genesis admin</p>
                 </div>
                 <IconButton label="Close menu" onClick={() => setNavOpen(false)}>
                   <X className="size-4.5 text-mist-300" />
@@ -662,7 +662,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
       </div>
 
       <p className="px-4 pb-6 text-center text-[0.7rem] font-semibold text-mist-600 sm:pb-8 sm:text-[0.72rem]">
-        Quiz Arena staff console · every change broadcasts live to connected players
+        Absolute Genesis staff console · every change broadcasts live to connected players
       </p>
     </div>
   );

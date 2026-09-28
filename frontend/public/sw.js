@@ -1,5 +1,5 @@
 /*
- * Quiz Arena service worker — keeps the app shell on the phone.
+ * Absolute Genesis service worker — keeps the app shell on the phone.
  *
  * Why: on a flaky or expensive connection the arena should open instantly and
  * an exam in progress must reopen with no network at all (answers themselves
@@ -16,7 +16,7 @@
  *
  * Bump VERSION to drop every old cache on the next visit.
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 /* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
    makes the app installable and gives an offline fallback page; it never
    caches dev modules, so hot reload behaves exactly as before. */

@@ -39,7 +39,7 @@ function useInstallAction() {
     setBusy(true);
     try {
       const accepted = await state.install();
-      if (accepted) toast('success', 'Quiz Arena installed', 'Open it from your home screen or app list.');
+      if (accepted) toast('success', 'Absolute Genesis installed', 'Open it from your home screen or app list.');
     } finally {
       setBusy(false);
     }
@@ -101,7 +101,7 @@ export default function InstallApp({variant = 'card', className = ''}: {variant?
       <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-nova-400/20 bg-nova-500/[0.07] px-4 py-3.5 sm:rounded-3xl sm:px-5 ${className}`}>
         <img src="/brand/icon-192.png" alt="" className="size-11 shrink-0 rounded-xl" width={44} height={44} />
         <div className="min-w-0 flex-1">
-          <p className="text-[0.86rem] font-black text-mist-50">Install Quiz Arena</p>
+          <p className="text-[0.86rem] font-black text-mist-50">Install Absolute Genesis</p>
           <p className="text-[0.74rem] font-semibold leading-snug text-mist-400">
             Opens from your home screen like any app, loads faster and keeps working on a weak network.
           </p>
@@ -143,12 +143,12 @@ export function InstallBanner({className = ''}: {className?: string}) {
     <>
       <div
         role="region"
-        aria-label="Install Quiz Arena"
+        aria-label="Install Absolute Genesis"
         className={`flex items-center gap-3 rounded-2xl border border-nova-400/25 bg-gradient-to-r from-nova-500/[0.14] to-fuchsia-500/[0.08] p-2.5 pr-2 sm:p-3 ${className}`}
       >
         <img src="/brand/icon-192.png" alt="" className="size-10 shrink-0 rounded-xl" width={40} height={40} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[0.82rem] font-black text-mist-50">Get the Quiz Arena app</p>
+          <p className="truncate text-[0.82rem] font-black text-mist-50">Get the Absolute Genesis app</p>
           <p className="text-[0.7rem] font-semibold leading-snug text-mist-400">Home-screen icon, full screen, works on weak network.</p>
         </div>
         <Button size="sm" loading={action.busy} onClick={action.run} icon={<Download className="size-3.5" />}>
@@ -189,7 +189,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
               <b className="text-mist-100"> {location.host}</b> over plain http, so the install option is switched off by the browser itself.
             </p>
             <ol className="mt-3 space-y-2.5">
-              <Step n={1} icon={<Lock className="size-3.5" />}>Open Quiz Arena from its https:// link (the one your admin shares).</Step>
+              <Step n={1} icon={<Lock className="size-3.5" />}>Open Absolute Genesis from its https:// link (the one your admin shares).</Step>
               <Step n={2}>Tap <b>Install app</b> again. It will install in one tap.</Step>
             </ol>
             <p className="mt-3 text-[0.74rem] font-semibold leading-relaxed text-mist-500">
@@ -205,7 +205,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
           <ol className="space-y-2.5">
             <Step n={1} icon={<Share className="size-3.5" />}>Tap the Share button in Safari’s toolbar</Step>
             <Step n={2} icon={<SquarePlus className="size-3.5" />}>Scroll down and tap <b>Add to Home Screen</b></Step>
-            <Step n={3}>Tap <b>Add</b>. Quiz Arena appears on your home screen and opens full screen.</Step>
+            <Step n={3}>Tap <b>Add</b>. Absolute Genesis appears on your home screen and opens full screen.</Step>
           </ol>
         ),
       };
@@ -237,7 +237,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
           <ol className="space-y-2.5">
             <Step n={1} icon={<Plus className="size-3.5" />}>Tap the install icon in the address bar, or open the menu ☰</Step>
             <Step n={2}>Choose <b>Add page to</b> → <b>Home screen</b> (or <b>Install</b>)</Step>
-            <Step n={3}>Confirm. Quiz Arena appears with your apps.</Step>
+            <Step n={3}>Confirm. Absolute Genesis appears with your apps.</Step>
           </ol>
         ),
       };
@@ -248,7 +248,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
           <ol className="space-y-2.5">
             <Step n={1} icon={<EllipsisVertical className="size-3.5" />}>Open the menu ⋮</Step>
             <Step n={2}>Tap <b>Install</b> (or <b>Add to Home screen</b>)</Step>
-            <Step n={3}>Confirm. Quiz Arena appears on your home screen.</Step>
+            <Step n={3}>Confirm. Absolute Genesis appears on your home screen.</Step>
           </ol>
         ),
       };
@@ -259,7 +259,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
           <ol className="space-y-2.5">
             <Step n={1} icon={<EllipsisVertical className="size-3.5" />}>Open the browser menu ⋮ (top right)</Step>
             <Step n={2} icon={<Smartphone className="size-3.5" />}>Tap <b>Install app</b> or <b>Add to Home screen</b></Step>
-            <Step n={3}>Tap <b>Install</b>. Quiz Arena appears with your other apps.</Step>
+            <Step n={3}>Tap <b>Install</b>. Absolute Genesis appears with your other apps.</Step>
           </ol>
         ),
       };
@@ -280,7 +280,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
         body: (
           <ol className="space-y-2.5">
             <Step n={1}>In Safari’s menu bar choose <b>File</b> → <b>Add to Dock</b></Step>
-            <Step n={2}>Click <b>Add</b>. Quiz Arena opens from the Dock like any app.</Step>
+            <Step n={2}>Click <b>Add</b>. Absolute Genesis opens from the Dock like any app.</Step>
           </ol>
         ),
       };
@@ -296,7 +296,7 @@ function steps(platform: InstallPlatform): {title: string; body: ReactNode} {
       };
     default:
       return {
-        title: 'Install Quiz Arena',
+        title: 'Install Absolute Genesis',
         body: (
           <ol className="space-y-2.5">
             <Step n={1} icon={<EllipsisVertical className="size-3.5" />}>Open your browser menu</Step>
@@ -409,7 +409,7 @@ export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void
           body: (
             <>
               <p className="text-[0.84rem] font-semibold leading-relaxed text-mist-300">
-                Quiz Arena is showing inside another page (a preview frame). Browsers only install a site opened in its own tab.
+                Absolute Genesis is showing inside another page (a preview frame). Browsers only install a site opened in its own tab.
               </p>
               <a href={location.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex">
                 <Button size="sm" icon={<ExternalLink className="size-3.5" />}>
@@ -425,7 +425,7 @@ export function InstallHelp({open, onClose}: {open: boolean; onClose: () => void
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
         <img src="/brand/icon-192.png" alt="" className="size-12 shrink-0 rounded-xl" width={48} height={48} />
         <div className="min-w-0">
-          <p className="text-[0.9rem] font-black text-mist-50">Quiz Arena</p>
+          <p className="text-[0.9rem] font-black text-mist-50">Absolute Genesis</p>
           <p className="flex items-center gap-1 text-[0.72rem] font-semibold text-mist-400">
             <CheckCircle2 className="size-3.5 text-mint-400" /> Free · small download · works offline
           </p>

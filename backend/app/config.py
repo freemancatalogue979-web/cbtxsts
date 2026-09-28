@@ -1,4 +1,4 @@
-"""Runtime configuration for the Quiz Arena backend."""
+"""Runtime configuration for the Absolute Genesis backend."""
 from __future__ import annotations
 
 import json
@@ -74,7 +74,7 @@ DUEL_BASE_POINTS = 60            # points for a correct duel answer
 
 MIN_MATCHMAKING_POOL = 2         # online players needed before quick-duel matches
 
-APP_NAME = "Quiz Arena"
+APP_NAME = "Absolute Genesis"
 APP_TAGLINE = "Compete. Conquer. Climb."
 
 

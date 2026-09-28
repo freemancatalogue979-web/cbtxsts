@@ -1,4 +1,6 @@
-# Quiz Arena
+# Absolute Genesis
+
+*A completely new beginning.*
 
 A real-time computer-based testing **and** quiz-competition platform: timed exams, live 1v1 duels,
 XP, levels, streaks, coins, badges, leaderboards and a prize vault — for the UNN Faculty of Law
@@ -59,7 +61,7 @@ Open **http://localhost:5173**.
   **4 exams**, **16 badges**, **9 prizes** and a few announcements. **No students are seeded** —
   every account is a real registration.
 * The front face is a branded landing page (animated picture reel of the uploaded game splash art, live
-  stats, current top five) wearing the uploaded **Quiz Arena crest** everywhere the brand appears —
+  stats, current top five) wearing the **Absolute Genesis crest** everywhere the brand appears —
   header, sign-in, favicon — with a game-HUD look (glossy coin/gem pills, gold XP bars, violet washes)
   guided by the brand theme board. The sign-in form lives on its own screen — on a phone they are
   strictly separate views with a button between them.
@@ -261,7 +263,7 @@ Players get an **AI Tutor** tab ("Ask anything about what you're learning.") pow
 
 ## Install as an app
 
-Quiz Arena installs like a normal app: home-screen icon, full screen, its own window on a computer, no app store.
+Absolute Genesis installs like a normal app: home-screen icon, full screen, its own window on a computer, no app store.
 
 - **Where the buttons are:** "Install app" in the landing header, an install banner on Home, the download icon in the top bar (tablet/desktop), an "Install app" tile in the Menu, and a card in Profile. Where the browser offers its prompt (Chrome, Edge, Samsung Internet, Opera on Android and desktop) one tap installs. Elsewhere the same buttons open steps for that exact browser (iPhone Safari → Share → Add to Home Screen, Firefox, Opera Mini → use Chrome).
 - **HTTPS is required by every browser.** Installing works from an `https://` address, or from `http://localhost` on the same computer. A phone opening `http://192.168.x.x:5173` over Wi-Fi can never install (the app says so and explains why).

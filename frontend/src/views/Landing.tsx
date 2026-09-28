@@ -20,8 +20,8 @@ import type {Bootstrap} from '../lib/types';
 const SLIDES: HeroSlide[] = [
   {
     src: '/arena/bg.webp',
-    pos: 'center 18%',
-    alt: 'Quiz Arena game art: neon esports arena scoreboard under the gold crown crest',
+    pos: 'center 35%',
+    alt: 'Absolute Genesis art: students on a glowing stage watching a new star rise over the arena',
     eyebrow: 'Timed arena exams',
     title: 'Every answer earns glory.',
     caption: 'Server-guarded clocks, instant grading and XP for every correct answer. Your phone is the exam hall.',
@@ -30,7 +30,7 @@ const SLIDES: HeroSlide[] = [
   {
     src: '/arena/bg.webp',
     pos: 'left center',
-    alt: 'Quiz Arena game art: rival mascots with headsets and tablets facing off',
+    alt: 'Absolute Genesis art: arena stands lit in violet beside floating answer cards',
     eyebrow: 'Live 1v1 duels',
     title: 'Duel a friend. Right now.',
     caption: 'Six-letter codes, real-time answers, speed bonuses and combo streaks. Winner takes the coin pot.',
@@ -39,7 +39,7 @@ const SLIDES: HeroSlide[] = [
   {
     src: '/arena/bg.webp',
     pos: 'center center',
-    alt: 'Quiz Arena game art: the wolf mascot charging forward with a crown phone',
+    alt: 'Absolute Genesis art: three students with a tablet and an open book, pointing ahead',
     eyebrow: 'Global & friends ranks',
     title: 'Climb the arena ladder.',
     caption: 'Weekly and all-time leaderboards, badges and login streaks. Beat your mates, not just the clock.',
@@ -48,7 +48,7 @@ const SLIDES: HeroSlide[] = [
   {
     src: '/arena/bg.webp',
     pos: 'right center',
-    alt: 'Quiz Arena game art: gold coins and the glowing EXP vault',
+    alt: 'Absolute Genesis art: a glowing open book, crystal trophies and gold coins',
     eyebrow: 'Coins become prizes',
     title: 'Turn XP into prizes.',
     caption: 'Bank coins from exams, duels and daily bonuses — then claim data bundles, books and campus perks.',
@@ -287,7 +287,7 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
             {config?.institution || 'University of Nigeria'} · {config?.faculty || 'Faculty of Law'}
           </p>
           <p className="mt-1 text-[0.66rem] font-semibold text-mist-600">
-            {config?.campus || 'Enugu, Nigeria'} · Powered by the Quiz Arena engine
+            {config?.campus || 'Enugu, Nigeria'} · Powered by the Absolute Genesis engine
           </p>
         </footer>
       </main>

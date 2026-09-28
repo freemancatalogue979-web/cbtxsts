@@ -1,4 +1,4 @@
-"""Quiz Arena API — FastAPI + SQLite + websockets.
+"""Absolute Genesis API — FastAPI + SQLite + websockets.
 
 Run locally with::
 

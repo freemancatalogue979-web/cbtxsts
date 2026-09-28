@@ -122,7 +122,7 @@ function Splash() {
           />
           <motion.img
             src="/brand/logo.webp"
-            alt="Quiz Arena"
+            alt="Absolute Genesis"
             draggable={false}
             initial={{opacity: 0, scale: 0.82}}
             animate={reduced ? {opacity: 1, scale: 1} : {opacity: 1, scale: [1, 1.05, 1]}}
@@ -131,7 +131,7 @@ function Splash() {
           />
         </div>
  <p className="game-title text-center font-display text-[0.9rem] font-black tracking-[0.34em] text-mist-400 sm:text-[1rem]">
-          Entering the arena
+          A completely new beginning
         </p>
       </div>
     </div>
