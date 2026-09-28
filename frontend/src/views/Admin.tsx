@@ -1,23 +1,27 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
 import {Activity, Award, LogOut, Bot, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
 import {Wordmark} from '../components/Brand';
-import ContentAdmin from '../admin/ContentAdmin';
-import PeopleAdmin from '../admin/PeopleAdmin';
-import BroadcastAdmin from '../admin/BroadcastAdmin';
-import EventsAdmin from '../admin/EventsAdmin';
-import StudioAdmin from '../admin/StudioAdmin';
-import GroupsAdmin from '../admin/GroupsAdmin';
-import SupportAdmin from '../admin/SupportAdmin';
-import MysteryAdmin from '../admin/MysteryAdmin';
-import TutorAdmin from '../admin/TutorAdmin';
 import {api} from '../lib/api';
+import {lazyScreen} from '../lib/lazy';
 import {formatCompact, formatNumber, formatRelative} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSession} from '../store/session';
 import type {AdminOverview, Config, Notice} from '../lib/types';
+
+/* Each console section downloads when first opened (the course builder and
+   materials editor alone are larger than the whole player home screen). */
+const ContentAdmin = lazyScreen(() => import('../admin/ContentAdmin'));
+const PeopleAdmin = lazyScreen(() => import('../admin/PeopleAdmin'));
+const BroadcastAdmin = lazyScreen(() => import('../admin/BroadcastAdmin'));
+const EventsAdmin = lazyScreen(() => import('../admin/EventsAdmin'));
+const StudioAdmin = lazyScreen(() => import('../admin/StudioAdmin'));
+const GroupsAdmin = lazyScreen(() => import('../admin/GroupsAdmin'));
+const SupportAdmin = lazyScreen(() => import('../admin/SupportAdmin'));
+const MysteryAdmin = lazyScreen(() => import('../admin/MysteryAdmin'));
+const TutorAdmin = lazyScreen(() => import('../admin/TutorAdmin'));
 
 type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'support' | 'tutor' | 'settings';
 
@@ -630,6 +634,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
               exit={{opacity: 0, y: -8}}
               transition={{duration: 0.24}}
             >
+              <Suspense fallback={<Skeleton className="h-64" />}>
               {section === 'overview' && <Overview key={`overview-${bump}`} onGoto={goto} />}
               {section === 'studio' && <StudioAdmin key={`studio-${bump}`} />}
               {/* ContentAdmin is not re-keyed on refresh: it reloads its own lists and must keep the open course / tab. */}
@@ -650,6 +655,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}
               {section === 'tutor' && <TutorAdmin key={`tutor-${bump}`} />}
               {section === 'settings' && <SettingsPanel key={`settings-${bump}`} />}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </div>

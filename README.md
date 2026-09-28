@@ -259,6 +259,19 @@ Players get an **AI Tutor** tab ("Ask anything about what you're learning.") pow
 
 ---
 
+## Offline, low data and exam integrity
+
+Built for players on weak or expensive networks.
+
+- **Answers save on the phone first.** `frontend/src/lib/examSync.ts` keeps an outbox per attempt and delivers it in batches to `POST /api/exams/attempts/{id}/sync`, retrying when the network returns. Submitting offline queues the submission; the server accepts it within `EXAM_SYNC_GRACE_SECONDS` after the clock ends.
+- **Exams reopen offline.** A saved copy of the paper (questions and the player's answers, never the answer key) lets a reload continue with no network. Signing in survives a dropped connection: only a rejected login (401) signs a player out.
+- **Installable app.** `public/manifest.webmanifest` plus `public/sw.js` (production builds only). The service worker keeps the app shell and every screen already opened; it never caches `/api`, websockets or music. Bump `VERSION` in `sw.js` to drop old caches. Profile shows an "Install Quiz Arena" card when the phone supports it.
+- **Smaller first download.** Staff console, duels, groups, results and most tabs load on first open (`src/lib/lazy.ts`); first load is about 230 KB gzipped. Common tabs are fetched when idle, except on Data Saver or 2G. Slow devices get lighter effects (`src/lib/fx.ts`).
+- **One device at a time.** A second phone must choose "Continue here" (takeover); the first phone then stops saving.
+- **Integrity review, never auto-penalty.** Leaving the screen, time away, offline spells, copy/paste and device moves are recorded. Staff see a Review/Check chip, a "Needs review" filter and a timeline under Results. Scores are never changed.
+- **Question stats.** Results → Question stats shows per-question difficulty, discrimination and option picks for an exam or the whole course, flagging likely wrong keys and weak distractors (from 5 submitted papers).
+- **Shuffle answer options.** A builder switch (on by default) shows A–D in a different order per student; grading maps answers back.
+
 ## Architecture
 
 ### Backend (`backend/app`)

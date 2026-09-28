@@ -96,6 +96,23 @@ export function cachePaper(state: AttemptState): void {
   write(BY_QUIZ(state.quiz_id), state.id);
 }
 
+/**
+ * Keep the saved copy's answers current, so a reload while offline shows every
+ * answer the player gave (including ones already delivered and no longer in
+ * the outbox). The clock reference (savedAt/time_remaining) is left alone.
+ */
+export function updateCachedAnswers(attemptId: number, rows: Record<number, {selected: OptionKey | null; flagged: boolean; seconds: number}>): void {
+  const paper = read<CachedPaper>(PAPER(attemptId));
+  if (!paper) return;
+  const answers = Object.entries(rows).map(([id, row]) => ({
+    question_id: Number(id),
+    selected: row.selected,
+    flagged: row.flagged,
+    seconds_spent: row.seconds,
+  }));
+  write(PAPER(attemptId), {...paper, state: {...paper.state, answers}} satisfies CachedPaper);
+}
+
 /** The saved paper for an exam, found by its quiz id (reload from the exam list). */
 export function cachedPaperForQuiz(quizId: number): CachedPaper | null {
   const id = read<number>(BY_QUIZ(quizId));

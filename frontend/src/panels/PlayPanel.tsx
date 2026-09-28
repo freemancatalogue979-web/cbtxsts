@@ -19,10 +19,9 @@ import {
   Trophy,
 } from 'lucide-react';
 import {motion} from 'motion/react';
-import {useEffect, useMemo, useState} from 'react';
+import {Suspense, useEffect, useMemo, useState} from 'react';
 import {Button, Card, Chip, EmptyState, ProgressRing, SectionHeading, Segmented, Skeleton} from '../components/ui';
-import FlashcardsPanel from './FlashcardsPanel';
-import PracticePanel from './PracticePanel';
+import {lazyScreen} from '../lib/lazy';
 import {api} from '../lib/api';
 import {formatDate, formatNumber, TIER_STYLES} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -33,6 +32,10 @@ import Mascot from '../components/Mascot';
 import {currentMascot} from '../lib/prefs';
 import {useSession} from '../store/session';
 import type {Quiz} from '../lib/types';
+
+/* Opened from the Practice / Flashcards switch, so they load on first use. */
+const PracticePanel = lazyScreen(() => import('./PracticePanel'));
+const FlashcardsPanel = lazyScreen(() => import('./FlashcardsPanel'));
 
 const STATUS_META: Record<string, {label: string; className: string; icon: typeof Play}> = {
   active: {label: 'Operation active', className: 'border-emerald-500/40 bg-emerald-500/12 text-emerald-300', icon: CircleDot},
@@ -423,8 +426,12 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
         ]}
       />
 
-      {pane === 'practice' && <PracticePanel />}
-      {pane === 'flashcards' && <FlashcardsPanel />}
+      {pane !== 'exams' && (
+        <Suspense fallback={<Skeleton className="h-48" />}>
+          {pane === 'practice' && <PracticePanel />}
+          {pane === 'flashcards' && <FlashcardsPanel />}
+        </Suspense>
+      )}
 
       {/* ---------------------------------------------------------- exams */}
       {pane === 'exams' && (

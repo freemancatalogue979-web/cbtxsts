@@ -40,6 +40,7 @@ import {useCallback, useEffect, useRef, useState, useSyncExternalStore} from 're
 import {Avatar, Button, Card, Chip, EmptyState, Field, ProgressRing, SectionHeading, Skeleton, TextInput} from '../components/ui';
 import {titleOf, themeOf} from '../lib/cosmetics';
 import SeasonBadge from '../components/SeasonBadge';
+import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES, isValidPhone, normalizePhoneInput, TIER_STYLES} from '../lib/format';
@@ -1097,6 +1098,8 @@ export default function ProfilePanel({
           </motion.ul>
         )}
       </section>
+
+      <InstallApp />
 
       <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3.5 sm:gap-3 sm:rounded-3xl sm:px-5 sm:py-4">
         <p className="text-[0.76rem] font-semibold text-mist-500 sm:text-[0.8rem]">

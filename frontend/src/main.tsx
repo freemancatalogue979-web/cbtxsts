@@ -8,6 +8,7 @@ import {music} from './lib/music';
 import {applyFont, applyMode, applySkin, currentFont, currentMode, currentSkin} from './lib/prefs';
 import {sfx} from './lib/sfx';
 import {lockViewport} from './lib/zoomlock';
+import {registerServiceWorker} from './lib/pwa';
 import {SessionProvider} from './store/session.tsx';
 import './index.css';
 
@@ -17,6 +18,9 @@ applyFont(currentFont());
 // Day/night applies before paint too — the default is the night arena, with
 // daylight one tap away in the personalisation panel.
 applySkin(currentSkin());
+
+// Offline app shell + "Install app" (production builds only; see public/sw.js).
+registerServiceWorker();
 
 // One fixed scale everywhere: no pinch zoom, no double-tap zoom, no ctrl+wheel.
 lockViewport();

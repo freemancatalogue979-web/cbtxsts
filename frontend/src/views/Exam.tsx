@@ -35,6 +35,7 @@ import {
   isTransient,
   pendingAnswers,
   type SyncStatus,
+  updateCachedAnswers,
 } from '../lib/examSync';
 import {HAPTICS} from '../lib/haptics';
 import {DifficultyChip, QuestionCard} from '../components/QuestionCard';
@@ -91,6 +92,14 @@ export default function Exam({
   const [navFilter, setNavFilter] = useState<'all' | 'todo' | 'flagged'>('all');
   const [swipeHint, setSwipeHint] = useState(true);
   const touchRef = useRef<{x: number; y: number; t: number} | null>(null);
+  /* Mirror answers into the saved paper so an offline reload shows them all. */
+  const paperId = state?.status === 'in_progress' && !reviewOnly ? state.id : null;
+  useEffect(() => {
+    if (!paperId || Object.keys(answers).length === 0) return;
+    const timer = window.setTimeout(() => updateCachedAnswers(paperId, answers), 500);
+    return () => window.clearTimeout(timer);
+  }, [answers, paperId]);
+
   useEffect(() => {
     if (!swipeHint) return undefined;
     const timer = window.setTimeout(() => setSwipeHint(false), 9000);

@@ -5,7 +5,7 @@
 import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
 import {api, tokenStore} from '../lib/api';
-import {cacheClearScope, cacheRead, cacheSweep, cacheWrite, userScope} from '../lib/cache';
+import {cacheClearScope, cacheDrop, cacheRead, cacheSweep, cacheWrite, userScope} from '../lib/cache';
 import {sfx} from '../lib/sfx';
 import {celebrate, coinRain, burst} from '../lib/confetti';
 import {LiveSocket} from '../lib/ws';
@@ -256,9 +256,19 @@ export function SessionProvider({children}: {children: ReactNode}) {
       setNotices(boot.notifications);
       setLeaderboard(boot.leaderboard);
       setOnline(boot.online);
+      cacheWrite('app', 'bootstrap', boot);
     } catch (error) {
+      /* Offline or server down: run on the last copy saved on this phone. */
+      const saved = cacheRead<Awaited<ReturnType<typeof api.bootstrap>>>('app', 'bootstrap', 0);
+      if (saved && !config) {
+        setConfig(saved.config);
+        setNotices(saved.notifications);
+        setLeaderboard(saved.leaderboard);
+      }
       if (!config) {
-        toast('error', 'Server unreachable', (error as Error).message);
+        const status = (error as {status?: number}).status;
+        if (!status) toast('info', "You're offline", 'Showing what is saved on this phone. Exam answers still save.');
+        else toast('error', 'Server unreachable', (error as Error).message);
       }
     }
   }, [config, toast]);
@@ -345,10 +355,23 @@ export function SessionProvider({children}: {children: ReactNode}) {
               });
             }
           }
-        } catch {
-          tokenStore.clear();
-          setToken(null);
-          setRole(null);
+        } catch (error) {
+          /* Only a rejected login signs the player out. A dropped network or a
+             server hiccup must not: that would lock a player out of an exam
+             they could otherwise continue offline. Use the saved profile and
+             refresh when the connection returns. */
+          const saved = cacheRead<{tail: string; me: Profile}>('app', 'me.profile', 0);
+          if ((error as {status?: number}).status === 401 || !saved || saved.tail !== stored.slice(-24)) {
+            if ((error as {status?: number}).status === 401) tokenStore.clear();
+            if (!cancelled) {
+              setToken((error as {status?: number}).status === 401 ? null : stored);
+              setRole((error as {status?: number}).status === 401 ? null : 'student');
+            }
+          } else if (!cancelled) {
+            setToken(stored);
+            setRole('student');
+            setProfile(saved.me);
+          }
         }
       } else if (stored && storedRole === 'admin') {
         setToken(stored);
@@ -361,6 +384,21 @@ export function SessionProvider({children}: {children: ReactNode}) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Keep the signed-in profile on the phone (read above when a reload happens
+     offline), and pick up the fresh one as soon as the network is back. */
+  useEffect(() => {
+    const current = tokenStore.get();
+    if (profile && current && role === 'student') cacheWrite('app', 'me.profile', {tail: current.slice(-24), me: profile});
+  }, [profile, role]);
+  useEffect(() => {
+    const back = () => {
+      if (tokenStore.get() && tokenStore.getRole() === 'student') void refreshProfile();
+      void loadBootstrap();
+    };
+    window.addEventListener('online', back);
+    return () => window.removeEventListener('online', back);
+  }, [refreshProfile, loadBootstrap]);
 
   /* ---------------------------------------------------- live websocket */
   useEffect(() => {
@@ -734,6 +772,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
     setProfile((current) => {
       // Personal mirrors (chat, friends, inbox) never outlive the session.
       cacheClearScope(userScope(current?.id));
+      cacheDrop('app', 'me.profile');
       return null;
     });
     // Signing out logs out *this* role; the other role's stored session (if

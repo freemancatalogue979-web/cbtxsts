@@ -41,10 +41,14 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          motion: ['motion'],
-          icons: ['lucide-react'],
+        /* Vendor code in its own long-lived files: an app update then only
+           re-downloads app code, not React (players pay for every MB). */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+          if (/node_modules\/(motion|framer-motion|motion-dom|motion-utils)\//.test(id)) return 'motion';
+          if (id.includes('node_modules/lucide-react/')) return 'icons';
+          return undefined;
         },
       },
     },

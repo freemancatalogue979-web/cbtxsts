@@ -1,7 +1,7 @@
 /** Root router: login, dashboard tabs, exam engine, duel arena, results, admin. */
 import {ChevronLeft, Coins, Shield} from 'lucide-react';
 import {AnimatePresence, motion, useReducedMotion} from 'motion/react';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {AppShell} from './components/AppShell';
 import {Wordmark} from './components/Brand';
 import {ErrorBoundary} from './components/ErrorBoundary';
@@ -14,16 +14,30 @@ import {TABS} from './lib/nav';
 import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
 import type {AttemptSummary, Duel, GroupSection, Quiz, RewardEvent} from './lib/types';
-import Admin from './views/Admin';
 import Dashboard from './views/Dashboard';
-import DuelArena from './views/Duel';
-import Room from './views/Room';
-import Group from './views/Group';
-import GroupQuiz from './views/GroupQuiz';
 import Exam from './views/Exam';
 import Welcome from './views/Welcome';
-import Result from './views/Result';
 import {useSession} from './store/session';
+import {lazyScreen, prefetchWhenIdle} from './lib/lazy';
+import {LIKELY_TABS} from './views/Dashboard';
+
+/* In the first download: sign-in, home and the exam engine (an exam must reopen
+   offline). The staff console, duels, rooms, groups and result pages download
+   on first open, then the service worker keeps them. */
+const Admin = lazyScreen(() => import('./views/Admin'));
+const DuelArena = lazyScreen(() => import('./views/Duel'));
+const Room = lazyScreen(() => import('./views/Room'));
+const Group = lazyScreen(() => import('./views/Group'));
+const GroupQuiz = lazyScreen(() => import('./views/GroupQuiz'));
+const Result = lazyScreen(() => import('./views/Result'));
+
+function ScreenLoading() {
+  return (
+    <div className="grid min-h-dvh place-items-center" aria-busy="true" aria-label="Loading">
+      <span className="size-9 animate-spin rounded-full border-[3px] border-white/10 border-t-nova-400" />
+    </div>
+  );
+}
 
 const GROUP_SECTIONS: GroupSection[] = ['overview', 'chat', 'quizzes', 'duels', 'questions', 'members', 'announcements', 'activity'];
 
@@ -218,6 +232,15 @@ export default function App() {
     if (ready) setStarted(true);
   }, [ready]);
 
+  /* Once a player is in, quietly fetch the screens they usually open next
+     (never on Data Saver / 2G). The service worker then keeps them offline. */
+  const warmed = useRef(false);
+  useEffect(() => {
+    if (warmed.current || role !== 'student' || !profile) return;
+    warmed.current = true;
+    prefetchWhenIdle([() => import('./views/Result'), ...LIKELY_TABS]);
+  }, [role, profile]);
+
   /* "Ask AI Tutor" from any screen (result, practice, reader…): switch to the
      tutor tab; the panel picks the attached context up when it mounts. */
   useEffect(() => {
@@ -318,7 +341,9 @@ export default function App() {
   if (role === 'admin') {
     return (
       <>
-        <Admin onExit={signOut} onSwitchToPlayer={() => gotoRole('student')} />
+        <Suspense fallback={<ScreenLoading />}>
+          <Admin onExit={signOut} onSwitchToPlayer={() => gotoRole('student')} />
+        </Suspense>
         <Toasts />
         <CelebrationLayer />
       </>
@@ -360,6 +385,7 @@ export default function App() {
   return (
     <>
       <ErrorBoundary key={route.view} label={route.view}>
+      <Suspense fallback={<ScreenLoading />}>
       <AnimatePresence mode="wait">
         <motion.div
           key={route.view}
@@ -459,6 +485,7 @@ export default function App() {
           )}
         </motion.div>
       </AnimatePresence>
+      </Suspense>
       </ErrorBoundary>
 
       <Toasts />
