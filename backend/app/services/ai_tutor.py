@@ -1101,7 +1101,11 @@ def cleanup(db: Session) -> dict:
     log_days = int(getattr(cfg, "ai_retention_logs_days", 180) or 180)
     unsaved_days = int(getattr(cfg, "ai_retention_unsaved_days", 7) or 7)
     now = utcnow()
-    out = {"conversations": 0, "events": 0, "practice_sets": 0}
+    out = {"conversations": 0, "events": 0, "practice_sets": 0, "temporary": 0}
+    # temporary chats nobody kept: gone after a day
+    for conv in db.execute(select(AIConversation).where(AIConversation.temporary.is_(True), func.coalesce(AIConversation.last_message_at, AIConversation.created_at) < now - timedelta(hours=24))).scalars():
+        db.delete(conv)
+        out["temporary"] += 1
     for conv in db.execute(select(AIConversation).where(AIConversation.deleted_at.is_not(None), AIConversation.deleted_at < now - timedelta(days=deleted_days))).scalars():
         db.delete(conv)
         out["conversations"] += 1

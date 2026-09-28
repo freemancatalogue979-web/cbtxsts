@@ -608,7 +608,7 @@ function ReviewItem({q, number, course}: {q: MiniExamQuestion; number: number; c
           })}
           {q.explanation && <p className="mt-1 rounded-lg bg-white/[0.03] px-2.5 py-2 text-[0.78rem] leading-relaxed text-mist-300">{q.explanation}</p>}
           <button
-            onClick={() => askTutor({prompt: `Explain question: "${q.text}". I picked ${q.selected ?? 'nothing'}; the answer is ${q.correct}. Why?`, mode: 'EXPLAIN', context: course ? {course_id: course, question_id: q.question_id} : undefined, autoSend: true, label: `Question ${number}`})}
+            onClick={() => askTutor({prompt: `Explain question: "${q.text}". I picked ${q.selected ?? 'nothing'}; the answer is ${q.correct}. Why?`, mode: 'EXPLAIN', context: course ? {course_id: course, question_id: q.question_id} : undefined, autoSend: true, temporary: true, label: `Question ${number}`})}
             className="mt-1 inline-flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.72rem] font-bold text-nova-300 hover:bg-nova-500/10"
           >
             <Sparkles className="size-3.5" /> Ask the tutor why

@@ -89,7 +89,7 @@ def _http(error: Exception) -> HTTPException:
 def _conversation_row(conv: AIConversation, count: int | None = None, snippet: str | None = None) -> dict:
     return {
         "id": conv.id, "title": conv.title, "course_id": conv.course_id, "topic": conv.topic, "context_type": conv.context_type or "general",
-        "archived": conv.archived, "archived_at": conv.archived_at.isoformat() if conv.archived_at else None,
+        "archived": conv.archived, "archived_at": conv.archived_at.isoformat() if conv.archived_at else None, "temporary": bool(conv.temporary),
         "created_at": conv.created_at.isoformat(), "last_message_at": conv.last_message_at.isoformat() if conv.last_message_at else None,
         **({"messages": count} if count is not None else {}), **({"snippet": snippet} if snippet else {}),
     }
@@ -184,6 +184,28 @@ def put_profile(payload: dict, db: Session = Depends(get_db), student: Student =
 
 
 # ----------------------------------------------------------- conversations
+def _live(s: Session, conv_id: int) -> int | None:
+    """The chat id if it still exists (a temporary chat can be discarded mid-answer)."""
+    return conv_id if s.get(AIConversation, conv_id) is not None else None
+
+
+def _check_chat_limit(db: Session, user_id: int) -> None:
+    lim = tutor.limits(db, user_id)
+    total = db.execute(select(func.count(AIConversation.id)).where(AIConversation.user_id == user_id, AIConversation.deleted_at.is_(None), AIConversation.temporary.is_(False))).scalar_one()
+    if total >= lim["max_conversations"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"You have {total} chats — delete a few old ones to start a new one.")
+
+
+def _discard_temporary(db: Session, user_id: int) -> int:
+    """Hard-delete a student's temporary chats (they were never kept)."""
+    rows = db.execute(select(AIConversation).where(AIConversation.user_id == user_id, AIConversation.temporary.is_(True))).scalars().all()
+    for conv in rows:
+        db.delete(conv)
+    if rows:
+        db.flush()
+    return len(rows)
+
+
 @core.get("/conversations")
 def list_conversations(
     archived: bool = Query(False), q: str = Query("", max_length=120), db: Session = Depends(get_db), student: Student = Depends(require_student)
@@ -191,7 +213,7 @@ def list_conversations(
     stmt = (
         select(AIConversation, func.count(AIMessage.id))
         .outerjoin(AIMessage, AIMessage.conversation_id == AIConversation.id)
-        .where(AIConversation.user_id == student.id, AIConversation.deleted_at.is_(None))
+        .where(AIConversation.user_id == student.id, AIConversation.deleted_at.is_(None), AIConversation.temporary.is_(False))
         .group_by(AIConversation.id)
         .order_by(AIConversation.last_message_at.desc())
         .limit(200)
@@ -203,7 +225,7 @@ def list_conversations(
         hits = db.execute(
             select(AIMessage.conversation_id, AIMessage.content)
             .join(AIConversation, AIConversation.id == AIMessage.conversation_id)
-            .where(AIConversation.user_id == student.id, AIMessage.user_id == student.id, AIConversation.deleted_at.is_(None), func.lower(AIMessage.content).like(like))
+            .where(AIConversation.user_id == student.id, AIMessage.user_id == student.id, AIConversation.deleted_at.is_(None), AIConversation.temporary.is_(False), func.lower(AIMessage.content).like(like))
             .limit(400)
         ).all()
         for conv_id, content in hits:
@@ -220,13 +242,15 @@ def list_conversations(
 
 @core.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(payload: dict, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
-    lim = tutor.limits(db, student.id)
-    total = db.execute(select(func.count(AIConversation.id)).where(AIConversation.user_id == student.id, AIConversation.deleted_at.is_(None))).scalar_one()
-    if total >= lim["max_conversations"]:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"You have {total} chats — delete a few old ones to start a new one.")
+    temporary = bool(payload.get("temporary"))
+    if temporary:
+        # one temporary chat at a time: the previous one was never kept → discard it
+        _discard_temporary(db, student.id)
+    else:
+        _check_chat_limit(db, student.id)
     course_id = payload.get("course_id") if isinstance(payload.get("course_id"), int) and db.get(Course, payload["course_id"]) else None
     ctype = payload.get("context_type") if payload.get("context_type") in tutor.CONTEXT_TYPES else ("course" if course_id else "general")
-    conv = AIConversation(user_id=student.id, title=tutor.title_from(str(payload.get("title") or "")) if payload.get("title") else "New chat", course_id=course_id, topic=str(payload.get("topic") or "")[:120], context_type=ctype)
+    conv = AIConversation(user_id=student.id, title=tutor.title_from(str(payload.get("title") or "")) if payload.get("title") else "New chat", course_id=course_id, topic=str(payload.get("topic") or "")[:120], context_type=ctype, temporary=temporary)
     db.add(conv)
     db.commit()
     return _conversation_row(conv, 0)
@@ -254,6 +278,15 @@ def update_conversation(conversation_id: int, payload: dict, db: Session = Depen
         conv.course_id = payload["course_id"] if isinstance(payload["course_id"], int) and db.get(Course, payload["course_id"]) else None
     if "topic" in payload:
         conv.topic = str(payload.get("topic") or "")[:120]
+    if "temporary" in payload and bool(payload["temporary"]) != bool(conv.temporary):
+        if conv.temporary:  # keep it: now a normal chat in the history
+            _check_chat_limit(db, student.id)
+            conv.temporary = False
+        else:
+            if db.execute(select(func.count(AIMessage.id)).where(AIMessage.conversation_id == conv.id)).scalar_one():
+                raise HTTPException(status.HTTP_409_CONFLICT, "Saved chats can't be made temporary — delete the chat instead.")
+            _discard_temporary(db, student.id)
+            conv.temporary = True
     db.commit()
     return _conversation_row(conv)
 
@@ -261,9 +294,12 @@ def update_conversation(conversation_id: int, payload: dict, db: Session = Depen
 @core.delete("/conversations/{conversation_id}")
 def delete_conversation(conversation_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     conv = _own_conversation(db, student, conversation_id)
-    conv.deleted_at = tutor.utcnow()
+    if conv.temporary:  # never kept → gone for good (no trash / restore)
+        db.delete(conv)
+    else:
+        conv.deleted_at = tutor.utcnow()
     db.commit()
-    return {"ok": True, "id": conv.id}
+    return {"ok": True, "id": conversation_id}
 
 
 @core.post("/conversations/{conversation_id}/restore")
@@ -337,10 +373,12 @@ def _stream_reply(db: Session, student: Student, conv: AIConversation, *, messag
     def save_partial(text: str, usage: dict | None, note: str, status_: str) -> int | None:
         with session_scope() as s:
             msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text + f"\n\n_({note})_", message_type=tutor.MESSAGE_TYPE.get(mode, "chat"), meta={**stored_meta, "partial": True})
-            s.add(msg)
-            tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage or _estimate(messages, text), latency_ms=int((time.monotonic() - started) * 1000), status=status_, conversation_id=conv_id, request_id=request_id, provider=provider, course_id=course_id, output_chars=len(text))
+            alive = _live(s, conv_id)
+            if alive:
+                s.add(msg)
+            tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage or _estimate(messages, text), latency_ms=int((time.monotonic() - started) * 1000), status=status_, conversation_id=alive, request_id=request_id, provider=provider, course_id=course_id, output_chars=len(text))
             s.flush()
-            return msg.id
+            return msg.id if alive else None
 
     def events():
         text, usage, finish = "", None, None
@@ -363,7 +401,7 @@ def _stream_reply(db: Session, student: Student, conv: AIConversation, *, messag
                 message_id = save_partial(text, usage, "stopped", "cancelled") if text.strip() else None
                 if not text.strip():
                     with session_scope() as s:
-                        tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage or _estimate(messages, ""), latency_ms=int((time.monotonic() - started) * 1000), status="cancelled", conversation_id=conv_id, request_id=request_id, provider=provider, course_id=course_id)
+                        tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage or _estimate(messages, ""), latency_ms=int((time.monotonic() - started) * 1000), status="cancelled", conversation_id=_live(s, conv_id), request_id=request_id, provider=provider, course_id=course_id)
                 yield _sse("cancelled", {"message_id": message_id})
                 return
             latency = int((time.monotonic() - started) * 1000)
@@ -372,10 +410,14 @@ def _stream_reply(db: Session, student: Student, conv: AIConversation, *, messag
             with session_scope() as s:
                 convo = s.get(AIConversation, conv_id)
                 usage = usage or _estimate(messages, text)
+                if convo is None:  # temporary chat discarded mid-answer: nothing to save it to
+                    tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), request_id=request_id, provider=provider, course_id=course_id, output_chars=len(text))
+                    settled = True
+                    return
                 msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text, message_type=tutor.MESSAGE_TYPE.get(mode, "chat"), meta={**stored_meta, "finish": finish}, token_input=int(usage.get("input") or 0), token_output=int(usage.get("output") or 0))
                 s.add(msg)
                 convo.last_message_at = tutor.utcnow()
-                cost = tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=latency, conversation_id=conv_id, request_id=request_id, provider=provider, course_id=course_id, output_chars=len(text))
+                cost = tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=latency, conversation_id=_live(s, conv_id), request_id=request_id, provider=provider, course_id=course_id, output_chars=len(text))
                 s.flush()
                 message_id = msg.id
                 lim_now = tutor.limits(s, student_id)
@@ -388,8 +430,8 @@ def _stream_reply(db: Session, student: Student, conv: AIConversation, *, messag
             technical = getattr(error, "technical", str(error))
             log.warning("tutor stream failed: %s", technical)
             with session_scope() as s:
-                tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=technical, conversation_id=conv_id, request_id=request_id, provider=provider, course_id=course_id)
-                if text.strip():  # keep what arrived so the student doesn't lose it
+                tutor.record_usage(s, student_id, kind=mode, model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=technical, conversation_id=_live(s, conv_id), request_id=request_id, provider=provider, course_id=course_id)
+                if text.strip() and _live(s, conv_id):  # keep what arrived so the student doesn't lose it
                     s.add(AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text + "\n\n_(answer cut off)_", message_type="chat", meta={**stored_meta, "partial": True}))
             yield _sse("error", {"detail": tutor.FRIENDLY, "status": 503, "partial": bool(text.strip())})
         except Exception:  # noqa: BLE001
@@ -488,9 +530,9 @@ def _agent_reply(db: Session, student: Student, conv: AIConversation, *, message
             if cancel.is_set():
                 settled = True
                 with session_scope() as s:
-                    tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage or _estimate(messages, ""), latency_ms=int((time.monotonic() - started) * 1000), status="cancelled", conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id)
+                    tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage or _estimate(messages, ""), latency_ms=int((time.monotonic() - started) * 1000), status="cancelled", conversation_id=_live(s, conv_id), request_id=request_id, provider=impl.name, course_id=course_id)
                     message_id = None
-                    if actions:
+                    if actions and _live(s, conv_id):
                         msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content="_(stopped)_", message_type="chat", meta={**stored_meta, "partial": True})
                         s.add(msg)
                         s.flush()
@@ -505,10 +547,14 @@ def _agent_reply(db: Session, student: Student, conv: AIConversation, *, message
             with session_scope() as s:
                 convo = s.get(AIConversation, conv_id)
                 usage = usage or _estimate(messages, text)
+                if convo is None:  # temporary chat discarded mid-answer: nothing to save it to
+                    tutor.record_usage(s, student_id, kind="AGENT" if tools else mode, model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), request_id=request_id, provider=impl.name, course_id=course_id, output_chars=len(text))
+                    settled = True
+                    return
                 msg = AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content=text, message_type=tutor.MESSAGE_TYPE.get(mode, "chat"), meta=stored_meta, token_input=int(usage.get("input") or 0), token_output=int(usage.get("output") or 0))
                 s.add(msg)
                 convo.last_message_at = tutor.utcnow()
-                cost = tutor.record_usage(s, student_id, kind="AGENT" if tools else mode, model=model, usage=usage, latency_ms=latency, conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id, output_chars=len(text))
+                cost = tutor.record_usage(s, student_id, kind="AGENT" if tools else mode, model=model, usage=usage, latency_ms=latency, conversation_id=_live(s, conv_id), request_id=request_id, provider=impl.name, course_id=course_id, output_chars=len(text))
                 s.flush()
                 message_id = msg.id
                 remaining = tutor.remaining(tutor.limits(s, student_id), tutor.usage_counts(s, student_id))
@@ -520,8 +566,8 @@ def _agent_reply(db: Session, student: Student, conv: AIConversation, *, message
             technical = getattr(error, "technical", str(error))
             log.warning("agent reply failed: %s", technical)
             with session_scope() as s:
-                tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=technical, conversation_id=conv_id, request_id=request_id, provider=impl.name, course_id=course_id)
-                if actions:
+                tutor.record_usage(s, student_id, kind="AGENT", model=model, usage=usage, latency_ms=int((time.monotonic() - started) * 1000), status="error", error=technical, conversation_id=_live(s, conv_id), request_id=request_id, provider=impl.name, course_id=course_id)
+                if actions and _live(s, conv_id):
                     s.add(AIMessage(conversation_id=conv_id, user_id=student_id, role="assistant", content="Your mini exam is ready below, but I couldn't finish my reply.", message_type="chat", meta={"mode": mode, "agent": True, "actions": actions, "tools": tools, "partial": True}))
             if actions:
                 yield _sse("actions", {"actions": actions})

@@ -9,10 +9,10 @@
 import {
   Archive, ArchiveRestore, ArrowDown, BarChart3, BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
   ListChecks, Lock, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, Search, Send, Settings2, ShieldCheck, Sparkles, Square,
-  Target, ThumbsDown, ThumbsUp, Trash2, X, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
+  Target, ThumbsDown, ThumbsUp, Trash2, X, Ghost, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, SwitchRow, PillSelect} from '../components/ui';
+import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, Switch, SwitchRow, PillSelect} from '../components/ui';
 import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, PlanView, QuizView, toolFromResult, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
 import {Markdown} from '../lib/markdown';
 import {formatRelative} from '../lib/format';
@@ -25,6 +25,8 @@ import {ActionCards, ToolTrail, mergeTool} from '../components/tutor/AgentBits';
 import {useSession} from '../store/session';
 
 const LAST_CHAT_KEY = 'arena.tutor.chat';
+/** The open temporary chat (per browser tab) — reopened when coming back to the tutor, never in the history. */
+const TEMP_CHAT_KEY = 'arena.tutor.temp';
 
 const EXAMPLES: {label: string; prompt: string; mode?: TutorMode; gen?: GenKind; icon: typeof Bot}[] = [
   {label: 'Explain this topic', prompt: 'Explain this topic to me clearly.', mode: 'EXPLAIN', icon: Lightbulb},
@@ -114,6 +116,24 @@ export default function TutorPanel() {
   const imageInput = useRef<HTMLInputElement | null>(null);
   const docInput = useRef<HTMLInputElement | null>(null);
   const pendingSend = useRef<TutorAsk | null>(null);
+  /** Temporary chats ("Why is this answer correct?") aren't saved unless kept. */
+  const [temporary, setTemporary] = useState(false);
+  const tempChatRef = useRef<number | null>(null);
+  /** In-flight discard — a new chat waits for it (SQLite can reuse the freed id). */
+  const discardingRef = useRef<Promise<unknown> | null>(null);
+  const [keeping, setKeeping] = useState(false);
+
+  /** Leaving a temporary chat throws it away. */
+  const discardTemp = () => {
+    const id = tempChatRef.current;
+    if (!id) return;
+    tempChatRef.current = null;
+    sessionStorage.removeItem(TEMP_CHAT_KEY);
+    const done = tutorApi.deleteConversation(id).catch(() => undefined).finally(() => {
+      if (discardingRef.current === done) discardingRef.current = null;
+    });
+    discardingRef.current = done;
+  };
 
   const refreshStatus = useCallback(() => tutorApi.status().then(setStatus).catch(() => undefined), []);
   const refreshChats = useCallback(
@@ -127,12 +147,17 @@ export default function TutorPanel() {
 
   const openChat = useCallback(async (id: number | null) => {
     abortRef.current?.abort();
+    if (tempChatRef.current && tempChatRef.current !== id) discardTemp();
+    const isTemp = !!id && id === tempChatRef.current;
     setChatId(id);
+    setTemporary(isTemp);
     setTool(null);
     setLibrary(false);
     setHistoryOpen(false);
-    if (id) localStorage.setItem(LAST_CHAT_KEY, String(id));
-    else localStorage.removeItem(LAST_CHAT_KEY);
+    if (!isTemp) {
+      if (id) localStorage.setItem(LAST_CHAT_KEY, String(id));
+      else localStorage.removeItem(LAST_CHAT_KEY);
+    }
     if (!id) {
       setMessages([]);
       return;
@@ -146,7 +171,11 @@ export default function TutorPanel() {
     } catch {
       setMessages([]);
       setChatId(null);
-      localStorage.removeItem(LAST_CHAT_KEY);
+      setTemporary(false);
+      if (isTemp) {
+        tempChatRef.current = null;
+        sessionStorage.removeItem(TEMP_CHAT_KEY);
+      } else localStorage.removeItem(LAST_CHAT_KEY);
     } finally {
       setLoadingChat(false);
     }
@@ -162,7 +191,10 @@ export default function TutorPanel() {
     }).catch(() => undefined);
     const ask = takePendingAsk();
     const last = Number(localStorage.getItem(LAST_CHAT_KEY)) || null;
+    const temp = Number(sessionStorage.getItem(TEMP_CHAT_KEY)) || null;
+    if (temp) tempChatRef.current = temp;
     if (ask) applyAsk(ask);
+    else if (temp) void openChat(temp);
     else if (last) void openChat(last);
     const onAsk = () => {
       const next = takePendingAsk();
@@ -178,8 +210,11 @@ export default function TutorPanel() {
 
   const applyAsk = (ask: TutorAsk) => {
     if (ask.newChat !== false) {
+      abortRef.current?.abort();
+      discardTemp();
       setChatId(null);
       setMessages([]);
+      setTemporary(!!ask.temporary);
       localStorage.removeItem(LAST_CHAT_KEY);
     }
     setTool(null);
@@ -190,6 +225,26 @@ export default function TutorPanel() {
     setAttached(Object.keys(rest).length ? {context: rest, label: ask.label || 'Attached'} : null);
     if (ask.autoSend && ask.prompt) pendingSend.current = ask;
     else if (ask.prompt) setDraft(ask.prompt);
+  };
+
+  /** Temporary ⇄ permanent. Keeping a started chat saves it to the history. */
+  const setChatTemporary = async (next: boolean) => {
+    if (!chatId) return setTemporary(next);
+    if (next || !temporary || keeping) return;
+    setKeeping(true);
+    try {
+      const convo = await tutorApi.updateConversation(chatId, {temporary: false});
+      tempChatRef.current = null;
+      sessionStorage.removeItem(TEMP_CHAT_KEY);
+      localStorage.setItem(LAST_CHAT_KEY, String(chatId));
+      setTemporary(false);
+      setChats((list) => [convo, ...(list ?? []).filter((c) => c.id !== convo.id)]);
+      toast('success', 'Chat saved', 'You\'ll find it in your chat history.');
+    } catch (error) {
+      toast('error', 'Could not save the chat', (error as Error).message);
+    } finally {
+      setKeeping(false);
+    }
   };
 
   useEffect(() => {
@@ -217,10 +272,14 @@ export default function TutorPanel() {
     let id = chatId;
     if (!id) {
       try {
-        const convo = await tutorApi.createConversation({course_id: courseId, topic});
+        if (discardingRef.current) await discardingRef.current;
+        const convo = await tutorApi.createConversation({course_id: courseId, topic, ...(temporary ? {temporary: true} : {})});
         id = convo.id;
         setChatId(id);
-        localStorage.setItem(LAST_CHAT_KEY, String(id));
+        if (temporary) {
+          tempChatRef.current = id;
+          sessionStorage.setItem(TEMP_CHAT_KEY, String(id));
+        } else localStorage.setItem(LAST_CHAT_KEY, String(id));
       } catch (error) {
         return toast('error', 'Could not start a chat', (error as Error).message);
       }
@@ -253,6 +312,7 @@ export default function TutorPanel() {
           onMeta: (meta) => {
             requestIdRef.current = meta.request_id;
             setMessages((list) => list.map((m) => (m.id === userMsg.id ? {...m, id: meta.user_message_id} : m)));
+            if (tempChatRef.current === meta.conversation_id) return; // temporary: stays out of the history
             setChats((list) => {
               const rest = (list ?? []).filter((c) => c.id !== meta.conversation_id);
               return [{id: meta.conversation_id, title: meta.title, course_id: courseId, topic, archived: false, created_at: now, last_message_at: now}, ...rest];
@@ -274,7 +334,7 @@ export default function TutorPanel() {
       abortRef.current = null;
       requestIdRef.current = null;
     }
-  }, [attached, chatId, courseId, image, locked, refreshStatus, streaming, toast, topic, socratic]);
+  }, [attached, chatId, courseId, image, locked, refreshStatus, streaming, toast, topic, socratic, temporary]);
 
   /** delta/done/error/cancelled handling shared by send + regenerate */
   function botHandlers(patchBot: (p: Partial<TutorMessage> | ((m: TutorMessage) => Partial<TutorMessage>)) => void, mode: TutorMode): StreamHandlers {
@@ -631,7 +691,31 @@ export default function TutorPanel() {
                     <button className="grid size-5 place-items-center rounded-full hover:bg-white/15" aria-label="Remove attachment" onClick={() => setAttached(null)}><X className="size-3" /></button>
                   </span>
                 )}
+                {!temporary && !chatId && !messages.length && (
+                  <button
+                    type="button"
+                    onClick={() => void setChatTemporary(true)}
+                    title="Temporary chat — not saved to your history"
+                    className="ml-auto flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-[0.72rem] font-bold text-mist-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-mist-200"
+                  >
+                    <Ghost className="size-3.5" /> Temporary
+                  </button>
+                )}
               </div>
+              {temporary && (
+                <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-dashed border-mist-400/30 bg-white/[0.03] px-3 py-2">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/[0.06] text-mist-300"><Ghost className="size-4" /></span>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="text-[0.8rem] font-extrabold text-mist-100">Temporary chat</p>
+                    <p className="text-[0.72rem] text-mist-400">Not saved to your history unless you keep it.</p>
+                  </div>
+                  <label className="flex shrink-0 items-center gap-2 text-[0.74rem] font-bold text-mist-300">
+                    <span className="hidden sm:inline">Keep chat</span>
+                    <span className="sm:hidden">Keep</span>
+                    <Switch checked={false} disabled={keeping || streaming} onChange={(v) => void setChatTemporary(!v)} aria-label="Keep this chat" />
+                  </label>
+                </div>
+              )}
 
               {/* messages */}
               <div className="relative flex min-h-0 flex-1 flex-col">

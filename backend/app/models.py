@@ -2281,6 +2281,9 @@ class AIConversation(Base):
     # title came from the AI (or the student) rather than the first message
     title_final: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    # Temporary chats (e.g. "Why is this answer correct?") stay out of the
+    # history and are discarded unless the student switches them to permanent.
+    temporary: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     messages: Mapped[list["AIMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="AIMessage.id")
 

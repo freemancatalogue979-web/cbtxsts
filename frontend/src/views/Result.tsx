@@ -332,6 +332,7 @@ export default function Result({
                                 context: {question_id: row.question_id, selected: row.selected ?? null},
                                 label: `Question ${position + 1}`,
                                 autoSend: true,
+                                temporary: true,
                               })
                             }
                             className="print-hide mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-nova-400/35 bg-nova-500/10 px-3 py-1.5 text-[0.76rem] font-bold text-nova-200 hover:bg-nova-500/20"

@@ -109,6 +109,46 @@ def run_v2(me: str, other: str, staff: str, course: dict, cid: int, q_id, hidden
     check("archive sets archived_at", code == 200 and conv["archived"] and conv["archived_at"], conv)
     check("archived list shows it", any(c["id"] == cid for c in call("GET", "/tutor/conversations?archived=true", token=me)[1]["conversations"]))
     call("PATCH", f"/tutor/conversations/{cid}", {"archived": False}, me)
+
+    print("temporary chats (why is this answer correct?)")
+    listed = lambda: {c["id"] for c in call("GET", "/tutor/conversations", token=me)[1]["conversations"]}
+    code, tmp = call("POST", "/tutor/conversations", {"temporary": True, "context_type": "question"}, me)
+    check("create a temporary chat", code in (200, 201) and tmp.get("temporary") is True, tmp)
+    tid = tmp["id"]
+    code, text = say(me, tid, "Why is this answer correct? Donoghue temporary check")
+    check("temporary chat answers normally", code == 200, text)
+    check("temporary chat not in the history", tid not in listed())
+    check("temporary chat not in search", tid not in {c["id"] for c in call("GET", "/tutor/conversations?q=temporary%20check", token=me)[1]["conversations"]})
+    check("temporary chat can still be opened", call("GET", f"/tutor/conversations/{tid}", token=me)[1].get("temporary") is True)
+    check("others can't keep my temporary chat", call("PATCH", f"/tutor/conversations/{tid}", {"temporary": False}, other)[0] == 404)
+    code, tmp2 = call("POST", "/tutor/conversations", {"temporary": True}, me)
+    after = call("GET", f"/tutor/conversations/{tid}", token=me)
+    # (SQLite may hand the freed id to the new chat — what matters is the old chat's content is gone)
+    check("a new temporary chat discards the old one", code in (200, 201) and (after[0] == 404 or (tmp2["id"] == tid and not after[1]["messages"])), (code, tmp2, after[0], str(after[1])[:200]))
+    t2 = tmp2["id"]
+    say(me, t2, "Why is my answer wrong?")
+    code, kept = call("PATCH", f"/tutor/conversations/{t2}", {"temporary": False}, me)
+    check("switch to permanent keeps it", code == 200 and kept["temporary"] is False and t2 in listed(), kept)
+    check("kept chat keeps its messages", len(call("GET", f"/tutor/conversations/{t2}", token=me)[1]["messages"]) >= 2)
+    check("started saved chats can't turn temporary", call("PATCH", f"/tutor/conversations/{t2}", {"temporary": True}, me)[0] == 409)
+    check("new temporary chat leaves the kept one alone", call("POST", "/tutor/conversations", {"temporary": True}, me)[0] in (200, 201) and call("GET", f"/tutor/conversations/{t2}", token=me)[0] == 200)
+    code, t3 = call("POST", "/tutor/conversations", {"temporary": True}, me)
+    call("DELETE", f"/tutor/conversations/{t3['id']}", token=me)
+    with SessionLocal() as s:
+        gone = s.get(AIConversation, t3["id"]) is None
+    check("deleting a temporary chat removes it for good (no trash)", gone)
+    code, t4 = call("POST", "/tutor/conversations", {"temporary": True}, me)
+    with SessionLocal() as s:
+        row = s.get(AIConversation, t4["id"])
+        row.created_at = row.created_at - timedelta(hours=30)
+        row.last_message_at = row.created_at
+        s.commit()
+        from app.services import ai_tutor as _tutor
+        out = _tutor.cleanup(s)
+        s.commit()
+        swept = s.get(AIConversation, t4["id"]) is None
+    check("cleanup sweeps temporary chats older than a day", swept and out.get("temporary", 0) >= 1, out)
+    call("DELETE", f"/tutor/conversations/{t2}", token=me)
     check("context_type recorded", conv.get("context_type") in {"course", "question", "general", "topic", "material"}, conv)
 
     print("learning profile (spec 107)")

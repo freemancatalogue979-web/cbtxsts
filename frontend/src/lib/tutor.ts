@@ -67,6 +67,8 @@ export interface Conversation {
   topic: string;
   archived: boolean;
   archived_at?: string | null;
+  /** Temporary chats stay out of the history unless switched to permanent. */
+  temporary?: boolean;
   context_type?: string;
   created_at: string;
   last_message_at: string | null;
@@ -258,9 +260,9 @@ export const tutorApi = {
   options: () => call<{courses: TutorCourse[]; uploads: TutorUpload[]}>('/options'),
   conversations: (archived = false, q = '') =>
     call<{conversations: Conversation[]}>(`/conversations?${q ? `q=${encodeURIComponent(q)}` : archived ? 'archived=true' : ''}`),
-  createConversation: (body: {course_id?: number | null; topic?: string; context_type?: string} = {}) => call<Conversation>('/conversations', 'POST', body),
+  createConversation: (body: {course_id?: number | null; topic?: string; context_type?: string; temporary?: boolean} = {}) => call<Conversation>('/conversations', 'POST', body),
   conversation: (id: number) => call<Conversation & {messages: TutorMessage[]}>(`/conversations/${id}`),
-  updateConversation: (id: number, body: Partial<Pick<Conversation, 'title' | 'archived' | 'course_id' | 'topic'>>) => call<Conversation>(`/conversations/${id}`, 'PATCH', body),
+  updateConversation: (id: number, body: Partial<Pick<Conversation, 'title' | 'archived' | 'course_id' | 'topic' | 'temporary'>>) => call<Conversation>(`/conversations/${id}`, 'PATCH', body),
   deleteConversation: (id: number) => call<{ok: boolean}>(`/conversations/${id}`, 'DELETE'),
   restoreConversation: (id: number) => call<Conversation>(`/conversations/${id}/restore`, 'POST'),
   cancel: (requestId: string) => call<{ok: boolean; cancelled: boolean}>(`/streams/${requestId}/cancel`, 'POST'),
@@ -783,6 +785,8 @@ export interface TutorAsk {
   label?: string;
   autoSend?: boolean;
   newChat?: boolean;
+  /** Open as a temporary chat (not saved unless the student keeps it). */
+  temporary?: boolean;
 }
 
 let pendingAsk: TutorAsk | null = null;

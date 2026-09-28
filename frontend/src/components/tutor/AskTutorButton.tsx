@@ -27,6 +27,7 @@ export default function AskTutorButton({
           context: {question_id: questionId, ...(chosenText ? {selected_text: `The answer I chose: ${chosenText}`} : {})},
           label,
           autoSend: true,
+          temporary: true,
         })
       }
       className={`inline-flex items-center gap-1.5 rounded-lg border border-nova-400/35 bg-nova-500/10 px-3 py-1.5 text-[0.76rem] font-bold text-nova-200 hover:bg-nova-500/20 ${className}`}
