@@ -1,3 +1,4 @@
+import {AlertCircle, Clock, FileCheck, ListChecks, Repeat, Target} from 'lucide-react';
 /** Pro analytics — the student's learning data, plainly presented. */
 import {useEffect, useMemo, useState} from 'react';
 import {api} from '../lib/api';
@@ -73,13 +74,13 @@ export default function ProAnalytics({onTab}: {onTab: (tab: Tab) => void}) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Metric label="Accuracy" value={loading ? '—' : answered ? pct(totals.accuracy) : '—'} tone={toneFor(totals.accuracy, answered)} sub={answered ? `${totals.correct} of ${answered} correct` : 'No answers yet'} />
-        <Metric label="Questions" value={loading ? '—' : answered.toLocaleString()} sub={`${Math.round((answered / Math.max(1, Number(data?.window_days ?? 30))) * 10) / 10} per day`} />
-        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes)} sub={answered ? `${Math.round((minutes * 60) / answered)} s per question` : 'exams and practice'} />
-        <Metric label="Exams" value={loading ? '—' : Number(o.exams ?? 0)} sub={`Best ${pct(o.best_percentage)}`} />
-        <Metric label="Practice runs" value={loading ? '—' : Number(o.practice_runs ?? 0)} sub={`${Number(o.flashcards_reviewed ?? 0)} flashcards reviewed`} />
-        <Metric label="Open mistakes" value={lab ? Number(lab.open_mistakes ?? 0) : '—'} sub={lab ? `${(lab.mastered ?? []).length} topics mastered` : ''} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+        <Metric icon={<Target />} hue="green" label="Accuracy" value={loading ? '—' : answered ? pct(totals.accuracy) : '—'} tone={toneFor(totals.accuracy, answered)} sub={answered ? `${totals.correct} of ${answered} correct` : 'No answers yet'} />
+        <Metric icon={<ListChecks />} hue="blue" label="Questions" value={loading ? '—' : answered.toLocaleString()} sub={`${Math.round((answered / Math.max(1, Number(data?.window_days ?? 30))) * 10) / 10} per day`} />
+        <Metric icon={<Clock />} hue="teal" label="Study time" value={loading ? '—' : minutesLabel(minutes)} sub={answered ? `${Math.round((minutes * 60) / answered)} s per question` : 'exams and practice'} />
+        <Metric icon={<FileCheck />} hue="violet" label="Exams" value={loading ? '—' : Number(o.exams ?? 0)} sub={`Best ${pct(o.best_percentage)}`} />
+        <Metric icon={<Repeat />} hue="amber" label="Practice runs" value={loading ? '—' : Number(o.practice_runs ?? 0)} sub={`${Number(o.flashcards_reviewed ?? 0)} flashcards reviewed`} />
+        <Metric icon={<AlertCircle />} hue="rose" label="Open mistakes" value={lab ? Number(lab.open_mistakes ?? 0) : '—'} sub={lab ? `${(lab.mastered ?? []).length} topics mastered` : ''} />
       </div>
 
       <Section title="Exam accuracy over time" description="Exam questions answered per day (bars) and accuracy (line).">

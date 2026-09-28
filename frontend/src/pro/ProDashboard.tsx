@@ -4,7 +4,7 @@
  * Everything comes from the same endpoints Standard uses (analytics, Study
  * Lab, practice, exams); nothing here is Pro-only data.
  */
-import {ArrowRight, Clock3} from 'lucide-react';
+import {ArrowRight, Award, Clock, Clock3, Flame, Gauge, ListChecks, Target} from 'lucide-react';
 import {useEffect, useState} from 'react';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
@@ -86,18 +86,20 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
       />
 
       {/* metrics */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         <Metric
+          icon={<Target />}
+          hue="green"
           label="Accuracy"
           value={loading ? '—' : answered30 ? pct(totals.accuracy) : '—'}
           sub={weekTotals.answered ? `${pct(weekTotals.accuracy)} this week` : 'No answers this week'}
           tone={toneFor(totals.accuracy, answered30)}
         />
-        <Metric label="Questions" value={loading ? '—' : answered30.toLocaleString()} sub={`${weekTotals.answered} this week`} />
-        <Metric label="Mastered" value={loading ? '—' : mastered} sub={known ? `of ${known} studied` : "No topics studied yet"} />
-        <Metric label="Study time" value={loading ? '—' : minutesLabel(minutes30)} sub="last 30 days" />
-        <Metric label="Streak" value={loading ? '—' : `${Number(all.streak ?? profile?.streak ?? 0)} d`} sub={`Best ${Number(all.best_streak ?? 0)} d`} />
-        <Metric label="Mastery" value={loading ? '—' : pct(mastery)} sub={`${Number(lab?.open_mistakes ?? 0)} open mistakes`} />
+        <Metric icon={<ListChecks />} hue="blue" label="Questions" value={loading ? '—' : answered30.toLocaleString()} sub={`${weekTotals.answered} this week`} />
+        <Metric icon={<Award />} hue="violet" label="Mastered" value={loading ? '—' : mastered} sub={known ? `of ${known} studied` : "No topics studied yet"} />
+        <Metric icon={<Clock />} hue="teal" label="Study time" value={loading ? '—' : minutesLabel(minutes30)} sub="last 30 days" />
+        <Metric icon={<Flame />} hue="amber" label="Streak" value={loading ? '—' : `${Number(all.streak ?? profile?.streak ?? 0)} d`} sub={`Best ${Number(all.best_streak ?? 0)} d`} />
+        <Metric icon={<Gauge />} hue="rose" label="Mastery" value={loading ? '—' : pct(mastery)} sub={`${Number(lab?.open_mistakes ?? 0)} open mistakes`} />
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
