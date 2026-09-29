@@ -505,7 +505,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
   }, []);
 
   return (
-    <div className="aurora min-h-dvh">
+    <div className="admin-shell aurora min-h-dvh">
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
 
       <header className="sticky top-0 z-50 bg-ink-950/85 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl safe-top">
