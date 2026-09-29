@@ -111,7 +111,8 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
       <header className="pro-hero" data-hue="violet">
         <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
           <div className="min-w-0">
-            <p className="pro-eyebrow" style={{color: 'var(--pro-accent-text)'}}>{today}</p>
+            <div className="pro-hero-status"><span /> Personal study command centre</div>
+            <p className="pro-eyebrow mt-4" style={{color: 'var(--pro-accent-text)'}}>{today}</p>
             <h1 className="pro-h1 mt-1.5 [overflow-wrap:anywhere]">
               {greeting()}
               {firstName ? (

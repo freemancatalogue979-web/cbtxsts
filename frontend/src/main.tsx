@@ -14,6 +14,7 @@ import {SessionProvider} from './store/session.tsx';
 import './index.css';
 import './pro.css';
 import './pro-mobile.css';
+import './pro-premium.css';
 
 // Modes (pro/game/fun) and the chosen font family apply before React renders.
 applyMode(currentMode());

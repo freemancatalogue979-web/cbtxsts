@@ -222,6 +222,9 @@ export default function ProShell({
               <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-header-control lg:hidden" aria-label="Open navigation" onClick={() => setDrawer(true)}>
                 <Menu className="size-5" />
               </button>
+              <div className="pro-mobile-brand lg:hidden" aria-label="Absolute Genesis Pro">
+                <Brand compact />
+              </div>
               <div className="pro-context min-w-0" data-hue={proHue(tab)}>
                 <span className="pro-dot hidden lg:inline-block" aria-hidden />
                 <span className="min-w-0">
