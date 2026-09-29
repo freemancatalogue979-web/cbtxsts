@@ -297,3 +297,63 @@
     .pro-hero .pro-h1 { font-size: 1.75rem; }
   }
 }
+
+/* Mobile section composition — keep icons attached to their copy and never
+   let the optional action sizing squeeze the actual heading. */
+@layer components {
+  .pro-section-header > .pro-section-head {
+    width: auto;
+    max-width: none;
+  }
+
+  @media (max-width: 767px) {
+    .pro-section-header {
+      align-items: center;
+      min-height: 76px;
+      padding: 14px 14px 13px;
+    }
+    .pro-section-head {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      width: 100%;
+      align-items: center;
+      column-gap: 11px;
+    }
+    .pro-section-head .pro-tile {
+      width: 38px;
+      height: 38px;
+      align-self: center;
+    }
+    .pro-section-head .pro-h3 {
+      font-size: 1.08rem;
+      line-height: 1.12;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+    .pro-section-head .pro-meta {
+      margin-top: 4px;
+      font-size: 0.76rem;
+      line-height: 1.38;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+    .pro-section-header > .shrink-0 {
+      max-width: 40%;
+    }
+
+    .pro-continue-row {
+      grid-template-columns: 58px minmax(0, 1fr);
+      align-items: center;
+      column-gap: 13px;
+      padding: 15px;
+    }
+    .pro-continue-row > .pro-ring { grid-column: 1; grid-row: 1; }
+    .pro-continue-row > div { grid-column: 2; grid-row: 1; }
+    .pro-continue-row > .pro-btn {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: 100%;
+      margin-top: 2px;
+    }
+  }
+}

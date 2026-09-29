@@ -97,7 +97,7 @@
   .pro-cover { max-width: 100%; }
   .pro-card :is(p, h1, h2, h3, span) { overflow-wrap: anywhere; }
   .pro-section-head { flex: 1 1 auto; }
-  .pro-section-header > :last-child { max-width: 48%; }
+  .pro-section-header > .shrink-0 { max-width: 48%; }
   .pro-page-actions { max-width: 100%; }
 
   /* Premium mobile dock: stronger active state and reliable safe-area spacing. */
@@ -137,7 +137,7 @@
     .pro-card { border-radius: 15px; }
     .pro-card-pad { padding: 14px; }
     .pro-section-header { gap: 9px; padding: 14px 14px 0; }
-    .pro-section-header > :last-child { max-width: 44%; }
+    .pro-section-header > .shrink-0 { max-width: 44%; }
     .pro-section-header + div { padding: 14px; }
     .pro-section-head { align-items: center; gap: 9px; }
     .pro-section-head .pro-tile { width: 32px; height: 32px; border-radius: 10px; }
@@ -172,6 +172,6 @@
     .pro-bottom-item { font-size: 0.61rem; }
     .pro-bottom-pill { width: 40px; }
     .pro-chip { padding-inline: 8px; font-size: 0.69rem; }
-    .pro-section-header > :last-child { max-width: 42%; }
+    .pro-section-header > .shrink-0 { max-width: 42%; }
   }
 }

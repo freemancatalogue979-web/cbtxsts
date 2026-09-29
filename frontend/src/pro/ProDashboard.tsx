@@ -392,7 +392,7 @@ function MiniFact({label, value}: {label: string; value: string}) {
 
 function ContinueRow({kind, title, detail, progress, action, onClick, hue, icon}: {kind: string; title: string; detail: string; progress: number; action: string; onClick: () => void; hue: Hue; icon: ReactNode}) {
   return (
-    <div className="pro-lift grid min-w-0 gap-3 rounded-2xl border p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center" style={{borderColor: 'var(--pro-border)', background: 'var(--pro-sunken)'}} data-hue={hue}>
+    <div className="pro-continue-row pro-lift grid min-w-0 gap-3 rounded-2xl border p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center" style={{borderColor: 'var(--pro-border)', background: 'var(--pro-sunken)'}} data-hue={hue}>
       <Ring value={progress} size={54} stroke={5} hue={hue} label={`${Math.round(progress)}%`}>
         <span className="[&>svg]:size-5" style={{color: 'var(--mark)'}}>{icon}</span>
       </Ring>
