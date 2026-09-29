@@ -30,6 +30,9 @@ backend/data/import-jobs/
 .env.*
 !.env.example
 
+# Persistent launcher runtime (PID files and service logs).
+.arena-run/
+
 # ------------------------------------------------------- editors and OS
 .DS_Store
 Thumbs.db

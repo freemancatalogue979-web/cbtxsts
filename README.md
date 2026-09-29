@@ -18,16 +18,25 @@ frontend/   React 19 + Vite + Tailwind v4 + Montserrat/Audiowide → http://loca
 You need **Python 3.11+** and **Node 18+** installed once. Then:
 
 ```bash
-./start-arena.sh          # macOS / Linux — installs both dependency sets, runs API + web app
+./start-arena.sh          # Linux/VPS — installs dependencies and starts both in the background
+./start-arena.sh status   # confirm that API and web are running
+./start-arena.sh logs     # follow logs; Ctrl+C only closes the log viewer
+./start-arena.sh restart  # restart after changing server configuration
+./start-arena.sh stop     # stop both services
 ```
+
+The Linux launcher uses independent `nohup`/`setsid` services, so the API and web app **keep
+running after you close SSH or the terminal**. Runtime logs and PID files live in the ignored
+`.arena-run/` directory. Use `./start-arena.sh foreground` when developing locally and you do want
+both processes attached to the current terminal.
 
 ```bat
-start-arena.bat           :: Windows — same thing, opens two terminal windows and your browser
+start-arena.bat           :: Windows — opens two terminal windows and your browser
 ```
 
-Both scripts are idempotent: they create `backend/.venv`, install `backend/requirements.txt` and
+Both launchers are idempotent: they create `backend/.venv`, install `backend/requirements.txt` and
 `frontend/package.json`, start the API on **:3000** and the web app on **:5173**, and the database
-seeds itself on first boot. Stop them with `Ctrl+C` (or by closing the two Windows terminals).
+seeds itself on first boot.
 
 Or run them separately:
 

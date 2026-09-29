@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Absolute Genesis — start the API (port 3000) and the web app (port 5173) together.
+# Absolute Genesis server launcher.
 #
-#   ./start-arena.sh            # both servers
-#   ./start-arena.sh api        # backend only
-#   ./start-arena.sh web        # frontend only
-#   ./start-arena.sh share      # both + a public https link (install on phones)
+# VPS (persistent; survives SSH/terminal logout):
+#   ./start-arena.sh              # install/update dependencies and start both
+#   ./start-arena.sh status       # show process state
+#   ./start-arena.sh logs         # follow API + web logs
+#   ./start-arena.sh restart      # restart both
+#   ./start-arena.sh stop         # stop both
 #
-# First run: creates backend/.venv, installs both dependency sets, and seeds
-# the SQLite database from backend/app/seed_data (356 students, 93 questions).
+# Local development (attached to this terminal):
+#   ./start-arena.sh foreground
+#   ./start-arena.sh share        # attached + Cloudflare quick tunnel
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${1:-all}"
 API_PORT="${API_PORT:-3000}"
 WEB_PORT="${WEB_PORT:-5173}"
+RUN_DIR="$ROOT/.arena-run"
+API_PID_FILE="$RUN_DIR/api.pid"
+WEB_PID_FILE="$RUN_DIR/web.pid"
+API_LOG="$RUN_DIR/api.log"
+WEB_LOG="$RUN_DIR/web.log"
 
 log() { printf '\033[38;5;141m▸ %s\033[0m\n' "$*"; }
+warn() { printf '\033[38;5;214m! %s\033[0m\n' "$*" >&2; }
 
 setup_backend() {
   cd "$ROOT/backend"
@@ -28,23 +37,22 @@ setup_backend() {
   ./.venv/bin/pip install --quiet -r requirements.txt
 }
 
-# AI key for "Make it easy to read" (Gemini or DeepSeek). Asked once, saved to
-# backend/.env (git-ignored, so it never reaches GitHub). A key already in the
-# environment (e.g. set by your host) is used as is. DeepSeek keys start "sk-".
+# AI key for "Make it easy to read" (Gemini or DeepSeek). Asked once and
+# stored in backend/.env, which is ignored by Git.
 ensure_gemini_key() {
   local env_file="$ROOT/backend/.env"
   if [ -n "${GEMINI_API_KEY:-}${DEEPSEEK_API_KEY:-}" ]; then return; fi
   if [ -f "$env_file" ] && grep -Eq '^(GEMINI|DEEPSEEK)_API_KEY=.+' "$env_file"; then return; fi
   if [ ! -t 0 ]; then
-    log "No AI key yet — the AI rewrite stays off (add GEMINI_API_KEY=... or DEEPSEEK_API_KEY=... to backend/.env)."
+    log "No AI key yet — AI rewrite stays off (add a key to backend/.env)."
     return
   fi
-  log "Paste your Gemini or DeepSeek API key for the AI rewrite (typing is hidden; press Enter to skip):"
+  log "Paste your Gemini or DeepSeek API key (typing is hidden; Enter skips):"
   local key=""
   read -rs key || true
   echo
   if [ -z "$key" ]; then
-    log "Skipped — you can add GEMINI_API_KEY=... or DEEPSEEK_API_KEY=... to backend/.env later."
+    log "Skipped — add GEMINI_API_KEY=... or DEEPSEEK_API_KEY=... later."
     return
   fi
   ( umask 077; touch "$env_file" )
@@ -54,61 +62,180 @@ ensure_gemini_key() {
   printf '%s=%s\n' "$name" "$key" >> "$env_file.tmp"
   mv "$env_file.tmp" "$env_file"
   chmod 600 "$env_file"
-  log "Saved as $name in backend/.env (kept out of git)."
+  log "Saved as $name in backend/.env."
 }
 
 setup_frontend() {
   cd "$ROOT/frontend"
-  # Install on first run AND whenever the dependency list changes (a pulled
-  # update that adds a package would otherwise fail with a 500 on main.tsx).
   if [ ! -d node_modules ] || ! cmp -s package-lock.json node_modules/.arena-lock 2>/dev/null; then
     log "Installing frontend dependencies…"
-    npm install && cp package-lock.json node_modules/.arena-lock
+    npm install
+    cp package-lock.json node_modules/.arena-lock
   fi
 }
 
-start_api() {
-  cd "$ROOT/backend"
-  log "API  → http://localhost:$API_PORT  (docs at /docs)"
-  exec ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app
+pid_running() {
+  local file="$1" pid=""
+  [ -f "$file" ] || return 1
+  pid="$(cat "$file" 2>/dev/null || true)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
-start_web() {
+start_api_daemon() {
+  mkdir -p "$RUN_DIR"
+  if pid_running "$API_PID_FILE"; then
+    log "API is already running (PID $(cat "$API_PID_FILE"))."
+    return
+  fi
+  rm -f "$API_PID_FILE"
+  : >> "$API_LOG"
+  (
+    cd "$ROOT/backend"
+    # setsid gives the service its own session; nohup ignores the SSH hangup.
+    nohup setsid ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" \
+      >> "$API_LOG" 2>&1 < /dev/null &
+    echo $! > "$API_PID_FILE"
+  )
+  sleep 1
+  if ! pid_running "$API_PID_FILE"; then
+    warn "API failed to start. Last log lines:"
+    tail -n 30 "$API_LOG" >&2 || true
+    return 1
+  fi
+  log "API started in background (PID $(cat "$API_PID_FILE"), port $API_PORT)."
+}
+
+start_web_daemon() {
+  mkdir -p "$RUN_DIR"
+  if pid_running "$WEB_PID_FILE"; then
+    log "Web app is already running (PID $(cat "$WEB_PID_FILE"))."
+    return
+  fi
+  rm -f "$WEB_PID_FILE"
+  : >> "$WEB_LOG"
+  (
+    cd "$ROOT/frontend"
+    nohup setsid ./node_modules/.bin/vite --host 0.0.0.0 --port "$WEB_PORT" \
+      >> "$WEB_LOG" 2>&1 < /dev/null &
+    echo $! > "$WEB_PID_FILE"
+  )
+  sleep 1
+  if ! pid_running "$WEB_PID_FILE"; then
+    warn "Web app failed to start. Last log lines:"
+    tail -n 30 "$WEB_LOG" >&2 || true
+    return 1
+  fi
+  log "Web app started in background (PID $(cat "$WEB_PID_FILE"), port $WEB_PORT)."
+}
+
+stop_one() {
+  local name="$1" file="$2" pid=""
+  if ! pid_running "$file"; then
+    rm -f "$file"
+    log "$name is not running."
+    return
+  fi
+  pid="$(cat "$file")"
+  log "Stopping $name (PID $pid)…"
+  # Kill the whole independent session when possible, then the process itself.
+  kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -9 -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+  fi
+  rm -f "$file"
+}
+
+stop_all() {
+  stop_one "web app" "$WEB_PID_FILE"
+  stop_one "API" "$API_PID_FILE"
+}
+
+show_status() {
+  local failed=0
+  if pid_running "$API_PID_FILE"; then
+    printf 'API      running  PID %-7s http://localhost:%s\n' "$(cat "$API_PID_FILE")" "$API_PORT"
+  else
+    printf 'API      stopped\n'; failed=1
+  fi
+  if pid_running "$WEB_PID_FILE"; then
+    printf 'Web      running  PID %-7s http://localhost:%s\n' "$(cat "$WEB_PID_FILE")" "$WEB_PORT"
+  else
+    printf 'Web      stopped\n'; failed=1
+  fi
+  return "$failed"
+}
+
+start_foreground() {
+  setup_backend
+  ensure_gemini_key
+  setup_frontend
+  ( cd "$ROOT/backend" && exec ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
+  local api_pid=$!
+  trap 'kill "$api_pid" 2>/dev/null || true' EXIT INT TERM
+  log "API  → http://localhost:$API_PORT"
+  sleep 2
   cd "$ROOT/frontend"
-  log "Web  → http://localhost:$WEB_PORT  (proxies /api and /ws to :$API_PORT)"
-  log "Install → open http://localhost:$WEB_PORT in Chrome/Edge and click \"Install app\" (phones need an https link, see README)"
-  exec npx vite --host 0.0.0.0 --port "$WEB_PORT"
+  log "Web  → http://localhost:$WEB_PORT"
+  exec ./node_modules/.bin/vite --host 0.0.0.0 --port "$WEB_PORT"
 }
 
 case "$TARGET" in
-  api) setup_backend; ensure_gemini_key; start_api ;;
-  web) setup_frontend; start_web ;;
-  all)
+  all|start)
     setup_backend
     ensure_gemini_key
     setup_frontend
-    # Start the API in the background, then hand the foreground to Vite.
-    ( cd "$ROOT/backend" && ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
-    API_PID=$!
-    trap 'kill $API_PID 2>/dev/null || true' EXIT INT TERM
-    log "API  → http://localhost:$API_PORT  (docs at /docs)"
-    sleep 2
-    start_web
+    start_api_daemon
+    start_web_daemon
+    echo
+    show_status || true
+    log "Safe to close this terminal. Use './start-arena.sh logs' to inspect output."
+    ;;
+  api)
+    setup_backend
+    ensure_gemini_key
+    start_api_daemon
+    ;;
+  web)
+    setup_frontend
+    start_web_daemon
+    ;;
+  stop)
+    stop_all
+    ;;
+  restart)
+    stop_all
+    setup_backend
+    ensure_gemini_key
+    setup_frontend
+    start_api_daemon
+    start_web_daemon
+    show_status || true
+    ;;
+  status)
+    show_status
+    ;;
+  logs)
+    mkdir -p "$RUN_DIR"
+    touch "$API_LOG" "$WEB_LOG"
+    log "Following logs — Ctrl+C stops viewing only; the servers keep running."
+    tail -n 80 -F "$API_LOG" "$WEB_LOG"
+    ;;
+  foreground)
+    start_foreground
     ;;
   share)
-    # Phones can only install from a public https:// address; a Wi-Fi
-    # http://192.168.x.x link only ever makes a shortcut. A Cloudflare quick
-    # tunnel gives a free https://....trycloudflare.com link (no account).
+    # A quick tunnel remains attached because its public URL only exists while
+    # cloudflared is connected. The normal API/web services still survive SSH.
     setup_backend
     ensure_gemini_key
     setup_frontend
-    ( cd "$ROOT/backend" && ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
-    API_PID=$!
-    ( cd "$ROOT/frontend" && npx vite --host 0.0.0.0 --port "$WEB_PORT" ) &
-    WEB_PID=$!
-    trap 'kill $API_PID $WEB_PID 2>/dev/null || true' EXIT INT TERM
-    sleep 3
-    log "Opening a public https link… open the https://….trycloudflare.com address it prints on your phone, then tap Install app."
+    start_api_daemon
+    start_web_daemon
+    log "Opening a public HTTPS tunnel (Ctrl+C closes only the tunnel)…"
     if command -v cloudflared >/dev/null 2>&1; then
       cloudflared tunnel --no-autoupdate --url "http://localhost:$WEB_PORT"
     else
@@ -116,7 +243,7 @@ case "$TARGET" in
     fi
     ;;
   *)
-    echo "usage: ./start-arena.sh [all|api|web|share]" >&2
+    echo "usage: ./start-arena.sh [start|stop|restart|status|logs|api|web|foreground|share]" >&2
     exit 2
     ;;
 esac
