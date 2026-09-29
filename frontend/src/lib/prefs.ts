@@ -32,9 +32,9 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'montserrat' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
 
-export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string}[] = [
+export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
   {
     id: 'montserrat',
     name: 'Montserrat',
@@ -42,6 +42,15 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
     short: 'Geometric and friendly.',
     sans: "'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
     display: "'Audiowide', 'Montserrat Variable', ui-sans-serif, sans-serif",
+  },
+  {
+    id: 'helvetica-oblique',
+    name: 'Helvetica Oblique',
+    blurb: 'Bold editorial italics — the signature Pro typeface.',
+    short: 'Premium editorial italics.',
+    sans: "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+    display: "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+    style: 'oblique',
   },
   {
     id: 'arena',
@@ -208,5 +217,6 @@ export function applyFont(name: FontName): void {
   const style = document.documentElement.style;
   style.setProperty('--font-sans', font.sans);
   style.setProperty('--font-display', font.display);
+  document.documentElement.dataset.font = font.id;
   write(FONT_KEY, name);
 }

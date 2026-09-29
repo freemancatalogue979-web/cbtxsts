@@ -12,6 +12,17 @@
   font-display: swap;
 }
 
+/* Helvetica Oblique is also a selectable Standard-mode font. Form controls do
+   not reliably inherit font-style, so include them explicitly. */
+html[data-font='helvetica-oblique']:not([data-mode='pro']) body,
+html[data-font='helvetica-oblique']:not([data-mode='pro']) button,
+html[data-font='helvetica-oblique']:not([data-mode='pro']) input,
+html[data-font='helvetica-oblique']:not([data-mode='pro']) textarea,
+html[data-font='helvetica-oblique']:not([data-mode='pro']) select {
+  font-family: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-style: oblique 12deg;
+}
+
 [data-mode='pro'] {
   --pro-bg: #070810;
   --pro-surface: #10121d;

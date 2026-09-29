@@ -830,7 +830,7 @@ export default function ProfilePanel({
                     }`}
                   >
                     <Type className="size-4 shrink-0 text-nova-300" />
-                    <span className="min-w-0 flex-1" style={{fontFamily: option.sans}}>
+                    <span className="min-w-0 flex-1" style={{fontFamily: option.sans, fontStyle: option.style}}>
                       <span className="block text-[0.78rem] font-extrabold text-mist-100">{option.name}</span>
                       <OptionBlurb short={option.short} blurb={option.blurb} />
                     </span>
