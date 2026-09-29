@@ -27,16 +27,14 @@ const APPEARANCE_ICON = {dark: Moon, light: Sun, system: Monitor};
 
 function Brand({compact = false}: {compact?: boolean}) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <img src="/brand/ag-icon-192.png" alt="" width={28} height={28} className="size-8 shrink-0 rounded-[10px]" style={{boxShadow: '0 0 0 1px var(--pro-border-strong), 0 6px 16px -8px var(--pro-accent-glow)'}} draggable={false} />
+    <div className="pro-brand flex min-w-0 items-center gap-2.5">
+      <span className="pro-brand-mark" aria-hidden>
+        <img src="/brand/ag-icon-192.png" alt="" width={32} height={32} draggable={false} />
+      </span>
       {!compact && (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-[0.8125rem] font-semibold tracking-tight" style={{color: 'var(--pro-text)'}}>
-            Absolute Genesis
-          </p>
-          <p className="mt-0.5 inline-flex rounded-full px-1.5 py-px text-[0.5625rem] font-bold tracking-[0.16em] text-white" style={{background: 'var(--pro-grad)'}}>
-            PRO
-          </p>
+          <p className="pro-brand-name truncate">Absolute Genesis</p>
+          <p className="pro-brand-edition"><Sparkles aria-hidden /> Pro workspace</p>
         </div>
       )}
     </div>
@@ -220,37 +218,36 @@ export default function ProShell({
         <div className="lg:pl-60">
           {/* ------------------------------------------------------ top bar */}
           <header className="pro-topbar print-hide sticky top-0 z-20 safe-top">
-            <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 md:px-6 lg:px-8">
-              <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon lg:hidden" aria-label="Open navigation" onClick={() => setDrawer(true)}>
+            <div className="pro-topbar-inner mx-auto flex max-w-[1280px] items-center gap-2 px-3 md:px-6 lg:px-8">
+              <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-header-control lg:hidden" aria-label="Open navigation" onClick={() => setDrawer(true)}>
                 <Menu className="size-5" />
               </button>
-              <div className="flex min-w-0 items-center gap-2.5" data-hue={proHue(tab)}>
+              <div className="pro-context min-w-0" data-hue={proHue(tab)}>
                 <span className="pro-dot hidden lg:inline-block" aria-hidden />
-                <p className="truncate text-[0.9375rem] font-semibold" style={{color: 'var(--pro-text)'}}>
-                  {proLabel(tab)}
-                </p>
+                <span className="min-w-0">
+                  <span className="pro-context-kicker hidden lg:block">Pro workspace</span>
+                  <span className="pro-context-title block truncate">{proLabel(tab)}</span>
+                </span>
               </div>
 
               <button
                 type="button"
                 onClick={() => setPalette(true)}
-                className="pro-input ml-auto hidden max-w-sm items-center gap-2 text-left md:flex lg:ml-6 lg:w-80"
+                className="pro-command-search ml-auto hidden max-w-sm items-center gap-2 text-left md:flex lg:ml-6 lg:w-80"
                 aria-label="Search (Ctrl+K)"
               >
-                <Search className="size-4 shrink-0" style={{color: 'var(--pro-muted)'}} />
-                <span className="min-w-0 flex-1 truncate text-[0.875rem]" style={{color: 'var(--pro-muted)'}}>
-                  Search courses, exams, materials…
-                </span>
+                <Search className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">Search your workspace…</span>
                 <span className="pro-kbd">Ctrl K</span>
               </button>
 
-              <div className="ml-auto flex items-center gap-1">
+              <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
                 <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon md:hidden" aria-label="Search" onClick={() => setPalette(true)}>
                   <Search className="size-[18px]" />
                 </button>
                 <button
                   type="button"
-                  className="pro-btn pro-btn-ghost pro-btn-icon"
+                  className="pro-btn pro-btn-ghost pro-btn-icon pro-header-appearance"
                   aria-label={`Appearance: ${appearance}. Switch to ${APPEARANCE_NEXT[appearance]}`}
                   title={`Appearance: ${appearance}`}
                   onClick={() => setAppearance(APPEARANCE_NEXT[appearance])}
@@ -302,7 +299,7 @@ export default function ProShell({
             id="pro-main"
             ref={mainRef}
             tabIndex={-1}
-            className="mx-auto w-full max-w-[1280px] min-w-0 px-4 pt-5 pb-28 focus:outline-none md:px-6 md:pt-8 md:pb-12 lg:px-8"
+            className="pro-main mx-auto w-full max-w-[1280px] min-w-0 px-3 pt-4 pb-28 focus:outline-none sm:px-4 md:px-6 md:pt-7 md:pb-12 lg:px-8"
           >
             <div key={tab} className="pro-page min-w-0">
               {children}
@@ -316,7 +313,7 @@ export default function ProShell({
             const item = PRO_NAV.find((row) => row.id === id)!;
             const Icon = item.icon;
             return (
-              <button key={id} type="button" className="pro-bottom-item" aria-current={tab === id ? 'page' : undefined} onClick={() => go(id)}>
+              <button key={id} type="button" className="pro-bottom-item" data-hue={item.hue} aria-current={tab === id ? 'page' : undefined} onClick={() => go(id)}>
                 <span className="pro-bottom-pill" aria-hidden>
                   <Icon className="size-5" />
                 </span>

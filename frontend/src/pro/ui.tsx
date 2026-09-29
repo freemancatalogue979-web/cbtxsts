@@ -29,15 +29,15 @@ export function PageHeader({eyebrow, title, description, actions, icon, hue = 'v
           <h1 className="pro-h1 mt-1 [overflow-wrap:anywhere]">{title}</h1>
           {description && <p className="pro-secondary mt-1.5 max-w-2xl">{description}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="pro-page-actions flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
       </header>
     );
   }
   return (
     <header className="pro-hero" data-hue={hue}>
       <HeroArt />
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-4">
-        <div className="flex min-w-0 items-center gap-4">
+      <div className="pro-page-head-row flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-4">
+        <div className="pro-page-head-copy flex min-w-0 items-center gap-4">
           <span className="pro-hero-icon" aria-hidden>
             {icon}
           </span>
@@ -47,7 +47,7 @@ export function PageHeader({eyebrow, title, description, actions, icon, hue = 'v
             {description && <p className="pro-secondary mt-1 max-w-2xl">{description}</p>}
           </div>
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="pro-page-actions flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {meta && <div className="mt-4 flex flex-wrap gap-2">{meta}</div>}
       {children}
@@ -69,7 +69,7 @@ export function Section({title, description, action, children, className = '', i
   return (
     <section className={`pro-card ${className}`}>
       {(title || action) && (
-        <div className="flex min-w-0 items-start justify-between gap-3 px-4 pt-4 md:px-5 md:pt-5">
+        <div className="pro-section-header flex min-w-0 items-start justify-between gap-3 px-4 pt-4 md:px-5 md:pt-5">
           <div className="pro-section-head">
             {icon && (
               <Tile hue={hue} size="md">
