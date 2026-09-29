@@ -107,7 +107,9 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-const FONT_KEY = 'arena.font.v3';
+// v4 makes Helvetica Oblique the new house default. A versioned key ensures
+// devices that silently stored the previous fallback receive the new default.
+const FONT_KEY = 'arena.font.v4';
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';
@@ -204,8 +206,8 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Space Grotesk is the house default; a stored choice always wins. */
-export const DEFAULT_FONT: FontName = 'grotesk';
+/** Helvetica Oblique is the house default; a stored choice always wins. */
+export const DEFAULT_FONT: FontName = 'helvetica-oblique';
 
 export function currentFont(): FontName {
   const stored = read(FONT_KEY, DEFAULT_FONT);
