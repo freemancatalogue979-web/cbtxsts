@@ -298,6 +298,26 @@
   }
 }
 
+/* Ring artwork and its centre icon are different SVG layers. The original
+   descendant selector positioned both absolutely, pushing the checklist and
+   graduation-cap icons onto the ring edge. */
+@layer components {
+  .pro-ring > svg { position: absolute; inset: 0; }
+  .pro-ring-label svg {
+    position: static;
+    inset: auto;
+    display: block;
+    width: 21px;
+    height: 21px;
+    transform: none;
+  }
+  .pro-ring-label > span {
+    display: grid;
+    place-items: center;
+    color: inherit;
+  }
+}
+
 /* Mobile section composition — keep icons attached to their copy and never
    let the optional action sizing squeeze the actual heading. */
 @layer components {
