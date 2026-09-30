@@ -84,6 +84,27 @@ Open **http://localhost:5173**.
 
 Interactive API docs: **http://localhost:3000/docs**.
 
+### Mobile visual audit
+
+After starting the app, install Playwright's browser once and run the automated phone/tablet audit:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run audit:visual
+```
+
+It checks Pro at 320px, 390px and tablet width plus the mobile staff console, fails on page/card
+overflow, and writes full-page evidence to `frontend/test-results/visual/` (git-ignored). Run it after
+changing cards, navigation, dialogs, typography or responsive CSS.
+
+### Background work
+
+Long material imports already run in a bounded worker pool and AI course jobs use their own durable
+queue with progress, cancellation, cost ceilings and restart recovery. Server clocks also execute DB
+work off the async request loop. `/api/health` reports queued/running AI work and active import jobs;
+graceful shutdown now stops the import executor so a deploy does not leave orphaned workers.
+
 ---
 
 ## What players get

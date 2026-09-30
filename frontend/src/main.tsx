@@ -15,7 +15,9 @@ import './index.css';
 import './pro.css';
 import './pro-mobile.css';
 import './pro-premium.css';
+import './pro-onboarding.css';
 import './admin-font.css';
+import './admin-mobile.css';
 
 // Modes (pro/game/fun) and the chosen font family apply before React renders.
 applyMode(currentMode());

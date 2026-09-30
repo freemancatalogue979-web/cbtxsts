@@ -21,6 +21,7 @@ import type {Quiz} from '../lib/types';
 import {askTutor} from '../lib/tutor';
 import {useSession} from '../store/session';
 import {PRO_MOBILE, PRO_NAV, PRO_SETTINGS, proHue, proLabel} from './nav';
+import ProOnboarding from './ProOnboarding';
 
 const APPEARANCE_NEXT: Record<Appearance, Appearance> = {dark: 'light', light: 'system', system: 'dark'};
 const APPEARANCE_ICON = {dark: Moon, light: Sun, system: Monitor};
@@ -363,6 +364,8 @@ export default function ProShell({
             </div>
           </div>
         )}
+
+        <ProOnboarding onTab={go} />
 
         <CommandPalette
           open={palette}

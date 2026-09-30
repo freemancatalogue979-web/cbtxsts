@@ -506,6 +506,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
 
   return (
     <div className="admin-shell aurora min-h-dvh">
+      <a className="admin-skip" href="#admin-main">Skip to console content</a>
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-50" />
 
       <header className="sticky top-0 z-50 bg-ink-950/85 shadow-[0_18px_45px_-32px_rgba(0,0,0,0.95)] backdrop-blur-xl safe-top">
@@ -575,6 +576,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                           <button
                             key={item.id}
                             onClick={() => goto(item.id)}
+                            aria-current={active ? 'page' : undefined}
                             className={`relative flex min-h-11 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-[0.84rem] font-bold transition-colors touch-manipulation ${
                               active ? 'text-white' : 'text-mist-400 hover:bg-white/6 hover:text-mist-200'
                             }`}
@@ -611,6 +613,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                   <button
                     key={item.id}
                     onClick={() => goto(item.id)}
+                    aria-current={active ? 'page' : undefined}
                     className={`relative flex min-h-11 w-full items-center gap-2.5 rounded-2xl px-4 py-3 text-left text-[0.84rem] font-bold transition-colors touch-manipulation ${
                       active ? 'text-white' : 'text-mist-500 hover:bg-white/6 hover:text-mist-200'
                     }`}
@@ -625,7 +628,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
           ))}
         </nav>
 
-        <div className="min-w-0 flex-1">
+        <main id="admin-main" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
           <AnimatePresence mode="wait">
             <motion.div
               key={section}
@@ -658,7 +661,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
               </Suspense>
             </motion.div>
           </AnimatePresence>
-        </div>
+        </main>
       </div>
 
       <p className="px-4 pb-6 text-center text-[0.7rem] font-semibold text-mist-600 sm:pb-8 sm:text-[0.72rem]">

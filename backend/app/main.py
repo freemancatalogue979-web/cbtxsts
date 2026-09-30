@@ -169,6 +169,11 @@ async def lifespan(app: FastAPI):
             await ticker
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await ranked
+        # Document imports run outside the request loop. Stop their executor
+        # cleanly so deploys do not leave orphaned worker threads.
+        from .services import import_jobs
+
+        import_jobs.shutdown()
         await async_engine.dispose()
 
 
@@ -279,10 +284,22 @@ def health() -> dict:
     with session_scope() as db:
         from sqlalchemy import func, select
 
-        from .models import Student
+        from .models import AITask, Student
 
         players = db.scalar(select(func.count(Student.id))) or 0
-    return {"status": "ok", "players": int(players), "online": hub.online_count()}
+        ai_queued = db.scalar(select(func.count(AITask.id)).where(AITask.status == "queued")) or 0
+        ai_running = db.scalar(select(func.count(AITask.id)).where(AITask.status == "running")) or 0
+    from .services import import_jobs
+
+    return {
+        "status": "ok",
+        "players": int(players),
+        "online": hub.online_count(),
+        "jobs": {
+            "ai": {"queued": int(ai_queued), "running": int(ai_running)},
+            "imports": import_jobs.stats(),
+        },
+    }
 
 
 def run() -> None:  # pragma: no cover - convenience entrypoint

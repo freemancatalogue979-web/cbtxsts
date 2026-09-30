@@ -172,3 +172,19 @@ def public(job: dict) -> dict:
     if job["state"] == "done":
         out["material"] = job["material"]
     return out
+
+
+def stats() -> dict[str, int]:
+    """Small, non-sensitive worker snapshot for health checks and monitoring."""
+    with _lock:
+        counts: dict[str, int] = {"total": len(_jobs), "reading": 0, "ready": 0, "importing": 0, "done": 0, "error": 0}
+        for job in _jobs.values():
+            state = str(job.get("state") or "error")
+            counts[state] = counts.get(state, 0) + 1
+    counts["active"] = counts.get("reading", 0) + counts.get("importing", 0)
+    return counts
+
+
+def shutdown() -> None:
+    """Stop accepting import work during a graceful API shutdown."""
+    _pool.shutdown(wait=False, cancel_futures=True)

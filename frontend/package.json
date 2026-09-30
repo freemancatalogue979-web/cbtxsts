@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 5173",
     "typecheck": "tsc --noEmit",
+    "audit:visual": "node scripts/visual-audit.mjs",
     "clean": "rm -rf dist",
     "check:music": "node scripts/music-check.mjs"
   },
