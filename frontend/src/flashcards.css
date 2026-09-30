@@ -1,0 +1,118 @@
+/* Flashcard study controls — compact bento controls instead of native-looking selects. */
+.study-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 9px;
+  width: 100%;
+}
+
+.study-filter {
+  --study-tone: var(--qa-nova-400);
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px 8px 9px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--study-tone) 22%, var(--qa-outline));
+  border-radius: 16px 6px 16px 6px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--study-tone) 10%, transparent), transparent 58%),
+    color-mix(in srgb, var(--qa-surface-raised) 94%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 10px 25px -22px rgb(0 0 0 / 90%);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+.study-filter[data-tone='blue'] { --study-tone: var(--qa-pulse-400); }
+.study-filter[data-tone='amber'] { --study-tone: var(--qa-gold-400); }
+.study-filter:hover,
+.study-filter:focus-within {
+  border-color: color-mix(in srgb, var(--study-tone) 58%, var(--qa-outline));
+  background-color: var(--qa-surface-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 9%), 0 13px 28px -20px color-mix(in srgb, var(--study-tone) 42%, transparent);
+  transform: translateY(-1px);
+}
+.study-filter:focus-within { outline: 2px solid color-mix(in srgb, var(--study-tone) 70%, transparent); outline-offset: 2px; }
+
+.study-filter-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--study-tone) 27%, transparent);
+  border-radius: 12px 5px 12px 5px;
+  background: color-mix(in srgb, var(--study-tone) 13%, transparent);
+  color: var(--study-tone);
+}
+.study-filter-icon svg { width: 17px; height: 17px; }
+.study-filter-copy { display: grid; min-width: 0; line-height: 1.05; }
+.study-filter-copy > span {
+  color: var(--color-mist-500);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.study-filter-copy select {
+  width: 100%;
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-mist-100);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.study-filter-copy option { background: var(--color-ink-900); color: var(--color-mist-100); }
+.study-filter-chevron { width: 15px; height: 15px; color: var(--color-mist-500); pointer-events: none; }
+
+.study-known {
+  display: flex;
+  min-width: 112px;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 8px 13px;
+  border: 1px solid color-mix(in srgb, var(--qa-mint-400) 35%, var(--qa-outline));
+  border-radius: 6px 16px 6px 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--qa-mint-500) 14%, transparent), color-mix(in srgb, var(--qa-surface-raised) 96%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%);
+  color: var(--color-mist-100);
+}
+.study-known-icon { display: grid; place-items: center; color: var(--qa-mint-400); }
+.study-known-icon svg { width: 20px; height: 20px; }
+.study-known > span:last-child { display: grid; line-height: 1; }
+.study-known strong { color: var(--qa-mint-300); font-size: .9rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.study-known small { margin-top: 5px; color: var(--color-mist-500); font-size: .56rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+
+@media (max-width: 639px) {
+  .study-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .study-filter { grid-template-columns: 32px minmax(0, 1fr) 14px; min-height: 54px; gap: 8px; padding: 7px 9px 7px 8px; }
+  .study-filter-icon { width: 32px; height: 32px; }
+  .study-filter-copy > span { font-size: .52rem; }
+  .study-filter-copy select { font-size: .72rem; }
+  .study-known { min-width: 0; min-height: 54px; justify-content: flex-start; padding-inline: 12px; }
+}
+
+@media (max-width: 349px) {
+  .study-filter { grid-template-columns: minmax(0, 1fr) 13px; }
+  .study-filter-icon { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-filter { transition: none; }
+  .study-filter:hover { transform: none; }
+}

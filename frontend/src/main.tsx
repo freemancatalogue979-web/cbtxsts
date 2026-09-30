@@ -18,6 +18,7 @@ import './pro-premium.css';
 import './pro-onboarding.css';
 import './admin-font.css';
 import './admin-mobile.css';
+import './flashcards.css';
 
 // Modes (pro/game/fun) and the chosen font family apply before React renders.
 applyMode(currentMode());

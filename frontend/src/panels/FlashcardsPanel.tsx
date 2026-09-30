@@ -9,6 +9,8 @@ import {
   ArrowLeftRight,
   Bookmark,
   BookmarkCheck,
+  CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   Layers,
   Plus,
@@ -455,43 +457,59 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
         </Button>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip className="border-white/12 bg-white/6 text-mist-400" icon={<Shuffle className="size-3.5" />}>
-          <select
-            value={String(shuffle)}
-            onChange={(event) => { const value = event.target.value === 'true'; setShuffle(value); load({shuffle: value}); }}
-            className="bg-transparent text-[0.74rem] font-bold text-mist-300 outline-none"
-            aria-label="Shuffle"
-          >
-            <option value="true">Shuffled</option>
-            <option value="false">In order</option>
-          </select>
-        </Chip>
-        <Chip className="border-white/12 bg-white/6 text-mist-400">
-          <select
-            value={dueOnly ? 'due' : 'all'}
-            onChange={(event) => { const value = event.target.value === 'due'; setDueOnly(value); load({due_only: value}); }}
-            className="bg-transparent text-[0.74rem] font-bold text-mist-300 outline-none"
-            aria-label="Due filter"
-          >
-            <option value="due">Due only</option>
-            <option value="all">Whole deck</option>
-          </select>
-        </Chip>
-        <Chip className="border-white/12 bg-white/6 text-mist-400">
-          <select
-            value={bookmarkedOnly ? 'star' : 'all'}
-            onChange={(event) => { const value = event.target.value === 'star'; setBookmarkedOnly(value); load({bookmarked: value}); }}
-            className="bg-transparent text-[0.74rem] font-bold text-mist-300 outline-none"
-            aria-label="Bookmark filter"
-          >
-            <option value="all">All cards</option>
-            <option value="star">Bookmarked</option>
-          </select>
-        </Chip>
-        <Chip className="ml-auto border-mint-500/25 bg-mint-500/10 text-mint-200">
-          {correctCount}/{reviewed || 0} known
-        </Chip>
+      <div className="study-filter-bar" aria-label="Study session controls">
+        <label className="study-filter" data-tone="violet">
+          <span className="study-filter-icon"><Shuffle /></span>
+          <span className="study-filter-copy">
+            <span>Order</span>
+            <select
+              value={String(shuffle)}
+              onChange={(event) => { const value = event.target.value === 'true'; setShuffle(value); load({shuffle: value}); }}
+              aria-label="Card order"
+            >
+              <option value="true">Shuffled</option>
+              <option value="false">In order</option>
+            </select>
+          </span>
+          <ChevronDown className="study-filter-chevron" />
+        </label>
+
+        <label className="study-filter" data-tone="blue">
+          <span className="study-filter-icon"><Layers /></span>
+          <span className="study-filter-copy">
+            <span>Session</span>
+            <select
+              value={dueOnly ? 'due' : 'all'}
+              onChange={(event) => { const value = event.target.value === 'due'; setDueOnly(value); load({due_only: value}); }}
+              aria-label="Session scope"
+            >
+              <option value="due">Due only</option>
+              <option value="all">Whole deck</option>
+            </select>
+          </span>
+          <ChevronDown className="study-filter-chevron" />
+        </label>
+
+        <label className="study-filter" data-tone="amber">
+          <span className="study-filter-icon"><Bookmark /></span>
+          <span className="study-filter-copy">
+            <span>Cards</span>
+            <select
+              value={bookmarkedOnly ? 'star' : 'all'}
+              onChange={(event) => { const value = event.target.value === 'star'; setBookmarkedOnly(value); load({bookmarked: value}); }}
+              aria-label="Card filter"
+            >
+              <option value="all">All cards</option>
+              <option value="star">Bookmarked</option>
+            </select>
+          </span>
+          <ChevronDown className="study-filter-chevron" />
+        </label>
+
+        <div className="study-known" role="status" aria-label={`${correctCount} of ${reviewed || 0} cards known`}>
+          <span className="study-known-icon"><CheckCircle2 /></span>
+          <span><strong>{correctCount}/{reviewed || 0}</strong><small>Known</small></span>
+        </div>
       </div>
 
       <Modal icon={StickyNoteIcon} tone="amber"
