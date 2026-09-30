@@ -571,6 +571,12 @@ export default function FlashcardsPanel() {
     }
   };
 
+  // Hooks must run in the same order when entering/leaving StudyView. This
+  // memo used to sit below the early return, causing “rendered fewer hooks”
+  // as soon as Study now was pressed.
+  const decks = useMemo(() => data?.decks ?? [], [data]);
+  const progress = data?.progress;
+
   if (studying) {
     return (
       <StudyView
@@ -583,9 +589,6 @@ export default function FlashcardsPanel() {
       />
     );
   }
-
-  const progress = data?.progress;
-  const decks = useMemo(() => data?.decks ?? [], [data]);
 
   return (
     <div className="grid gap-4">

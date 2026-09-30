@@ -193,7 +193,11 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
             "icon": material.icon,
             "accent": material.accent,
             "estimated_minutes": material.estimated_minutes,
-            "sections": len(sections),
+            "section_count": len(sections),
+            "sections": len(sections),  # backwards-compatible alias
+            "difficulty": material.difficulty,
+            "description": material.description,
+            "tags": _loads(material.tags, []),
             "progress": engine.progress_public(row, len(sections)),
             "course_title": _course_name(db, material.course_id),
         }
@@ -214,6 +218,7 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
                 "id": row.id,
                 "material_id": row.material_id,
                 "material_title": material.title,
+                "title": material.title,
                 "section_id": row.section_id,
                 "label": row.label,
                 "snippet": row.snippet,
@@ -226,6 +231,7 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
             "id": row.id,
             "material_id": row.material_id,
             "material_title": (db.get(Material, row.material_id).title if db.get(Material, row.material_id) else ""),
+            "title": row.title or (db.get(Material, row.material_id).title if db.get(Material, row.material_id) else ""),
             "section_id": row.section_id,
             "body": row.body,
             "quote": row.quote,
@@ -244,6 +250,7 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
             "id": row.id,
             "material_id": row.material_id,
             "material_title": (db.get(Material, row.material_id).title if db.get(Material, row.material_id) else ""),
+            "title": (db.get(Material, row.material_id).title if db.get(Material, row.material_id) else ""),
             "section_id": row.section_id,
             "quote": row.quote,
             "question": row.question,
@@ -275,6 +282,16 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
         ).all()
     ]
 
+    # Keep this aggregate in the API contract. The player and Pro libraries
+    # both consume it; omitting it used to crash “My learning” at render time.
+    visible_progress = continue_reading + completed
+    total_seconds = sum(int((card.get("progress") or {}).get("seconds_spent") or 0) for card in visible_progress)
+    average_percent = round(sum(int((card.get("progress") or {}).get("percent") or 0) for card in visible_progress) / max(1, len(visible_progress)))
+    topic_counts: dict[str, int] = {}
+    for card in visible_progress:
+        name = str(card.get("topic") or "General")
+        topic_counts[name] = topic_counts.get(name, 0) + 1
+
     return {
         "continue_reading": continue_reading,
         "completed": completed,
@@ -282,6 +299,15 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
         "notes": notes,
         "confusions": confusions,
         "highlights": highlights,
+        "topics": [{"topic": name, "count": count, "percent": 0} for name, count in sorted(topic_counts.items())],
+        "summary": {
+            "reading": len(continue_reading),
+            "completed": len(completed),
+            "bookmarks": len(bookmarks),
+            "notes": len(notes),
+            "minutes": round(total_seconds / 60),
+            "percent": average_percent,
+        },
         "streak": engine.streak_public(db, student.id),
     }
 

@@ -1817,6 +1817,22 @@ export default function MaterialsPanel() {
     }
   };
 
+  // Older cached /mine payloads did not include summary. Keep the screen
+  // render-safe while the fresh API response replaces them.
+  const learningSummary = mine?.summary ?? {
+    reading: mine?.continue_reading?.length ?? 0,
+    completed: mine?.completed?.length ?? 0,
+    bookmarks: mine?.bookmarks?.length ?? 0,
+    notes: mine?.notes?.length ?? 0,
+    minutes: Math.round(
+      [...(mine?.continue_reading ?? []), ...(mine?.completed ?? [])].reduce(
+        (total, row) => total + Number(row.progress?.seconds_spent ?? 0),
+        0,
+      ) / 60,
+    ),
+    percent: 0,
+  };
+
   if (view === 'reader' && detail) {
     return (
       <Reader
@@ -1879,10 +1895,10 @@ export default function MaterialsPanel() {
           {mine ? (
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               {[
-                {label: 'Reading', value: mine.summary.reading, icon: BookOpen},
-                {label: 'Completed', value: mine.summary.completed, icon: Trophy},
-                {label: 'Minutes read', value: mine.summary.minutes, icon: Clock3},
-                {label: 'Highlights', value: mine.summary.bookmarks + mine.summary.notes, icon: Highlighter},
+                {label: 'Reading', value: learningSummary.reading, icon: BookOpen},
+                {label: 'Completed', value: learningSummary.completed, icon: Trophy},
+                {label: 'Minutes read', value: learningSummary.minutes, icon: Clock3},
+                {label: 'Highlights', value: learningSummary.bookmarks + learningSummary.notes, icon: Highlighter},
               ].map((tile) => (
                 <Card key={tile.label} className="min-w-0 p-3">
                   <tile.icon className="size-4 text-nova-300" />
