@@ -424,8 +424,12 @@ class FlashcardGradeIn(BaseModel):
 
 
 class FlashcardNoteIn(BaseModel):
-    card_id: int
-    notes: str = ""
+    # The card identity lives in the route path. Keep this optional only for
+    # backwards compatibility with older clients that also sent it in JSON.
+    card_id: int | None = None
+    # None means "leave the note alone". A bookmark-only PATCH must never erase
+    # an existing note as the old empty-string default did.
+    notes: str | None = Field(default=None, max_length=2000)
     bookmarked: bool | None = None
 
 
@@ -884,7 +888,9 @@ class GameSessionStartIn(BaseModel):
 
 
 class GameSessionFinishIn(BaseModel):
-    session_id: int
+    # Session identity is carried by /session/{session_id}/finish. Optional for
+    # compatibility with current clients that still mirror it in the body.
+    session_id: int | None = None
     score: int = Field(default=0, ge=0, le=10_000_000)
     seconds: int = Field(default=0, ge=0, le=60 * 60)
     combo: int = Field(default=0, ge=0, le=100_000)

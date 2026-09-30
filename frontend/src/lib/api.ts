@@ -611,7 +611,9 @@ export const api = {
     due: (params: {deck_id?: number; limit?: number} = {}) => request<Json>(`/api/flashcards/due${query(params)}`),
     stats: () => request<Json>('/api/flashcards/stats'),
     updateCard: (id: number, body: {notes?: string; bookmarked?: boolean}) =>
-      request<Json>(`/api/flashcards/cards/${id}`, {method: 'PATCH', body}),
+      // Include card_id for rolling-deploy compatibility with older API
+      // workers; current servers correctly take identity from the route path.
+      request<Json>(`/api/flashcards/cards/${id}`, {method: 'PATCH', body: {...body, card_id: id}}),
   },
 
   /* ------------------------------------------------------- practice & bosses */

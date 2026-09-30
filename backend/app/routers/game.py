@@ -259,6 +259,8 @@ def finish_session(
     student: Student = Depends(require_student),
 ) -> dict:
     """Close a run. Score/seconds are clamped to what the server can believe."""
+    if payload.session_id is not None and payload.session_id != session_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Session id does not match the request path.")
     session = db.get(GameSession, session_id)
     if session is None or session.student_id != student.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found.")

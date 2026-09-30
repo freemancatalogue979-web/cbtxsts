@@ -199,7 +199,9 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
     if (!card) return;
     try {
       const next = !card.bookmarked;
-      await api.flashcards.updateCard(card.card_id, {bookmarked: next});
+      // Send the current note as well for compatibility with older API workers
+      // whose bookmark PATCH treated an omitted note as an empty string.
+      await api.flashcards.updateCard(card.card_id, {bookmarked: next, notes: card.notes});
       setPayload((current) =>
         current ? {...current, cards: current.cards.map((row) => (row.card_id === card.card_id ? {...row, bookmarked: next} : row))} : current,
       );

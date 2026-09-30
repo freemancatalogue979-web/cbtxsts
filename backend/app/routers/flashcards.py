@@ -620,12 +620,15 @@ def update_card(
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
 ) -> dict:
+    if payload.card_id is not None and payload.card_id != card_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Card id does not match the request path.")
     card = db.get(FlashcardCard, card_id)
     if card is None or (card.student_id is not None and card.student_id != student.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Card not found.")
     if payload.bookmarked is not None:
         card.bookmarked = payload.bookmarked
-    card.notes = payload.notes[:2000]
+    if payload.notes is not None:
+        card.notes = payload.notes
     db.commit()
     return {"ok": True, "bookmarked": card.bookmarked, "notes": card.notes}
 
