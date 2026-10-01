@@ -26,8 +26,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db, session_scope
-from ..deps import require_admin, require_student
-from ..models import Admin, AIProposal, AITask, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, Config, Course, CourseTopic, Material, Question, Quiz, Student
+from ..deps import require_admin, require_institution_staff, require_student
+from ..models import Admin, AIProposal, AITask, AIStaffUsage, AIToolCall, AIUsageEvent, Attempt, ClassTeacher, Config, Course, CourseTopic, Material, Question, Quiz, Student, TeachingClass
 from ..services import ai_core
 from ..services import ai_providers as providers
 from ..services import ai_tutor as tutor
@@ -186,6 +186,8 @@ def delete_mini_exam(exam_id: int, db: Session = Depends(get_db), student: Stude
 
 # =================================================================== staff
 def _role(admin: Admin) -> str:
+    if admin.role == "teacher":
+        return registry.TEACHER
     return admin.role if admin.role in registry.STAFF_ROLES else registry.STAFF
 
 
@@ -223,7 +225,7 @@ def _spend(db: Session, cfg: Config | None) -> dict:
 
 
 @admin_router.get("/status")
-def staff_ai_status(db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+def staff_ai_status(db: Session = Depends(get_db), admin: Admin = Depends(require_institution_staff)) -> dict:
     impl, model = tutor.ai_target(db)
     cfg = db.get(Config, 1)
     pending = db.execute(select(func.count(AIProposal.id)).where(AIProposal.status == "pending")).scalar_one()
@@ -266,7 +268,7 @@ def _staff_steps(cfg: Config | None) -> int:
 
 
 @admin_router.post("/agent")
-def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+def staff_agent(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_institution_staff)) -> dict:
     """One assistant turn. The console keeps the visible thread and sends the
     recent turns back (max 12); the server adds the rules and the tools."""
     impl, cfg, messages, course, thinking = _staff_prepare(payload, db, admin)
@@ -305,7 +307,7 @@ def _sse(event: str, data: dict) -> bytes:
 
 
 @admin_router.post("/agent/stream")
-def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> StreamingResponse:
+def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_institution_staff)) -> StreamingResponse:
     """Same turn as /agent, streamed as server-sent events so the console can
     show the work live and stop it:
 
@@ -404,7 +406,7 @@ def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admi
 
 
 @admin_router.post("/agent/{request_id}/stop")
-def staff_agent_stop(request_id: str, admin: Admin = Depends(require_admin)) -> dict:
+def staff_agent_stop(request_id: str, admin: Admin = Depends(require_institution_staff)) -> dict:
     with _staff_stops_lock:
         event = _staff_stops.get(request_id)
     if event:

@@ -28,6 +28,7 @@ log = logging.getLogger("arena.ai.tools")
 MAX_RESULT_CHARS = 9000  # what one tool reply may add to the prompt
 
 STUDENT = "student"
+TEACHER = "teacher"
 STAFF = "staff"
 OWNER = "owner"
 STAFF_ROLES = frozenset({STAFF, OWNER})
@@ -84,8 +85,15 @@ def tool(name: str, *, description: str, parameters: dict | None = None, roles: 
     return register
 
 
+def _allowed(tool: Tool, role: str) -> bool:
+    # Teachers may use staff lookup/analysis tools, but never tools that write
+    # platform data. Their generated lessons remain drafts until platform staff
+    # publish them through normal review workflows.
+    return role in tool.roles or (role == TEACHER and STAFF in tool.roles and not tool.writes)
+
+
 def specs_for(role: str) -> list[dict]:
-    return [t.spec() for t in _TOOLS.values() if role in t.roles]
+    return [t.spec() for t in _TOOLS.values() if _allowed(t, role)]
 
 
 def label_for(name: str) -> str:
@@ -94,7 +102,7 @@ def label_for(name: str) -> str:
 
 
 def names_for(role: str) -> list[str]:
-    return [t.name for t in _TOOLS.values() if role in t.roles]
+    return [t.name for t in _TOOLS.values() if _allowed(t, role)]
 
 
 # ------------------------------------------------------------- validation
@@ -192,7 +200,7 @@ def execute(ctx: ToolContext, name: str, raw_args: Any) -> tuple[str, dict]:
         if t is None:
             status = "invalid"
             result: Any = {"error": f"Unknown tool '{name}'."}
-        elif ctx.role not in t.roles:
+        elif not _allowed(t, ctx.role):
             status = "denied"
             result = {"error": "You are not allowed to use this tool."}
         else:

@@ -490,13 +490,14 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
   const [section, setSection] = useState<Section>(teacherOnly ? 'institutions' : 'overview');
   // Bumping the key remounts a section so it re-fetches after a mutation.
   const [bump, setBump] = useState(0);
+  const [tutorPrompt, setTutorPrompt] = useState('');
   const refresh = () => setBump((value) => value + 1);
   // Phones get the full console too: the rail folds into a hamburger drawer
   // below lg, every section keeps its permissions and functionality.
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
-    if (teacherOnly && section !== 'institutions') setSection('institutions');
+    if (teacherOnly && !['institutions', 'tutor'].includes(section)) setSection('institutions');
   }, [teacherOnly, section]);
 
   const goto = (next: Section) => {
@@ -505,7 +506,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
     window.scrollTo({top: 0});
   };
 
-  const visibleSections = teacherOnly ? SECTIONS.filter((item) => item.id === 'institutions') : SECTIONS;
+  const visibleSections = teacherOnly ? SECTIONS.filter((item) => ['institutions', 'tutor'].includes(item.id)) : SECTIONS;
   const groups = visibleSections.reduce<{name: string; items: typeof SECTIONS}[]>((acc, item) => {
     const last = acc[acc.length - 1];
     if (last && last.name === item.group) last.items.push(item);
@@ -663,10 +664,10 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                 />
               )}
               {section === 'groups' && <GroupsAdmin key={`groups-${bump}`} />}
-              {section === 'institutions' && <InstitutionsAdmin key={`institutions-${bump}`} />}
+              {section === 'institutions' && <InstitutionsAdmin key={`institutions-${bump}`} onOpenTutor={(prompt) => { setTutorPrompt(prompt); goto('tutor'); }} />}
               {section === 'support' && <SupportAdmin key={`support-${bump}`} />}
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}
-              {section === 'tutor' && <TutorAdmin key={`tutor-${bump}`} />}
+              {section === 'tutor' && <TutorAdmin key={`tutor-${bump}-${tutorPrompt}`} initialPrompt={tutorPrompt || undefined} />}
               {section === 'settings' && <SettingsPanel key={`settings-${bump}`} />}
               </Suspense>
             </motion.div>

@@ -70,9 +70,10 @@ const money = (n: number, digits = 3) => `$${(n || 0).toFixed(digits)}`;
 const pct = (n: number) => `${Math.round((n || 0) * 10) / 10}%`;
 const errText = (e: unknown) => (e as Error).message || 'Something went wrong.';
 
-export default function TutorAdmin() {
-  const {toast} = useSession();
-  const [tab, setTab] = useState<Tab>('overview');
+export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
+  const {toast, profile} = useSession();
+  const teacherOnly = String((profile as unknown as {role?: string} | null)?.role || '') === 'teacher';
+  const [tab, setTab] = useState<Tab>(initialPrompt ? 'assistant' : 'overview');
   const [range, setRange] = useState<AdminRange>({range: '7d'});
   const [settings, setSettings] = useState<TutorAdminSettings | null>(null);
   const [saved, setSaved] = useState<TutorAdminSettings | null>(null);
@@ -80,12 +81,13 @@ export default function TutorAdmin() {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
+    if (teacherOnly) return;
     tutorAdminApi.settings().then((r) => {
       setSettings(r.settings);
       setSaved(r.settings);
       setProviders(r.providers ?? []);
     }).catch((e) => toast('error', 'Could not load tutor settings', errText(e)));
-  }, [toast]);
+  }, [teacherOnly, toast]);
   useEffect(load, [load]);
 
   const dirty = useMemo(() => !!settings && !!saved && JSON.stringify(settings) !== JSON.stringify(saved), [settings, saved]);
@@ -108,6 +110,18 @@ export default function TutorAdmin() {
   const active = providers.find((p) => p.active);
   const set = (patch: Partial<TutorAdminSettings>) => setSettings((s) => (s ? {...s, ...patch} : s));
   const editing = tab === 'settings' || tab === 'limits' || tab === 'features' || tab === 'models' || tab === 'costs';
+
+  if (teacherOnly) {
+    return (
+      <div className="space-y-3">
+        <header className="flex items-center gap-3 rounded-2xl border border-nova-400/20 bg-nova-500/8 p-3.5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white"><Wand2 className="size-5" /></span>
+          <div><h2 className="text-[1rem] font-extrabold text-mist-50">Teacher AI workspace</h2><p className="text-[.72rem] font-semibold text-mist-400">Analyze learning evidence and draft lessons with read-only platform tools.</p></div>
+        </header>
+        <AIAssistant initialPrompt={initialPrompt} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -165,7 +179,7 @@ export default function TutorAdmin() {
       ) : (
         <>
           {tab === 'overview' && <OverviewTab range={range} providers={providers} settings={settings} onGo={setTab} />}
-          {tab === 'assistant' && <AIAssistant />}
+          {tab === 'assistant' && <AIAssistant initialPrompt={initialPrompt} />}
           {tab === 'settings' && <SettingsTab settings={settings} set={set} />}
           {tab === 'usage' && <UsageTab range={range} />}
           {tab === 'costs' && <CostsTab range={range} settings={settings} set={set} />}

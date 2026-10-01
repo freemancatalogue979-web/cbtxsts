@@ -115,7 +115,7 @@ function readCourse(): number | null {
 }
 
 /* =================================================================== shell */
-export default function AIAssistant({onPending}: {onPending?: (n: number) => void}) {
+export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n: number) => void; initialPrompt?: string}) {
   const {toast} = useSession();
   const [view, setView] = useState<View>('assistant');
   const [status, setStatus] = useState<AIStaffStatus | null>(null);
@@ -123,7 +123,7 @@ export default function AIAssistant({onPending}: {onPending?: (n: number) => voi
   const [courseId, setCourseIdState] = useState<number | null>(readCourse);
   const [openProposal, setOpenProposal] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [queued, setQueued] = useState<string | null>(null);
+  const [queued, setQueued] = useState<string | null>(initialPrompt || null);
   const [focusTask, setFocusTask] = useState<number | null>(null);
   const openTask = (id: number) => { setFocusTask(id); setView('tasks'); };
 
