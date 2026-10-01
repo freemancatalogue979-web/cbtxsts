@@ -102,7 +102,7 @@ export default function TeachersAdmin() {
             <div className="pro-card overflow-hidden">
               {rows.map((r, i) => (
                 <button key={r.id} type="button" className="t-row t-row-btn" style={{borderTop: i ? '1px solid var(--pro-border)' : undefined}} onClick={() => setOpenId(r.id)}>
-                  <PersonAvatar id={r.student_id} name={r.name} hue={r.avatar_hue} hasPhoto={r.has_photo} size={40} />
+                  <PersonAvatar id={r.student_id} name={r.name} hue={r.avatar_hue} hasPhoto={r.has_photo} size={42} ring={r.verified ? 'brand' : 'hue'} verified={r.verified} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate font-semibold">{r.name}</span>

@@ -99,7 +99,7 @@ export default function Messages() {
                 style={{borderColor: 'var(--pro-border)', background: c.with.id === activeId ? 'var(--pro-hover)' : undefined}}
                 onClick={() => setActiveId(c.with.id)}
               >
-                <PersonAvatar id={c.with.id} name={c.with.name} hue={c.with.avatar_hue} hasPhoto={c.with.has_photo} size={42} online={onlineIds.includes(c.with.id)} />
+                <PersonAvatar id={c.with.id} name={c.with.name} hue={c.with.avatar_hue} hasPhoto={c.with.has_photo} size={44} online={onlineIds.includes(c.with.id)} ring={c.role === 'teacher' ? 'brand' : c.role === 'student' ? 'hue' : undefined} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-[0.9rem] font-semibold">{c.with.name}</span>
@@ -109,7 +109,7 @@ export default function Messages() {
                     <span className="pro-meta truncate" style={{color: c.unread ? 'var(--pro-text)' : undefined, fontWeight: c.unread ? 650 : undefined}}>
                       {c.blocked ? 'Blocked' : c.last ? `${c.last.mine ? 'You: ' : ''}${c.last.body}` : ROLE_LABEL[c.role]}
                     </span>
-                    {c.unread > 0 ? <span className="t-unread">{c.unread}</span> : c.role !== 'friend' && <span className="t-topic !py-0 !text-[0.65rem]">{ROLE_LABEL[c.role]}</span>}
+                    {c.unread > 0 ? <span className="t-unread">{c.unread}</span> : c.role !== 'friend' && <span className="t-topic shrink-0 whitespace-nowrap !py-0 !text-[0.65rem]">{ROLE_LABEL[c.role]}</span>}
                   </span>
                 </span>
               </button>
@@ -305,7 +305,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
         <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm min-[900px]:hidden" onClick={onBack} aria-label="Back to conversations">
           <ArrowLeft className="size-4" />
         </button>
-        <PersonAvatar id={otherId} name={other?.name ?? '…'} hue={other?.avatar_hue} hasPhoto={other?.has_photo} size={38} online={online} />
+        <PersonAvatar id={otherId} name={other?.name ?? '…'} hue={other?.avatar_hue} hasPhoto={other?.has_photo} size={40} online={online} ring={conversation?.role === 'teacher' ? 'brand' : conversation?.role === 'student' ? 'hue' : undefined} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{other?.name ?? 'Conversation'}</p>
           <p className="pro-meta truncate">

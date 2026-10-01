@@ -1,6 +1,6 @@
 /** Shared building blocks for the Teacher Network screens (Pro design language). */
 import {AnimatePresence, motion} from 'framer-motion';
-import {BadgeCheck, Star, X} from 'lucide-react';
+import {Atom, BadgeCheck, BookOpen, Calculator, Check, Code2, Dna, FlaskConical, Globe2, GraduationCap, Landmark, Languages, LineChart, Music2, Palette, Scale, Sigma, Star, X, type LucideIcon} from 'lucide-react';
 import {useEffect, useRef, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import type {Tab} from '../lib/nav';
@@ -38,7 +38,32 @@ export function ProScope({children}: {children: ReactNode}) {
 }
 
 /* ---------------------------------------------------------------- avatar */
-export function PersonAvatar({id, name, hue = 260, hasPhoto, size = 40, online}: {id?: number | null; name: string; hue?: number; hasPhoto?: boolean; size?: number; online?: boolean}) {
+/**
+ * Profile picture with personality: photo or a rich two-tone monogram, an
+ * optional conic ring (verified teachers get the brand ring), a verified seal
+ * and an online dot. Works on any surface — the gap ring uses the surface colour.
+ */
+export function PersonAvatar({
+  id,
+  name,
+  hue = 260,
+  hasPhoto,
+  size = 40,
+  online,
+  ring,
+  verified,
+}: {
+  id?: number | null;
+  name: string;
+  hue?: number;
+  hasPhoto?: boolean;
+  size?: number;
+  online?: boolean;
+  /** 'brand' = verified/teacher ring, 'hue' = ring in the person's colour. */
+  ring?: 'brand' | 'hue';
+  /** Small verified seal on the avatar. */
+  verified?: boolean;
+}) {
   const photo = usePlayerPhoto(id ?? null, hasPhoto ?? false);
   const initials = name
     .split(' ')
@@ -46,11 +71,85 @@ export function PersonAvatar({id, name, hue = 260, hasPhoto, size = 40, online}:
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+  const seal = Math.max(14, Math.round(size * 0.3));
   return (
-    <span className="t-avatar" style={{width: size, height: size, ['--hue' as string]: String(hue)}} aria-hidden>
-      {photo ? <img src={photo} alt="" /> : <span style={{fontSize: Math.max(11, size * 0.36)}}>{initials || '·'}</span>}
-      {online && <i data-on="" aria-label="Online" />}
+    <span className="t-avatar" data-ring={ring} style={{width: size, height: size, ['--hue' as string]: String(hue), ['--ring-w' as string]: `${size >= 72 ? 3 : 2}px`}} aria-hidden>
+      <span className="t-avatar-core">{photo ? <img src={photo} alt="" /> : <span style={{fontSize: Math.max(11, size * 0.36)}}>{initials || '·'}</span>}</span>
+      {verified && (
+        <b className="t-avatar-seal" style={{width: seal, height: seal}}>
+          <Check strokeWidth={3.5} style={{width: seal * 0.6, height: seal * 0.6}} />
+        </b>
+      )}
+      {online && !verified && <i data-on="" aria-label="Online" />}
     </span>
+  );
+}
+
+/* --------------------------------------------------------------- subjects */
+export type HueName = 'blue' | 'green' | 'amber' | 'violet' | 'rose' | 'teal';
+export const HUE_DEG: Record<HueName, number> = {blue: 218, green: 152, amber: 36, violet: 262, rose: 340, teal: 178};
+const SUBJECT_LOOK: [RegExp, LucideIcon, HueName][] = [
+  [/math|calculus|algebra|geometry|statistic|trigon/i, Sigma, 'violet'],
+  [/physic|mechanic|vector|electric/i, Atom, 'blue'],
+  [/chem|organic|stoichi/i, FlaskConical, 'green'],
+  [/bio|anatomy|physiolog|genetic/i, Dna, 'rose'],
+  [/english|literature|essay|comprehension|grammar/i, BookOpen, 'amber'],
+  [/french|yoruba|igbo|hausa|language|spanish/i, Languages, 'teal'],
+  [/computer|program|coding|software|data/i, Code2, 'blue'],
+  [/econom|finance|account|business/i, LineChart, 'teal'],
+  [/law|government|civic|politic/i, Scale, 'amber'],
+  [/history|geograph|social/i, Globe2, 'teal'],
+  [/account|tax/i, Calculator, 'green'],
+  [/art|design|draw/i, Palette, 'rose'],
+  [/music/i, Music2, 'violet'],
+  [/relig|crk|irk/i, Landmark, 'amber'],
+];
+/** Icon + colour for a subject or topic, so cards read at a glance. */
+export function subjectLook(subject?: string | null): {Icon: LucideIcon; hue: HueName; deg: number} {
+  const hit = SUBJECT_LOOK.find(([re]) => re.test(subject ?? ''));
+  const hue = hit?.[2] ?? 'violet';
+  return {Icon: hit?.[1] ?? GraduationCap, hue, deg: HUE_DEG[hue]};
+}
+
+/** Stable hue (0-359) from any string — used for people without a stored avatar hue. */
+export function hueOf(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+export function SubjectChip({subject, label, size = 'md'}: {subject: string; label?: string; size?: 'sm' | 'md'}) {
+  const {Icon, hue} = subjectLook(subject);
+  return (
+    <span className="t-subject" data-hue={hue} data-size={size}>
+      <Icon />
+      <span className="truncate">{label ?? subject}</span>
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ cover */
+/** Gradient-mesh banner with a faint dotted grid and a watermark icon. */
+export function Cover({deg = 262, deg2, icon: Icon, height = 88, className = '', children}: {deg?: number; deg2?: number; icon?: LucideIcon; height?: number; className?: string; children?: ReactNode}) {
+  return (
+    <div className={`t-cover ${className}`} style={{height, ['--c1' as string]: String(deg), ['--c2' as string]: String(deg2 ?? deg + 48)}}>
+      {Icon && <Icon className="t-cover-mark" aria-hidden />}
+      {children}
+    </div>
+  );
+}
+
+/** Compact stat with a coloured icon tile — replaces bare "label: value" text. */
+export function StatTile({icon, label, value, sub, hue = 'violet'}: {icon: ReactNode; label: string; value: ReactNode; sub?: ReactNode; hue?: HueName}) {
+  return (
+    <div className="t-stat-tile" data-hue={hue}>
+      <span className="t-stat-icon">{icon}</span>
+      <span className="min-w-0">
+        <b>{value}</b>
+        <span>{label}</span>
+        {sub && <small>{sub}</small>}
+      </span>
+    </div>
   );
 }
 

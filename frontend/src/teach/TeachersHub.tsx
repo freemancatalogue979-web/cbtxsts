@@ -22,6 +22,11 @@ import {
   Star,
   UserPlus,
   Users,
+  Zap,
+  Award,
+  Quote,
+  TrendingUp,
+  MapPin,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState, type FormEvent} from 'react';
 import {ApiError} from '../lib/api';
@@ -39,7 +44,7 @@ import {
 import {Empty, LoadingRows, PageHeader} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
-import {AvailabilityDot, BadgeRow, Field, PersonAvatar, ProScope, Sheet, StarInput, Stars, StatusPill, Toggle, VerifiedMark, goTo, responseLabel, takeIntent, timeAgo} from './ui';
+import {BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
@@ -350,54 +355,69 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
 }
 
 function TeacherCardView({teacher: t, onOpen, onRequest}: {teacher: TeacherCard; onOpen: () => void; onRequest: () => void}) {
-  const topics = t.specialties.flatMap((s) => (s.topics.length ? s.topics : [s.subject]));
+  const main = subjectLook(t.specialties[0]?.subject);
+  const chips = t.specialties.flatMap((sp) => (sp.topics.length ? sp.topics.map((topic) => [sp.subject, topic] as const) : [[sp.subject, sp.subject] as const]));
+  const avail = t.availability_now;
   return (
-    <article className="pro-card t-card">
-      <button type="button" onClick={onOpen} className="flex min-w-0 items-start gap-3 text-left">
-        <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={52} />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="pro-h3 truncate">{t.name}</span>
-            {t.verified && <VerifiedMark />}
-          </span>
-          <span className="pro-secondary line-clamp-2 [overflow-wrap:anywhere]">{t.headline || 'Teacher on Genesis'}</span>
-        </span>
+    <article className="pro-card t-tcard pro-lift">
+      <button type="button" onClick={onOpen} className="block w-full text-left" aria-label={`Open ${t.name}'s profile`}>
+        <Cover deg={main.deg} deg2={(t.avatar_hue + 40) % 360} icon={main.Icon} height={84}>
+          <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+            <span className="t-glass" data-state={avail}>
+              <i /> {avail === 'available' ? 'Available now' : avail === 'busy' ? 'Busy today' : t.accepting ? 'Accepting students' : 'Not accepting'}
+            </span>
+            {t.stats.review_count > 0 && (
+              <span className="t-glass">
+                <Star style={{color: '#ffcf5c', fill: '#ffcf5c'}} /> {t.stats.rating.toFixed(1)} <span className="opacity-70">({t.stats.review_count})</span>
+              </span>
+            )}
+          </div>
+        </Cover>
+        <div className="t-tcard-id">
+          <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={68} ring={t.verified ? 'brand' : 'hue'} verified={t.verified} />
+          <div className="min-w-0 flex-1 pt-8">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="pro-h3 truncate">{t.name}</span>
+              {t.verified && <VerifiedMark size={15} />}
+            </span>
+            <span className="pro-meta block truncate">{[t.institution, t.languages.slice(0, 2).join(' · ')].filter(Boolean).join(' — ') || 'Teacher on Genesis'}</span>
+          </div>
+        </div>
       </button>
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        {topics.slice(0, 4).map((topic) => (
-          <span key={topic} className="t-topic">
-            {topic}
-          </span>
-        ))}
-        {topics.length > 4 && <span className="t-topic">+{topics.length - 4}</span>}
-      </div>
-      <div className="t-stat-line">
-        <span>
-          <Star style={{color: '#f5b544', fill: '#f5b544'}} />
-          {t.stats.review_count ? `${t.stats.rating.toFixed(1)} (${t.stats.review_count})` : 'No reviews yet'}
-        </span>
-        <span>
-          <Users />
-          {t.stats.students_taught} student{t.stats.students_taught === 1 ? '' : 's'}
-        </span>
-        {t.experience_years > 0 && (
-          <span>
-            <Briefcase />
-            {t.experience_years} yrs
-          </span>
-        )}
-        <AvailabilityDot state={t.availability_now} />
-      </div>
-      <BadgeRow badges={t.badges.filter((b) => b.key !== 'verified')} max={3} compact />
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="pro-btn" onClick={onOpen}>
-          View profile
-        </button>
-        <button type="button" className="pro-btn pro-btn-primary" onClick={onRequest} disabled={!t.accepting}>
-          {t.accepting ? 'Request help' : 'Not accepting'}
-        </button>
+      <div className="grid min-w-0 gap-3 px-4 pb-4">
+        <p className="pro-secondary line-clamp-2 min-h-[2.6em] [overflow-wrap:anywhere]">{t.headline || 'Teacher on Genesis'}</p>
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          {chips.slice(0, 3).map(([subject, topic]) => (
+            <SubjectChip key={subject + topic} subject={subject} label={topic} size="sm" />
+          ))}
+          {chips.length > 3 && <span className="t-topic">+{chips.length - 3}</span>}
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          <MiniStat icon={<Users />} value={t.stats.students_taught} label="students" hue="blue" />
+          <MiniStat icon={<Briefcase />} value={t.experience_years ? `${t.experience_years}y` : '—'} label="experience" hue="violet" />
+          <MiniStat icon={<Zap />} value={t.stats.response_hours == null ? 'New' : responseLabel(t.stats.response_hours)} label="replies" hue="green" />
+        </div>
+        <BadgeRow badges={t.badges.filter((b) => b.key !== 'verified')} max={2} compact />
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-2">
+          <button type="button" className="pro-btn" onClick={onOpen}>
+            Profile
+          </button>
+          <button type="button" className="pro-btn pro-btn-primary" onClick={onRequest} disabled={!t.accepting}>
+            <UserPlus className="size-4" /> {t.accepting ? 'Request help' : 'Not accepting'}
+          </button>
+        </div>
       </div>
     </article>
+  );
+}
+
+function MiniStat({icon, value, label, hue}: {icon: React.ReactNode; value: React.ReactNode; label: string; hue: HueName}) {
+  return (
+    <span className="t-mini" data-hue={hue}>
+      {icon}
+      <b>{value}</b>
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -546,117 +566,108 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
         <ArrowLeft className="size-4" /> All teachers
       </button>
 
-      <section className="t-hero-teacher grid min-w-0 gap-4">
-        <div className="flex min-w-0 flex-wrap items-start gap-4">
-          <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={typeof window !== 'undefined' && window.innerWidth < 640 ? 60 : 76} />
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="pro-h1 [overflow-wrap:anywhere] max-sm:!text-[1.6rem]">{t.name}</h1>
-              {t.verified && <VerifiedMark size={22} />}
-            </div>
-            <p className="pro-body mt-1 [overflow-wrap:anywhere]" style={{color: 'var(--pro-text-2)'}}>
-              {t.headline}
-            </p>
-            <div className="t-stat-line mt-2">
-              {t.institution && (
-                <span>
-                  <GraduationCap /> {t.institution}
-                </span>
-              )}
-              {t.languages.length > 0 && (
-                <span>
-                  <Languages /> {t.languages.join(', ')}
-                </span>
-              )}
-              <span>
-                <Users /> {FORMAT_LABEL[t.formats]}
-              </span>
-              <AvailabilityDot state={t.availability_now} />
-            </div>
-          </div>
-          <div className="relative">
-            <button type="button" className="pro-btn pro-btn-icon" aria-label="More actions" title="More" onClick={() => setMenu((m) => !m)}>
-              <MoreHorizontal className="size-4" />
-            </button>
-            {menu && (
-              <div className="pro-card absolute right-0 z-10 mt-1 grid w-44 p-1" onMouseLeave={() => setMenu(false)}>
-                <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), setReport({kind: 'teacher', id: t.id, label: t.name}))}>
-                  <Flag className="size-4" /> Report
-                </button>
-                <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), void block())}>
-                  <Lock className="size-4" /> Block
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        <BadgeRow badges={t.badges} />
-        {!t.is_me && (
-          <div className="flex flex-wrap gap-2">
-            {t.relationship && t.relationship.status === 'active' ? (
-              <button type="button" className="pro-btn pro-btn-primary" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
-                <MessageSquare className="size-4" /> Message
+      <section className="pro-card t-profile-hero">
+        <Cover deg={subjectLook(t.specialties[0]?.subject).deg} deg2={(t.avatar_hue + 40) % 360} icon={subjectLook(t.specialties[0]?.subject).Icon} height={128} className="t-profile-cover">
+          <div className="absolute top-3 right-3 flex items-center gap-2">
+            <span className="t-glass" data-state={t.availability_now}>
+              <i /> {t.availability_now === 'available' ? 'Available now' : t.availability_now === 'busy' ? 'Busy today' : t.accepting ? 'Accepting students' : 'Not accepting'}
+            </span>
+            <div className="relative">
+              <button type="button" className="t-glass !p-2" aria-label="More actions" title="More" onClick={() => setMenu((m) => !m)}>
+                <MoreHorizontal />
               </button>
-            ) : t.pending_request ? (
-              <>
+              {menu && (
+                <div className="pro-card absolute right-0 z-10 mt-1 grid w-44 p-1" onMouseLeave={() => setMenu(false)}>
+                  <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), setReport({kind: 'teacher', id: t.id, label: t.name}))}>
+                    <Flag className="size-4" /> Report
+                  </button>
+                  <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), void block())}>
+                    <Lock className="size-4" /> Block
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </Cover>
+        <div className="t-profile-body">
+          <div className="t-profile-id">
+            <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={typeof window !== 'undefined' && window.innerWidth < 640 ? 88 : 112} ring={t.verified ? 'brand' : 'hue'} verified={t.verified} />
+            <div className="min-w-0 flex-1 pt-[50px] sm:pt-[66px]">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h1 className="pro-h1 [overflow-wrap:anywhere] max-sm:!text-[1.6rem] md:!text-[2rem]">{t.name}</h1>
+                {t.verified && (
+                  <span className="pro-badge" data-tone="accent">
+                    <ShieldCheck className="size-3" /> Verified
+                  </span>
+                )}
+              </div>
+              <p className="pro-body mt-1 [overflow-wrap:anywhere]" style={{color: 'var(--pro-text-2)'}}>
+                {t.headline}
+              </p>
+            </div>
+          </div>
+          <div className="t-stat-line">
+            {t.institution && (
+              <span>
+                <MapPin /> {t.institution}
+              </span>
+            )}
+            {t.languages.length > 0 && (
+              <span>
+                <Languages /> {t.languages.join(', ')}
+              </span>
+            )}
+            <span>
+              <Users /> {FORMAT_LABEL[t.formats]}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            {t.specialties.flatMap((sp) => (sp.topics.length ? sp.topics : [sp.subject]).map((topic) => <SubjectChip key={sp.subject + topic} subject={sp.subject} label={topic} />))}
+          </div>
+          <BadgeRow badges={t.badges.filter((b) => b.key !== 'verified')} />
+          {!t.is_me && (
+            <div className="flex flex-wrap gap-2">
+              {t.relationship && t.relationship.status === 'active' ? (
                 <button type="button" className="pro-btn pro-btn-primary" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
                   <MessageSquare className="size-4" /> Message
                 </button>
-                <button type="button" className="pro-btn" onClick={() => void cancel()}>
-                  Cancel request
+              ) : t.pending_request ? (
+                <>
+                  <button type="button" className="pro-btn pro-btn-primary" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
+                    <MessageSquare className="size-4" /> Message
+                  </button>
+                  <button type="button" className="pro-btn" onClick={() => void cancel()}>
+                    Cancel request
+                  </button>
+                  <span className="pro-meta self-center">Request sent {timeAgo(t.pending_request.created_at)}</span>
+                </>
+              ) : (
+                <button type="button" className="pro-btn pro-btn-primary" disabled={!t.accepting} onClick={() => setRequesting(true)}>
+                  <UserPlus className="size-4" /> {t.accepting ? (t.relationship ? 'Request again' : 'Request help') : 'Not accepting students'}
                 </button>
-                <span className="pro-meta self-center">Request sent {timeAgo(t.pending_request.created_at)}</span>
-              </>
-            ) : (
-              <button type="button" className="pro-btn pro-btn-primary" disabled={!t.accepting} onClick={() => setRequesting(true)}>
-                <UserPlus className="size-4" /> {t.accepting ? (t.relationship ? 'Request again' : 'Request help') : 'Not accepting students'}
-              </button>
-            )}
-            {t.relationship?.status === 'completed' && (
-              <button type="button" className="pro-btn" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
-                <MessageSquare className="size-4" /> Message
-              </button>
-            )}
-            {t.can_review && (
-              <button type="button" className="pro-btn" onClick={() => setReviewing(true)}>
-                <Star className="size-4" /> Write a review
-              </button>
-            )}
-          </div>
-        )}
+              )}
+              {t.relationship?.status === 'completed' && (
+                <button type="button" className="pro-btn" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
+                  <MessageSquare className="size-4" /> Message
+                </button>
+              )}
+              {t.can_review && (
+                <button type="button" className="pro-btn" onClick={() => setReviewing(true)}>
+                  <Star className="size-4" /> Write a review
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </section>
 
-      <section aria-label="Reputation" className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="t-kpi">
-          <span>Rating</span>
-          <b>{s.review_count ? s.rating.toFixed(1) : '—'}</b>
-          <small>{s.review_count ? <Stars value={s.rating} size={12} /> : 'No reviews yet'}</small>
-        </div>
-        <div className="t-kpi">
-          <span>Reviews</span>
-          <b>{s.review_count}</b>
-          <small>From real students only</small>
-        </div>
-        <div className="t-kpi">
-          <span>Students taught</span>
-          <b>{s.students_taught}</b>
-          <small>{s.active_students} active now</small>
-        </div>
-        <div className="t-kpi">
-          <span>Response rate</span>
-          <b>{s.response_rate === null ? '—' : `${s.response_rate}%`}</b>
-          <small>Requests answered</small>
-        </div>
-        <div className="t-kpi">
-          <span>Typical reply</span>
-          <b>{responseLabel(s.response_hours)}</b>
-          <small>To a new request</small>
-        </div>
-        <div className="t-kpi">
-          <span>Experience</span>
-          <b>{t.experience_years ? `${t.experience_years}y` : '—'}</b>
-          <small>Years teaching</small>
-        </div>
+      <section aria-label="Reputation" className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
+        <StatTile hue="amber" icon={<Star />} label={s.review_count ? `${s.review_count} review${s.review_count === 1 ? '' : 's'}` : 'No reviews yet'} value={s.review_count ? s.rating.toFixed(1) : '—'} />
+        <StatTile hue="blue" icon={<Users />} label="students taught" value={s.students_taught} sub={`${s.active_students} active now`} />
+        <StatTile hue="green" icon={<CheckCircle2 />} label="answered" value={s.response_rate === null ? '—' : `${s.response_rate}%`} />
+        <StatTile hue="teal" icon={<Zap />} label="typical reply" value={responseLabel(s.response_hours)} />
+        <StatTile hue="violet" icon={<Award />} label="years teaching" value={t.experience_years || '—'} />
+        <StatTile hue="rose" icon={<TrendingUp />} label="quiz attempts" value={s.quiz_attempts} />
       </section>
 
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -727,11 +738,15 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
             {t.reviews.length === 0 && <p className="pro-secondary">No reviews yet. Reviews come only from students who completed lessons with this teacher.</p>}
             <div className="grid gap-3">
               {t.reviews.map((r) => (
-                <article key={r.id} className="grid gap-1.5 rounded-xl p-3" style={{background: 'var(--pro-hover)'}}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2">
-                      <Stars value={r.rating} size={13} />
-                      <span className="text-[0.8rem] font-semibold">{r.author}</span>
+                <article key={r.id} className="t-review">
+                  <Quote className="t-review-quote" aria-hidden />
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <PersonAvatar id={r.anonymous ? null : r.author_id} name={r.anonymous ? '?' : r.author} hue={r.anonymous ? 230 : hueOf(r.author)} size={36} ring="hue" />
+                      <span className="grid min-w-0">
+                        <span className="truncate text-[0.85rem] font-semibold">{r.anonymous ? 'Anonymous student' : r.author}</span>
+                        <Stars value={r.rating} size={12} />
+                      </span>
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="pro-meta">{timeAgo(r.created_at)}</span>
@@ -744,9 +759,12 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
                   </div>
                   {r.body && <p className="pro-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{r.body}</p>}
                   {r.teacher_response && (
-                    <div className="mt-1 border-l-2 pl-3" style={{borderColor: 'var(--pro-accent)'}}>
-                      <p className="pro-eyebrow">Teacher's response</p>
-                      <p className="pro-secondary [overflow-wrap:anywhere]">{r.teacher_response}</p>
+                    <div className="t-review-reply">
+                      <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={26} ring="brand" />
+                      <div className="min-w-0">
+                        <p className="pro-eyebrow">{t.name} replied</p>
+                        <p className="pro-secondary [overflow-wrap:anywhere]">{r.teacher_response}</p>
+                      </div>
                     </div>
                   )}
                   {r.is_mine && r.editable && (
@@ -937,10 +955,16 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
       ) : (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
           {live.map(({relationship: rel, teacher: t, can_review}) => (
-            <article key={rel.id} className="pro-card t-card">
-              <div className="flex min-w-0 items-start gap-3">
-                <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={46} />
-                <div className="min-w-0 flex-1">
+            <article key={rel.id} className="pro-card t-tcard">
+              <Cover deg={subjectLook(rel.subject).deg} deg2={(t.avatar_hue + 40) % 360} icon={subjectLook(rel.subject).Icon} height={56}>
+                <div className="absolute top-2.5 right-3">
+                  <StatusPill status={rel.status} />
+                </div>
+              </Cover>
+              <div className="grid min-w-0 gap-3 px-4 pb-4">
+              <div className="-mt-7 flex min-w-0 items-start gap-3">
+                <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={60} ring={t.verified ? 'brand' : 'hue'} verified={t.verified} />
+                <div className="min-w-0 flex-1 pt-[32px]">
                   <p className="flex items-center gap-1.5">
                     <span className="pro-h3 truncate">{t.name}</span>
                     {t.verified && <VerifiedMark size={15} />}
@@ -949,7 +973,6 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
                     {[rel.topic || rel.subject, `since ${new Date(rel.started_at).toLocaleDateString(undefined, {month: 'short', year: 'numeric'})}`].filter(Boolean).join(' · ')}
                   </p>
                 </div>
-                <StatusPill status={rel.status} />
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="pro-btn pro-btn-primary pro-btn-sm" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
@@ -968,6 +991,7 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
                     <Star className="size-4" /> Review
                   </button>
                 )}
+              </div>
               </div>
             </article>
           ))}
@@ -1036,21 +1060,22 @@ function MyRequests({learning, onOpen, onReload, onFind}: {learning: Learning | 
   return (
     <div className="pro-card pro-rows overflow-hidden">
       {learning.requests.map((r) => (
-        <div key={r.id} className="grid min-w-0 gap-2 p-4">
+        <div key={r.id} className="grid min-w-0 gap-2.5 p-4">
           <div className="flex min-w-0 items-center gap-3">
-            {r.teacher && <PersonAvatar id={r.teacher.student_id} name={r.teacher.name} hue={r.teacher.avatar_hue} hasPhoto={r.teacher.has_photo} size={36} />}
+            {r.teacher && <PersonAvatar id={r.teacher.student_id} name={r.teacher.name} hue={r.teacher.avatar_hue} hasPhoto={r.teacher.has_photo} size={44} ring={r.teacher.verified ? 'brand' : 'hue'} />}
             <div className="min-w-0 flex-1">
               <button type="button" className="flex items-center gap-1.5 text-left" onClick={() => r.teacher && onOpen(r.teacher.id)}>
                 <span className="truncate font-semibold">{r.teacher?.name ?? 'Teacher'}</span>
                 {r.teacher?.verified && <VerifiedMark size={14} />}
               </button>
               <p className="pro-meta truncate">
-                {[r.topic || r.subject, FORMAT_LABEL[r.format], timeAgo(r.created_at)].filter(Boolean).join(' · ')}
+                {[FORMAT_LABEL[r.format], timeAgo(r.created_at)].filter(Boolean).join(' · ')}
               </p>
             </div>
             <StatusPill status={r.status} />
           </div>
-          <p className="pro-secondary line-clamp-2 [overflow-wrap:anywhere]">{r.message}</p>
+          {r.subject && <SubjectChip subject={r.subject} label={r.topic || r.subject} size="sm" />}
+          <p className="t-quote line-clamp-3">{r.message}</p>
           {r.response_note && (
             <p className="pro-secondary border-l-2 pl-3 [overflow-wrap:anywhere]" style={{borderColor: 'var(--pro-accent)'}}>
               {r.response_note}
@@ -1100,14 +1125,21 @@ function GroupRow({group: g, onChanged}: {group: TGroup; onChanged: () => void})
     onChanged();
   };
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl p-2.5" style={{background: 'var(--pro-hover)'}}>
-      <span className="t-attach-icon" style={{['--mark' as string]: 'var(--pro-h-teal)'}}>
-        <Users />
-      </span>
+    <div className="t-group-row">
+      <GroupMark subject={g.subject} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[0.88rem] font-semibold">{g.name}</span>
-        <span className="pro-meta block truncate">
-          {[g.topic || g.subject, `${g.members}${g.capacity ? `/${g.capacity}` : ''} members`, g.privacy === 'request' ? 'Approval needed' : g.privacy === 'invite' ? 'Invite only' : 'Open'].filter(Boolean).join(' · ')}
+        <span className="block truncate text-[0.9rem] font-semibold">{g.name}</span>
+        <span className="pro-meta flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{[g.topic || g.subject, g.teacher?.name].filter(Boolean).join(' · ')}</span>
+        </span>
+        <span className="mt-1.5 flex items-center gap-2">
+          <span className="t-capacity" title={`${g.members} members`}>
+            <i style={{width: `${g.capacity ? Math.min(100, (g.members / g.capacity) * 100) : 30}%`}} />
+          </span>
+          <span className="pro-meta whitespace-nowrap">
+            {g.members}
+            {g.capacity ? `/${g.capacity}` : ''} · {g.privacy === 'request' ? 'Approval' : g.privacy === 'invite' ? 'Invite only' : 'Open'}
+          </span>
         </span>
       </span>
       {g.is_member ? (
@@ -1124,6 +1156,15 @@ function GroupRow({group: g, onChanged}: {group: TGroup; onChanged: () => void})
         </button>
       )}
     </div>
+  );
+}
+
+function GroupMark({subject}: {subject?: string}) {
+  const look = subjectLook(subject);
+  return (
+    <span className="t-group-mark" style={{['--deg' as string]: String(look.deg)}}>
+      <look.Icon />
+    </span>
   );
 }
 

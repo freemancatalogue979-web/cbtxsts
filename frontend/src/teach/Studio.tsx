@@ -30,7 +30,7 @@ import {Empty, LoadingRows, PageHeader, Seg} from '../pro/ui';
 import {useSession} from '../store/session';
 import {ApplicationGate, ProfileEditor} from './Apply';
 import {StudioMaterials, StudioQuizzes} from './StudioContent';
-import {BadgeRow, Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, VerifiedMark, goTo, responseLabel, takeIntent, timeAgo, useLive} from './ui';
+import {BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, SubjectChip, VerifiedMark, subjectLook, goTo, responseLabel, takeIntent, timeAgo, useLive} from './ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
@@ -192,6 +192,7 @@ function greeting() {
 }
 
 function Home({profile, overview, onOpen, onChanged, onMore}: {profile: MyProfile; overview: StudioOverview | null; onOpen: (v: View) => void; onChanged: () => void; onMore: () => void}) {
+  const me = useSession().profile;
   if (!overview) return <LoadingRows rows={6} />;
   const t = overview.today;
   const kpis: {label: string; value: number; sub: string; action: () => void; hue: string; icon: ReactNode}[] = [
@@ -202,17 +203,21 @@ function Home({profile, overview, onOpen, onChanged, onMore}: {profile: MyProfil
   ];
   return (
     <div className="grid min-w-0 gap-5">
-      <section className="t-hero-teacher grid gap-4">
+      <section className="t-hero-teacher t-studio-hero grid gap-4">
+        <Cover deg={subjectLook(profile.specialties[0]?.subject).deg} deg2={((me?.avatar_hue ?? 260) + 40) % 360} icon={subjectLook(profile.specialties[0]?.subject).Icon} height={70} className="t-studio-cover" />
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-start gap-3.5">
+          {me && <PersonAvatar id={me.id} name={me.name} hue={me.avatar_hue} hasPhoto={me.has_photo} size={72} ring="brand" verified={profile.verified} />}
+          <div className="min-w-0 pt-[34px]">
             <p className="pro-eyebrow">Teacher Studio</p>
-            <h1 className="pro-h1 mt-1 flex flex-wrap items-center gap-x-2 [overflow-wrap:anywhere] md:!text-[2.1rem]">
+            <h1 className="pro-h1 mt-1 flex flex-wrap items-center gap-x-2 [overflow-wrap:anywhere] max-sm:!text-[1.55rem] md:!text-[2.1rem]">
               {greeting()}, {overview.profile.short_name}
               {profile.verified && <VerifiedMark />}
             </h1>
             <p className="pro-secondary mt-1 max-w-xl">{overview.profile.headline || 'Your teaching workspace.'}</p>
           </div>
-          <span className="pro-badge" data-tone={overview.profile.accepting ? 'success' : 'neutral'}>
+          </div>
+          <span className="pro-badge sm:mt-[40px]" data-tone={overview.profile.accepting ? 'success' : 'neutral'}>
             {overview.profile.accepting ? 'Accepting students' : 'Not accepting'}
           </span>
         </div>
@@ -355,20 +360,20 @@ function RequestCard({request: r, onChanged, compact}: {request: TRequest; onCha
   return (
     <article className={compact ? 'grid gap-2.5 rounded-2xl p-3' : 'pro-card t-card'} style={compact ? {background: 'var(--pro-hover)'} : undefined}>
       <div className="flex min-w-0 items-start gap-3">
-        <PersonAvatar id={student.id} name={student.name ?? 'Student'} hue={student.avatar_hue} hasPhoto={student.has_photo} size={40} />
+        <PersonAvatar id={student.id} name={student.name ?? 'Student'} hue={student.avatar_hue} hasPhoto={student.has_photo} size={44} ring="hue" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center justify-between gap-2">
             <p className="truncate font-semibold">{student.name}</p>
             {!compact && <StatusPill status={r.status} />}
           </div>
           <p className="pro-meta truncate">
-            {[r.subject, r.topic].filter(Boolean).join(' · ') || 'General help'} · {timeAgo(r.created_at)}
+            {FORMAT_LABEL[r.format] ?? r.format} · {timeAgo(r.created_at)}
           </p>
         </div>
       </div>
-      <p className={`pro-body text-[0.88rem] [overflow-wrap:anywhere] ${compact ? 'line-clamp-2' : 'whitespace-pre-wrap'}`}>{r.message}</p>
-      <div className="t-stat-line">
-        <span>{FORMAT_LABEL[r.format] ?? r.format}</span>
+      {r.subject ? <SubjectChip subject={r.subject} label={r.topic || r.subject} size="sm" /> : <span className="t-topic justify-self-start">General help</span>}
+      <p className={`t-quote ${compact ? 'line-clamp-2' : 'whitespace-pre-wrap'}`}>{r.message}</p>
+      <div className="t-stat-line empty:hidden">
         {r.preferred_time && (
           <span>
             <CalendarClock className="size-3.5" /> {r.preferred_time}
@@ -490,18 +495,14 @@ function Students({groups}: {groups: TGroup[]}) {
         <div className="pro-card overflow-hidden">
           {shown.map((s, i) => (
             <button key={s.relationship.id} type="button" className="t-row t-row-btn" style={{borderTop: i ? '1px solid var(--pro-border)' : undefined}} onClick={() => setOpenId(s.student.id)}>
-              <PersonAvatar id={s.student.id} name={s.student.name} hue={s.student.avatar_hue} hasPhoto={s.student.has_photo} size={40} />
+              <PersonAvatar id={s.student.id} name={s.student.name} hue={s.student.avatar_hue} hasPhoto={s.student.has_photo} size={44} ring="hue" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{s.student.name}</span>
                 <span className="pro-meta block truncate">
                   {[s.relationship.topic || s.relationship.subject, `${s.quiz_attempts} quiz${s.quiz_attempts === 1 ? '' : 'zes'}`, `active ${timeAgo(s.last_activity_at)}`].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              {s.progress != null && (
-                <span className="pro-badge" data-tone={s.progress >= 70 ? 'success' : s.progress >= 50 ? 'info' : 'warning'}>
-                  {Math.round(s.progress)}%
-                </span>
-              )}
+              {s.progress != null && <ProgressRing value={s.progress} />}
               <ChevronRight className="size-4 shrink-0 opacity-50" />
             </button>
           ))}
@@ -509,6 +510,16 @@ function Students({groups}: {groups: TGroup[]}) {
       )}
       <StudentSheet studentId={openId} groups={groups} onClose={() => setOpenId(null)} onChanged={load} />
     </div>
+  );
+}
+
+function ProgressRing({value}: {value: number}) {
+  const v = Math.max(0, Math.min(100, Math.round(value)));
+  const hue = v >= 70 ? 'green' : v >= 50 ? 'blue' : 'amber';
+  return (
+    <span className="t-ring" style={{['--v' as string]: String(v), ['--c' as string]: `var(--pro-h-${hue})`}} title={`Average quiz score ${v}%`} aria-label={`Average quiz score ${v}%`}>
+      <b>{v}</b>
+    </span>
   );
 }
 
