@@ -39,13 +39,21 @@ def require_student(
     return student
 
 
-def require_admin(
+def require_institution_staff(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> Admin:
+    """Any authenticated staff identity, including organization teachers."""
     if principal.role != ROLE_ADMIN:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Staff access required.")
     admin = db.scalar(select(Admin).where(Admin.id == int(principal.subject)))
     if admin is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Staff session expired.")
+    return admin
+
+
+def require_admin(admin: Admin = Depends(require_institution_staff)) -> Admin:
+    """Platform management only; teachers are restricted to institution APIs."""
+    if admin.role not in {"owner", "staff"}:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Platform management access required.")
     return admin

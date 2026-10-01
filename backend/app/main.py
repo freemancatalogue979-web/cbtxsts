@@ -33,6 +33,7 @@ from .routers import (
     game,
     groups,
     insights,
+    institutions,
     live,
     materials,
     practice,
@@ -129,6 +130,14 @@ def _startup_db() -> dict:
     init_db()
     with session_scope() as db:
         summary = seed_all(db)
+    try:
+        from .services import import_jobs
+
+        recovered = import_jobs.recover()
+        if recovered["loaded"]:
+            logger.info("import jobs recovered | %s", recovered)
+    except Exception as error:  # pragma: no cover - imports must never block startup
+        logger.warning("import job recovery skipped: %s", error)
     try:  # AI Tutor upkeep: move v1 saved items into their tables, apply retention
         from .services import ai_library, ai_migrations, ai_tutor
 
@@ -246,6 +255,8 @@ app.include_router(practice.router, prefix=API_PREFIX)
 app.include_router(competitive.router, prefix=API_PREFIX)
 app.include_router(groups.router, prefix=API_PREFIX)
 app.include_router(insights.router, prefix=API_PREFIX)
+app.include_router(institutions.router, prefix=API_PREFIX)
+app.include_router(institutions.learning_router, prefix=API_PREFIX)
 app.include_router(game.router, prefix=API_PREFIX)
 app.include_router(game.study_router, prefix=API_PREFIX)
 app.include_router(materials.router, prefix=API_PREFIX)

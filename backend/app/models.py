@@ -2724,3 +2724,190 @@ class AIStaffUsage(Base):
     status: Mapped[str] = mapped_column(String(16), default="ok")
     error: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+# ===========================================================================
+# Learning Intelligence + institutions
+# ===========================================================================
+class LearningConcept(Base):
+    """A concept node beneath a course/topic in the learning graph."""
+
+    __tablename__ = "learning_concepts"
+    __table_args__ = (UniqueConstraint("course_id", "key", name="uq_learning_concept_course_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    topic: Mapped[str] = mapped_column(String(120), default="", index=True)
+    key: Mapped[str] = mapped_column(String(120), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str] = mapped_column(String(600), default="")
+    objective: Mapped[str] = mapped_column(String(300), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ConceptPrerequisite(Base):
+    __tablename__ = "concept_prerequisites"
+    __table_args__ = (UniqueConstraint("concept_id", "prerequisite_id", name="uq_concept_prerequisite"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    concept_id: Mapped[int] = mapped_column(ForeignKey("learning_concepts.id", ondelete="CASCADE"), index=True)
+    prerequisite_id: Mapped[int] = mapped_column(ForeignKey("learning_concepts.id", ondelete="CASCADE"), index=True)
+    strength: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MasterySnapshot(Base):
+    """Append-only mastery evidence used for trends and readiness history."""
+
+    __tablename__ = "mastery_snapshots"
+    __table_args__ = (Index("ix_mastery_snapshot_student_scope", "student_id", "scope_type", "scope_key", "recorded_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    scope_type: Mapped[str] = mapped_column(String(20), default="topic")
+    scope_key: Mapped[str] = mapped_column(String(120), default="")
+    mastery: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    answered: Mapped[int] = mapped_column(Integer, default=0)
+    correct: Mapped[int] = mapped_column(Integer, default=0)
+    source: Mapped[str] = mapped_column(String(24), default="graded_answer")
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class AdaptiveLearningSession(Base):
+    """Persistent multi-stage remediation session that survives refresh/restart."""
+
+    __tablename__ = "adaptive_learning_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    concept_id: Mapped[int | None] = mapped_column(ForeignKey("learning_concepts.id", ondelete="SET NULL"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(24), default="weakness")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)  # active|completed|abandoned
+    stage: Mapped[str] = mapped_column(String(24), default="concept_review")
+    stage_index: Mapped[int] = mapped_column(Integer, default=0)
+    plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    starting_mastery: Mapped[float] = mapped_column(Float, default=0.0)
+    ending_mastery: Mapped[float | None] = mapped_column(Float, nullable=True)
+    practice_token: Mapped[str] = mapped_column(String(80), default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="school")  # school|university|training|enterprise
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class OrganizationMember(Base):
+    __tablename__ = "organization_members"
+    __table_args__ = (UniqueConstraint("organization_id", "actor_type", "actor_id", name="uq_organization_member"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    actor_type: Mapped[str] = mapped_column(String(12))  # admin|student
+    actor_id: Mapped[int] = mapped_column(Integer, index=True)
+    role: Mapped[str] = mapped_column(String(24), default="student")  # owner|principal|teacher|student|analyst
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeachingClass(Base):
+    __tablename__ = "teaching_classes"
+    __table_args__ = (UniqueConstraint("organization_id", "name", "academic_year", name="uq_teaching_class_year"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(140))
+    academic_year: Mapped[str] = mapped_column(String(30), default="")
+    level: Mapped[str] = mapped_column(String(60), default="")
+    course_ids: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ClassEnrollment(Base):
+    __tablename__ = "class_enrollments"
+    __table_args__ = (UniqueConstraint("class_id", "student_id", name="uq_class_enrollment"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ClassTeacher(Base):
+    __tablename__ = "class_teachers"
+    __table_args__ = (UniqueConstraint("class_id", "admin_id", name="uq_class_teacher"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id", ondelete="CASCADE"), index=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(24), default="teacher")
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id", ondelete="CASCADE"), index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("admins.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    kind: Mapped[str] = mapped_column(String(24), default="practice")
+    resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AssignmentSubmission(Base):
+    __tablename__ = "assignment_submissions"
+    __table_args__ = (UniqueConstraint("assignment_id", "student_id", name="uq_assignment_submission"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="not_started")
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SubscriptionAccount(Base):
+    """Entitlements for an individual or organization; billing-provider neutral."""
+
+    __tablename__ = "subscription_accounts"
+    __table_args__ = (UniqueConstraint("owner_type", "owner_id", name="uq_subscription_owner"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_type: Mapped[str] = mapped_column(String(16))  # student|organization
+    owner_id: Mapped[int] = mapped_column(Integer, index=True)
+    plan: Mapped[str] = mapped_column(String(24), default="free")  # free|pro|teacher|school|enterprise
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    seats: Mapped[int] = mapped_column(Integer, default=1)
+    entitlements: Mapped[dict] = mapped_column(JSON, default=dict)
+    external_customer_id: Mapped[str] = mapped_column(String(160), default="")
+    external_subscription_id: Mapped[str] = mapped_column(String(160), default="")
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

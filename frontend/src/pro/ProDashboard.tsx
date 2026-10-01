@@ -30,6 +30,7 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
   const [heat, setHeat] = useState<Json[]>([]);
   const [plan, setPlan] = useState<Json | null>(null);
   const [catalog, setCatalog] = useState<Json[]>([]);
+  const [assignments, setAssignments] = useState<Json[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
       api.arena.heatmap(30).then((d) => live && setHeat(((d as Json).data ?? []) as Json[])),
       api.arena.studyPlan().then((d) => live && setPlan(d as Json)),
       api.arena.practiceCatalog().then((d) => live && setCatalog(((d as Json).courses ?? []) as Json[])),
+      api.institutions.myAssignments().then((d) => live && setAssignments(((d as Json).assignments ?? []) as Json[])),
     ]).finally(() => live && setLoading(false));
     return () => {
       live = false;
@@ -113,17 +115,33 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
   const prescribedSession = (nextAction?.session ?? {}) as Json;
   const sessionSteps = (prescribedSession.steps ?? []) as Json[];
 
+  const openAssignment = async (row: Json) => {
+    try {
+      const result = await api.institutions.startAssignment(Number(row.id));
+      const assignment = (result.assignment ?? {}) as Json;
+      if (assignment.kind === 'exam') onTab('exams');
+      else if (assignment.kind === 'material') onTab('materials');
+      else onTab('bank');
+    } catch (error) {
+      toast('error', 'Could not open assignment', (error as Error).message);
+    }
+  };
+
   const startWeaknessSession = async () => {
     if (startingWeakness) return;
     const topic = String(nextAction?.topic ?? '');
     setStartingWeakness(true);
     try {
-      await api.arena.startPractice({
+      const sessionResult = await api.learning.startSession({topic: topic || undefined, course_id: Number(nextAction?.course_id || 0) || undefined});
+      const practiceResult = await api.arena.startPractice({
         mode: topic ? 'weak' : 'sprint10',
         topic: topic || undefined,
         course_id: Number(nextAction?.course_id || 0) || undefined,
         size: Number(prescribedSession.question_count || 10),
       });
+      const sessionId = Number((sessionResult.session as Json | undefined)?.id || 0);
+      const token = String(practiceResult.token || '');
+      if (sessionId && token) await api.learning.updateSession(sessionId, {practice_token: token, evidence: {practice_started: new Date().toISOString()}});
       toast('success', topic ? 'Weakness session ready' : 'Diagnostic ready', topic || 'Genesis will use this run to improve your learning profile.');
       onTab('bank');
     } catch (error) {
@@ -284,6 +302,16 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:gap-6">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5 md:gap-6">
+          {assignments.length > 0 && (
+            <Section title="Assigned by your teacher" icon={<GraduationCap />} hue="amber" description="Tracked class work that contributes to your learning profile.">
+              <ul className="grid gap-3">
+                {assignments.slice(0, 3).map((row) => {
+                  const submission = (row.submission ?? {}) as Json;
+                  return <RecRow key={String(row.id)} hue="amber" icon={<ClipboardCheck />} title={String(row.title)} detail={`${String(row.kind || 'Practice')} · ${String(submission.status || 'not started').replace('_', ' ')}`} tone={submission.status === 'submitted' ? 'success' : undefined} onClick={() => void openAssignment(row)} />;
+                })}
+              </ul>
+            </Section>
+          )}
           {/* continue */}
           <Section title="Continue studying" icon={<Play />} hue="violet" description="Pick up exactly where you stopped.">
             {loading ? (

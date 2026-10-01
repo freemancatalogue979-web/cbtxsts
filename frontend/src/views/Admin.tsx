@@ -1,5 +1,5 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {Activity, Award, LogOut, Bot, BarChart3, Bell, BookOpen, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
+import {Activity, Award, LogOut, Bot, BarChart3, Bell, BookOpen, Building2, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
@@ -22,8 +22,9 @@ const GroupsAdmin = lazyScreen(() => import('../admin/GroupsAdmin'));
 const SupportAdmin = lazyScreen(() => import('../admin/SupportAdmin'));
 const MysteryAdmin = lazyScreen(() => import('../admin/MysteryAdmin'));
 const TutorAdmin = lazyScreen(() => import('../admin/TutorAdmin'));
+const InstitutionsAdmin = lazyScreen(() => import('../admin/InstitutionsAdmin'));
 
-type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'support' | 'tutor' | 'settings';
+type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'institutions' | 'support' | 'tutor' | 'settings';
 
 const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[] = [
   {id: 'overview', label: 'Overview', icon: Gauge, group: 'Arena'},
@@ -37,6 +38,7 @@ const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[
   {id: 'results', label: 'Results', icon: BarChart3, group: 'People'},
   {id: 'claims', label: 'Prize claims', icon: PackageCheck, group: 'People'},
   {id: 'groups', label: 'Study groups', icon: GraduationCap, group: 'People'},
+  {id: 'institutions', label: 'Schools & classes', icon: Building2, group: 'People'},
   {id: 'support', label: 'Customer support', icon: LifeBuoy, group: 'People'},
   {id: 'tutor', label: 'AI Tutor', icon: Bot, group: 'System'},
   {id: 'settings', label: 'Settings', icon: Settings, group: 'System'},
@@ -483,7 +485,9 @@ function AdminProfile({onSettings, onExit, onSwitch}: {onSettings: () => void; o
 }
 
 export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; onSwitchToPlayer?: () => void}) {
-  const [section, setSection] = useState<Section>('overview');
+  const {profile} = useSession();
+  const teacherOnly = String((profile as unknown as {role?: string} | null)?.role || '') === 'teacher';
+  const [section, setSection] = useState<Section>(teacherOnly ? 'institutions' : 'overview');
   // Bumping the key remounts a section so it re-fetches after a mutation.
   const [bump, setBump] = useState(0);
   const refresh = () => setBump((value) => value + 1);
@@ -491,13 +495,18 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
   // below lg, every section keeps its permissions and functionality.
   const [navOpen, setNavOpen] = useState(false);
 
+  useEffect(() => {
+    if (teacherOnly && section !== 'institutions') setSection('institutions');
+  }, [teacherOnly, section]);
+
   const goto = (next: Section) => {
     setSection(next);
     setNavOpen(false);
     window.scrollTo({top: 0});
   };
 
-  const groups = SECTIONS.reduce<{name: string; items: typeof SECTIONS}[]>((acc, item) => {
+  const visibleSections = teacherOnly ? SECTIONS.filter((item) => item.id === 'institutions') : SECTIONS;
+  const groups = visibleSections.reduce<{name: string; items: typeof SECTIONS}[]>((acc, item) => {
     const last = acc[acc.length - 1];
     if (last && last.name === item.group) last.items.push(item);
     else acc.push({name: item.group, items: [item]});
@@ -524,11 +533,11 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
           <div className="ml-auto flex items-center gap-0.5 sm:gap-2">
             <AdminBell />
             <span className="hidden sm:block">
-              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
+              <AdminProfile onSettings={() => goto(teacherOnly ? 'institutions' : 'settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
             <Button size="sm" variant="ghost" className="hidden lg:inline-flex" label="Sign out" onClick={onExit} icon={<LogOut className="size-4" />} />
             <span className="sm:hidden">
-              <AdminProfile onSettings={() => goto('settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
+              <AdminProfile onSettings={() => goto(teacherOnly ? 'institutions' : 'settings')} onExit={onExit} onSwitch={onSwitchToPlayer} />
             </span>
           </div>
         </div>
@@ -654,6 +663,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                 />
               )}
               {section === 'groups' && <GroupsAdmin key={`groups-${bump}`} />}
+              {section === 'institutions' && <InstitutionsAdmin key={`institutions-${bump}`} />}
               {section === 'support' && <SupportAdmin key={`support-${bump}`} />}
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}
               {section === 'tutor' && <TutorAdmin key={`tutor-${bump}`} />}

@@ -21,9 +21,11 @@ from ..db import get_db
 from ..deps import require_student
 from ..events import Event, dispatch, to_student
 from ..models import (
+    AdaptiveLearningSession,
     BossRun,
     CommunityBoss,
     Course,
+    PlayerMastery,
     PracticeChallenge,
     PracticeRun,
     Question,
@@ -960,6 +962,28 @@ async def finish_practice(
     }
     state["summary"] = summary
     challenge.payload = state
+    adaptive = db.scalar(
+        select(AdaptiveLearningSession).where(
+            AdaptiveLearningSession.student_id == student.id,
+            AdaptiveLearningSession.practice_token == token,
+            AdaptiveLearningSession.status == "active",
+        )
+    )
+    if adaptive is not None:
+        mastery = db.scalar(
+            select(PlayerMastery).where(
+                PlayerMastery.student_id == student.id,
+                PlayerMastery.scope_type == "topic",
+                func.lower(PlayerMastery.scope_key) == adaptive.topic.lower(),
+            )
+        ) if adaptive.topic else None
+        adaptive.evidence = {**(adaptive.evidence or {}), "practice": {"token": token, "correct": correct, "total": total, "percentage": summary["score_percent"]}}
+        adaptive.ending_mastery = float(mastery.mastery) if mastery else adaptive.starting_mastery
+        adaptive.stage = "reassessment"
+        adaptive.stage_index = max(adaptive.stage_index, len((adaptive.plan or {}).get("steps") or []) - 1)
+        adaptive.status = "completed"
+        adaptive.completed_at = utcnow()
+        adaptive.updated_at = utcnow()
     db.flush()
     best = db.scalar(
         select(func.max(PracticeRun.score)).where(PracticeRun.student_id == student.id, PracticeRun.mode == mode)

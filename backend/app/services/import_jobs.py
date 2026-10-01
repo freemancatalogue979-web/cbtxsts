@@ -6,13 +6,17 @@ Flow (all requests return in well under a second):
     GET  /import/uploads/{id}     poll                                     → reading | ready (+preview) | error
     POST /import/uploads/{id}/commit   course/title/…  → material created in a worker → importing → done (+material)
 
-Jobs live in memory (a restart loses unfinished ones — the app then asks to
-upload again) and are swept after a few hours together with their files.
+Jobs are mirrored to small JSON state files. On restart, reading/importing
+work is resumed from the saved upload while ready jobs remain available for
+staff to commit. State writes are atomic, so a process crash cannot leave a
+half-written job record.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -46,6 +50,46 @@ def _dir() -> Path:
     return base
 
 
+def _state_path(job_id: str) -> Path:
+    return _dir() / f"{job_id}.json"
+
+
+def _persist(job: dict[str, Any]) -> None:
+    """Atomically mirror one job; only JSON-compatible import drafts are stored."""
+    target = _state_path(str(job["id"]))
+    temporary = target.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(job, ensure_ascii=False, default=str), encoding="utf-8")
+    os.replace(temporary, target)
+
+
+def recover() -> dict[str, int]:
+    """Reload persisted jobs and resume work interrupted by a process restart."""
+    resumed = ready = failed = 0
+    with _lock:
+        _jobs.clear()
+        for path in _dir().glob("*.json"):
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(job, dict) or not job.get("id"):
+                    raise ValueError("invalid job")
+                _jobs[str(job["id"])] = job
+            except Exception:  # noqa: BLE001
+                failed += 1
+                path.unlink(missing_ok=True)
+    for job_id, job in list(_jobs.items()):
+        state = str(job.get("state") or "error")
+        if state == "reading":
+            _pool.submit(_read, job_id); resumed += 1
+        elif state == "importing" and job.get("commit_fields"):
+            _pool.submit(_create, job_id, dict(job["commit_fields"])); resumed += 1
+        elif state in {"ready", "done"}:
+            ready += 1
+        else:
+            _set(job_id, state="error", error=job.get("error") or "This import was interrupted. Upload it again.")
+    _sweep()
+    return {"loaded": len(_jobs), "resumed": resumed, "ready": ready, "invalid": failed}
+
+
 def _sweep() -> None:
     cutoff = time.time() - KEEP_SECONDS
     with _lock:
@@ -54,13 +98,18 @@ def _sweep() -> None:
             _jobs.pop(key, None)
     for key in old:
         (_dir() / key).unlink(missing_ok=True)
+        _state_path(key).unlink(missing_ok=True)
 
 
 def _set(job_id: str, **changes: Any) -> None:
+    snapshot = None
     with _lock:
         job = _jobs.get(job_id)
         if job is not None:
             job.update(changes, updated=time.time())
+            snapshot = dict(job)
+    if snapshot is not None:
+        _persist(snapshot)
 
 
 def _message(error: Exception) -> str:
@@ -139,7 +188,9 @@ def start(filename: str, data: bytes, *, owner: int) -> dict:
     now = time.time()
     with _lock:
         _jobs[job_id] = {"id": job_id, "owner": owner, "filename": filename[:200], "size": len(data), "state": "reading", "error": "",
-                         "draft": None, "material": None, "created": now, "updated": now}
+                         "draft": None, "material": None, "commit_fields": None, "created": now, "updated": now}
+        snapshot = dict(_jobs[job_id])
+    _persist(snapshot)
     _pool.submit(_read, job_id)
     return public(_jobs[job_id])
 
@@ -158,7 +209,9 @@ def commit(job_id: str, *, owner: int, fields: dict) -> dict:
             return job
         if job["state"] != "ready":
             raise JobError("This file isn't ready yet." if job["state"] in {"reading", "importing"} else job["error"] or "This file can't be imported.", 409)
-        job.update(state="importing", error="", updated=time.time())
+        job.update(state="importing", error="", commit_fields=fields, updated=time.time())
+        snapshot = dict(job)
+    _persist(snapshot)
     _pool.submit(_create, job_id, fields)
     return job
 

@@ -616,6 +616,15 @@ export const api = {
       request<Json>(`/api/flashcards/cards/${id}`, {method: 'PATCH', body: {...body, card_id: id}}),
   },
 
+  learning: {
+    entitlements: () => request<Json>('/api/learning/entitlements'),
+    currentSession: () => request<Json>('/api/learning/sessions/current'),
+    startSession: (body: {topic?: string; course_id?: number | null} = {}) => request<Json>('/api/learning/sessions', {method: 'POST', body}),
+    updateSession: (id: number, body: {action?: 'advance' | 'complete' | 'abandon'; practice_token?: string; evidence?: Json} = {}) =>
+      request<Json>(`/api/learning/sessions/${id}`, {method: 'PATCH', body}),
+    masteryHistory: (params: {scope_type?: string; scope_key?: string; days?: number} = {}) => request<Json>(`/api/learning/mastery/history${query(params)}`),
+  },
+
   /* ------------------------------------------------------- practice & bosses */
   arena: {
     intelligence: () => request<Json>('/api/arena/intelligence'),
@@ -1136,6 +1145,23 @@ export const api = {
       leaderboard: (limit = 20) => request<Json>(`/api/admin/students/leaderboard${query({limit})}`),
       recentVersions: (limit = 30) => request<Json>(`/api/admin/versions/recent${query({limit})}`),
     },
+  },
+
+  institutions: {
+    list: () => request<Json>('/api/institutions'),
+    create: (body: {name: string; slug?: string; kind?: string; plan?: string; seats?: number}) => request<Json>('/api/institutions', {method: 'POST', body}),
+    dashboard: (id: number) => request<Json>(`/api/institutions/${id}/dashboard`),
+    addMember: (id: number, body: {actor_type: 'admin' | 'student'; actor_id: number; role?: string}) => request<Json>(`/api/institutions/${id}/members`, {method: 'POST', body}),
+    createTeacher: (id: number, body: {name: string; email: string; password: string}) => request<Json>(`/api/institutions/${id}/teachers`, {method: 'POST', body}),
+    createClass: (id: number, body: {name: string; academic_year?: string; level?: string; course_ids?: number[]}) => request<Json>(`/api/institutions/${id}/classes`, {method: 'POST', body}),
+    classIntelligence: (id: number) => request<Json>(`/api/institutions/classes/${id}/intelligence`),
+    enroll: (id: number, student_ids: number[]) => request<Json>(`/api/institutions/classes/${id}/enroll`, {method: 'POST', body: {student_ids}}),
+    assignments: (id: number) => request<Json>(`/api/institutions/classes/${id}/assignments`),
+    createAssignment: (id: number, body: Json) => request<Json>(`/api/institutions/classes/${id}/assignments`, {method: 'POST', body}),
+    subscription: (id: number) => request<Json>(`/api/institutions/${id}/subscription`),
+    myAssignments: () => request<Json>('/api/institutions/me/assignments'),
+    startAssignment: (id: number) => request<Json>(`/api/institutions/me/assignments/${id}/start`, {method: 'POST'}),
+    submitAssignment: (id: number, body: {score: number; result?: Json}) => request<Json>(`/api/institutions/me/assignments/${id}/submit`, {method: 'POST', body}),
   },
 
   /* ------------------------------------------------------- study groups

@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import Course, PlayerMastery, Question, Student, StudyMistake, StudyPath
+from ..models import ConceptPrerequisite, Course, LearningConcept, MasterySnapshot, PlayerMastery, Question, Student, StudyMistake, StudyPath
 from .ai_tutor import refresh_topic_progress
 
 WEAK_BELOW = 60.0
@@ -106,6 +106,13 @@ def build_profile(db: Session, student: Student) -> dict[str, Any]:
         row.topic.lower(): row
         for row in db.scalars(select(StudyPath).where(StudyPath.student_id == student.id)).all()
     }
+    snapshots: dict[str, list[MasterySnapshot]] = defaultdict(list)
+    for snap in db.scalars(
+        select(MasterySnapshot)
+        .where(MasterySnapshot.student_id == student.id, MasterySnapshot.scope_type == "topic")
+        .order_by(MasterySnapshot.recorded_at.desc())
+    ).all():
+        snapshots[snap.scope_key.lower()].append(snap)
 
     topics: list[dict[str, Any]] = []
     for row in progress:
@@ -136,7 +143,11 @@ def build_profile(db: Session, student: Student) -> dict[str, Any]:
             patterns = [{"label": "Low topic accuracy", "count": max(1, attempted - int(row.correct or 0)), "kind": "accuracy"}]
         course = courses.get(row.course_id)
         pool = int(pools.get(row.topic, 0) or 0)
-        path = paths.get((row.topic or "").lower())
+        topic_key = (row.topic or "").lower()
+        path = paths.get(topic_key)
+        history = snapshots.get(topic_key, [])
+        delta = round(float(history[0].mastery) - float(history[min(len(history) - 1, 5)].mastery), 1) if len(history) > 1 else 0.0
+        trend = "improving" if delta >= 3 else "declining" if delta <= -3 else "stable" if len(history) > 1 else "insufficient"
         urgency = round((100 - mastery) * (0.45 + confidence / 180) + min(20, repeated * 2), 1)
         topics.append(
             {
@@ -152,6 +163,9 @@ def build_profile(db: Session, student: Student) -> dict[str, Any]:
                 "correct": int(row.correct or 0),
                 "incorrect": int(row.incorrect or 0),
                 "last_evidence_at": row.last_attempted.isoformat() if row.last_attempted else None,
+                "trend": trend,
+                "trend_delta": delta,
+                "history_points": len(history),
                 "open_mistakes": len(misses),
                 "repeated_misses": repeated,
                 "error_patterns": patterns,
@@ -170,6 +184,22 @@ def build_profile(db: Session, student: Student) -> dict[str, Any]:
     weighted = sum(row["mastery"] * row["attempted"] for row in topics)
     overall = round(weighted / total_attempted, 1) if total_attempted else 0.0
     readiness = "ready" if overall >= 75 and not any(row["status"] == "critical" for row in topics) else "building" if overall >= 55 else "needs_attention"
+
+    course_ids = {int(row["course_id"]) for row in topics if row.get("course_id")}
+    concepts = db.scalars(select(LearningConcept).where(LearningConcept.course_id.in_(course_ids), LearningConcept.active.is_(True)).order_by(LearningConcept.course_id, LearningConcept.position)).all() if course_ids else []
+    concept_ids = [row.id for row in concepts]
+    edges = db.scalars(select(ConceptPrerequisite).where(ConceptPrerequisite.concept_id.in_(concept_ids))).all() if concept_ids else []
+    topic_lookup = {str(row["topic"]).lower(): row for row in topics}
+    graph_nodes = [
+        {"id": f"concept:{row.id}", "concept_id": row.id, "course_id": row.course_id, "topic": row.topic, "title": row.title,
+         "mastery": (topic_lookup.get(row.topic.lower()) or {}).get("mastery", 0), "status": (topic_lookup.get(row.topic.lower()) or {}).get("status", "emerging")}
+        for row in concepts
+    ]
+    # Courses without curated concepts still get useful topic nodes; edges are
+    # added later by staff without invalidating historical mastery evidence.
+    if not graph_nodes:
+        graph_nodes = [{"id": f"topic:{index}", "concept_id": None, "course_id": row.get("course_id"), "topic": row["topic"], "title": row["topic"], "mastery": row["mastery"], "status": row["status"]} for index, row in enumerate(topics)]
+    graph = {"nodes": graph_nodes, "edges": [{"from": f"concept:{edge.prerequisite_id}", "to": f"concept:{edge.concept_id}", "strength": edge.strength} for edge in edges]}
 
     if primary:
         next_action = {
@@ -203,6 +233,7 @@ def build_profile(db: Session, student: Student) -> dict[str, Any]:
             "evidence_count": total_attempted,
         },
         "next_action": next_action,
+        "learning_graph": graph,
         "topics": topics,
         "priority_topics": actionable[:6],
         "strong_topics": sorted([row for row in topics if row["status"] == "mastered"], key=lambda item: -item["mastery"])[:5],

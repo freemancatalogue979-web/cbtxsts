@@ -1274,7 +1274,7 @@ def mastery_scope_update(
     correct: bool,
 ) -> None:
     """Update a mastery band (course/topic/subtopic/difficulty) for a player."""
-    from ..models import PlayerMastery
+    from ..models import MasterySnapshot, PlayerMastery
 
     key = (scope_key or "").strip()[:120] or "General"
     row = db.scalar(
@@ -1294,6 +1294,20 @@ def mastery_scope_update(
     confidence = min(1.0, row.answered / 12)
     row.mastery = round(accuracy * 100 * confidence, 2)
     row.updated_at = utcnow()
+    # Append-only evidence makes trends reconstructable instead of inferring
+    # them from a single mutable aggregate. Keep every graded update: this is
+    # the audit trail behind readiness and institutional reporting.
+    db.add(
+        MasterySnapshot(
+            student_id=student_id,
+            scope_type=scope_type,
+            scope_key=key,
+            mastery=row.mastery,
+            confidence=round(confidence * 100, 1),
+            answered=row.answered,
+            correct=row.correct,
+        )
+    )
 
 
 def flag_question(
