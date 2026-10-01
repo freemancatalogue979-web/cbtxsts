@@ -66,7 +66,7 @@ class PhoneLoginRequest(BaseModel):
 
 class ChatSendIn(BaseModel):
     to: int
-    kind: Literal["text", "duel", "quiz"] = "text"
+    kind: Literal["text", "duel", "quiz", "file", "material", "tquiz"] = "text"
     body: str = Field(default="", max_length=600)
     meta: dict[str, Any] = Field(default_factory=dict)
 

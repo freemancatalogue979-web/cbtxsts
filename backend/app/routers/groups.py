@@ -114,7 +114,8 @@ def list_groups(
         query = query.where(or_(func.lower(StudyGroup.name).like(needle), func.lower(StudyGroup.description).like(needle)))
     all_groups = list(db.scalars(query.order_by(StudyGroup.id.desc())).all())
     mine = [group for group in all_groups if group.id in set(my_ids)]
-    discover = [group for group in all_groups if group.id not in set(my_ids)]
+    # Invite-only groups never appear in discovery.
+    discover = [group for group in all_groups if group.id not in set(my_ids) and (group.privacy or "open") != "invite"]
 
     def window(rows: list[StudyGroup]) -> tuple[list[dict], int]:
         total = len(rows)
@@ -167,6 +168,9 @@ async def join_group(
     existing = group_service.membership(db, group.id, student.id)
     events = []
     if existing is None:
+        # A code is an invitation, so it opens request/invite groups too —
+        # but never past capacity or through a block.
+        _guard_teacher_group(db, group, student, via_code=True)
         db.add(StudyGroupMember(group_id=group.id, student_id=student.id, role="member"))
         db.flush()
         _, join_events = log_activity(
@@ -196,6 +200,7 @@ async def join_group_by_id(
     """Join from the discover card (no code typing)."""
     group = _group_or_404(db, group_id)
     if group_service.membership(db, group.id, student.id) is None:
+        _guard_teacher_group(db, group, student, via_code=False)
         db.add(StudyGroupMember(group_id=group.id, student_id=student.id, role="member"))
         db.flush()
         _, events = log_activity(
@@ -204,6 +209,29 @@ async def join_group_by_id(
         db.commit()
         await dispatch(events)
     return group_service.group_public(db, group, student)
+
+
+def _guard_teacher_group(db: Session, group: StudyGroup, student: Student, *, via_code: bool) -> None:
+    """Teacher-led groups enforce privacy, capacity and blocks on every join path."""
+    privacy = group.privacy or "open"
+    if privacy == "open" and not group.capacity and not group.teacher_id:
+        return
+    from ..services import teachers as teacher_rules
+
+    owner_id = group.owner_id
+    if teacher_rules.is_blocked(db, owner_id, student.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't join this group.")
+    if not via_code and privacy in {"request", "invite"}:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "This group is invite only." if privacy == "invite" else "Ask to join — the teacher approves new members.",
+        )
+    if group.capacity:
+        members = db.scalar(
+            select(func.count(StudyGroupMember.id)).where(StudyGroupMember.group_id == group.id, StudyGroupMember.role != "owner")
+        ) or 0
+        if members >= group.capacity:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This group is full.")
 
 
 @router.post("/{group_id}/leave")

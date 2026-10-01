@@ -20,6 +20,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .config import APP_NAME, APP_TAGLINE, CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_ORIGINS, HOST, PORT
 from .db import async_engine, init_db, session_scope
 from .routers import (
+    teachers,
+    teachers_admin,
     admin,
     course_workspace,
     auth,
@@ -274,6 +276,8 @@ app.include_router(ai_core.admin_router, prefix=API_PREFIX)
 app.include_router(tutor.router, prefix=API_PREFIX)
 app.include_router(tutor.alias_router, prefix=API_PREFIX)
 app.include_router(tutor.admin_router, prefix=API_PREFIX)
+app.include_router(teachers.router, prefix=API_PREFIX)
+app.include_router(teachers_admin.router, prefix=API_PREFIX)
 app.include_router(live.router)  # websocket routes stay unprefixed: /ws/live, /ws/duel/{id}, /ws/room/{id}
 
 

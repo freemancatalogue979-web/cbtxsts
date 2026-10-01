@@ -1285,6 +1285,13 @@ class StudyGroup(Base):
     goal: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    # Teacher-led groups (Teacher Network). Student groups keep privacy "open":
+    # anyone can join from discover, exactly as before.
+    teacher_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # teacher_profiles.id
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    privacy: Mapped[str] = mapped_column(String(12), default="open")  # open|public|request|invite
+    capacity: Mapped[int] = mapped_column(Integer, default=0)  # 0 = no limit
 
 
 class StudyGroupMember(Base):
@@ -2911,3 +2918,282 @@ class SubscriptionAccount(Base):
     external_subscription_id: Mapped[str] = mapped_column(String(160), default="")
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Teacher Network — verified teachers, requests, relationships, content, reviews
+# ---------------------------------------------------------------------------
+# Teachers are ordinary player accounts that applied and were approved by staff:
+# one login, one profile, and the same courses and question bank as everyone.
+class TeacherProfile(Base):
+    __tablename__ = "teacher_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), unique=True, index=True)
+    headline: Mapped[str] = mapped_column(String(140), default="")
+    bio: Mapped[str] = mapped_column(Text, default="")
+    experience_years: Mapped[int] = mapped_column(Integer, default=0)
+    experience: Mapped[str] = mapped_column(Text, default="")
+    institution: Mapped[str] = mapped_column(String(160), default="")
+    languages: Mapped[list] = mapped_column(JSON, default=list)
+    formats: Mapped[str] = mapped_column(String(8), default="both")  # one|group|both
+    availability: Mapped[list] = mapped_column(JSON, default=list)  # [{day, start, end}]
+    accepting: Mapped[bool] = mapped_column(Boolean, default=True)
+    # draft | pending | needs_info | approved | rejected | suspended
+    status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    staff_message: Mapped[str] = mapped_column(Text, default="")  # latest note shown to the applicant
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    student: Mapped[Student] = relationship()
+
+
+class TeacherSpecialty(Base):
+    __tablename__ = "teacher_specialties"
+    __table_args__ = (UniqueConstraint("teacher_id", "subject", "topic", name="uq_teacher_specialty"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    subject: Mapped[str] = mapped_column(String(80), index=True)
+    topic: Mapped[str] = mapped_column(String(120), default="", index=True)  # "" = the subject in general
+
+
+class TeacherFile(Base):
+    """An uploaded file (qualification proof, teaching material, chat attachment).
+
+    Bytes live on disk under data/teacher_files; every download is re-checked
+    against the file's purpose, so nothing is reachable by guessing a URL.
+    """
+
+    __tablename__ = "teacher_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(16), default="material")  # qualification|material|chat
+    name: Mapped[str] = mapped_column(String(200))
+    mime: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    path: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeacherQualification(Base):
+    __tablename__ = "teacher_qualifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    institution: Mapped[str] = mapped_column(String(160), default="")
+    year: Mapped[str] = mapped_column(String(10), default="")
+    file_id: Mapped[int | None] = mapped_column(ForeignKey("teacher_files.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|verified|rejected
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeacherVerificationLog(Base):
+    __tablename__ = "teacher_verification_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    action: Mapped[str] = mapped_column(String(24))  # submitted|approved|rejected|needs_info|suspended|reinstated|note
+    note: Mapped[str] = mapped_column(Text, default="")
+    actor: Mapped[str] = mapped_column(String(120), default="")
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class TeacherRequest(Base):
+    __tablename__ = "teacher_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    format: Mapped[str] = mapped_column(String(8), default="either")  # one|group|either
+    preferred_time: Mapped[str] = mapped_column(String(160), default="")
+    # pending | accepted | declined | cancelled | completed | expired
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    response_note: Mapped[str] = mapped_column(String(400), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TeacherStudent(Base):
+    """The teaching relationship — the gate for chat, sharing, notes and reviews."""
+
+    __tablename__ = "teacher_students"
+    __table_args__ = (UniqueConstraint("teacher_id", "student_id", name="uq_teacher_student"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    request_id: Mapped[int | None] = mapped_column(ForeignKey("teacher_requests.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="active", index=True)  # active|completed|ended
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeacherNote(Base):
+    """Private notes a teacher keeps about a student. Never serialised to students."""
+
+    __tablename__ = "teacher_notes"
+    __table_args__ = (UniqueConstraint("teacher_id", "student_id", name="uq_teacher_note"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    weak_areas: Mapped[str] = mapped_column(Text, default="")
+    progress: Mapped[str] = mapped_column(String(40), default="")
+    next_step: Mapped[str] = mapped_column(Text, default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TeacherMaterial(Base):
+    __tablename__ = "teacher_materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    kind: Mapped[str] = mapped_column(String(8), default="text")  # file|text|link
+    body: Mapped[str] = mapped_column(Text, default="")
+    link: Mapped[str] = mapped_column(String(500), default="")
+    file_id: Mapped[int | None] = mapped_column(ForeignKey("teacher_files.id", ondelete="SET NULL"), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(10), default="private")  # private|students|group|public
+    group_id: Mapped[int | None] = mapped_column(ForeignKey("study_groups.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="active")  # active|removed
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    downloads: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class TeacherMaterialView(Base):
+    __tablename__ = "teacher_material_views"
+    __table_args__ = (UniqueConstraint("material_id", "student_id", name="uq_teacher_material_view"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("teacher_materials.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    downloaded: Mapped[bool] = mapped_column(Boolean, default=False)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeacherShare(Base):
+    """A material or quiz shared directly with one student (e.g. from chat)."""
+
+    __tablename__ = "teacher_shares"
+    __table_args__ = (UniqueConstraint("kind", "item_id", "student_id", name="uq_teacher_share"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10))  # material|quiz
+    item_id: Mapped[int] = mapped_column(Integer, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeacherQuiz(Base):
+    __tablename__ = "teacher_quizzes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    subject: Mapped[str] = mapped_column(String(80), default="")
+    topic: Mapped[str] = mapped_column(String(120), default="")
+    time_limit_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    pass_mark: Mapped[int] = mapped_column(Integer, default=50)  # percent
+    visibility: Mapped[str] = mapped_column(String(10), default="students")  # private|students|group|public
+    group_id: Mapped[int | None] = mapped_column(ForeignKey("study_groups.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="draft", index=True)  # draft|published|archived|removed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TeacherQuizQuestion(Base):
+    __tablename__ = "teacher_quiz_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("teacher_quizzes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(8), default="mcq")  # mcq|tf|short|numeric
+    prompt: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON, default=list)
+    answer: Mapped[str] = mapped_column(String(400), default="")
+    tolerance: Mapped[float] = mapped_column(Float, default=0.0)
+    explanation: Mapped[str] = mapped_column(Text, default="")
+    marks: Mapped[int] = mapped_column(Integer, default=1)
+    difficulty: Mapped[str] = mapped_column(String(8), default="medium")
+    source_question_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class TeacherQuizAttempt(Base):
+    __tablename__ = "teacher_quiz_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("teacher_quizzes.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="in_progress")  # in_progress|submitted
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    max_score: Mapped[float] = mapped_column(Float, default=0.0)
+    percentage: Mapped[float] = mapped_column(Float, default=0.0)
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TeacherReview(Base):
+    __tablename__ = "teacher_reviews"
+    __table_args__ = (UniqueConstraint("relationship_id", name="uq_teacher_review_relationship"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teacher_profiles.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    relationship_id: Mapped[int] = mapped_column(ForeignKey("teacher_students.id", ondelete="CASCADE"))
+    rating: Mapped[int] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text, default="")
+    anonymous: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(10), default="visible", index=True)  # visible|hidden
+    teacher_response: Mapped[str] = mapped_column(Text, default="")
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class UserBlock(Base):
+    """One player blocking another: no messages, requests or invites between them."""
+
+    __tablename__ = "user_blocks"
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id", name="uq_user_block"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blocker_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    blocked_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class GroupJoinRequest(Base):
+    __tablename__ = "group_join_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    message: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)  # pending|approved|rejected|cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

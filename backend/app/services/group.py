@@ -270,9 +270,16 @@ def group_public(db: Session, group: StudyGroup, viewer: Student | None) -> dict
     member = membership(db, group.id, viewer.id) if viewer else None
     owner = db.get(Student, group.owner_id)
     course = db.get(Course, group.course_id) if group.course_id else None
+    private = (group.privacy or "open") in {"request", "invite"}
     return {
         "id": group.id,
-        "code": group.code,
+        # For request/invite groups the code is an invitation: members only.
+        "code": group.code if (member is not None or not private) else None,
+        "teacher_id": group.teacher_id,
+        "subject": group.subject or "",
+        "topic": group.topic or "",
+        "privacy": group.privacy or "open",
+        "capacity": group.capacity or 0,
         "name": group.name,
         "description": group.description,
         "goal": group.goal,
