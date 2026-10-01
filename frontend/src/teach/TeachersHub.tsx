@@ -41,9 +41,10 @@ import {
   type TGroup,
   type TRequest,
 } from '../lib/teachers';
-import {Empty, LoadingRows, PageHeader} from '../pro/ui';
+import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
+import {HowItWorks, HubHero, LearningSnapshot, SectionHead, SubjectGrid, TeachCta} from './sections';
 import {BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
@@ -58,6 +59,20 @@ export default function TeachersHub() {
   const [learning, setLearning] = useState<Learning | null>(null);
   const [material, setMaterial] = useState<number | null>(null);
   const [quiz, setQuiz] = useState<number | null>(null);
+
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [openGroups, setOpenGroups] = useState<TGroup[] | null>(null);
+  useEffect(() => {
+    teachers.catalog().then(setCatalog).catch(() => {});
+    teachers
+      .discoverGroups('')
+      .then((res) => setOpenGroups(res.items))
+      .catch(() => setOpenGroups([]));
+  }, []);
+  const findTeachers = () => {
+    setView('find');
+    window.setTimeout(() => document.getElementById('t-search')?.focus(), 60);
+  };
 
   const loadLearning = useCallback(() => {
     teachers.learning().then(setLearning).catch(() => setLearning({teachers: [], requests: [], materials: [], quizzes: [], groups: []}));
@@ -95,13 +110,7 @@ export default function TeachersHub() {
 
   return (
     <ProScope>
-      <PageHeader
-        icon={<GraduationCap className="size-6" />}
-        hue="blue"
-        eyebrow="Teacher network"
-        title="Learn with a teacher"
-        description="Verified teachers for specific topics. Request help, chat, join their study groups and take their quizzes."
-      />
+      <HubHero catalog={catalog} learning={learning} groups={openGroups?.length ?? null} onFind={findTeachers} compact={view !== 'find'} />
       <div className="pro-tabs pro-tabs-fit" role="tablist" aria-label="Teachers">
         {(
           [
@@ -119,7 +128,8 @@ export default function TeachersHub() {
           </button>
         ))}
       </div>
-      {view === 'find' && <FindTeachers onOpen={setOpenId} />}
+      {view === 'find' && <LearningSnapshot learning={learning} onTab={setView} />}
+      {view === 'find' && <FindTeachers catalog={catalog} groups={openGroups} onOpen={setOpenId} onGroups={() => setView('groups')} onReloadGroups={loadLearning} />}
       {view === 'mine' && <MyTeachers learning={learning} onOpen={setOpenId} onReload={loadLearning} onOpenMaterial={setMaterial} onOpenQuiz={setQuiz} onFind={() => setView('find')} />}
       {view === 'requests' && <MyRequests learning={learning} onOpen={setOpenId} onReload={loadLearning} onFind={() => setView('find')} />}
       {view === 'groups' && <TeacherGroups mine={learning?.groups ?? []} onReload={loadLearning} />}
@@ -130,8 +140,7 @@ export default function TeachersHub() {
 }
 
 /* ------------------------------------------------------------------ find */
-function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
+function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups}: {catalog: Catalog | null; groups: TGroup[] | null; onOpen: (id: number) => void; onGroups: () => void; onReloadGroups: () => void}) {
   const [term, setTerm] = useState('');
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState('');
@@ -149,10 +158,6 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [requestFor, setRequestFor] = useState<TeacherCard | null>(null);
-
-  useEffect(() => {
-    teachers.catalog().then(setCatalog).catch(() => {});
-  }, []);
 
   const params = useMemo(
     () => ({q: query, subject, topic, verified, available, min_rating: minRating, min_experience: minExperience, format, language, sort}),
@@ -185,6 +190,8 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
 
   const topics = catalog?.subjects.find((s) => s.subject === subject)?.topics ?? [];
   const activeFilters = [minRating > 0, minExperience > 0, !!format, !!language, sort !== 'relevance'].filter(Boolean).length;
+  const browsing = !query && !subject && !topic && !verified && !available && activeFilters === 0;
+  const openGroups = (groups ?? []).filter((g) => !g.is_member).slice(0, 4);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setQuery(term.trim());
@@ -195,7 +202,7 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
       <form onSubmit={submit} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="pro-search min-w-0">
           <Search />
-          <input className="pro-input w-full" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Try “calculus”, “organic chemistry” or a teacher's name" aria-label="Search teachers" enterKeyHint="search" />
+          <input id="t-search" className="pro-input w-full" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Try “calculus”, “organic chemistry” or a teacher's name" aria-label="Search teachers" enterKeyHint="search" />
         </label>
         <button type="submit" className="pro-btn pro-btn-primary max-sm:hidden">
           Search
@@ -250,9 +257,36 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="pro-meta">{items === null ? 'Searching…' : `${total} teacher${total === 1 ? '' : 's'}${query ? ` for “${query}”` : ''}`}</p>
-      </div>
+      <SubjectGrid catalog={catalog} active={subject} onPick={(next) => (setSubject(next), setTopic(''))} />
+
+      <SectionHead
+        icon={browsing ? <Star /> : <Search />}
+        title={browsing ? 'Featured teachers' : 'Results'}
+        sub={items === null ? 'Searching…' : `${total} teacher${total === 1 ? '' : 's'}${query ? ` for “${query}”` : subject ? ` in ${topic || subject}` : ''}`}
+        action={
+          !browsing ? (
+            <button
+              type="button"
+              className="pro-btn pro-btn-ghost pro-btn-sm"
+              onClick={() => {
+                setTerm('');
+                setQuery('');
+                setSubject('');
+                setTopic('');
+                setVerified(false);
+                setAvailable(false);
+                setMinRating(0);
+                setMinExperience(0);
+                setFormat('');
+                setLanguage('');
+                setSort('relevance');
+              }}
+            >
+              Clear all
+            </button>
+          ) : undefined
+        }
+      />
 
       {items === null && <LoadingRows rows={3} />}
       {items && items.length === 0 && (
@@ -277,6 +311,30 @@ function FindTeachers({onOpen}: {onOpen: (id: number) => void}) {
           Show more teachers
         </button>
       )}
+
+      {browsing && <HowItWorks />}
+
+      {browsing && openGroups.length > 0 && (
+        <section className="grid min-w-0 gap-3">
+          <SectionHead
+            icon={<Users />}
+            title="Open study groups"
+            sub="Small groups led by teachers — learn alongside other students"
+            action={
+              <button type="button" className="pro-btn pro-btn-ghost pro-btn-sm" onClick={onGroups}>
+                See all <ChevronRight className="size-4" />
+              </button>
+            }
+          />
+          <div className="grid min-w-0 gap-2 md:grid-cols-2">
+            {openGroups.map((g) => (
+              <GroupRow key={g.id} group={g} onChanged={onReloadGroups} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {browsing && <TeachCta />}
 
       <Sheet
         open={filtersOpen}
@@ -395,7 +453,7 @@ function TeacherCardView({teacher: t, onOpen, onRequest}: {teacher: TeacherCard;
         <div className="grid grid-cols-3 gap-1.5">
           <MiniStat icon={<Users />} value={t.stats.students_taught} label="students" hue="blue" />
           <MiniStat icon={<Briefcase />} value={t.experience_years ? `${t.experience_years}y` : '—'} label="experience" hue="violet" />
-          <MiniStat icon={<Zap />} value={t.stats.response_hours == null ? 'New' : responseLabel(t.stats.response_hours)} label="replies" hue="green" />
+          <MiniStat icon={<Zap />} value={shortReply(t.stats.response_hours)} label="reply time" hue="green" />
         </div>
         <BadgeRow badges={t.badges.filter((b) => b.key !== 'verified')} max={2} compact />
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-2">
@@ -409,6 +467,14 @@ function TeacherCardView({teacher: t, onOpen, onRequest}: {teacher: TeacherCard;
       </div>
     </article>
   );
+}
+
+/** Compact reply time for small tiles: New, <1h, 5h, 2d. */
+function shortReply(hours: number | null): string {
+  if (hours == null) return 'New';
+  if (hours < 1) return '<1h';
+  if (hours < 24) return `${Math.round(hours)}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 function MiniStat({icon, value, label, hue}: {icon: React.ReactNode; value: React.ReactNode; label: string; hue: HueName}) {
@@ -952,6 +1018,9 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
             }
           />
         </div>
+      ) : null}
+      {live.length === 0 ? (
+        <HowItWorks />
       ) : (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
           {live.map(({relationship: rel, teacher: t, can_review}) => (

@@ -98,7 +98,7 @@
   .t-glass[data-state='busy'] > i { background: #f5b544; }
 
   /* teacher card ---------------------------------------------------------- */
-  .t-tcard { display: grid; align-content: start; overflow: hidden; padding: 0 !important; min-width: 0; }
+  .t-tcard { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; overflow: hidden; padding: 0 !important; min-width: 0; }
   .t-tcard .t-cover { border-bottom: 1px solid var(--pro-border); }
   .t-tcard-id { display: flex; align-items: flex-start; gap: 12px; padding: 0 16px 10px; margin-top: -34px; position: relative; min-width: 0; }
   .t-tcard-id .t-avatar { box-shadow: 0 0 0 4px var(--pro-surface); background: var(--pro-surface); }

@@ -9,6 +9,7 @@ import {useExperience} from '../lib/mode';
 import type {RequestStatus, TeacherBadge} from '../lib/teachers';
 import {useSession} from '../store/session';
 import './teach.css';
+import './game.css';
 
 /* ------------------------------------------------------------- navigation */
 /** `groupId` opens the group screen (tab is ignored). */
@@ -30,11 +31,16 @@ export function takeIntent(key: string): string | null {
 }
 
 /* ------------------------------------------------------------------ scope */
-/** Standard mode borrows the Pro tokens for these workspaces; Pro uses its own theme. */
+/** Pro renders the workspace in its own theme. Standard wraps the same screens in
+ *  `.t-game`, which maps the shared tokens onto the live arena palette (game.css). */
 export function ProScope({children}: {children: ReactNode}) {
   const {pro} = useExperience();
-  if (pro) return <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">{children}</div>;
-  return <div className="pro-scope grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">{children}</div>;
+  return <div className={`${pro ? '' : 't-game '}grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5`}>{children}</div>;
+}
+
+/** True in Standard (arena) mode — for the few places that add game-only flourishes. */
+export function useArena(): boolean {
+  return !useExperience().pro;
 }
 
 /* ---------------------------------------------------------------- avatar */
@@ -265,7 +271,7 @@ export function Sheet({open, onClose, title, subtitle, children, footer, size = 
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div className={`t-scrim ${pro ? '' : 'pro-scope'}`} initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} transition={{duration: 0.16}} onClick={onClose} role="presentation">
+        <motion.div className={`t-scrim ${pro ? '' : 't-game'}`} initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} transition={{duration: 0.16}} onClick={onClose} role="presentation">
           <motion.div
             className={`t-sheet ${widths[size]}`}
             initial={{opacity: 0, y: 24}}
