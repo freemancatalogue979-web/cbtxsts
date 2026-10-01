@@ -26,6 +26,9 @@ const MysteryPanel = lazyScreen(() => import('../panels/MysteryPanel'));
 const SupportPanel = lazyScreen(() => import('../panels/SupportPanel'));
 const WorldMapPanel = lazyScreen(() => import('../panels/WorldMapPanel'));
 const TutorPanel = lazyScreen(() => import('../panels/TutorPanel'));
+const TeachersHub = lazyScreen(() => import('../teach/TeachersHub'));
+const Messages = lazyScreen(() => import('../teach/Messages'));
+const Studio = lazyScreen(() => import('../teach/Studio'));
 
 /** Loaders for the tabs most players open next, warmed when the app is idle. */
 export const LIKELY_TABS = [
@@ -96,6 +99,9 @@ export default function Dashboard({
         {tab === 'shop' && <ShopPanel />}
         {tab === 'prizes' && <PrizesPanel />}
         {tab === 'feed' && <FeedPanel />}
+        {tab === 'teachers' && <TeachersHub />}
+        {tab === 'messages' && <Messages />}
+        {tab === 'studio' && <Studio />}
         {tab === 'profile' && (
           <ProfilePanel onOpenResult={onOpenResult} onOpenDuels={onOpenDuels} onSignOut={onSignOut} />
         )}

@@ -216,7 +216,7 @@ export function deviceId(): string {
   return deviceMemo;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const {method = 'GET', body, token = tokenStore.get(), raw = false} = options;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const headers: Record<string, string> = {'Accept': 'application/json'};
@@ -429,7 +429,7 @@ export const api = {
 
   /* ---------------------------------------------------------------- chat */
   chatWith: (friendId: number) => request<{messages: ChatMessage[]}>(`/api/chat?with=${friendId}`),
-  sendChat: (body: {to: number; kind?: 'text' | 'duel' | 'quiz'; body?: string; meta?: Record<string, unknown>}) =>
+  sendChat: (body: {to: number; kind?: ChatMessage['kind']; body?: string; meta?: Record<string, unknown>}) =>
     request<ChatMessage>('/api/chat', {method: 'POST', body}),
   markChatRead: (friendId: number) =>
     request<{marked: number}>(`/api/chat/read?with=${friendId}`, {method: 'POST'}),

@@ -285,6 +285,23 @@ export default function App() {
     return () => window.removeEventListener(OPEN_MINI_EXAM_EVENT, onOpen);
   }, [navigate]);
 
+  /* Teacher Network deep links (goTo in teach/ui.tsx): switch tab or open a
+     group; the target screen reads the one-shot intent when it mounts. */
+  useEffect(() => {
+    const onNav = (event: Event) => {
+      const detail = (event as CustomEvent<{tab?: string; groupId?: number}>).detail ?? {};
+      if (detail.groupId) {
+        navigate({view: 'group', groupId: detail.groupId, section: 'overview'});
+        return;
+      }
+      const tab = detail.tab as Tab | undefined;
+      if (!tab || !TAB_IDS.includes(tab)) return;
+      if (routeRef.current.view !== 'dashboard' || routeRef.current.tab !== tab) navigate({view: 'dashboard', tab});
+    };
+    window.addEventListener('ag:navigate', onNav);
+    return () => window.removeEventListener('ag:navigate', onNav);
+  }, [navigate]);
+
   /* Pro-only workspaces don't exist in Standard: land on Home instead. */
   useEffect(() => {
     if (!pro && route.view === 'dashboard' && PRO_ONLY_TABS.includes(route.tab)) navigate({view: 'dashboard', tab: 'play'}, 'replace');

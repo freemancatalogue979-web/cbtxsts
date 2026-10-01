@@ -230,6 +230,22 @@ function NoticeBell({className = ''}: {className?: string}) {
                           <div className="flex items-center gap-2">
                             <Icon className="size-3.5 shrink-0 text-nova-400" />
                             <p className="truncate text-[0.84rem] font-extrabold text-mist-100">{note.title}</p>
+                            {typeof note.meta?.tab === 'string' && (
+                              <button
+                                type="button"
+                                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-bold text-nova-300 hover:bg-white/8"
+                                onClick={() => {
+                                  /* Teacher Network notes deep-link (same contract as teach/ui goTo). */
+                                  const meta = note.meta as {tab: string; view?: string; with?: number};
+                                  if (meta.view) sessionStorage.setItem(`ag.${meta.tab}.view`, meta.view);
+                                  if (meta.with) sessionStorage.setItem('ag.msg.with', String(meta.with));
+                                  window.dispatchEvent(new CustomEvent('ag:navigate', {detail: {tab: meta.tab, view: meta.view, withId: meta.with}}));
+                                  setOpen(false);
+                                }}
+                              >
+                                Open
+                              </button>
+                            )}
                           </div>
                           {note.message && <p className="mt-1 break-words text-[0.8rem] font-medium text-mist-400">{note.message}</p>}
  <p className="mt-1.5 text-[0.68rem] font-bold tracking-wider text-mist-600">{formatRelative(note.created_at)}</p>

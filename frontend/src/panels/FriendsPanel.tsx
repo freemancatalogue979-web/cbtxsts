@@ -920,7 +920,19 @@ export default function FriendsPanel({
                                   }`}
                                 >
                                   <QuoteBlock meta={message.meta} mine={mine} />
-                                  <p className="break-words text-[0.82rem] leading-relaxed font-semibold">{message.body}</p>
+                                  {(message.kind === 'file' || message.kind === 'material' || message.kind === 'tquiz') && (
+                                    <button
+                                      type="button"
+                                      className="mb-1 block text-left text-[0.78rem] font-extrabold underline underline-offset-2"
+                                      onClick={() => {
+                                        sessionStorage.setItem('ag.msg.with', String(mine ? message.recipient_id : message.sender_id));
+                                        window.dispatchEvent(new CustomEvent('ag:navigate', {detail: {tab: 'messages', withId: mine ? message.recipient_id : message.sender_id}}));
+                                      }}
+                                    >
+                                      {message.kind === 'file' ? `📎 ${String(message.meta.name ?? 'Attachment')}` : `${message.kind === 'tquiz' ? 'Quiz' : 'Material'}: ${String(message.meta.title ?? '')}`} · open in Messages
+                                    </button>
+                                  )}
+                                  {message.body && <p className="break-words text-[0.82rem] leading-relaxed font-semibold">{message.body}</p>}
                                   {/* inside the gradient bubble — theme-ok */}
  <p className={`mt-1 text-[0.58rem] font-bold tracking-wider ${mine ? 'text-white/70' : 'text-mist-600'}`}>
                                     {formatRelative(message.created_at)}

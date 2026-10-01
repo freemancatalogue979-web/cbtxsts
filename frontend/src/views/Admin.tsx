@@ -1,5 +1,5 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {Activity, Award, LogOut, Bot, BarChart3, Bell, BookOpen, Building2, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
+import {Activity, Award, LogOut, Bot, Presentation, BarChart3, Bell, BookOpen, Building2, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
@@ -23,8 +23,9 @@ const SupportAdmin = lazyScreen(() => import('../admin/SupportAdmin'));
 const MysteryAdmin = lazyScreen(() => import('../admin/MysteryAdmin'));
 const TutorAdmin = lazyScreen(() => import('../admin/TutorAdmin'));
 const InstitutionsAdmin = lazyScreen(() => import('../admin/InstitutionsAdmin'));
+const TeachersAdmin = lazyScreen(() => import('../admin/TeachersAdmin'));
 
-type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'institutions' | 'support' | 'tutor' | 'settings';
+type Section = 'overview' | 'studio' | 'content' | 'events' | 'mystery' | 'people' | 'results' | 'broadcast' | 'prizes' | 'claims' | 'groups' | 'teachers' | 'institutions' | 'support' | 'tutor' | 'settings';
 
 const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[] = [
   {id: 'overview', label: 'Overview', icon: Gauge, group: 'Arena'},
@@ -38,6 +39,7 @@ const SECTIONS: {id: Section; label: string; icon: typeof Gauge; group: string}[
   {id: 'results', label: 'Results', icon: BarChart3, group: 'People'},
   {id: 'claims', label: 'Prize claims', icon: PackageCheck, group: 'People'},
   {id: 'groups', label: 'Study groups', icon: GraduationCap, group: 'People'},
+  {id: 'teachers', label: 'Teachers', icon: Presentation, group: 'People'},
   {id: 'institutions', label: 'Schools & classes', icon: Building2, group: 'People'},
   {id: 'support', label: 'Customer support', icon: LifeBuoy, group: 'People'},
   {id: 'tutor', label: 'AI Tutor', icon: Bot, group: 'System'},
@@ -664,6 +666,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
                 />
               )}
               {section === 'groups' && <GroupsAdmin key={`groups-${bump}`} />}
+              {section === 'teachers' && <TeachersAdmin key={`teachers-${bump}`} />}
               {section === 'institutions' && <InstitutionsAdmin key={`institutions-${bump}`} onOpenTutor={(prompt) => { setTutorPrompt(prompt); goto('tutor'); }} />}
               {section === 'support' && <SupportAdmin key={`support-${bump}`} />}
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}

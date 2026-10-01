@@ -1,7 +1,9 @@
 /** Navigation model shared by the desktop tabs and the mobile bottom bar. */
-import {Activity, BookOpen, CalendarDays, Gamepad2, Gift, GraduationCap, LifeBuoy, Map, Sparkles, Search, Shield, Store, Swords, TrendingUp, Trophy, User, Users} from 'lucide-react';
+import {Activity, BookOpen, Briefcase, CalendarDays, Gamepad2, Gift, GraduationCap, LifeBuoy, Map, MessagesSquare, Presentation, Sparkles, Search, Shield, Store, Swords, TrendingUp, Trophy, User, Users} from 'lucide-react';
 
 export type Tab = 'play' | 'map' | 'study' | 'tutor' | 'materials' | 'arena' | 'ranked' | 'events' | 'mystery' | 'duels' | 'shop' | 'friends' | 'ranks' | 'prizes' | 'feed' | 'support' | 'profile'
+  /* Teacher Network (Standard + Pro) */
+  | 'teachers' | 'messages' | 'studio'
   /* Pro Mode workspaces (same data, focused interfaces) */
   | 'courses' | 'bank' | 'exams' | 'flashcards' | 'analytics' | 'settings';
 
@@ -21,6 +23,9 @@ export const TABS: {id: Tab; label: string; short: string; icon: typeof Gamepad2
   {id: 'ranks', label: 'Ranks', short: 'Ranks', icon: Trophy},
   {id: 'prizes', label: 'Prizes', short: 'Prizes', icon: Gift},
   {id: 'feed', label: 'Feed', short: 'Feed', icon: Activity},
+  {id: 'teachers', label: 'Find a Teacher', short: 'Teachers', icon: Presentation},
+  {id: 'messages', label: 'Messages', short: 'Inbox', icon: MessagesSquare},
+  {id: 'studio', label: 'Teacher Studio', short: 'Studio', icon: Briefcase},
   {id: 'support', label: 'Support', short: 'Help', icon: LifeBuoy},
   {id: 'profile', label: 'Profile', short: 'You', icon: User},
 ];
@@ -38,7 +43,7 @@ export const MOBILE_TABS: Tab[] = ['play', 'map', 'study', 'duels'];
 export const MORE_TABS: Tab[] = TABS.map((row) => row.id).filter((id) => !MOBILE_TABS.includes(id));
 
 export const DESKTOP_PRIMARY_TABS: Tab[] = ['play', 'ranked', 'events', 'study', 'tutor', 'mystery', 'arena', 'shop'];
-export const DESKTOP_MORE_TABS: Tab[] = ['map', 'materials', 'duels', 'friends', 'ranks', 'prizes', 'feed', 'support', 'profile'];
+export const DESKTOP_MORE_TABS: Tab[] = ['teachers', 'messages', 'studio', 'map', 'materials', 'duels', 'friends', 'ranks', 'prizes', 'feed', 'support', 'profile'];
 
 /** Tabs that only exist in Pro Mode; Standard falls back to Home for them. */
 export const PRO_ONLY_TABS: Tab[] = ['courses', 'bank', 'exams', 'flashcards', 'analytics', 'settings'];

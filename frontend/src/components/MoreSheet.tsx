@@ -77,12 +77,16 @@ const META: Partial<Record<Tab, {tone: Tone; hint: string}>> = {
   feed: {tone: 'cyan', hint: 'What’s happening'},
   shop: {tone: 'gold', hint: 'Spend your coins'},
   prizes: {tone: 'flare', hint: 'Claim rewards'},
+  teachers: {tone: 'mint', hint: 'Verified tutors by topic'},
+  messages: {tone: 'cyan', hint: 'Teachers & students'},
+  studio: {tone: 'nova', hint: 'Teach on Genesis'},
 };
 
 type Group = {id: string; title: string; tabs: Tab[]; style: 'feature' | 'tiles' | 'wide'};
 
 const GROUPS: Group[] = [
   {id: 'study', title: 'Study', tabs: ['tutor', 'materials'], style: 'feature'},
+  {id: 'teach', title: 'Teachers', tabs: ['teachers', 'messages', 'studio'], style: 'tiles'},
   {id: 'compete', title: 'Compete', tabs: ['arena', 'ranked', 'events', 'mystery'], style: 'tiles'},
   {id: 'community', title: 'Community', tabs: ['friends', 'ranks', 'feed'], style: 'tiles'},
   {id: 'rewards', title: 'Rewards', tabs: ['shop', 'prizes'], style: 'wide'},

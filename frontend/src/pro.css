@@ -20,7 +20,8 @@
    ========================================================================== */
 
 /* ------------------------------------------------------------ PRO DARK */
-[data-mode='pro'] {
+[data-mode='pro'],
+.pro-scope {
   color-scheme: dark;
 
   --pro-bg: #0b0d10;
@@ -653,7 +654,8 @@ select.pro-input { padding-right: 32px; }
    Lively layer — colour identity + gentle, functional motion.
    Six muted hues for sections/courses (never for actions: that's the accent).
    ========================================================================== */
-[data-mode='pro'] {
+[data-mode='pro'],
+.pro-scope {
   --pro-track: #232830;
   --pro-h-blue: #5b8def;   --pro-h-blue-soft: rgba(91, 141, 239, 0.14);
   --pro-h-green: #4caf7d;  --pro-h-green-soft: rgba(76, 175, 125, 0.14);
@@ -817,7 +819,8 @@ select.pro-input { padding-right: 32px; }
    covers and livelier data. Motion stays short (≤250ms) and honours
    reduced-motion.
    ========================================================================== */
-[data-mode='pro'] {
+[data-mode='pro'],
+.pro-scope {
   --pro-bg: #08090e;
   --pro-surface: #0f1119;
   --pro-elevated: #151823;

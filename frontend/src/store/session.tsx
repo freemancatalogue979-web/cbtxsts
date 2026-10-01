@@ -485,7 +485,13 @@ export function SessionProvider({children}: {children: ReactNode}) {
                   ? payload.body.slice(0, 60)
                   : payload.kind === 'duel'
                     ? 'Sent you a duel invite'
-                    : 'Proposed a quiz plan',
+                    : payload.kind === 'file'
+                      ? 'Sent a file'
+                      : payload.kind === 'material'
+                        ? 'Shared a material'
+                        : payload.kind === 'tquiz'
+                          ? 'Shared a quiz'
+                          : 'Proposed a quiz plan',
               );
             }
             break;

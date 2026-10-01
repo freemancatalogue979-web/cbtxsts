@@ -1,5 +1,5 @@
 /** Pro Mode navigation: the sidebar, the phone bar and the command menu share it. */
-import {BarChart3, BookOpen, ClipboardCheck, GraduationCap, Layers, LayoutDashboard, Library, ListChecks, Settings, Sparkles} from 'lucide-react';
+import {BarChart3, BookOpen, Briefcase, ClipboardCheck, GraduationCap, Layers, LayoutDashboard, Library, ListChecks, MessagesSquare, Presentation, Settings, Sparkles} from 'lucide-react';
 import type {Tab} from '../lib/nav';
 import type {Hue} from './ui';
 
@@ -15,6 +15,9 @@ export const PRO_NAV: ProNavItem[] = [
   {id: 'flashcards', label: 'Flashcards', icon: Layers, hint: 'Spaced review', hue: 'blue', group: 'Practise'},
   {id: 'tutor', label: 'AI Assistant', icon: Sparkles, hint: 'Ask about your studies', hue: 'violet', group: 'Insight'},
   {id: 'analytics', label: 'Analytics', icon: BarChart3, hint: 'Your learning data', hue: 'teal', group: 'Insight'},
+  {id: 'teachers', label: 'Teachers', icon: Presentation, hint: 'Find a verified teacher', hue: 'green', group: 'Teach'},
+  {id: 'messages', label: 'Messages', icon: MessagesSquare, hint: 'Teachers and students', hue: 'blue', group: 'Teach'},
+  {id: 'studio', label: 'Teacher Studio', icon: Briefcase, hint: 'Your teaching workspace', hue: 'violet', group: 'Teach'},
 ];
 
 export const PRO_SETTINGS: ProNavItem = {id: 'settings', label: 'Settings', icon: Settings, hint: 'Appearance, reading, account'};

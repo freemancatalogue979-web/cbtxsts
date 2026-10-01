@@ -21,6 +21,9 @@ const ProMaterials = lazy(() => import('./ProMaterials'));
 const ProBank = lazy(() => import('./ProBank'));
 const ProFlashcards = lazy(() => import('./ProFlashcards'));
 const TutorPanel = lazy(() => import('../panels/TutorPanel'));
+const TeachersHub = lazy(() => import('../teach/TeachersHub'));
+const Messages = lazy(() => import('../teach/Messages'));
+const Studio = lazy(() => import('../teach/Studio'));
 
 function Loading() {
   return (
@@ -79,6 +82,15 @@ export default function ProRoutes({
       break;
     case 'tutor':
       body = <TutorPanel />;
+      break;
+    case 'teachers':
+      body = <TeachersHub />;
+      break;
+    case 'messages':
+      body = <Messages />;
+      break;
+    case 'studio':
+      body = <Studio />;
       break;
     default:
       body = fallback;

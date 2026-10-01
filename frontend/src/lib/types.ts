@@ -757,7 +757,8 @@ export interface ChatMessage {
   id: number;
   sender_id: number;
   recipient_id: number;
-  kind: 'text' | 'duel' | 'quiz';
+  /** file / material / tquiz come from the Teacher Network. */
+  kind: 'text' | 'duel' | 'quiz' | 'file' | 'material' | 'tquiz';
   body: string;
   meta: Record<string, unknown>;
   created_at: string;
