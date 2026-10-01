@@ -7,7 +7,7 @@ import type {ChatMessage} from '../lib/types';
 import {Empty, LoadingRows, PageHeader} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
-import {PersonAvatar, ProScope, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
+import {PersonAvatar, ProScope, activeLabel, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 const ROLE_LABEL: Record<Conversation['role'], string> = {teacher: 'Your teacher', student: 'Your student', request: 'Request', friend: 'Friend'};
@@ -309,7 +309,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{other?.name ?? 'Conversation'}</p>
           <p className="pro-meta truncate">
-            {typing ? 'typing…' : online ? 'Online' : other?.last_active ? `Active ${timeAgo(other.last_active)}` : conversation ? ROLE_LABEL[conversation.role] : ''}
+            {typing ? 'typing…' : online ? 'Online' : other?.last_active ? activeLabel(other.last_active) : conversation ? ROLE_LABEL[conversation.role] : ''}
             {conversation && conversation.role !== 'friend' && !typing ? ` · ${ROLE_LABEL[conversation.role]}` : ''}
           </p>
         </div>

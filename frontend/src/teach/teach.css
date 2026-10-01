@@ -153,7 +153,9 @@
   .t-week em { display: block; padding: 4px 2px; border-radius: 6px; font-size: 0.66rem; font-style: normal; text-align: center; color: var(--pro-muted); background: var(--pro-hover); }
 
   /* messages -------------------------------------------------------------- */
-  .t-chat { display: grid; grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 180px); min-height: 480px; overflow: hidden; padding: 0; }
+  .t-chat { display: grid; grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 170px); min-height: 480px; overflow: hidden; padding: 0; }
+  /* desktop keeps the page header above the card, so the composer must still fit */
+  @media (min-width: 768px) { .t-chat { height: calc(100dvh - 290px); min-height: 440px; } }
   @media (min-width: 900px) { .t-chat { grid-template-columns: 320px minmax(0, 1fr); } }
   @media (max-width: 767px) { .t-chat { height: calc(100dvh - 150px); min-height: 420px; border-radius: 16px; } }
   .t-chat-list { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--pro-border); }

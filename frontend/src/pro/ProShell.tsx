@@ -201,7 +201,8 @@ export default function ProShell({
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <NavList tab={tab} onTab={go} />
           </div>
-          <div className="px-2 pt-2">
+          {/* Short laptop screens: keep every nav item visible instead of the card. */}
+          <div className="px-2 pt-2 [@media(max-height:940px)]:hidden">
             <TodayCard tab={tab} onTab={go} />
           </div>
           <div className="grid gap-0.5 border-t px-3 py-3" style={{borderColor: 'var(--pro-border)'}}>

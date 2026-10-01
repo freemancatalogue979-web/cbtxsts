@@ -2,7 +2,7 @@
 import {Archive, ArchiveRestore, BarChart3, BookOpen, CheckCircle2, Copy, Database, Eye, FileText, Link2, ListChecks, Loader2, Pencil, Plus, Rocket, Send, Trash2, Upload, X} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ApiError, api} from '../lib/api';
-import {VISIBILITY_LABEL, fileUrl, formatBytes, teachers, type QKind, type StudioStudent, type TGroup, type TMaterial, type TQuestion, type TQuiz, type Visibility} from '../lib/teachers';
+import {VISIBILITY_LABEL, formatBytes, teachers, type QKind, type StudioStudent, type TGroup, type TMaterial, type TQuestion, type TQuiz, type Visibility} from '../lib/teachers';
 import type {Course} from '../lib/types';
 import {Empty, LoadingRows, Seg} from '../pro/ui';
 import {useSession} from '../store/session';
@@ -484,6 +484,21 @@ export function StudioQuizzes({groups}: {groups: TGroup[]}) {
   );
 }
 
+const LETTERS = 'ABCDEF';
+/** MCQ answers are stored as a letter (A–F) — drop blank options and re-letter the answer. */
+function compactMcq(q: TQuestion): TQuestion {
+  if (q.kind !== 'mcq') return q;
+  const correct = LETTERS.indexOf(q.answer.toUpperCase());
+  const kept: string[] = [];
+  let answer = '';
+  q.options.forEach((o, i) => {
+    if (!o.trim()) return;
+    if (i === correct) answer = LETTERS[kept.length]!;
+    kept.push(o);
+  });
+  return {...q, options: kept, answer};
+}
+
 const KIND_LABEL: Record<QKind, string> = {mcq: 'Multiple choice', tf: 'True / False', short: 'Short answer', numeric: 'Numerical'};
 const blankQuestion = (kind: QKind): TQuestion => ({
   kind,
@@ -501,7 +516,8 @@ function questionProblem(q: TQuestion): string | null {
   if (q.kind === 'mcq') {
     const filled = q.options.filter((o) => o.trim());
     if (filled.length < 2) return 'Add at least two options';
-    if (!q.answer || !q.options.includes(q.answer) || !q.answer.trim()) return 'Mark the correct option';
+    const correct = LETTERS.indexOf(q.answer.toUpperCase());
+    if (correct < 0 || !q.options[correct]?.trim()) return 'Mark the correct option';
   }
   if (q.kind === 'short' && !q.answer.trim()) return 'Add the accepted answer';
   if (q.kind === 'numeric' && (q.answer.trim() === '' || Number.isNaN(Number(q.answer)))) return 'Add a numerical answer';
@@ -568,7 +584,7 @@ function QuizBuilder({quizId, groups, onClose, onSaved}: {quizId: number | 'new'
       pass_mark: passMark,
       visibility,
       group_id: visibility === 'group' ? groupId : null,
-      questions: questions.map((q) => ({...q, options: q.kind === 'mcq' ? q.options.filter((o) => o.trim()) : q.options})),
+      questions: questions.map(compactMcq),
     };
     try {
       const saved = quizId === 'new' ? await teachers.createQuiz(payload) : await teachers.updateQuiz(quizId as number, payload);
@@ -724,14 +740,14 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
       {q.kind === 'mcq' && (
         <div className="grid gap-2">
           {q.options.map((opt, oi) => {
-            const correct = !!opt.trim() && q.answer === opt;
+            const correct = q.answer.toUpperCase() === LETTERS[oi];
             return (
               <div key={oi} className="flex items-center gap-2">
                 <button
                   type="button"
                   className="grid size-8 shrink-0 place-items-center rounded-full border text-[0.75rem] font-bold"
                   style={{borderColor: correct ? 'var(--pro-success)' : 'var(--pro-border-strong)', background: correct ? 'var(--pro-success)' : 'transparent', color: correct ? '#fff' : 'var(--pro-muted)'}}
-                  onClick={() => opt.trim() && onChange({answer: opt})}
+                  onClick={() => onChange({answer: LETTERS[oi]!})}
                   aria-label={`Mark option ${String.fromCharCode(65 + oi)} correct`}
                   title="Mark as correct"
                 >
@@ -742,13 +758,13 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
                   value={opt}
                   maxLength={400}
                   placeholder={`Option ${String.fromCharCode(65 + oi)}`}
-                  onChange={(e) => {
-                    const options = q.options.map((o, j) => (j === oi ? e.target.value : o));
-                    onChange({options, answer: q.answer === opt ? e.target.value : q.answer});
-                  }}
+                  onChange={(e) => onChange({options: q.options.map((o, j) => (j === oi ? e.target.value : o))})}
                 />
                 {q.options.length > 2 && (
-                  <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm" onClick={() => onChange({options: q.options.filter((_, j) => j !== oi), answer: q.answer === opt ? '' : q.answer})} aria-label="Remove option" title="Remove option">
+                  <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm" onClick={() => {
+                      const idx = LETTERS.indexOf(q.answer.toUpperCase());
+                      onChange({options: q.options.filter((_, j) => j !== oi), answer: idx === oi ? '' : idx > oi ? LETTERS[idx - 1]! : q.answer});
+                    }} aria-label="Remove option" title="Remove option">
                     <X className="size-4" />
                   </button>
                 )}
@@ -762,7 +778,7 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
           )}
         </div>
       )}
-      {q.kind === 'tf' && <Seg value={q.answer} onChange={(v) => onChange({answer: v})} label="Correct answer" fill options={[{value: 'True', label: 'True'}, {value: 'False', label: 'False'}]} />}
+      {q.kind === 'tf' && <Seg value={q.answer.toLowerCase() === 'false' ? 'False' : 'True'} onChange={(v) => onChange({answer: v})} label="Correct answer" fill options={[{value: 'True', label: 'True'}, {value: 'False', label: 'False'}]} />}
       {q.kind === 'short' && (
         <Field label="Accepted answers" hint="Separate alternatives with | — matching ignores case and extra spaces.">
           <input className="pro-input" value={q.answer} onChange={(e) => onChange({answer: e.target.value})} maxLength={400} placeholder="e.g. mitochondria | mitochondrion" />
@@ -896,7 +912,9 @@ function BankImport({open, onClose, onAdd}: {open: boolean; onClose: () => void;
                 <CheckCircle2 className="mt-0.5 size-5 shrink-0" style={{color: on ? 'var(--pro-accent-text)' : 'var(--pro-border-strong)'}} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[0.88rem] font-semibold [overflow-wrap:anywhere]">{q.prompt}</span>
-                  <span className="pro-meta block">Answer: {q.answer} · {q.difficulty}</span>
+                  <span className="pro-meta block [overflow-wrap:anywhere]">
+                    Answer: {q.kind === 'mcq' ? `${q.answer}. ${q.options[LETTERS.indexOf(q.answer.toUpperCase())] ?? ''}` : q.answer} · {q.difficulty}
+                  </span>
                 </span>
               </button>
             );
@@ -975,4 +993,3 @@ function QuizResults({quizId, onClose}: {quizId: number | null; onClose: () => v
   );
 }
 
-export {fileUrl};

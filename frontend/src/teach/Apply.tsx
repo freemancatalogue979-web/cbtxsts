@@ -189,7 +189,7 @@ function ApplyWizard({profile, onChanged, onSubmitted}: {profile: MyProfile | nu
     draft.headline.trim().length >= 8 && draft.bio.trim().length >= 60,
     draft.specialties.some((s) => s.topics.length > 0),
     (profile?.qualifications.length ?? 0) > 0,
-    true,
+    draft.availability.length > 0,
   ];
 
   return (
@@ -208,12 +208,16 @@ function ApplyWizard({profile, onChanged, onSubmitted}: {profile: MyProfile | nu
           {STEPS.map((label, i) => (
             <button key={label} type="button" aria-current={step === i ? 'step' : undefined} data-done={checks[i] && i !== step ? '' : undefined} onClick={() => void save().then((ok) => ok && setStep(i))}>
               <i />
-              <span>
+              <span className="max-sm:hidden">
                 {i + 1}. {label}
               </span>
             </button>
           ))}
         </div>
+
+        <p className="pro-meta -mt-3 sm:hidden">
+          Step {step + 1} of {STEPS.length} · <b style={{color: 'var(--pro-text)'}}>{STEPS[step]}</b>
+        </p>
 
         {step === 0 && <AboutStep draft={draft} setDraft={setDraft} languages={catalog?.languages ?? []} />}
         {step === 1 && <SubjectsStep draft={draft} setDraft={setDraft} catalog={catalog} />}

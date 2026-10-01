@@ -2,7 +2,7 @@
 import {BadgeCheck, Ban, Check, CircleHelp, Eye, EyeOff, FileText, Flag, GraduationCap, History, Loader2, RotateCcw, Search, ShieldCheck, Star, Trash2, X} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
 import {ApiError} from '../lib/api';
-import {fileUrl, teacherAdmin, type AdminReport, type AdminTeacherDetail, type AdminTeacherRow} from '../lib/teachers';
+import {FORMAT_LABEL, fileUrl, teacherAdmin, type AdminReport, type AdminTeacherDetail, type AdminTeacherRow} from '../lib/teachers';
 import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, timeAgo} from '../teach/ui';
@@ -91,7 +91,7 @@ export default function TeachersAdmin() {
                 </button>
               ))}
             </div>
-            <label className="pro-search min-w-0">
+            <label className="pro-search min-w-0 self-start">
               <Search />
               <input className="pro-input w-full" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, username or headline" aria-label="Search teachers" />
             </label>
@@ -273,7 +273,7 @@ function TeacherSheet({id, onClose, onChanged}: {id: number | null; onClose: () 
                   ['Experience', `${data.experience_years} year${data.experience_years === 1 ? '' : 's'}`],
                   ['Institution', data.institution || '—'],
                   ['Languages', data.languages.join(', ') || '—'],
-                  ['Formats', data.formats],
+                  ['Formats', FORMAT_LABEL[data.formats] ?? data.formats],
                   ['Accepting students', data.accepting ? 'Yes' : 'No'],
                   ['Account joined', data.account.joined ? timeAgo(data.account.joined) : '—'],
                 ].map(([k, v]) => (

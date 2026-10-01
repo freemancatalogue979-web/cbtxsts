@@ -206,7 +206,7 @@ function Home({profile, overview, onOpen, onChanged, onMore}: {profile: MyProfil
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="pro-eyebrow">Teacher Studio</p>
-            <h1 className="pro-h1 mt-1 flex items-center gap-2 [overflow-wrap:anywhere]">
+            <h1 className="pro-h1 mt-1 flex flex-wrap items-center gap-x-2 [overflow-wrap:anywhere] md:!text-[2.1rem]">
               {greeting()}, {overview.profile.short_name}
               {profile.verified && <VerifiedMark />}
             </h1>
@@ -471,7 +471,7 @@ function Students({groups}: {groups: TGroup[]}) {
     <div className="grid min-w-0 gap-4">
       <PageHeader eyebrow="Teacher Studio" title="Students" description="Everyone you teach. Open a student for progress, quiz results and your private notes." />
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <label className="pro-search min-w-0">
+        <label className="pro-search min-w-0 self-start">
           <Search />
           <input className="pro-input w-full" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search by name or topic" aria-label="Search students" />
         </label>

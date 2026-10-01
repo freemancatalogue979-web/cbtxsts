@@ -49,7 +49,7 @@ export function PersonAvatar({id, name, hue = 260, hasPhoto, size = 40, online}:
   return (
     <span className="t-avatar" style={{width: size, height: size, ['--hue' as string]: String(hue)}} aria-hidden>
       {photo ? <img src={photo} alt="" /> : <span style={{fontSize: Math.max(11, size * 0.36)}}>{initials || '·'}</span>}
-      {online !== undefined && <i data-on={online ? '' : undefined} />}
+      {online && <i data-on="" aria-label="Online" />}
     </span>
   );
 }
@@ -203,7 +203,7 @@ export function Sheet({open, onClose, title, subtitle, children, footer, size = 
 export function Field({label, hint, children, error, group}: {label: string; hint?: ReactNode; children: ReactNode; error?: string | null; group?: boolean}) {
   const Tag = group ? 'div' : 'label';
   return (
-    <Tag className="grid min-w-0 gap-1.5" role={group ? 'group' : undefined} aria-label={group ? label : undefined}>
+    <Tag className="grid min-w-0 content-start gap-1.5" role={group ? 'group' : undefined} aria-label={group ? label : undefined}>
       <span className="t-label">{label}</span>
       {children}
       {error ? <span className="pro-meta" style={{color: 'var(--pro-danger)'}}>{error}</span> : hint ? <span className="pro-meta">{hint}</span> : null}
@@ -253,6 +253,20 @@ export function useLive(event: string, handler: (data: unknown) => void): void {
   const ref = useRef(handler);
   ref.current = handler;
   useEffect(() => on(event, (data) => ref.current(data)), [on, event]);
+}
+
+/** `last_active` is a calendar day (streak tracking), so speak in days, not hours. */
+export function activeLabel(iso?: string | null): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const then = new Date(y!, (m ?? 1) - 1, d ?? 1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((today.getTime() - then.getTime()) / 86400000);
+  if (days <= 0) return 'Active today';
+  if (days === 1) return 'Active yesterday';
+  if (days < 30) return `Active ${days} days ago`;
+  return 'Active over a month ago';
 }
 
 /** Plain-language reputation numbers for profiles and cards. */

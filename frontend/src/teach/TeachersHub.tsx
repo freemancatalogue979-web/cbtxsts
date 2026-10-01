@@ -100,15 +100,16 @@ export default function TeachersHub() {
       <div className="pro-tabs pro-tabs-fit" role="tablist" aria-label="Teachers">
         {(
           [
-            ['find', 'Find', Search],
-            ['mine', 'My teachers', GraduationCap],
-            ['requests', 'Requests', Inbox],
-            ['groups', 'Groups', Users],
+            ['find', 'Find', 'Find', Search],
+            ['mine', 'My teachers', 'Mine', GraduationCap],
+            ['requests', 'Requests', 'Requests', Inbox],
+            ['groups', 'Groups', 'Groups', Users],
           ] as const
-        ).map(([id, label, Icon]) => (
+        ).map(([id, label, short, Icon]) => (
           <button key={id} type="button" role="tab" aria-selected={view === id} className="pro-tab inline-flex items-center justify-center gap-1.5" onClick={() => setView(id)}>
             <Icon className="size-4 max-sm:hidden" />
-            {label}
+            <span className="max-sm:hidden">{label}</span>
+            <span className="sm:hidden">{short}</span>
             {id === 'requests' && pendingCount > 0 && <span className="t-unread">{pendingCount}</span>}
           </button>
         ))}
@@ -547,10 +548,10 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
 
       <section className="t-hero-teacher grid min-w-0 gap-4">
         <div className="flex min-w-0 flex-wrap items-start gap-4">
-          <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={76} />
+          <PersonAvatar id={t.student_id} name={t.full_name || t.name} hue={t.avatar_hue} hasPhoto={t.has_photo} size={typeof window !== 'undefined' && window.innerWidth < 640 ? 60 : 76} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="pro-h1 [overflow-wrap:anywhere]">{t.name}</h1>
+              <h1 className="pro-h1 [overflow-wrap:anywhere] max-sm:!text-[1.6rem]">{t.name}</h1>
               {t.verified && <VerifiedMark size={22} />}
             </div>
             <p className="pro-body mt-1 [overflow-wrap:anywhere]" style={{color: 'var(--pro-text-2)'}}>
