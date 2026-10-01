@@ -16,6 +16,7 @@ import './pro.css';
 import './pro-mobile.css';
 import './pro-premium.css';
 import './pro-onboarding.css';
+import './pro-intelligence.css';
 import './admin-font.css';
 import './admin-mobile.css';
 import './flashcards.css';

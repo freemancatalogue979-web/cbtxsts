@@ -28,6 +28,7 @@ from ..models import (
     utcnow,
 )
 from ..serializers import iso
+from ..services import learning_intelligence
 
 router = APIRouter(prefix="/arena", tags=["arena"])
 
@@ -227,6 +228,18 @@ def analytics(
             ).all()
         ],
     }
+
+
+@router.get("/intelligence")
+def intelligence(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
+    """Canonical learning profile and the student's next best action.
+
+    This endpoint powers Pro, adaptive study and tutor context from the same
+    server-graded evidence. It never asks AI to estimate academic performance.
+    """
+    profile = learning_intelligence.build_profile(db, student)
+    db.commit()  # refresh_topic_progress maintains the canonical topic ledger
+    return profile
 
 
 @router.get("/study-plan")

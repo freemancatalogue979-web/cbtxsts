@@ -618,6 +618,7 @@ export const api = {
 
   /* ------------------------------------------------------- practice & bosses */
   arena: {
+    intelligence: () => request<Json>('/api/arena/intelligence'),
     practiceModes: () => request<Json>('/api/arena/practice/modes'),
     practiceCatalog: () => request<Json>('/api/arena/practice/catalog'),
     practiceActive: () => request<Json>('/api/arena/practice/active'),

@@ -4,7 +4,7 @@
  * Everything comes from the same endpoints Standard uses (analytics, Study
  * Lab, practice, exams); nothing here is Pro-only data.
  */
-import {ArrowRight, Award, BarChart3, BookOpen, CalendarDays, ClipboardCheck, Clock, Compass, FileText, Flame, Gauge, GraduationCap, History, Library, Lightbulb, ListChecks, Play, RotateCcw, Target, TrendingUp} from 'lucide-react';
+import {ArrowRight, Award, BarChart3, BookOpen, BrainCircuit, CalendarDays, CheckCircle2, ClipboardCheck, Clock, Compass, FileText, Flame, Gauge, GraduationCap, History, Library, Lightbulb, ListChecks, Play, RotateCcw, ShieldAlert, Sparkles, Target, TrendingUp} from 'lucide-react';
 import {useEffect, useMemo, useState, type ReactNode} from 'react';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
@@ -18,8 +18,10 @@ import {Bars, Chip, Cover, Empty, LoadingRows, Metric, Ring, Section, Tile, gree
 type Json = Record<string, any>;
 
 export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) => void; onStartExam: (quiz: Quiz) => void}) {
-  const {profile} = useSession();
+  const {profile, toast} = useSession();
   const [analytics, setAnalytics] = useState<Json | null>(null);
+  const [intelligence, setIntelligence] = useState<Json | null>(null);
+  const [startingWeakness, setStartingWeakness] = useState(false);
   const [month, setMonth] = useState<Json | null>(null);
   const [lab, setLab] = useState<Json | null>(null);
   const [practice, setPractice] = useState<Json | null>(null);
@@ -33,6 +35,7 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
   useEffect(() => {
     let live = true;
     void Promise.allSettled([
+      api.arena.intelligence().then((d) => live && setIntelligence(d as Json)),
       api.arena.analytics(7).then((d) => live && setAnalytics(d)),
       api.arena.analytics(30).then((d) => live && setMonth(d)),
       api.studyLabOverview().then((d) => live && setLab(d as Json)),
@@ -104,6 +107,31 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
     onTab('study');
   };
   const today = new Date().toLocaleDateString(undefined, {weekday: 'long', day: 'numeric', month: 'long'});
+  const nextAction = intelligence?.next_action as Json | undefined;
+  const priority = (intelligence?.priority_topics ?? []) as Json[];
+  const intelSummary = (intelligence?.summary ?? {}) as Json;
+  const prescribedSession = (nextAction?.session ?? {}) as Json;
+  const sessionSteps = (prescribedSession.steps ?? []) as Json[];
+
+  const startWeaknessSession = async () => {
+    if (startingWeakness) return;
+    const topic = String(nextAction?.topic ?? '');
+    setStartingWeakness(true);
+    try {
+      await api.arena.startPractice({
+        mode: topic ? 'weak' : 'sprint10',
+        topic: topic || undefined,
+        course_id: Number(nextAction?.course_id || 0) || undefined,
+        size: Number(prescribedSession.question_count || 10),
+      });
+      toast('success', topic ? 'Weakness session ready' : 'Diagnostic ready', topic || 'Genesis will use this run to improve your learning profile.');
+      onTab('bank');
+    } catch (error) {
+      toast('error', 'Could not start the session', (error as Error).message);
+    } finally {
+      setStartingWeakness(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:gap-6">
@@ -161,6 +189,81 @@ export default function ProDashboard({onTab, onStartExam}: {onTab: (tab: Tab) =>
           </div>
         </div>
       </header>
+
+      {/* ------------------------------------------------ learning intelligence */}
+      <section className="pro-intelligence" aria-labelledby="learning-intelligence-title">
+        <div className="pro-intelligence-main">
+          <div className="pro-intelligence-kicker"><BrainCircuit /> Genesis Learning Intelligence <span>Live</span></div>
+          {loading || !intelligence ? (
+            <div className="mt-5"><LoadingRows rows={3} /></div>
+          ) : (
+            <>
+              <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0 max-w-2xl">
+                  <p className="pro-eyebrow">Your next best action</p>
+                  <h2 id="learning-intelligence-title" className="pro-intelligence-title">{String(nextAction?.title ?? 'Build your learning profile')}</h2>
+                  <p className="pro-secondary mt-2">{String(nextAction?.detail ?? 'Complete a short diagnostic so Genesis can prescribe your next step.')}</p>
+                </div>
+                <div className="pro-intelligence-score" data-state={String(intelSummary.readiness ?? 'building')}>
+                  <span>{Math.round(Number(intelSummary.overall_mastery ?? 0))}%</span>
+                  <small>overall mastery</small>
+                </div>
+              </div>
+
+              {priority[0]?.error_patterns?.length ? (
+                <div className="pro-intelligence-reason">
+                  <ShieldAlert />
+                  <div>
+                    <strong>Why Genesis selected this</strong>
+                    <p>{(priority[0].error_patterns as Json[]).slice(0, 3).map((row) => String(row.label)).join(' · ')}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {sessionSteps.length > 0 && (
+                <ol className="pro-session-steps" aria-label="Recommended session plan">
+                  {sessionSteps.map((step, index) => (
+                    <li key={`${step.kind}-${index}`}>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <div><strong>{String(step.label)}</strong><small>{Number(step.minutes)} min</small></div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <button type="button" className="pro-btn pro-btn-primary pro-btn-lg" disabled={startingWeakness || prescribedSession.available === false} onClick={() => void startWeaknessSession()}>
+                  <Sparkles className="size-4" /> {startingWeakness ? 'Preparing…' : nextAction?.kind === 'diagnostic' ? 'Start diagnostic' : 'Fix my weaknesses'}
+                </button>
+                <span className="pro-meta">{Number(prescribedSession.duration_minutes ?? 10)} min · adaptive · evidence-based</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <aside className="pro-intelligence-map" aria-label="Learning graph priorities">
+          <div className="flex items-center justify-between gap-3">
+            <div><p className="pro-eyebrow">Learning graph</p><h3>Priority concepts</h3></div>
+            <button type="button" className="pro-btn pro-btn-sm pro-btn-ghost" onClick={() => onTab('analytics')}>Explore <ArrowRight /></button>
+          </div>
+          {loading ? <LoadingRows rows={4} /> : priority.length ? (
+            <div className="mt-4 grid gap-3">
+              {priority.slice(0, 4).map((row) => {
+                const value = Number(row.mastery ?? 0);
+                return (
+                  <button key={`${row.course_id}-${row.topic}`} type="button" className="pro-intelligence-node" data-status={String(row.status)} onClick={() => openTopic(String(row.topic))}>
+                    <span className="pro-intelligence-dot"><span /></span>
+                    <span className="min-w-0"><strong>{String(row.topic)}</strong><small>{String(row.course?.code ?? 'Learning profile')} · {Number(row.attempted)} answers</small></span>
+                    <span className="pro-intelligence-value">{Math.round(value)}%</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="pro-intelligence-empty"><CheckCircle2 /><p>No confirmed weakness yet.</p><small>Complete a diagnostic to map your concepts.</small></div>
+          )}
+        </aside>
+      </section>
 
       {/* metrics */}
       <div className="pro-stagger grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
