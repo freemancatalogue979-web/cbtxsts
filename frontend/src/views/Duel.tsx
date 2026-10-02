@@ -994,7 +994,7 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
         <Button variant="ghost" size="sm" onClick={onExit} aria-label="Leave duel" className="-ml-2 w-10 px-0 sm:ml-0 sm:w-auto sm:px-3.5" icon={<ChevronBack />}>
           <span className="hidden sm:inline">Leave</span>
         </Button>
-        <Chip className="hidden border-flare-500/35 bg-flare-500/14 text-flare-300 sm:inline-flex" icon={<Zap className="size-3.5" />}>
+        <Chip tone="flare" className="hidden sm:inline-flex" icon={<Zap className="size-3.5" />}>
           Live duel
         </Chip>
         <CopyCode code={duel.code} size="sm" pillClassName="hidden border-white/10 bg-white/5 text-mist-300 sm:inline-flex" />
@@ -1053,10 +1053,10 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
                     The question is a round in a fight: which round, what it is
                     worth, how hot the run is, and what speed is still paying. */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <Chip className="border-nova-500/28 bg-nova-500/12 text-nova-300">
+                  <Chip tone="nova">
                     Round {current.order ?? index + 1}/{duel.question_count}
                   </Chip>
-                  <Chip className="border-gold-500/28 bg-gold-500/12 text-gold-300" icon={<Zap className="size-3" />}>
+                  <Chip tone="gold" icon={<Zap className="size-3" />}>
                     {current.points} pts on the line
                   </Chip>
                   <ComboMeter combo={myRun} className="sm:ml-0" />

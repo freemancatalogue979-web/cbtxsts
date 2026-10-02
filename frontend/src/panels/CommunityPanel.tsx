@@ -85,15 +85,15 @@ export function TournamentsPanel() {
                     {row.kind === 'bracket' ? 'Knockout bracket' : 'Points ladder'} · {row.entries}/{row.size} in
                   </p>
                 </div>
-                <Chip className={row.status === 'open' ? 'border-mint-500/30 bg-mint-500/12 text-mint-200' : 'border-white/12 bg-white/6 text-mist-400'}>
+                <Chip tone={row.status === 'open' ? 'mint' : 'neutral'}>
                   {row.status}
                 </Chip>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
-                <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">+{row.prize_xp} XP</Chip>
-                <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200">+{row.prize_coins}</Chip>
-                <Chip className="border-white/12 bg-white/6 text-mist-400">{row.cycle_key}</Chip>
+                <Chip tone="nova">+{row.prize_xp} XP</Chip>
+                <Chip tone="gold">+{row.prize_coins}</Chip>
+                <Chip tone="neutral">{row.cycle_key}</Chip>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -151,7 +151,7 @@ export function TournamentsPanel() {
                 <ul className="mt-2 grid gap-1.5">
                   {matches.map((match) => (
                     <li key={match.id} className="flex items-center gap-2 rounded-xl border border-white/8 bg-ink-900/50 px-3 py-2">
-                      <Chip className="border-white/12 bg-white/6 text-mist-400">R{match.round}</Chip>
+                      <Chip tone="neutral">R{match.round}</Chip>
                       <span className={`min-w-0 flex-1 truncate text-[0.8rem] font-bold ${match.winner_id === match.a.id ? 'text-mint-300' : 'text-mist-200'}`}>{match.a.name}</span>
                       <Swords className="size-3.5 shrink-0 text-mist-600" />
                       <span className={`min-w-0 flex-1 truncate text-right text-[0.8rem] font-bold ${match.winner_id === match.b.id ? 'text-mint-300' : 'text-mist-200'}`}>{match.b.name}</span>
@@ -259,9 +259,9 @@ export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, secti
 
   const roleChip = (group: StudyGroupSummary) =>
     group.my_role === 'owner' ? (
-      <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200" icon={<Crown className="size-3" />}>Owner</Chip>
+      <Chip tone="gold" icon={<Crown className="size-3" />}>Owner</Chip>
     ) : group.my_role === 'moderator' ? (
-      <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200">Mod</Chip>
+      <Chip tone="nova">Mod</Chip>
     ) : null;
 
   return (
@@ -302,9 +302,9 @@ export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, secti
                     {roleChip(group)}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Chip className="border-white/12 bg-white/6 text-mist-300">{group.member_count} members</Chip>
+                    <Chip tone="neutral">{group.member_count} members</Chip>
                     <CopyCode code={group.code} size="sm" pillClassName="border-nova-500/25 bg-nova-500/10 text-nova-200" />
-                    {group.course_title && <Chip className="border-white/12 bg-white/6 text-mist-400">{group.course_title}</Chip>}
+                    {group.course_title && <Chip tone="neutral">{group.course_title}</Chip>}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button variant="primary" size="sm" onClick={() => onOpenGroup(group.id)}>Open</Button>
@@ -331,7 +331,7 @@ export function GroupsPanel({onOpenGroup}: {onOpenGroup: (groupId: number, secti
                     <h4 className="truncate text-[0.84rem] font-extrabold text-mist-100">{group.name}</h4>
                     <p className="mt-0.5 line-clamp-2 text-[0.72rem] font-medium text-mist-500">{group.description || group.goal || 'Open study group'}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <Chip className="border-white/12 bg-white/6 text-mist-400">{group.member_count} members</Chip>
+                      <Chip tone="neutral">{group.member_count} members</Chip>
                       <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void joinDiscover(group)}>Join</Button>
                     </div>
                   </Card>

@@ -298,7 +298,7 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
  <p className="text-[0.68rem] font-black tracking-[0.18em] text-mist-500">Badges</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {detail.badges.map((badge) => (
-                    <Chip key={badge.key} className="border-gold-500/28 bg-gold-500/12 text-gold-300">
+                    <Chip key={badge.key} tone="gold">
                       {badge.name}
                     </Chip>
                   ))}
@@ -710,7 +710,7 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
         title="Prize claims"
         subtitle="Approve, deliver or reject — the player is notified instantly."
         icon={<PackageCheck className="size-4" />}
-        action={<Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">{pending} pending</Chip>}
+        action={<Chip tone="gold">{pending} pending</Chip>}
       />
 
       {!claims ? (

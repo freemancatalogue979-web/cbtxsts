@@ -177,10 +177,10 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
           <Wordmark size="sm" className="hidden sm:block" />
           {profile && (
             <div className="ml-auto flex items-center gap-2">
-              <Chip className="float-chip border-gold-500/28 text-gold-300" icon={<Coins className="size-3.5" />}>
+              <Chip tone="gold" className="float-chip" icon={<Coins className="size-3.5" />}>
                 {formatNumber(profile.coins)}
               </Chip>
-              <Chip className="float-chip hidden border-nova-500/28 text-nova-300 sm:inline-flex">
+              <Chip tone="nova" className="float-chip hidden sm:inline-flex">
                 Lv {profile.progress.level}
               </Chip>
             </div>

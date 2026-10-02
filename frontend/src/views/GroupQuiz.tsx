@@ -216,7 +216,7 @@ export default function GroupQuiz({groupId, quizId, onExit}: {groupId: number; q
       {/* body */}
       {phase === 'loading' && (
         <div className="grid flex-1 place-items-center">
-          <Chip className="border-white/12 bg-white/6 text-mist-400" icon={<Zap className="size-4 animate-pulse" />}>Loading your questions…</Chip>
+          <Chip tone="neutral" icon={<Zap className="size-4 animate-pulse" />}>Loading your questions…</Chip>
         </div>
       )}
 
@@ -236,7 +236,7 @@ export default function GroupQuiz({groupId, quizId, onExit}: {groupId: number; q
             <div className="mx-auto max-w-2xl">
               <Card className="p-4">
                 <div className="flex items-start gap-2">
-                  <Chip className="shrink-0 border-nova-500/25 bg-nova-500/10 text-nova-200">{question.points} pt{question.points === 1 ? '' : 's'}</Chip>
+                  <Chip tone="nova" className="shrink-0">{question.points} pt{question.points === 1 ? '' : 's'}</Chip>
                   <p className="min-w-0 flex-1 text-[0.98rem] leading-relaxed font-bold text-mist-50 sm:text-[1.05rem]">{question.text}</p>
                 </div>
               </Card>
@@ -338,10 +338,10 @@ export default function GroupQuiz({groupId, quizId, onExit}: {groupId: number; q
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              {summary.position && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200" icon={<Trophy className="size-3.5" />}>Rank #{summary.position}</Chip>}
-              {summary.xp_awarded > 0 && <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200">+{summary.xp_awarded} XP</Chip>}
-              {summary.coins_awarded > 0 && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">+{summary.coins_awarded} 🪙</Chip>}
-              <Chip className="border-white/12 bg-white/6 text-mist-400">Pass mark {summary.pass_score}%</Chip>
+              {summary.position && <Chip tone="gold" icon={<Trophy className="size-3.5" />}>Rank #{summary.position}</Chip>}
+              {summary.xp_awarded > 0 && <Chip tone="nova">+{summary.xp_awarded} XP</Chip>}
+              {summary.coins_awarded > 0 && <Chip tone="gold">+{summary.coins_awarded} 🪙</Chip>}
+              <Chip tone="neutral">Pass mark {summary.pass_score}%</Chip>
             </div>
 
             <Button className="mt-4" variant="primary" block onClick={onExit}>Back to group quizzes</Button>

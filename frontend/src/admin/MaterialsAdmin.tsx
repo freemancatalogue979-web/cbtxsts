@@ -504,7 +504,7 @@ function MaterialEditor({
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <Chip className={statusTone(draft.status)}>{draft.status}</Chip>
-        {dirty && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">Unsaved changes</Chip>}
+        {dirty && <Chip tone="gold">Unsaved changes</Chip>}
         <div className="ml-auto flex gap-1.5">
           <Button size="sm" variant="outline" icon={<Save className="size-4" />} loading={saving} onClick={() => void save('draft')}>
             Save draft
@@ -876,7 +876,7 @@ function MaterialEditor({
             <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
               {linked.length ? (
                 linked.map((id) => (
-                  <Chip key={id} className="border-nova-500/25 bg-nova-500/12 text-nova-200">
+                  <Chip key={id} tone="nova">
                     Q{id}
                   </Chip>
                 ))
@@ -1875,7 +1875,7 @@ function MaterialsTab({
                     Open
                   </Button>
                   {row.note_count ? (
-                    <Chip className="self-center border-nova-500/25 bg-nova-500/10 text-nova-200">
+                    <Chip tone="nova" className="self-center">
                       <NotebookPen className="size-3" /> {row.note_count} note{row.note_count === 1 ? '' : 's'}
                     </Chip>
                   ) : null}

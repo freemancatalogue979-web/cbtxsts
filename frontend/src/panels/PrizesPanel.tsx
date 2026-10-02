@@ -26,17 +26,17 @@ function PrizeCard({prize, onClaim}: {prize: Prize; onClaim: (prize: Prize) => v
             <Icon className="size-6 sm:size-7" strokeWidth={2.2} />
           </span>
           <div className="flex flex-col items-end gap-1 sm:gap-1.5">
-            <Chip className="border-white/14 bg-white/6 text-mist-300 capitalize">{prize.tier}</Chip>
+            <Chip tone="neutral" className="capitalize">{prize.tier}</Chip>
             {prize.claimed ? (
-              <Chip className="border-mint-500/32 bg-mint-500/14 text-mint-300" icon={<CheckCircle2 className="size-3" />}>
+              <Chip tone="mint" icon={<CheckCircle2 className="size-3" />}>
                 Claimed
               </Chip>
             ) : !prize.eligible ? (
-              <Chip className="border-white/12 bg-white/5 text-mist-500" icon={<Lock className="size-3" />}>
+              <Chip tone="muted" icon={<Lock className="size-3" />}>
                 Locked
               </Chip>
             ) : prize.stock >= 0 ? (
-              <Chip className="border-white/12 bg-white/5 text-mist-500" icon={<Tag className="size-3" />}>
+              <Chip tone="muted" icon={<Tag className="size-3" />}>
                 {prize.stock} left
               </Chip>
             ) : null}
@@ -127,7 +127,7 @@ export default function PrizesPanel() {
         subtitle={vault?.prize_pool_note || 'Spend coins or top the board to unlock real rewards.'}
         icon={<Gift className="size-4" />}
         action={
-          <Chip className="border-gold-500/28 bg-gold-500/12 text-gold-300" icon={<Coins className="size-3.5" />}>
+          <Chip tone="gold" icon={<Coins className="size-3.5" />}>
             {formatNumber(profile?.coins ?? 0)} coins
           </Chip>
         }

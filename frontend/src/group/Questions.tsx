@@ -153,7 +153,7 @@ function ReplyRow({reply, question, onChanged}: {reply: GroupQuestionReply; ques
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-[0.78rem] font-bold text-mist-100">{reply.author?.name ?? 'Member'}</span>
-            {reply.is_best && <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200" icon={<CheckCircle2 className="size-3" />}>Best answer</Chip>}
+            {reply.is_best && <Chip tone="mint" icon={<CheckCircle2 className="size-3" />}>Best answer</Chip>}
             <span className="ml-auto shrink-0 text-[0.64rem] font-semibold text-mist-600">{formatRelative(reply.created_at)}</span>
           </div>
           <p className="mt-1 text-[0.82rem] leading-snug font-medium break-words text-mist-200">{reply.body}</p>
@@ -228,9 +228,9 @@ function QuestionDetail({questionId, onBack}: {questionId: number; onBack: () =>
             </p>
           </div>
           {question.status === 'open' ? (
-            <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">Open</Chip>
+            <Chip tone="gold">Open</Chip>
           ) : (
-            <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Answered</Chip>
+            <Chip tone="mint">Answered</Chip>
           )}
         </div>
         {question.body && <p className="mt-2 text-[0.85rem] leading-relaxed font-medium break-words text-mist-200">{question.body}</p>}
@@ -345,9 +345,9 @@ export default function Questions() {
                     <div className="flex items-center gap-2">
                       <h3 className="min-w-0 flex-1 truncate text-[0.88rem] font-extrabold text-mist-50">{row.title}</h3>
                       {row.status === 'open' ? (
-                        <Chip className="shrink-0 border-gold-500/30 bg-gold-500/12 text-gold-200">Open</Chip>
+                        <Chip tone="gold" className="shrink-0">Open</Chip>
                       ) : (
-                        <Chip className="shrink-0 border-mint-500/30 bg-mint-500/12 text-mint-200">
+                        <Chip tone="mint" className="shrink-0">
                           {row.resolved ? 'Resolved' : 'Answered'}
                         </Chip>
                       )}

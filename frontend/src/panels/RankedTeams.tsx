@@ -366,7 +366,7 @@ export default function RankedTeams({onSoloQueue}: {onSoloQueue?: () => void}) {
                   <li key={row.student_id} className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-white/4 px-3 py-2">
                     <Avatar name={row.name} size={26} />
                     <span className="min-w-0 flex-1 truncate text-[0.82rem] font-extrabold text-mist-100">{row.name}</span>
-                    <Chip className="border-white/12 bg-white/6 text-mist-400">{row.team_size}v{row.team_size}</Chip>
+                    <Chip tone="neutral">{row.team_size}v{row.team_size}</Chip>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -414,7 +414,7 @@ export default function RankedTeams({onSoloQueue}: {onSoloQueue?: () => void}) {
         <SectionHeading icon={<Award className="size-4" />} title="Ranked pools" subtitle="Courses the engine can draw squad matches from — solo queue uses the same pools" />
         <div className="flex flex-wrap gap-1.5">
           {data.courses.filter((course) => course.playable).slice(0, 10).map((course) => (
-            <Chip key={course.id} className="border-white/12 bg-white/6 text-mist-300">
+            <Chip key={course.id} tone="neutral">
               {course.code} · {course.pool} q
             </Chip>
           ))}
@@ -632,9 +632,9 @@ function LobbyScreen({
                 <span className="block text-[0.66rem] font-black text-mist-500">{member.rating} rating · {member.connection}</span>
               </span>
               {member.ready ? (
-                <Chip className="border-emerald-400/35 bg-emerald-500/12 text-emerald-300"><CheckCircle2 className="size-3" /> ready</Chip>
+                <Chip tone="mint"><CheckCircle2 className="size-3" /> ready</Chip>
               ) : (
-                <Chip className="border-white/12 bg-white/6 text-mist-400">waiting</Chip>
+                <Chip tone="neutral">waiting</Chip>
               )}
               {lobby.viewer_is_host && !member.is_host && (
                 <Button size="sm" variant="ghost" disabled={busy || lobby.status === 'matching'} onClick={() => void patch(() => api.teamLobbyKick(member.student_id))()} icon={<XCircle className="size-3.5 text-flare-300" />}>

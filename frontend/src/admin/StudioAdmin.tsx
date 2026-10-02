@@ -125,7 +125,7 @@ function Pulse() {
             ))}
             {health.by_status &&
               Object.entries(health.by_status).map(([status, count]) => (
-                <Chip key={status} className="capitalize border-white/10 bg-white/5 text-mist-400">
+                <Chip key={status} tone="neutral" className="capitalize">
                   {status}: {count}
                 </Chip>
               ))}
@@ -297,7 +297,7 @@ function Bank() {
           <Button size="sm" variant="outline" onClick={load} icon={<RefreshCw className="size-3.5" />} label="Refresh" />
           <Chip>{rows?.length ?? 0} shown</Chip>
           {facets && typeof facets.status === 'object' && (
-            <Chip className="border-white/10 bg-white/5 text-mist-400">
+            <Chip tone="neutral">
               facets: {Object.keys(facets.status as Record<string, number>).length} statuses
             </Chip>
           )}
@@ -370,13 +370,13 @@ function Bank() {
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-[0.86rem] font-bold text-mist-100">{row.text}</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Answer {row.correct}</Chip>
+                      <Chip tone="mint">Answer {row.correct}</Chip>
                       <Chip>{row.points ?? 1} pts</Chip>
                       <DifficultyChip level={row.difficulty} />
                       <TopicChip topic={row.topic} />
-                      {row.status && row.status !== 'approved' && <Chip className="capitalize border-gold-500/30 bg-gold-500/12 text-gold-200">{row.status}</Chip>}
-                      {row.drawn && <Chip className="border-pulse-500/25 bg-pulse-500/10 text-pulse-200">Bank copy</Chip>}
-                      {row.flagged && <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-200">Flagged</Chip>}
+                      {row.status && row.status !== 'approved' && <Chip tone="gold" className="capitalize">{row.status}</Chip>}
+                      {row.drawn && <Chip tone="pulse">Bank copy</Chip>}
+                      {row.flagged && <Chip tone="flare">Flagged</Chip>}
                       {typeof row.usage_count === 'number' && row.usage_count > 0 && (
                         <Chip className="tabular">
                           {row.usage_count} answers · {Math.round(row.accuracy ?? 0)}% right
@@ -509,9 +509,9 @@ function Review() {
             <li key={row.id} className="rounded-2xl border border-white/8 bg-white/[0.02] p-2.5">
               <p className="break-words text-[0.82rem] font-bold text-mist-100">{row.text}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Answer {row.correct}</Chip>
+                <Chip tone="mint">Answer {row.correct}</Chip>
                 <Chip className="capitalize">{row.status ?? 'approved'}</Chip>
-                {row.flag_reason && <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-200">{row.flag_reason}</Chip>}
+                {row.flag_reason && <Chip tone="flare">{row.flag_reason}</Chip>}
                 {typeof row.accuracy === 'number' && <Chip>{Math.round(row.accuracy)}% correct</Chip>}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -586,7 +586,7 @@ function Review() {
           <ul className="mt-2 space-y-1.5">
             {audit.map((row) => (
               <li key={row.id} className="flex flex-wrap items-center gap-2 text-[0.76rem] font-semibold text-mist-400">
-                <Chip className="border-white/10 bg-white/5">{row.action}</Chip>
+                <Chip tone="neutral">{row.action}</Chip>
                 <span className="min-w-0 flex-1 break-words">
                   {row.actor} → {row.target_type} #{row.target_id}
                 </span>
@@ -855,7 +855,7 @@ export default function StudioAdmin() {
         title="Arena Studio"
         subtitle="Bank health, bulk editing, review queues, blueprints and builders — all backed by the authoritative question engine."
         icon={<Sparkles className="size-4" />}
-        action={<Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">answers are server-owned</Chip>}
+        action={<Chip tone="mint">answers are server-owned</Chip>}
       />
       <Segmented
         value={pane}

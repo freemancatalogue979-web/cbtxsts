@@ -515,10 +515,10 @@ export default function ShopPanel() {
           <span className="hud-pill float-chip text-[0.86rem] text-nova-300 tabular" title="Data Crystals — crystallized knowledge energy, earned only from milestones">
             <Gem className="size-4 text-nova-400" /> {formatNumber(wallet.diamonds)} <span className="hidden sm:inline text-[0.72rem] text-nova-200/80">Crystals</span>
           </span>
-          <Chip className="border-white/12 bg-white/5 text-mist-300" icon={<TrendingUp className="size-3" />}>
+          <Chip tone="neutral" icon={<TrendingUp className="size-3" />}>
             {state.collection.owned_count}/{state.collection.total} collected
           </Chip>
-          <Chip className="border-white/12 bg-white/5 text-mist-300" icon={<Package className="size-3" />}>
+          <Chip tone="neutral" icon={<Package className="size-3" />}>
             {totalChests} chests
           </Chip>
           <span className="ml-auto hidden text-[0.68rem] font-semibold text-mist-500 sm:block">

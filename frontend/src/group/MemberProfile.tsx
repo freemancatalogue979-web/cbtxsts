@@ -91,8 +91,8 @@ export default function MemberProfile({studentId, onBack}: {studentId: number; o
                 {friendBusy ? 'Sending…' : 'Add friend'}
               </Button>
             )}
-            {friendStatus === 'pending' && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">Friend request sent</Chip>}
-            {friendStatus === 'friends' && <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Friends</Chip>}
+            {friendStatus === 'pending' && <Chip tone="gold">Friend request sent</Chip>}
+            {friendStatus === 'friends' && <Chip tone="mint">Friends</Chip>}
             <Button size="sm" variant="ghost" icon={<MessageSquare className="size-4" />} onClick={() => go('chat')}>
               Group chat
             </Button>

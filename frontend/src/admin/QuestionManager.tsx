@@ -584,15 +584,15 @@ export default function QuestionManager({
                         {question.text}
                       </span>
                       <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
-                        <Chip className="border-mint-500/30 bg-mint-500/10 text-mint-200">Ans {question.correct || '—'}</Chip>
+                        <Chip tone="mint">Ans {question.correct || '—'}</Chip>
                         <DifficultyChip level={question.difficulty} />
                         <TopicChip topic={question.topic} className="max-w-[12rem]" />
                         {question.status && question.status !== 'approved' && (
-                          <Chip className="capitalize border-gold-500/30 bg-gold-500/12 text-gold-200">{question.status}</Chip>
+                          <Chip tone="gold" className="capitalize">{question.status}</Chip>
                         )}
-                        {question.visible === false && <Chip className="text-mist-400">Hidden</Chip>}
-                        {question.flag_reason && <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-200">Flagged</Chip>}
-                        {!isBank && question.in_bank && <Chip className="text-mist-300">Also in bank</Chip>}
+                        {question.visible === false && <Chip tone="neutral">Hidden</Chip>}
+                        {question.flag_reason && <Chip tone="flare">Flagged</Chip>}
+                        {!isBank && question.in_bank && <Chip tone="neutral">Also in bank</Chip>}
                       </span>
                     </span>
                     <ChevronDown className={`mt-1 size-4 shrink-0 text-mist-500 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -953,7 +953,7 @@ Explanation: Section 246(1)(a) of the 1999 Constitution.
 
             {paperFile && (
               <div className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
-                <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200">
+                <Chip tone="nova">
                   {preview?.file?.kind ? preview.file.kind : 'File'}
                 </Chip>
                 <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-mist-100">{paperFile.name}</span>

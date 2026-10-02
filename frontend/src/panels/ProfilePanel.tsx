@@ -392,7 +392,7 @@ export default function ProfilePanel({
                       </Chip>
                       {/* The equipped shop title is what other players read. */}
                       {wornTitle && (
-                        <Chip className="border-gold-400/40 bg-gold-500/12 font-display text-gold-200" icon={<Sparkles className="size-3" />}>
+                        <Chip tone="gold" className="font-display" icon={<Sparkles className="size-3" />}>
                           {wornTitle}
                         </Chip>
                       )}
@@ -476,22 +476,22 @@ export default function ProfilePanel({
               Save card
             </Button>
             {(profile.streak_freezes ?? 0) > 0 && (
-              <Chip className="border-pulse-500/28 bg-pulse-500/12 text-pulse-300" icon={<Snowflake className="size-3.5" />}>
+              <Chip tone="pulse" icon={<Snowflake className="size-3.5" />}>
                 {profile.streak_freezes} streak freeze{(profile.streak_freezes ?? 0) > 1 ? 's' : ''}
               </Chip>
             )}
             {profile.xp_boosted && (
-              <Chip className="border-gold-500/28 bg-gold-500/12 text-gold-300" icon={<Zap className="size-3.5" />}>
+              <Chip tone="gold" icon={<Zap className="size-3.5" />}>
                 2× XP live
               </Chip>
             )}
             {profile.flair && (
-              <Chip className="border-nova-500/28 bg-nova-500/12 text-nova-300" icon={<Sparkles className="size-3.5" />}>
+              <Chip tone="nova" icon={<Sparkles className="size-3.5" />}>
                 {profile.flair} flair
               </Chip>
             )}
             {(profile.helper_points ?? 0) > 0 && (
-              <Chip className="border-mint-500/28 bg-mint-500/12 text-mint-300" icon={<HandHelping className="size-3.5" />}>
+              <Chip tone="mint" icon={<HandHelping className="size-3.5" />}>
                 {profile.helper_points} tutor pts
               </Chip>
             )}
@@ -752,8 +752,8 @@ export default function ProfilePanel({
               icon={<Database className="size-4" />}
             />
             <div className="ml-auto flex items-center gap-2">
-              <Chip className="border-white/12 bg-white/6 text-mist-300 tabular">{storage.entries} items</Chip>
-              <Chip className="border-white/12 bg-white/6 text-mist-300 tabular">{Math.max(1, Math.round(storage.bytes / 1024))} KB</Chip>
+              <Chip tone="neutral" className="tabular">{storage.entries} items</Chip>
+              <Chip tone="neutral" className="tabular">{Math.max(1, Math.round(storage.bytes / 1024))} KB</Chip>
               <Button
                 size="sm"
                 variant="outline"
@@ -873,7 +873,7 @@ export default function ProfilePanel({
             subtitle={`${profile.season.label} — the badge ladder resets on the first of every month.`}
             icon={<Medal className="size-4" />}
             action={
-              <Chip className="border-pulse-500/28 bg-pulse-500/12 text-pulse-300" icon={<CalendarClock className="size-3.5" />}>
+              <Chip tone="pulse" icon={<CalendarClock className="size-3.5" />}>
                 {profile.season.days_left}d left
               </Chip>
             }
@@ -951,7 +951,7 @@ export default function ProfilePanel({
           subtitle="Friends power the friends leaderboard and instant duel invites."
           icon={<Users className="size-4" />}
           action={
-            <Chip className="border-mint-500/28 bg-mint-500/12 text-mint-300">
+            <Chip tone="mint">
               {friends?.friends.filter((friend) => onlineIds.includes(friend.id)).length ?? 0} online
             </Chip>
           }

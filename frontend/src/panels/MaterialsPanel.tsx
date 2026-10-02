@@ -301,11 +301,11 @@ function MaterialTile({material, onOpen, accent = 'violet'}: {material: Material
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <Chip className={ACCENTS[accent] ?? ACCENTS.violet}>{material.difficulty}</Chip>
         {(material.tags ?? []).slice(0, 2).map((tag) => (
-          <Chip key={tag} className="border-white/10 bg-white/4 text-mist-400">
+          <Chip key={tag} tone="neutral">
             {tag}
           </Chip>
         ))}
-        {percent > 0 && <Chip className="border-mint-500/25 bg-mint-500/12 text-mint-300">{percent}% read</Chip>}
+        {percent > 0 && <Chip tone="mint">{percent}% read</Chip>}
       </div>
       {percent > 0 && <ProgressBar className="mt-2.5" value={percent} />}
     </motion.button>
@@ -328,8 +328,8 @@ function BankStrip({bank, streak}: {bank: PlaytimeBank | null; streak?: {current
           <p className="text-[1.05rem] font-black text-mist-50 tabular">{minutes} min left today</p>
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5">
-          <Chip className="border-gold-500/25 bg-gold-500/12 text-gold-300">{bank.study_xp_today} study XP today</Chip>
-          <Chip className="border-mint-500/25 bg-mint-500/12 text-mint-300">
+          <Chip tone="gold">{bank.study_xp_today} study XP today</Chip>
+          <Chip tone="mint">
             <Flame className="size-3" /> {streak?.current ?? 0} day streak
           </Chip>
         </div>
@@ -915,11 +915,11 @@ export function Reader({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Chip className={ACCENTS[detail.accent] ?? ACCENTS.violet}>{detail.topic || 'General'}</Chip>
             <DifficultyChip level={detail.difficulty} />
-            <Chip className="border-white/10 bg-white/4 text-mist-400">
+            <Chip tone="neutral">
               <Clock3 className="size-3" /> {detail.estimated_minutes} min
             </Chip>
             {detail.streak?.current ? (
-              <Chip className="border-gold-500/25 bg-gold-500/12 text-gold-300">
+              <Chip tone="gold">
                 <Flame className="size-3" /> {detail.streak.current} day streak
               </Chip>
             ) : null}

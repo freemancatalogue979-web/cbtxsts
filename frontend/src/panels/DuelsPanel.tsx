@@ -126,29 +126,29 @@ function DuelCard({
 
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             {duel.status === 'live' && (
-              <Chip className="animate-pulse border-flare-500/40 bg-flare-500/16 text-flare-300" icon={<Zap className="size-3" />}>
+              <Chip tone="flare" className="animate-pulse" icon={<Zap className="size-3" />}>
                 Live
               </Chip>
             )}
             {duel.status === 'starting' && (
-              <Chip className="animate-pulse border-nova-500/40 bg-nova-500/16 text-nova-200" icon={<Hourglass className="size-3" />}>
+              <Chip tone="nova" className="animate-pulse" icon={<Hourglass className="size-3" />}>
                 Starting
               </Chip>
             )}
-            {duel.status === 'invited' && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">Invite</Chip>}
+            {duel.status === 'invited' && <Chip tone="gold">Invite</Chip>}
             {result === 'win' && (
-              <Chip className="border-mint-500/32 bg-mint-500/14 text-mint-300" icon={<Trophy className="size-3" />}>
+              <Chip tone="mint" icon={<Trophy className="size-3" />}>
                 Won
               </Chip>
             )}
             {result === 'loss' && (
-              <Chip className="border-flare-500/32 bg-flare-500/14 text-flare-300" icon={<Skull className="size-3" />}>
+              <Chip tone="flare" icon={<Skull className="size-3" />}>
                 Lost
               </Chip>
             )}
-            {result === 'draw' && <Chip className="border-white/16 bg-white/8 text-mist-300">Draw</Chip>}
-            {duel.status === 'cancelled' && <Chip className="border-white/12 bg-white/6 text-mist-500">Cancelled</Chip>}
-            {duel.status === 'expired' && <Chip className="border-white/12 bg-white/6 text-mist-500">Expired</Chip>}
+            {result === 'draw' && <Chip tone="neutral">Draw</Chip>}
+            {duel.status === 'cancelled' && <Chip tone="muted">Cancelled</Chip>}
+            {duel.status === 'expired' && <Chip tone="muted">Expired</Chip>}
           </div>
         </div>
 
@@ -785,8 +785,8 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
                 {(record.rivals as {id: number; name: string; wins?: number; losses?: number}[]).slice(0, 4).map((rival) => (
                   <li key={rival.id} className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
                     <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-mist-200">{rival.name}</span>
-                    <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">{rival.wins ?? 0}W</Chip>
-                    <Chip className="border-flare-500/25 bg-flare-500/10 text-flare-200">{rival.losses ?? 0}L</Chip>
+                    <Chip tone="mint">{rival.wins ?? 0}W</Chip>
+                    <Chip tone="flare">{rival.losses ?? 0}L</Chip>
                   </li>
                 ))}
               </ul>
@@ -799,7 +799,7 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
               <ul className="mt-1.5 space-y-1.5">
                 {(record.history as {id: number; won: boolean; mode?: string; opponent?: {name: string}[]}[]).slice(0, 4).map((row) => (
                   <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
-                    <Chip className={row.won ? 'border-mint-500/30 bg-mint-500/12 text-mint-200' : 'border-flare-500/30 bg-flare-500/12 text-flare-200'}>
+                    <Chip tone={row.won ? 'mint' : 'flare'}>
                       {row.won ? 'Win' : 'Loss'}
                     </Chip>
                     <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-mist-200">

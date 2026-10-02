@@ -1442,24 +1442,6 @@
 }
 .btag > svg { width: 0.82rem; height: 0.82rem; flex-shrink: 0; }
 [data-skin='day'] .btag { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7); }
-/* leading icon sits in its own tinted dot */
-.btag-ico { padding-left: 0.22rem; }
-.btag-ico > .btag-dot {
-  display: grid; place-items: center; width: 1.08rem; height: 1.08rem; border-radius: 999px; flex-shrink: 0;
-  background: color-mix(in srgb, currentColor 20%, transparent);
-}
-.btag-ico > .btag-dot > svg { width: 0.66rem; height: 0.66rem; }
-/* difficulty signal: three rising bars, lit by level */
-.btag-bars { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 0.7rem; flex-shrink: 0; }
-.btag-bars > i { width: 3px; border-radius: 1px; background: color-mix(in srgb, currentColor 28%, transparent); }
-.btag-bars > i:nth-child(1) { height: 40%; }
-.btag-bars > i:nth-child(2) { height: 70%; }
-.btag-bars > i:nth-child(3) { height: 100%; }
-.btag-bars > i[data-on] { background: currentColor; }
-/* score counters: number leads, label follows quieter */
-.btag-score > b { font-weight: 900; font-variant-numeric: tabular-nums; }
-.btag-score > span { opacity: 0.78; font-weight: 650; }
-@media (max-width: 639px) { .grid > .btag-score { justify-content: center; padding-inline: 0.4rem; gap: 0.28rem; min-width: 0; } }
 .btag-shimmer {
   position: relative;
   overflow: hidden;
@@ -2215,3 +2197,151 @@ input[type='radio'] {
 }
 .ag-league > i { background: linear-gradient(140deg, color-mix(in srgb, var(--lg) 80%, #fff), var(--lg)); color: rgb(40 20 0 / 0.85); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4); }
 [data-skin='day'] .ag-league { color: color-mix(in srgb, var(--lg) 60%, #000); }
+
+/* ==========================================================================
+   CHIP SYSTEM — <Chip tone size variant icon dot selected onClick onRemove>
+   Everything derives from two custom properties per tone:
+     --chip      the accent (fill tint, edge, dot, selected glow)
+     --chip-ink  the label colour
+   Layered as components so callers' utilities (ml-auto, max-w-*, legacy
+   colour classes) still win.
+   ========================================================================== */
+@layer components {
+  .chip {
+    --chip: currentColor;
+    --chip-h: 1.55rem;
+    --chip-px: 0.62rem;
+    --chip-fs: 0.7rem;
+    --chip-ico: 0.8rem;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
+    min-height: var(--chip-h);
+    max-width: 100%;
+    padding: 0 var(--chip-px);
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--chip) 28%, transparent);
+    background-color: color-mix(in srgb, var(--chip) 11%, transparent);
+    color: var(--chip-ink, inherit);
+    font-size: var(--chip-fs);
+    font-weight: 700;
+    font-style: normal;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+  }
+  .chip:not([data-tone]) { color: var(--color-mist-300); }
+  .chip > svg, .chip-hit > svg { width: var(--chip-ico); height: var(--chip-ico); flex-shrink: 0; }
+  .chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; padding-block: 0.04em; }
+
+  /* tones */
+  .chip[data-tone='neutral'] { --chip: var(--color-mist-300); --chip-ink: var(--color-mist-200); }
+  .chip[data-tone='muted']   { --chip: var(--color-mist-500); --chip-ink: var(--color-mist-400); }
+  .chip[data-tone='nova']    { --chip: var(--color-nova-400); --chip-ink: var(--color-nova-200); }
+  .chip[data-tone='pulse']   { --chip: var(--color-pulse-400); --chip-ink: var(--color-pulse-200); }
+  .chip[data-tone='flare']   { --chip: var(--color-flare-400); --chip-ink: var(--color-flare-200); }
+  .chip[data-tone='mint']    { --chip: var(--color-mint-400); --chip-ink: var(--color-mint-200); }
+  .chip[data-tone='gold']    { --chip: var(--color-gold-400); --chip-ink: var(--color-gold-200); }
+  .chip[data-tone='rose']    { --chip: var(--color-rose-400); --chip-ink: var(--color-rose-200); }
+  .chip[data-tone='custom']  { --chip: var(--chip-c); --chip-ink: color-mix(in srgb, var(--chip-c) 45%, white); }
+  [data-skin='day'] .chip[data-tone='custom'] { --chip-ink: color-mix(in srgb, var(--chip-c) 70%, black); }
+  [data-skin='day'] .chip[data-tone] { --chip-ink: color-mix(in srgb, var(--chip) 72%, #0b1020); }
+  [data-skin='day'] .chip[data-tone='neutral'] { --chip-ink: var(--color-mist-200); }
+  [data-skin='day'] .chip { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.75); }
+
+  /* sizes */
+  .chip[data-size='xs'] { --chip-h: 1.25rem; --chip-px: 0.48rem; --chip-fs: 0.62rem; --chip-ico: 0.7rem; gap: 0.26rem; }
+  .chip[data-size='md'] { --chip-h: 1.95rem; --chip-px: 0.82rem; --chip-fs: 0.78rem; --chip-ico: 0.92rem; gap: 0.42rem; }
+
+  /* variants */
+  .chip[data-variant='outline'] { background-color: transparent; border-color: color-mix(in srgb, var(--chip) 45%, transparent); box-shadow: none; }
+  .chip[data-variant='solid'] {
+    border-color: color-mix(in srgb, var(--chip) 70%, #000);
+    background-color: var(--chip);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.22), rgb(0 0 0 / 0.12));
+    color: #fff;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 4px 12px -6px color-mix(in srgb, var(--chip) 85%, transparent);
+  }
+
+  /* status dot */
+  .chip-dot { width: 0.42rem; height: 0.42rem; flex-shrink: 0; border-radius: 999px; background: var(--chip); box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip) 22%, transparent); }
+
+  /* removable */
+  .chip-removable { padding-right: 0.2rem; }
+  .chip-x {
+    display: grid; place-items: center; width: calc(var(--chip-h) - 0.5rem); height: calc(var(--chip-h) - 0.5rem); flex-shrink: 0;
+    margin-left: 0.06rem; border-radius: 999px; color: inherit; opacity: 0.7;
+    background: color-mix(in srgb, var(--chip) 16%, transparent);
+    transition: opacity 0.14s ease, background-color 0.14s ease;
+  }
+  .chip-x svg { width: 62%; height: 62%; }
+  .chip-x:hover { opacity: 1; background: color-mix(in srgb, var(--chip) 30%, transparent); }
+
+  /* interactive: the whole pill is the hit target */
+  .chip-press { padding: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .chip-press.chip-removable { padding-right: 0.2rem; }
+  .chip-hit {
+    display: inline-flex; align-items: center; gap: inherit; min-width: 0; min-height: calc(var(--chip-h) - 2px);
+    padding: 0 var(--chip-px); border-radius: inherit; color: inherit; font: inherit; letter-spacing: inherit; cursor: inherit;
+    touch-action: manipulation;
+  }
+  .chip-press.chip-removable .chip-hit { padding-right: 0.15rem; }
+  .chip-hit:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-nova-400) 80%, transparent); outline-offset: 2px; }
+  .chip-hit:disabled { cursor: not-allowed; opacity: 0.5; }
+  .chip-press:hover { border-color: color-mix(in srgb, var(--chip) 48%, transparent); background-color: color-mix(in srgb, var(--chip) 17%, transparent); }
+  .chip-press:active { transform: scale(0.96); }
+  .chip-press[data-selected] {
+    border-color: color-mix(in srgb, var(--chip) 82%, transparent);
+    background-color: color-mix(in srgb, var(--chip) 22%, transparent);
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--chip) 30%, transparent), color-mix(in srgb, var(--chip) 8%, transparent));
+    color: var(--chip-selected-ink, #fff);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 6px 16px -10px color-mix(in srgb, var(--chip) 95%, transparent);
+  }
+  [data-skin='day'] .chip-press[data-selected] { --chip-selected-ink: color-mix(in srgb, var(--chip) 65%, #0b1020); }
+  /* unselected toggles stay quiet so the picked ones read at a glance */
+  .chip-press[data-tone]:not([data-selected]) .chip-hit[aria-pressed='false'] { color: var(--color-mist-300); }
+
+  /* check / radio marks used by the pickers */
+  .chip-mark {
+    display: grid; place-items: center; width: 0.95rem; height: 0.95rem; flex-shrink: 0; border-radius: 999px;
+    border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent);
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+  }
+  .chip-mark > svg { width: 0.62rem; height: 0.62rem; }
+  [data-selected] > .chip-hit > .chip-mark { border-color: transparent; background: var(--chip); color: #0b0716; }
+  .chip-mark[data-radio] > i { width: 0.4rem; height: 0.4rem; border-radius: 999px; background: transparent; }
+  [data-selected] > .chip-hit > .chip-mark[data-radio] > i { background: #0b0716; }
+
+  /* shimmer — rare, for limited-time badges */
+  .chip-shimmer { overflow: hidden; }
+  .chip-shimmer::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.45) 50%, transparent 65%);
+    background-size: 260% 100%; animation: shimmer 3.4s linear infinite;
+  }
+
+  /* smart-chip parts */
+  .chip-topic { padding-left: 0.2rem; }
+  .chip-badge {
+    display: grid; place-items: center; width: calc(var(--chip-h) - 0.42rem); height: calc(var(--chip-h) - 0.42rem); flex-shrink: 0;
+    border-radius: 999px; background: color-mix(in srgb, var(--chip) 22%, transparent); color: var(--chip-ink, currentColor);
+  }
+  .chip-badge > svg { width: 58%; height: 58%; }
+  .chip-bars { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 0.7rem; flex-shrink: 0; }
+  .chip-bars > i { width: 3px; border-radius: 1px; background: color-mix(in srgb, var(--chip) 30%, transparent); }
+  .chip-bars > i:nth-child(1) { height: 40%; }
+  .chip-bars > i:nth-child(2) { height: 70%; }
+  .chip-bars > i:nth-child(3) { height: 100%; }
+  .chip-bars > i[data-on] { background: var(--chip); }
+  .chip-score .chip-label b { font-weight: 900; font-variant-numeric: tabular-nums; }
+  .chip-score .chip-label span { opacity: 0.75; font-weight: 650; }
+  @media (max-width: 639px) { .grid > .chip-score { justify-content: center; padding-inline: 0.4rem; gap: 0.28rem; min-width: 0; } }
+  @media (max-width: 439px) { .grid > .chip-score > svg { display: none; } }
+}
+[data-fx='low'] .chip-shimmer::after { display: none; }
+@media (prefers-reduced-motion: reduce) { .chip-shimmer::after { animation: none; display: none; } .chip-press:active { transform: none; } }

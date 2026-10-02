@@ -1,7 +1,7 @@
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
 import {Check, CheckCircle2, Copy, Loader2, Minus, Phone, Plus, X} from 'lucide-react';
 import {AnimatePresence, motion, useDragControls} from 'motion/react';
-import type {ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
+import type {ButtonHTMLAttributes, ComponentType, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
 import {createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
 import {avatarStyle, clamp} from '../lib/format';
 import {auraOf, frameOf, portraitOf} from '../lib/cosmetics';
@@ -230,76 +230,179 @@ export function IconButton({
  * the default now carries the game badge chrome: hard border, top highlight and
  * a solid bottom edge.
  */
-/* ------------------------------------------------------------ smart chips */
-const DIFF_TONE: Record<string, {cls: string; bars: number; label: string}> = {
-  easy: {cls: 'text-mint-300', bars: 1, label: 'Easy'},
-  medium: {cls: 'text-gold-300', bars: 2, label: 'Medium'},
-  hard: {cls: 'text-flare-300', bars: 3, label: 'Hard'},
-};
-
-/** Difficulty with a three-bar signal: easy (1, mint), medium (2, gold), hard (3, pink). */
-export function DifficultyChip({level, className = ''}: {level?: string | null; className?: string}) {
-  if (!level) return null;
-  const tone = DIFF_TONE[level.toLowerCase()] ?? {cls: 'text-mist-300', bars: 0, label: level};
-  return (
-    <span className={`btag ${tone.cls} ${className}`} title={`Difficulty: ${tone.label}`}>
-      <span className="btag-bars" aria-hidden="true">
-        {[1, 2, 3].map((n) => (
-          <i key={n} data-on={n <= tone.bars ? '' : undefined} />
-        ))}
-      </span>
-      {tone.label}
-    </span>
-  );
-}
-
-/** A topic / subject tag: tinted dot icon + truncating label. */
-export function TopicChip({topic, className = '', tone = 'text-nova-200'}: {topic?: string | null; className?: string; tone?: string}) {
-  if (!topic) return null;
-  return (
-    <span className={`btag btag-ico max-w-full min-w-0 ${tone} ${className}`} title={topic}>
-      <span className="btag-dot" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
-        </svg>
-      </span>
-      <span className="min-w-0 truncate">{topic}</span>
-    </span>
-  );
-}
-
-/** A live counter pill — "3 correct": number bold, label quieter. */
-export function ScoreChip({value, label, icon, className = 'text-mist-300'}: {value: ReactNode; label: string; icon?: ReactNode; className?: string}) {
-  return (
-    <span className={`btag btag-score ${className}`}>
-      {icon}
-      <b>{value}</b>
-      <span>{label}</span>
-    </span>
-  );
-}
+/* ================================================================== chips
+   One chip system for the whole arena. A chip is a small rounded label that
+   can also be a toggle (`onClick` + `selected`) or removable (`onRemove`).
+   Colour comes from a named `tone`; the CSS derives fill, edge and ink from
+   it, so every chip in the app agrees. Legacy callers that pass colour
+   utilities in `className` still work (the tint follows their text colour).
+   ========================================================================= */
+export type ChipTone = 'neutral' | 'muted' | 'nova' | 'pulse' | 'flare' | 'mint' | 'gold' | 'rose';
+export type ChipSize = 'xs' | 'sm' | 'md';
+export type ChipVariant = 'soft' | 'solid' | 'outline';
 
 export function Chip({
   children,
-  className = '',
+  tone,
+  size = 'sm',
+  variant = 'soft',
   icon,
+  dot = false,
+  selected,
+  onClick,
+  onRemove,
+  removeLabel = 'Remove',
+  disabled,
+  title,
+  role,
+  className = '',
   shimmer = false,
+  color,
 }: {
-  children: ReactNode;
-  className?: string;
+  children?: ReactNode;
+  /** Data-driven accent (e.g. a course colour). Ink is auto-lightened for contrast. */
+  color?: string;
+  /** `radio` for single-choice groups (PillSelect); default is a toggle button. */
+  role?: 'radio';
+  /** Named colour. Omit to let a legacy text-colour class drive the tint. */
+  tone?: ChipTone;
+  size?: ChipSize;
+  variant?: ChipVariant;
   icon?: ReactNode;
+  /** A small status dot before the label (live, online, new…). */
+  dot?: boolean;
+  /** Toggle state when the chip is a button. */
+  selected?: boolean;
+  onClick?: () => void;
+  /** Shows a trailing × button. */
+  onRemove?: () => void;
+  removeLabel?: string;
+  disabled?: boolean;
+  title?: string;
+  className?: string;
   /** For limited-time / hot badges only — keep it rare. */
   shimmer?: boolean;
 }) {
-  return (
-    <span
-      className={`btag ${shimmer ? 'btag-shimmer ' : ''}${
-        className || 'border-black/30 bg-ink-700 text-mist-300'
-      }`}
-    >
+  const legacy = !tone && /(^|\s)text-(white|black|mist|ink|nova|pulse|flare|mint|gold|rose|red|amber|emerald|sky|cyan|blue|violet|orange|green|yellow|pink)/.test(className);
+  const attrs = {
+    'data-tone': color ? 'custom' : tone ?? (legacy ? undefined : 'neutral'),
+    style: color ? ({'--chip-c': color} as CSSProperties) : undefined,
+    'data-size': size,
+    'data-variant': variant,
+    title,
+  };
+  const cls = `chip ${shimmer ? 'chip-shimmer ' : ''}${onRemove ? 'chip-removable ' : ''}${className}`;
+  const body = (
+    <>
+      {dot && <i className="chip-dot" aria-hidden="true" />}
       {icon}
-      {children}
+      {children !== undefined && children !== null && children !== false && <span className="chip-label">{children}</span>}
+    </>
+  );
+  const remove = onRemove ? (
+    <button
+      type="button"
+      className="chip-x"
+      aria-label={removeLabel}
+      title={removeLabel}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        uiClick('select');
+        onRemove();
+      }}
+    >
+      <X strokeWidth={3} />
+    </button>
+  ) : null;
+
+  if (onClick) {
+    return (
+      <span className={`${cls} chip-press`} {...attrs} data-selected={selected ? '' : undefined}>
+        <button
+          type="button"
+          className="chip-hit"
+          role={role}
+          aria-checked={role === 'radio' ? Boolean(selected) : undefined}
+          aria-pressed={role === 'radio' || selected === undefined ? undefined : selected}
+          disabled={disabled}
+          onClick={() => {
+            uiClick('select');
+            onClick();
+          }}
+        >
+          {body}
+        </button>
+        {remove}
+      </span>
+    );
+  }
+  return (
+    <span className={cls} {...attrs}>
+      {body}
+      {remove}
     </span>
+  );
+}
+
+/* ------------------------------------------------------------ smart chips */
+const DIFF_TONE: Record<string, {tone: ChipTone; bars: number; label: string}> = {
+  easy: {tone: 'mint', bars: 1, label: 'Easy'},
+  medium: {tone: 'gold', bars: 2, label: 'Medium'},
+  hard: {tone: 'flare', bars: 3, label: 'Hard'},
+};
+
+/** Difficulty with a three-bar signal: easy (1, mint), medium (2, gold), hard (3, pink). */
+export function DifficultyChip({level, size, className = ''}: {level?: string | null; size?: ChipSize; className?: string}) {
+  if (!level) return null;
+  const d = DIFF_TONE[level.toLowerCase()] ?? {tone: 'neutral' as ChipTone, bars: 0, label: level};
+  return (
+    <Chip
+      tone={d.tone}
+      size={size}
+      className={className}
+      title={`Difficulty: ${d.label}`}
+      icon={
+        <span className="chip-bars" aria-hidden="true">
+          {[1, 2, 3].map((n) => (
+            <i key={n} data-on={n <= d.bars ? '' : undefined} />
+          ))}
+        </span>
+      }
+    >
+      {d.label}
+    </Chip>
+  );
+}
+
+/** A topic / subject tag: `#` badge + truncating label. */
+export function TopicChip({topic, tone = 'nova', size, className = ''}: {topic?: string | null; tone?: ChipTone; size?: ChipSize; className?: string}) {
+  if (!topic) return null;
+  return (
+    <Chip
+      tone={tone}
+      size={size}
+      title={topic}
+      className={`chip-topic max-w-full min-w-0 ${className}`}
+      icon={
+        <span className="chip-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+          </svg>
+        </span>
+      }
+    >
+      {topic}
+    </Chip>
+  );
+}
+
+/** A live counter — "3 correct": number bold, label quieter. */
+export function ScoreChip({value, label, icon, tone = 'neutral', size, className = ''}: {value: ReactNode; label: string; icon?: ReactNode; tone?: ChipTone; size?: ChipSize; className?: string}) {
+  return (
+    <Chip tone={tone} size={size} icon={icon} className={`chip-score ${className}`}>
+      <b>{value}</b> <span>{label}</span>
+    </Chip>
   );
 }
 
@@ -409,18 +512,18 @@ export function GameTag({
   children: ReactNode;
   icon?: ReactNode;
 }) {
-  const tones: Record<string, string> = {
-    easy: 'bg-gradient-to-b from-mint-300 to-mint-500 text-ink-950',
-    medium: 'bg-gradient-to-b from-gold-300 to-gold-500 text-ink-950',
-    hard: 'bg-gradient-to-b from-flare-400 to-flare-600 text-white',
-    boss: 'bg-gradient-to-b from-nova-400 to-nova-700 text-white',
-    new: 'bg-gradient-to-b from-pulse-300 to-pulse-600 text-ink-950',
-    mastered: 'bg-gradient-to-b from-gold-200 to-gold-400 text-ink-950',
-    daily: 'bg-gradient-to-b from-pulse-400 to-nova-600 text-white',
-    hot: 'bg-gradient-to-b from-flare-300 to-flare-600 text-white',
+  const tones: Record<string, ChipTone> = {
+    easy: 'mint',
+    medium: 'gold',
+    hard: 'flare',
+    boss: 'nova',
+    new: 'pulse',
+    mastered: 'gold',
+    daily: 'pulse',
+    hot: 'flare',
   };
   return (
-    <Chip className={tones[tone]} icon={icon} shimmer={tone === 'hot' || tone === 'daily'}>
+    <Chip tone={tones[tone]} variant="solid" icon={icon} shimmer={tone === 'hot' || tone === 'daily'}>
       {children}
     </Chip>
   );
@@ -1178,28 +1281,25 @@ export function ToggleChips<T extends string>({
       {options.map((option) => {
         const on = values.includes(option.value);
         return (
-          <button
+          <Chip
             key={option.value}
-            type="button"
-            aria-pressed={on}
+            tone="nova"
+            size="md"
+            selected={on}
             onClick={() => {
-              uiClick('select');
               if (on) {
                 if (values.length > min) onChange(values.filter((v) => v !== option.value));
               } else onChange([...values, option.value]);
             }}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.76rem] font-semibold transition touch-manipulation active:scale-95 ${
-              on
-                ? 'border-nova-400/55 bg-nova-500/18 text-white'
-                : 'border-white/10 bg-white/[0.03] text-mist-300 hover:border-white/20 hover:text-mist-100'
-            }`}
+            icon={
+              <>
+                <span className="chip-mark" aria-hidden="true">{on && <Check strokeWidth={3.5} />}</span>
+                {option.icon && renderIcon(option.icon, 'size-3.5')}
+              </>
+            }
           >
-            <span className={`grid size-3.5 place-items-center rounded-full ${on ? 'bg-nova-400 text-ink-950' : 'border border-white/25'}`}>
-              {on && <Check className="size-2.5" strokeWidth={3.5} />}
-            </span>
-            {option.icon && renderIcon(option.icon, 'size-3.5')}
             {option.label}
-          </button>
+          </Chip>
         );
       })}
     </div>
@@ -1225,24 +1325,17 @@ export function PillSelect<T extends string>({
       {options.map((option) => {
         const on = option.value === value;
         return (
-          <button
+          <Chip
             key={option.value}
-            type="button"
+            tone="nova"
+            size="md"
             role="radio"
-            aria-checked={on}
-            onClick={() => {
-              if (!on) uiClick('select');
-              onChange(option.value);
-            }}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.78rem] font-semibold transition touch-manipulation active:scale-95 ${
-              on
-                ? 'border-nova-400/60 bg-gradient-to-r from-pulse-500/20 to-nova-500/25 text-white shadow-[0_4px_16px_-8px_rgba(139,92,246,0.8)]'
-                : 'border-white/10 bg-white/[0.03] text-mist-300 hover:border-white/20 hover:text-mist-100'
-            }`}
+            selected={on}
+            onClick={() => onChange(option.value)}
+            icon={option.icon ? renderIcon(option.icon, 'size-3.5') : undefined}
           >
-            {option.icon && renderIcon(option.icon, `size-3.5 ${on ? 'text-nova-200' : 'text-mist-500'}`)}
             {option.label}
-          </button>
+          </Chip>
         );
       })}
     </div>

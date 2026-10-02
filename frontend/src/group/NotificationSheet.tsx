@@ -91,7 +91,7 @@ export default function NotificationSheet({open, onClose, onRead}: {open: boolea
                     {row.message && <p className="mt-0.5 line-clamp-2 text-[0.74rem] font-medium text-mist-400">{row.message}</p>}
                     <span className="mt-1 block text-[0.66rem] font-semibold text-mist-600">{formatRelative(row.created_at)}</span>
                   </div>
-                  {!row.read && <Chip className="shrink-0 border-nova-500/30 bg-nova-500/12 text-nova-200">New</Chip>}
+                  {!row.read && <Chip tone="nova" className="shrink-0">New</Chip>}
                 </button>
               </li>
             ))}

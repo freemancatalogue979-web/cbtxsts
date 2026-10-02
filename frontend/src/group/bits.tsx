@@ -51,13 +51,13 @@ export function PresenceDot({status, className = ''}: {status: PresenceStatus; c
 export function RoleChip({role}: {role: string}) {
   if (role === 'owner')
     return (
-      <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200" icon={<Crown className="size-3" />}>
+      <Chip tone="gold" icon={<Crown className="size-3" />}>
         Owner
       </Chip>
     );
   if (role === 'moderator')
     return (
-      <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-200" icon={<ShieldCheck className="size-3" />}>
+      <Chip tone="nova" icon={<ShieldCheck className="size-3" />}>
         Mod
       </Chip>
     );

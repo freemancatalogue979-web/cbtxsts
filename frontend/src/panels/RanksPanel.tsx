@@ -173,7 +173,7 @@ function ExtraBoards() {
         title="More boards"
         subtitle="Skill boards built from the same answer records as exams, duels and practice."
         icon={<BarChart3 className="size-4" />}
-        action={data?.passed_players ? <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">passed {data.passed_players} players</Chip> : undefined}
+        action={data?.passed_players ? <Chip tone="mint">passed {data.passed_players} players</Chip> : undefined}
       />
       <div className="no-scrollbar mt-3 flex gap-1.5 overflow-x-auto pb-1">
         {OPTIONS.map((option) => (
@@ -248,7 +248,7 @@ export default function RanksPanel() {
         subtitle={meta.hint}
         icon={<Trophy className="size-4" />}
         action={
-          <Chip className="border-mint-500/28 bg-mint-500/12 text-mint-300" icon={<Zap className="size-3.5" />}>
+          <Chip tone="mint" icon={<Zap className="size-3.5" />}>
             {online} online
           </Chip>
         }

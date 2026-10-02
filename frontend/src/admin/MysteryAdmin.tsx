@@ -131,11 +131,11 @@ export default function MysteryAdmin() {
                   <p className="truncate text-[0.9rem] font-black text-mist-50">{row.title}</p>
                   <p className="mt-0.5 line-clamp-1 text-[0.72rem] font-semibold text-mist-400">{row.blurb}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <Chip className={row.status === 'published' ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-300' : 'border-white/12 bg-white/6 text-mist-400'}>{row.status}</Chip>
+                    <Chip tone={row.status === 'published' ? 'mint' : 'neutral'}>{row.status}</Chip>
                     <TopicChip topic={row.topic} />
                     <Chip>{row.clues.length} clues</Chip>
                     <Chip>{row.pass_count}/{row.question_count} q</Chip>
-                    <Chip className={row.pool === 0 ? 'border-flare-400/40 bg-flare-500/12 text-flare-300' : ''}>{row.pool} in pool</Chip>
+                    <Chip tone={row.pool === 0 ? 'flare' : 'neutral'}>{row.pool} in pool</Chip>
                     <Chip>{row.solved}/{row.solves} solve rate</Chip>
                   </div>
                 </div>

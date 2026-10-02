@@ -102,7 +102,7 @@ function BankCard({bank, streak}: {bank: PlaytimeBank; streak: GameHub['streak']
           </p>
         </div>
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
-          <Chip className="border-gold-500/25 bg-gold-500/12 text-gold-300">
+          <Chip tone="gold">
             <Flame className="size-3" /> {streak.current} day streak
           </Chip>
         </div>
@@ -347,11 +347,11 @@ function StarDash({
           Arena
         </Button>
         <div className="ml-auto flex items-center gap-1.5">
-          <Chip className="border-nova-500/25 bg-nova-500/12 text-nova-200">
+          <Chip tone="nova">
             <Clock3 className="size-3" /> {Math.max(0, Math.floor(remaining / 60))}:{String(Math.max(0, remaining % 60)).padStart(2, '0')}
           </Chip>
           {mode === 'survival' ? (
-            <Chip className="border-flare-500/25 bg-flare-500/12 text-flare-300">
+            <Chip tone="flare">
               <Heart className="size-3" /> {lives}
             </Chip>
           ) : null}
@@ -365,11 +365,11 @@ function StarDash({
             <p className="text-[1.1rem] font-black text-mist-50 tabular">{formatNumber(score)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Chip className="border-white/10 bg-white/4 text-mist-300">wave {wave}</Chip>
-            <Chip className={combo >= 8 ? 'border-gold-500/30 bg-gold-500/14 text-gold-300' : 'border-white/10 bg-white/4 text-mist-400'}>
+            <Chip tone="neutral">wave {wave}</Chip>
+            <Chip tone={combo >= 8 ? 'gold' : 'neutral'}>
               <Zap className="size-3" /> x{combo}
             </Chip>
-            {deadline !== null ? <Chip className="border-white/10 bg-white/4 text-mist-300">{seconds}s</Chip> : null}
+            {deadline !== null ? <Chip tone="neutral">{seconds}s</Chip> : null}
           </div>
         </div>
 
@@ -676,7 +676,7 @@ export default function GameArenaPanel() {
         <div className="min-w-0 space-y-3.5">
           <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
             <Card className="min-w-0 p-4">
-              <SectionHeading title="Daily challenge" subtitle={hub.daily_challenge.title} action={hub.daily_challenge.done ? <Chip className="border-mint-500/25 bg-mint-500/12 text-mint-300">cleared</Chip> : null} />
+              <SectionHeading title="Daily challenge" subtitle={hub.daily_challenge.title} action={hub.daily_challenge.done ? <Chip tone="mint">cleared</Chip> : null} />
               <ol className="mt-2.5 space-y-1.5">
                 {hub.daily_challenge.board.slice(0, 5).map((row, index) => (
                   <li key={row.student_id} className="flex min-w-0 items-center gap-2 text-[0.82rem]">
@@ -770,7 +770,7 @@ export default function GameArenaPanel() {
                       <span className="font-bold text-mist-100">{row.mine ? 'You' : row.from}</span> vs <span className="font-bold text-mist-100">{row.mine ? row.to : 'you'}</span> · target{' '}
                       {formatNumber(row.target_score)}
                     </span>
-                    <Chip className={row.status === 'beaten' ? 'border-mint-500/25 bg-mint-500/12 text-mint-300' : 'border-white/10 bg-white/4 text-mist-400'}>
+                    <Chip tone={row.status === 'beaten' ? 'mint' : 'neutral'}>
                       {row.status}
                     </Chip>
                   </li>
@@ -806,15 +806,15 @@ export default function GameArenaPanel() {
           <Card className="min-w-0 p-4">
             <SectionHeading title="Banked today" subtitle={`${Math.round(hub.today_played_seconds / 60)} min played · ${hub.study.xp_today} Study XP earned`} />
             <div className="mt-2.5 flex min-w-0 flex-wrap gap-1.5">
-              <Chip className="border-mint-500/25 bg-mint-500/12 text-mint-300">
+              <Chip tone="mint">
                 <Coins className="size-3" /> {hub.friends.length} friends playing
               </Chip>
               {hub.study.next_threshold ? (
-                <Chip className="border-nova-500/25 bg-nova-500/12 text-nova-200">
+                <Chip tone="nova">
                   {hub.study.next_threshold - hub.study.xp_today} XP to the next unlock
                 </Chip>
               ) : (
-                <Chip className="border-gold-500/25 bg-gold-500/12 text-gold-300">All unlocks today are yours</Chip>
+                <Chip tone="gold">All unlocks today are yours</Chip>
               )}
             </div>
           </Card>

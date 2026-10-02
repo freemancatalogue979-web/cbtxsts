@@ -352,7 +352,7 @@ export default function EventsPanel() {
             <Chip>{event.course_title}</Chip>
             <Chip>{event.question_count} questions</Chip>
             <Chip>{timeModeLabel(event.time_mode)}</Chip>
-            {event.entry_xp > 0 && <Chip className="border-flare-400/30 bg-flare-400/10 text-flare-300">{formatNumber(event.entry_xp)} XP entry</Chip>}
+            {event.entry_xp > 0 && <Chip tone="flare">{formatNumber(event.entry_xp)} XP entry</Chip>}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatTile
@@ -525,10 +525,10 @@ export default function EventsPanel() {
             {Object.keys(me.rewards ?? {}).length > 0 && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
                 <Gift className="size-4 text-gold-300" />
-                {(me.rewards as Record<string, number>).xp ? <Chip className="border-gold-400/30 bg-gold-400/10 text-gold-300">{(me.rewards as Record<string, number>).xp} XP</Chip> : null}
-                {(me.rewards as Record<string, number>).coins ? <Chip className="border-gold-400/30 bg-gold-400/10 text-gold-300">{(me.rewards as Record<string, number>).coins} coins</Chip> : null}
-                {(me.rewards as Record<string, number>).diamonds ? <Chip className="border-nova-400/30 bg-nova-400/10 text-nova-200">{(me.rewards as Record<string, number>).diamonds} diamonds</Chip> : null}
-                {(me.rewards as Record<string, string>).badge ? <Chip className="border-mint-400/30 bg-mint-400/10 text-mint-300">Event badge</Chip> : null}
+                {(me.rewards as Record<string, number>).xp ? <Chip tone="gold">{(me.rewards as Record<string, number>).xp} XP</Chip> : null}
+                {(me.rewards as Record<string, number>).coins ? <Chip tone="gold">{(me.rewards as Record<string, number>).coins} coins</Chip> : null}
+                {(me.rewards as Record<string, number>).diamonds ? <Chip tone="nova">{(me.rewards as Record<string, number>).diamonds} diamonds</Chip> : null}
+                {(me.rewards as Record<string, string>).badge ? <Chip tone="mint">Event badge</Chip> : null}
               </div>
             )}
             <Button className="mt-4" variant="outline" onClick={openReview} icon={<Eye className="size-4" />}>
@@ -657,8 +657,8 @@ export default function EventsPanel() {
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 <Chip>{card.prize_pool}</Chip>
                 <Chip>{card.question_count} questions</Chip>
-                {card.entry_xp > 0 && <Chip className="border-flare-400/30 bg-flare-400/10 text-flare-300">{formatNumber(card.entry_xp)} XP entry</Chip>}
-                {card.joined && <Chip className="border-mint-400/30 bg-mint-400/10 text-mint-300">Joined</Chip>}
+                {card.entry_xp > 0 && <Chip tone="flare">{formatNumber(card.entry_xp)} XP entry</Chip>}
+                {card.joined && <Chip tone="mint">Joined</Chip>}
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-white/8 pt-3">
                 <p className="flex items-center gap-1.5 text-[0.68rem] font-bold text-mist-500">

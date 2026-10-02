@@ -325,6 +325,9 @@
 [data-mode='pro'] .btag-shimmer::before {
   display: none;
 }
+[data-mode='pro'] .chip { box-shadow: none; }
+[data-mode='pro'] .chip[data-variant='solid'] { text-shadow: none; background-image: none; }
+[data-mode='pro'] .chip-shimmer::after { display: none; }
 [data-mode='pro'] .xpbar {
   background: var(--pro-border);
   border-color: transparent;
@@ -1122,6 +1125,7 @@ select.pro-input { padding-right: 32px; }
     font-size: 0.75rem; font-weight: 600; color: var(--pro-text-2); white-space: nowrap;
   }
   .pro-chip svg { width: 14px; height: 14px; color: var(--mark, var(--pro-accent-text)); }
+  .pro-chip.chip { --mark: var(--chip-c); letter-spacing: 0; }
 
   /* ---------------------------------------------------------------- tiles */
   .pro-tile { border-radius: 11px; box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent); }

@@ -111,7 +111,7 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-[0.9rem] font-extrabold text-mist-50">
                     {notice.title}
-                    {notice.is_pinned && <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">Pinned</Chip>}
+                    {notice.is_pinned && <Chip tone="gold">Pinned</Chip>}
                     <Chip className="capitalize">{notice.kind}</Chip>
                   </p>
                   <p className="mt-1 text-[0.82rem] font-medium text-mist-400">{notice.message}</p>
@@ -280,7 +280,7 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
                       <Chip className="capitalize">{prize.tier}</Chip>
                       <Chip>{prize.kind === 'rank' ? `Rank ${prize.min_rank}${prize.max_rank !== prize.min_rank ? `–${prize.max_rank}` : ''}` : `${formatNumber(prize.cost_coins)} coins`}</Chip>
                       <Chip>{prize.stock < 0 ? 'Unlimited' : `${prize.stock} left`}</Chip>
-                      <Chip className={prize.is_active ? 'border-mint-500/30 bg-mint-500/12 text-mint-300' : ''}>
+                      <Chip tone={prize.is_active ? 'mint' : 'neutral'}>
                         {prize.is_active ? 'Live' : 'Hidden'}
                       </Chip>
                       <Chip>{prize.claims} claimed</Chip>

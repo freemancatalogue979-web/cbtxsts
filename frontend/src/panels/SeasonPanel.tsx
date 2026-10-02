@@ -141,12 +141,12 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
         <LevelTrack level={me.level} ranks={ladder} className="mt-3" />
         <div className="mt-3 flex flex-wrap gap-1.5">
           {ladder.slice(0, 5).map((rank) => (
-            <Chip key={rank.key} className="border-white/12 bg-white/[0.03] text-mist-400">
+            <Chip key={rank.key} tone="neutral">
               {rank.label} · Lv {rank.level_from}
             </Chip>
           ))}
-          <Chip className="border-white/12 bg-white/[0.03] text-mist-400">…</Chip>
-          <Chip className="border-white/12 bg-white/[0.03] text-mist-400">
+          <Chip tone="neutral">…</Chip>
+          <Chip tone="neutral">
             {ladder[ladder.length - 1].label} · Lv {ladder[ladder.length - 1].level_from}
           </Chip>
         </div>

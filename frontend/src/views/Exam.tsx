@@ -648,7 +648,7 @@ export default function Exam({
 
         {!finished && <SaveStatus status={sync} />}
         {finished ? (
-          <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-300" icon={<CheckCircle2 className="size-3.5" />}>
+          <Chip tone="mint" icon={<CheckCircle2 className="size-3.5" />}>
             Submitted · {state.grade}
           </Chip>
         ) : (
@@ -733,7 +733,7 @@ export default function Exam({
                   className="min-w-0"
                   chips={
                     <>
-                      <Chip className="border-nova-500/28 bg-nova-500/12 text-nova-300">
+                      <Chip tone="nova">
                         Question {current.position || index + 1}
                       </Chip>
                       <Chip>{current.points} pts</Chip>

@@ -882,11 +882,11 @@ function RankedSoloPanel() {
         <Card className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">Find a match</h2>
-            <Chip className="border-nova-500/30 bg-nova-500/12 text-nova-300" icon={<SignalHigh className="size-3" />}>
+            <Chip tone="nova" icon={<SignalHigh className="size-3" />}>
               {courses.length} arena{courses.length === 1 ? '' : 's'} open
             </Chip>
             {queueTotal > 0 && (
-              <Chip className="border-mint-400/35 bg-mint-400/10 text-mint-300" icon={<Flame className="size-3" />}>
+              <Chip tone="mint" icon={<Flame className="size-3" />}>
                 {queueTotal} player{queueTotal === 1 ? '' : 's'} queueing now
               </Chip>
             )}
@@ -985,7 +985,7 @@ function RankedSoloPanel() {
             <div className="flex flex-wrap items-center gap-2">
               <Crown className="size-4 text-gold-300" />
               <h2 className="font-display text-[0.95rem] font-extrabold text-mist-50">The ranked ladder</h2>
-              <Chip className="border-gold-400/30 bg-gold-400/12 text-gold-200" icon={<Medal className="size-3" />}>
+              <Chip tone="gold" icon={<Medal className="size-3" />}>
                 {meta.tiers.length} badges
               </Chip>
             </div>

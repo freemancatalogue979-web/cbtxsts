@@ -287,9 +287,9 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
         <Button variant="ghost" size="sm" icon={<ChevronLeft className="size-4" />} onClick={onExit} className="-ml-1">
           Decks
         </Button>
-        <Chip className="border-white/12 bg-white/6 text-mist-300">{payload.deck.name}</Chip>
+        <Chip tone="neutral">{payload.deck.name}</Chip>
         <Chip className={stateClass}>{card.state}</Chip>
-        {card.topic && <Chip className="hidden border-white/12 bg-white/6 text-mist-400 sm:inline-flex">{card.topic}</Chip>}
+        {card.topic && <Chip tone="neutral" className="hidden sm:inline-flex">{card.topic}</Chip>}
         <div className="ml-auto flex items-center gap-2">
           <Character
             mood={!flipped ? 'idle' : card.state === 'new' ? 'think' : 'cheer'}
@@ -298,7 +298,7 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
             className="-my-2 hidden sm:block"
             label="Arena hero"
           />
-          <Chip className="border-white/12 bg-white/6 text-mist-300" icon={<Timer className="size-3.5" />}>
+          <Chip tone="neutral" icon={<Timer className="size-3.5" />}>
             {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
           </Chip>
           <Button
@@ -349,7 +349,7 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
           <Card className="card-raised relative min-h-56 w-full overflow-hidden p-5 sm:min-h-64">
             <Scenery layer="arena" className="opacity-60" />
             <div className="relative flex items-center justify-between gap-2">
-              <Chip className="border-white/12 bg-white/6 text-mist-400">
+              <Chip tone="neutral">
                 {mode === 'q_to_a' ? 'Question' : 'Answer'}
               </Chip>
               <div className="flex items-center gap-1.5">
@@ -624,10 +624,10 @@ export default function FlashcardsPanel() {
               {progress ? `${progress.reviewed_today} of ${progress.goal} cards reviewed · ${progress.due_total} due now` : 'Loading your study plan…'}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Chip className="border-white/12 bg-white/6 text-mist-300">🔥 {progress?.study_days ?? 0}-day study</Chip>
-              <Chip className="border-white/12 bg-white/6 text-mist-300">{progress?.total_cards ?? 0} cards</Chip>
-              <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">{progress?.mastered ?? 0} mastered</Chip>
-              <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{progress?.mastery ?? 0}% mastery</Chip>
+              <Chip tone="neutral">🔥 {progress?.study_days ?? 0}-day study</Chip>
+              <Chip tone="neutral">{progress?.total_cards ?? 0} cards</Chip>
+              <Chip tone="mint">{progress?.mastered ?? 0} mastered</Chip>
+              <Chip tone="nova">{progress?.mastery ?? 0}% mastery</Chip>
             </div>
           </div>
           <div className="flex w-full gap-2 sm:w-auto">
@@ -646,7 +646,7 @@ export default function FlashcardsPanel() {
           title="Decks"
           subtitle="Arena decks, plus everything you build from the bank."
           icon={<Layers className="size-4" />}
-          action={<Chip className="border-white/12 bg-white/6 text-mist-400">{decks.length} decks</Chip>}
+          action={<Chip tone="neutral">{decks.length} decks</Chip>}
         />
 
         {!data && (
@@ -687,7 +687,7 @@ export default function FlashcardsPanel() {
                     <h3 className="text-[0.92rem] leading-snug font-extrabold break-words text-mist-50">{deck.name}</h3>
                     <p className="mt-0.5 line-clamp-2 text-[0.76rem] font-medium text-mist-500">{deck.description || 'Custom deck'}</p>
                   </div>
-                  <Chip className={deck.is_system ? 'border-nova-500/25 bg-nova-500/10 text-nova-200' : 'border-white/12 bg-white/6 text-mist-400'}>
+                  <Chip tone={deck.is_system ? 'nova' : 'neutral'}>
                     {deck.is_system ? 'Arena' : 'Mine'}
                   </Chip>
                 </div>
@@ -755,10 +755,10 @@ export default function FlashcardsPanel() {
             })}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Chip className="border-white/12 bg-white/6 text-mist-300">{formatNumber(Number(stats.total_reviews ?? 0))} reviews</Chip>
-            <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">{String(stats.accuracy ?? 0)}% known</Chip>
-            <Chip className="border-white/12 bg-white/6 text-mist-300">{String(stats.streak_days ?? 0)} study days</Chip>
-            <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">
+            <Chip tone="neutral">{formatNumber(Number(stats.total_reviews ?? 0))} reviews</Chip>
+            <Chip tone="mint">{String(stats.accuracy ?? 0)}% known</Chip>
+            <Chip tone="neutral">{String(stats.streak_days ?? 0)} study days</Chip>
+            <Chip tone="nova">
               {Number((stats.next_due as {due_today?: number} | undefined)?.due_today ?? 0)} due today
             </Chip>
           </div>

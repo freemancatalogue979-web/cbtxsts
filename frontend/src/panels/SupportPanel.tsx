@@ -121,7 +121,7 @@ export default function SupportPanel() {
                 <p className="mt-0.5 line-clamp-1 text-[0.76rem] font-semibold text-mist-400">{ticket.preview}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <Chip className={STATUS_STYLE[ticket.status] ?? ''}>{ticket.status_label}</Chip>
-                  <Chip className="border-white/12 bg-white/6 text-mist-400">{ticket.category_label}</Chip>
+                  <Chip tone="neutral">{ticket.category_label}</Chip>
                   <span className="text-[0.66rem] font-black text-mist-600">{ticket.last_message_at ? formatRelative(ticket.last_message_at) : ''}</span>
                 </div>
               </button>
@@ -283,8 +283,8 @@ function TicketThread({id, onBack}: {id: number; onBack: () => void}) {
           </p>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
             <Chip className={STATUS_STYLE[ticket.status] ?? ''}>{ticket.status_label}</Chip>
-            <Chip className="border-white/12 bg-white/6 text-mist-400">{ticket.category_label}</Chip>
-            {ticket.assignee && <Chip className="border-emerald-400/25 bg-emerald-500/8 text-emerald-300">with {ticket.assignee.split('@')[0]}</Chip>}
+            <Chip tone="neutral">{ticket.category_label}</Chip>
+            {ticket.assignee && <Chip tone="mint">with {ticket.assignee.split('@')[0]}</Chip>}
           </div>
         </div>
       </Card>

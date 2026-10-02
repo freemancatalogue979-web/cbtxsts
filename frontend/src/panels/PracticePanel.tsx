@@ -256,10 +256,10 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
           {label} · {Number(summary?.score ?? 0)} points · best combo {Number(summary?.max_combo ?? 0)}x
         </p>
         <div className="relative mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Chip className="border-white/12 bg-white/6 text-mist-300">+{Number(summary?.xp ?? 0)} XP</Chip>
-          <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200">+{Number(summary?.coins ?? 0)} coins</Chip>
-          <Chip className="border-white/12 bg-white/6 text-mist-300">best {Number(summary?.best ?? 0)}</Chip>
-          <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{summary?.new_best ? 'New personal best' : 'Keep pushing'}</Chip>
+          <Chip tone="neutral">+{Number(summary?.xp ?? 0)} XP</Chip>
+          <Chip tone="gold">+{Number(summary?.coins ?? 0)} coins</Chip>
+          <Chip tone="neutral">best {Number(summary?.best ?? 0)}</Chip>
+          <Chip tone="nova">{summary?.new_best ? 'New personal best' : 'Keep pushing'}</Chip>
         </div>
         <div className="relative mt-5 flex flex-wrap justify-center gap-2">
           <Button variant="primary" onClick={onExit}>Back to modes</Button>
@@ -280,8 +280,8 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Chip className="border-white/12 bg-white/6 text-mist-300">{label}</Chip>
-        <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200" icon={<Zap className="size-3.5" />}>
+        <Chip tone="neutral">{label}</Chip>
+        <Chip tone="nova" icon={<Zap className="size-3.5" />}>
           {score} pts
         </Chip>
         <ComboMeter combo={combo} />
@@ -497,7 +497,7 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
         <div className="relative flex items-center gap-2">
           <Skull className="size-4 shrink-0 text-rose-300" />
           <h3 className="min-w-0 truncate text-[0.95rem] font-black text-mist-50">{fight.boss.name}</h3>
-          <Chip className="ml-auto border-white/12 bg-white/6 text-mist-300" icon={<Swords className="size-3.5" />}>
+          <Chip tone="neutral" className="ml-auto" icon={<Swords className="size-3.5" />}>
             {combo > 1 ? `${combo}x combo` : 'combo —'}
           </Chip>
         </div>
@@ -520,13 +520,13 @@ function BossFight({bossKey, onExit}: {bossKey: string; onExit: () => void}) {
         <PracticeClock paused={Boolean(over)} />
         </div>
         <div className="relative mt-3 flex flex-wrap gap-2">
-          <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200" icon={<Zap className="size-3.5" />}>{damage} damage</Chip>
+          <Chip tone="gold" icon={<Zap className="size-3.5" />}>{damage} damage</Chip>
           {fight.boss.lives > 0 && (
-            <Chip className="border-rose-500/25 bg-rose-500/10 text-rose-200" icon={<Heart className="size-3.5" />}>
+            <Chip tone="rose" icon={<Heart className="size-3.5" />}>
               {Math.max(0, lives)} lives
             </Chip>
           )}
-          <Chip className="ml-auto border-white/12 bg-white/6 text-mist-400">
+          <Chip tone="neutral" className="ml-auto">
             {index + 1}/{fight.questions.length}
           </Chip>
         </div>
@@ -1261,10 +1261,10 @@ export default function PracticePanel() {
             <Card className="p-4">
               <SectionHeading title="Your runs" subtitle="Personal bests and recent history" icon={<Trophy className="size-4" />} />
               <div className="mt-3 flex flex-wrap gap-2">
-                <Chip className="border-white/12 bg-white/6 text-mist-300">{String((history.stats as Record<string, number>)?.runs ?? 0)} runs</Chip>
-                <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">{String((history.stats as Record<string, number>)?.accuracy ?? 0)}% accuracy</Chip>
-                <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200">best streak {String((history.stats as Record<string, number>)?.best_streak ?? 0)}</Chip>
-                <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{String((history.stats as Record<string, number>)?.days_played ?? 0)} days played</Chip>
+                <Chip tone="neutral">{String((history.stats as Record<string, number>)?.runs ?? 0)} runs</Chip>
+                <Chip tone="mint">{String((history.stats as Record<string, number>)?.accuracy ?? 0)}% accuracy</Chip>
+                <Chip tone="gold">best streak {String((history.stats as Record<string, number>)?.best_streak ?? 0)}</Chip>
+                <Chip tone="nova">{String((history.stats as Record<string, number>)?.days_played ?? 0)} days played</Chip>
               </div>
               <ul className="mt-3 grid gap-1.5">
                 {((history.runs as Record<string, unknown>[]) ?? []).slice(0, 6).map((row) => (
@@ -1272,7 +1272,7 @@ export default function PracticePanel() {
                     <span className="min-w-0 flex-1 truncate text-[0.8rem] font-bold text-mist-200">{String(row.label ?? row.mode)}</span>
                     <span className="text-[0.74rem] font-semibold text-mist-500">{String(row.correct)}/{String(row.total)}</span>
                     <span className="text-[0.74rem] font-black text-gold-300">{String(row.score)}</span>
-                    {Boolean(row.perfect) && <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">perfect</Chip>}
+                    {Boolean(row.perfect) && <Chip tone="mint">perfect</Chip>}
                   </li>
                 ))}
               </ul>
@@ -1288,7 +1288,7 @@ export default function PracticePanel() {
               <div className="relative flex items-center gap-2">
                 <Skull className="size-4 text-rose-300" />
                 <h3 className="text-[0.95rem] font-black text-mist-50">{community.name}</h3>
-                <Chip className="ml-auto border-white/12 bg-white/6 text-mist-300">{community.contributions} hits</Chip>
+                <Chip tone="neutral" className="ml-auto">{community.contributions} hits</Chip>
               </div>
               <ProgressBar value={community.percent} className="mt-3" />
               <p className="mt-1.5 text-[0.76rem] font-semibold text-mist-500">
@@ -1315,9 +1315,9 @@ export default function PracticePanel() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <Chip className="border-white/12 bg-white/6 text-mist-400">{boss.cycle}</Chip>
+                  <Chip tone="neutral">{boss.cycle}</Chip>
                   {(boss.key === 'daily_boss' || boss.key === 'weekly_boss') && (
-                    <Chip className="border-amber-500/25 bg-amber-500/10 text-amber-200" icon={<AlertTriangle className="size-3" />}>one attempt</Chip>
+                    <Chip tone="gold" icon={<AlertTriangle className="size-3" />}>one attempt</Chip>
                   )}
                 </div>
                 <Button variant="primary" size="sm" className="mt-3 self-start" onClick={() => setFighting(boss.key)}>

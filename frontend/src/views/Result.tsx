@@ -158,14 +158,14 @@ export default function Result({
                 <Award className="size-3.5" /> Grade {state.grade}
               </Chip>
               {state.rank_label && (
-                <Chip className="border-gold-500/30 bg-gold-500/12 px-2.5 py-1 text-[0.76rem] text-gold-300 sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
+                <Chip tone="gold" className="px-2.5 py-1 text-[0.76rem] sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
                   <Medal className="size-3.5" /> {state.rank_label}
                 </Chip>
               )}
-              <Chip className="border-mint-500/30 bg-mint-500/12 px-2.5 py-1 text-[0.76rem] text-mint-300 sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
+              <Chip tone="mint" className="px-2.5 py-1 text-[0.76rem] sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
                 {passed ? <CheckCircle2 className="size-3.5" /> : <X className="size-3.5" />} {passed ? 'Passed' : 'Below pass mark'}
               </Chip>
-              <Chip className="border-white/12 bg-white/6 px-2.5 py-1 text-[0.76rem] text-mist-300 sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
+              <Chip tone="neutral" className="px-2.5 py-1 text-[0.76rem] sm:px-3 sm:py-1.5 sm:text-[0.82rem]">
                 <ScrollText className="size-3.5" /> {state.correct_count}/{summary.total} correct
               </Chip>
             </div>

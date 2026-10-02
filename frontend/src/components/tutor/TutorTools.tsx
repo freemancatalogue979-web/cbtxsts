@@ -603,7 +603,7 @@ export function QuizView({data, savedId, setId, meta, onBack, onSaved, onChange,
         {!finished && q ? (
           <div className="mx-auto max-w-2xl space-y-3">
             <div className="flex flex-wrap gap-1.5">
-              <Chip className="border-nova-400/30 bg-nova-500/15 text-nova-200">{q.type.replace('_', ' ')}</Chip>
+              <Chip tone="nova">{q.type.replace('_', ' ')}</Chip>
               <TopicChip topic={q.topic} />
               <DifficultyChip level={q.difficulty} />
             </div>

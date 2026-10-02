@@ -184,7 +184,7 @@ export default function MysteryPanel() {
             <p className="min-w-0 flex-1 truncate text-[0.98rem] font-black text-mist-50">
               {COVERS[row.cover] ?? '🔍'} {row.title}
             </p>
-            {row.my && <Chip className={solved ? 'border-emerald-400/40 bg-emerald-500/12 text-emerald-300' : 'border-white/12 bg-white/6 text-mist-300'}>{solved ? 'Solved' : `Question ${Math.min((row.my.position ?? 0) + 1, row.my.total || 1)}/${row.my.total || row.question_count}`}</Chip>}
+            {row.my && <Chip tone={solved ? 'mint' : 'neutral'}>{solved ? 'Solved' : `Question ${Math.min((row.my.position ?? 0) + 1, row.my.total || 1)}/${row.my.total || row.question_count}`}</Chip>}
           </div>
         </Card>
 
@@ -195,7 +195,7 @@ export default function MysteryPanel() {
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.74rem] font-black text-mist-400">
               <Chip><Search className="size-3" /> {row.question_count} questions</Chip>
               <Chip>solve at {row.pass_count}</Chip>
-              <Chip className="border-gold-400/40 bg-gold-500/12 text-gold-300"><Sparkles className="size-3" /> +{row.reward_xp} XP · +{row.reward_coins} 🪙</Chip>
+              <Chip tone="gold"><Sparkles className="size-3" /> +{row.reward_xp} XP · +{row.reward_coins} 🪙</Chip>
             </div>
             <Button className="mt-4" size="sm" variant="mint" loading={busy} disabled={row.pool_ready === 0} onClick={() => void begin()} icon={<PackageOpen className="size-4" />}>
               Open the case file
@@ -334,7 +334,7 @@ export default function MysteryPanel() {
             <h2 className="text-[1.05rem] font-black text-mist-50">Mystery cases</h2>
             <p className="text-[0.78rem] font-semibold text-mist-400">Clues, deductions, a real solution — every case teaches a course topic.</p>
           </div>
-          <Chip className="border-gold-400/40 bg-gold-500/12 text-gold-300">{progress.solved}/{progress.total} solved</Chip>
+          <Chip tone="gold">{progress.solved}/{progress.total} solved</Chip>
         </div>
       </Card>
 
@@ -359,7 +359,7 @@ export default function MysteryPanel() {
                     <DifficultyChip level={row.difficulty} />
                     <TopicChip topic={row.topic} />
                     <Chip>{row.clues.length} clues</Chip>
-                    <Chip className="border-gold-400/40 bg-gold-500/12 text-gold-300">+{row.reward_xp} XP</Chip>
+                    <Chip tone="gold">+{row.reward_xp} XP</Chip>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     {solved ? (

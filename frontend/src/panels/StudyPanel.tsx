@@ -264,7 +264,7 @@ function Flashcards({onExit}: {onExit: () => void}) {
           className="min-w-0"
           chips={
             <>
-              <Chip className="border-nova-500/28 bg-nova-500/12 text-nova-300">{card.quiz_title || 'Mixed deck'}</Chip>
+              <Chip tone="nova">{card.quiz_title || 'Mixed deck'}</Chip>
               <DifficultyChip level={card.difficulty} />
             </>
           }
@@ -776,11 +776,11 @@ function HelpHub({onExit}: {onExit: () => void}) {
  <p className="text-[0.66rem] font-bold tracking-wide text-mist-600">{formatRelative(row.created_at)}</p>
         </div>
         {row.status === 'answered' ? (
-          <Chip className={row.was_correct ? 'border-mint-500/30 bg-mint-500/12 text-mint-300' : 'border-flare-500/30 bg-flare-500/12 text-flare-300'}>
+          <Chip tone={row.was_correct ? 'mint' : 'flare'}>
             {row.was_correct ? '✅ Solved' : '❌ Missed'}
           </Chip>
         ) : (
-          <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-300">Waiting</Chip>
+          <Chip tone="gold">Waiting</Chip>
         )}
       </div>
       <p className="mt-2.5 break-words text-[0.86rem] leading-snug font-bold text-mist-50">{row.prompt}</p>
@@ -967,7 +967,7 @@ function Missions({onExit}: {onExit: () => void}) {
                       <p className="truncate text-[0.86rem] font-extrabold text-mist-50">{row.title}</p>
                       <p className="truncate text-[0.72rem] font-medium text-mist-500">{row.detail}</p>
                     </div>
-                    <Chip className="border-gold-500/28 bg-gold-500/12 text-gold-300">+{row.coins}🪙</Chip>
+                    <Chip tone="gold">+{row.coins}🪙</Chip>
                   </div>
                   <div className="mt-2.5 flex items-center gap-2.5">
                     <ProgressBar value={Math.min(100, (row.progress / row.goal) * 100)} className="flex-1" tone="gold" />
@@ -975,7 +975,7 @@ function Missions({onExit}: {onExit: () => void}) {
                       {row.progress}/{row.goal}
                     </span>
                     {row.claimed ? (
-                      <Chip className="border-white/12 text-mist-500">Claimed</Chip>
+                      <Chip tone="muted">Claimed</Chip>
                     ) : (
                       <Button size="sm" variant={done ? 'mint' : 'outline'} disabled={!done} onClick={() => claim(row)} className="shrink-0">
                         {done ? `Claim +${row.xp} XP` : `+${row.xp} XP`}
@@ -1160,7 +1160,7 @@ export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => v
         icon={<GraduationCap className="size-4" />}
         action={
           analytics ? (
-            <Chip className="border-pulse-500/28 bg-pulse-500/12 text-pulse-300" icon={<Brain className="size-3.5" />}>
+            <Chip tone="pulse" icon={<Brain className="size-3.5" />}>
               {analytics.accuracy}% accuracy
             </Chip>
           ) : undefined

@@ -158,7 +158,7 @@ export default function FeedPanel() {
         subtitle="Every XP drop, duel and badge — yours and everyone else's."
         icon={<Activity className="size-4" />}
         action={
-          <Chip className="border-pulse-500/28 bg-pulse-500/12 text-pulse-300" icon={<Globe className="size-3.5" />}>
+          <Chip tone="pulse" icon={<Globe className="size-3.5" />}>
             Live
           </Chip>
         }

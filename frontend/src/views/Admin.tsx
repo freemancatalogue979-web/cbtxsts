@@ -530,7 +530,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
           <p className="min-w-0 flex-1 truncate text-[0.86rem] font-black tracking-tight text-mist-100 sm:flex-none sm:text-[0.92rem]">
             <span className="sm:hidden">Staff console</span>
           </p>
-          <Chip className="hidden border-flare-500/30 bg-flare-500/12 text-flare-300 sm:inline-flex" icon={<Shield className="size-3.5" />}>
+          <Chip tone="flare" className="hidden sm:inline-flex" icon={<Shield className="size-3.5" />}>
             Staff console
           </Chip>
           <div className="ml-auto flex items-center gap-0.5 sm:gap-2">

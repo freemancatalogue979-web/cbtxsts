@@ -594,7 +594,7 @@ export default function Group({
           <span className="tf-orb grid size-14 place-items-center rounded-full border-2 border-black/35 bg-gradient-to-br from-nova-300 to-nova-600 text-ink-950">
             <Users className="size-6" />
           </span>
-          <Chip className="border-white/12 bg-white/6 text-mist-400">Opening the study group…</Chip>
+          <Chip tone="neutral">Opening the study group…</Chip>
         </div>
       </div>
     );

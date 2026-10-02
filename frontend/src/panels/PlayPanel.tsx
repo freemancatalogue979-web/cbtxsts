@@ -67,10 +67,8 @@ function QuizCard({quiz, onStart, index}: {quiz: Quiz; onStart: (quiz: Quiz) => 
                 OP-{String((index ?? 0) + 1).padStart(2, '0')}
               </span>
               {quiz.course && (
-                <Chip className="border-white/12 bg-white/6 text-mist-400 text-[0.66rem]">
-                  <span style={{color: quiz.course.accent}} className="font-black">
-                    {quiz.course.code}
-                  </span>
+                <Chip color={quiz.course.accent} size="xs" className="font-black">
+                  {quiz.course.code}
                 </Chip>
               )}
             </div>

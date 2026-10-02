@@ -581,7 +581,7 @@ function RoomClock({question, reveal}: {question: RoomQuestionPayload; reveal: R
   return (
     <>
       <div className="flex items-center gap-2">
-        <Chip className="border-nova-400/30 bg-nova-500/12 text-nova-200">Question {question.index + 1} / {question.total}</Chip>
+        <Chip tone="nova">Question {question.index + 1} / {question.total}</Chip>
         <span className={`ml-auto font-display text-[0.95rem] font-black tabular-nums ${secondsLeft <= 5 && !reveal ? 'text-flare-400 animate-pulse' : 'text-gold-300'}`}>
           {reveal ? 'Locked' : `${secondsLeft}s`}
         </span>

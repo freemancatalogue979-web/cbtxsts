@@ -24,9 +24,9 @@ function toUtcIso(local: string): string | null {
 
 function QuizStarts({iso, status}: {iso: string | null; status: string}) {
   const label = useCountdown(iso);
-  if (status === 'live') return <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Live now</Chip>;
-  if (status === 'closed') return <Chip className="border-white/12 bg-white/6 text-mist-500">Closed</Chip>;
-  return <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">{label ? `Starts ${label}` : 'Scheduled'}</Chip>;
+  if (status === 'live') return <Chip tone="mint">Live now</Chip>;
+  if (status === 'closed') return <Chip tone="muted">Closed</Chip>;
+  return <Chip tone="gold">{label ? `Starts ${label}` : 'Scheduled'}</Chip>;
 }
 
 /* ------------------------------------------------------------- create form */
@@ -218,16 +218,16 @@ function QuizDetail({quizId, onBack}: {quizId: number; onBack: () => void}) {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <Chip className="border-white/12 bg-white/6 text-mist-300" icon={<Users className="size-3.5" />}>
+          <Chip tone="neutral" icon={<Users className="size-3.5" />}>
             {quiz.participants} joined · {quiz.submitted} submitted
           </Chip>
-          {quiz.per_question_seconds > 0 && <Chip className="border-white/12 bg-white/6 text-mist-300">{quiz.per_question_seconds}s / question</Chip>}
+          {quiz.per_question_seconds > 0 && <Chip tone="neutral">{quiz.per_question_seconds}s / question</Chip>}
           {(quiz.reward_xp > 0 || quiz.reward_coins > 0) && (
-            <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200">
+            <Chip tone="gold">
               +{quiz.reward_xp} XP{quiz.reward_coins ? ` · +${quiz.reward_coins} 🪙` : ''}
             </Chip>
           )}
-          <Chip className="border-white/12 bg-white/6 text-mist-400">Max attempts: {quiz.max_attempts === 0 ? '∞' : quiz.max_attempts}</Chip>
+          <Chip tone="neutral">Max attempts: {quiz.max_attempts === 0 ? '∞' : quiz.max_attempts}</Chip>
         </div>
 
         {part && (
@@ -376,7 +376,7 @@ export default function Quizzes() {
                     Leaderboard
                   </Button>
                   {quiz.my_participation?.status === 'submitted' && (
-                    <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">Score {quiz.my_participation.percentage}%</Chip>
+                    <Chip tone="mint">Score {quiz.my_participation.percentage}%</Chip>
                   )}
                 </div>
               </Card>

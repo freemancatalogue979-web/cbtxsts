@@ -146,7 +146,7 @@ export default function Announcements() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="min-w-0 flex-1 truncate text-[0.9rem] font-extrabold text-mist-50">{row.title}</h3>
-            {row.priority === 'high' && <Chip className="border-flare-500/30 bg-flare-500/12 text-flare-200">High</Chip>}
+            {row.priority === 'high' && <Chip tone="flare">High</Chip>}
             {can('delete_announcements') && (
               <Button size="sm" variant="ghost" onClick={() => void remove(row.id)} icon={<Trash2 className="size-3.5 text-flare-300" />}>
                 <span className="sr-only">Delete</span>

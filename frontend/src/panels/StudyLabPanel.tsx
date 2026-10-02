@@ -256,7 +256,7 @@ export default function StudyLabPanel() {
           </div>
           <div className="flex items-center gap-1.5">
             {overview.streak_days > 0 && (
-              <Chip className="border-amber-400/40 bg-amber-500/12 text-amber-300">
+              <Chip tone="gold">
                 <Flame className="size-3.5" /> {overview.streak_days}-day streak
               </Chip>
             )}
@@ -322,7 +322,7 @@ export default function StudyLabPanel() {
                         <p className="truncate text-[0.95rem] font-extrabold text-mist-50">{row.topic}</p>
                         <Chip className={STATE_STYLE[row.state] ?? 'border-white/12 bg-white/6 text-mist-300'}>{STAGE_LABELS[row.stage] ?? row.state}</Chip>
                         {row.weak && (
-                          <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-300">
+                          <Chip tone="flare">
                             <Target className="size-3" /> weak
                           </Chip>
                         )}
@@ -536,7 +536,7 @@ function TopicScreen({
               </li>
             );
           })}
-          {page.mastery.check_passed && <Chip className="border-gold-400/45 bg-gold-500/14 text-gold-300"><Trophy className="size-3" /> mastered</Chip>}
+          {page.mastery.check_passed && <Chip tone="gold"><Trophy className="size-3" /> mastered</Chip>}
         </ol>
       </Card>
 
@@ -572,7 +572,7 @@ function TopicScreen({
             )}
             <div className="flex flex-wrap items-center gap-2">
               {page.understand.materials.slice(0, 3).map((material) => (
-                <Chip key={material.id} className="border-white/12 bg-white/6 text-mist-300">
+                <Chip key={material.id} tone="neutral">
                   📄 {material.title} · {material.estimated_minutes}m
                 </Chip>
               ))}
@@ -804,7 +804,7 @@ function RunPlayer({
           {feedback && feedback.rewards.length > 0 && (
             <div className="mt-3 flex flex-wrap justify-center gap-1.5">
               {feedback.rewards.map((reward, index) => (
-                <Chip key={index} className="border-gold-400/40 bg-gold-500/12 text-gold-300">
+                <Chip key={index} tone="gold">
                   +{String((reward as Json).amount ?? (reward as Json).xp ?? 1)} {String((reward as Json).kind ?? 'reward')}
                 </Chip>
               ))}
@@ -917,7 +917,7 @@ function MistakeScreen({onBack, onPractice}: {onBack: () => void; onPractice: (t
                 <div className="flex min-w-0 items-start justify-between gap-2">
                   <p className="min-w-0 break-words text-[0.88rem] leading-snug font-bold text-mist-100">{row.question}</p>
                   {row.resolved && (
-                    <Chip className="mt-0.5 shrink-0 border-emerald-400/25 bg-emerald-500/10 text-[0.58rem] text-emerald-300">
+                    <Chip tone="mint" className="mt-0.5 shrink-0 text-[0.58rem]">
                       <CheckCircle2 className="size-3" /> retired
                     </Chip>
                   )}
@@ -926,7 +926,7 @@ function MistakeScreen({onBack, onPractice}: {onBack: () => void; onPractice: (t
                   <span className="max-w-full min-w-0 break-words rounded-lg bg-flare-500/12 px-2 py-1 text-flare-300">Your answer: {row.your_answer || '—'}</span>
                   <span className="max-w-full min-w-0 break-words rounded-lg bg-emerald-500/12 px-2 py-1 text-emerald-300">Correct: {row.correct_answer}</span>
                   <TopicChip topic={row.topic} />
-                  <Chip className="border-white/12 bg-white/6 text-mist-400">×{row.hits} · {row.source}</Chip>
+                  <Chip tone="neutral">×{row.hits} · {row.source}</Chip>
                 </div>
                 {row.why && <p className="mt-2 text-[0.78rem] leading-relaxed font-semibold text-mist-300"><span className="font-black text-mist-500 uppercase">Why:</span> {row.why}</p>}
                 {!row.resolved && (

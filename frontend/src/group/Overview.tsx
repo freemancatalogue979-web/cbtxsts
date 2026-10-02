@@ -90,7 +90,7 @@ export default function Overview() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[1.05rem] font-black text-mist-50">{group.name}</h2>
-              <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{group.code}</Chip>
+              <Chip tone="nova">{group.code}</Chip>
             </div>
             <p className="mt-1 text-[0.8rem] font-medium text-mist-400">{group.description || group.goal || 'A study community inside Absolute Genesis.'}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.74rem] font-semibold text-mist-500">
@@ -166,7 +166,7 @@ export default function Overview() {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    {quiz.status === 'live' ? <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Live</Chip> : <QuizCountdown iso={quiz.starts_at} />}
+                    {quiz.status === 'live' ? <Chip tone="mint">Live</Chip> : <QuizCountdown iso={quiz.starts_at} />}
                   </div>
                 </button>
               </li>
@@ -195,7 +195,7 @@ export default function Overview() {
                     <p className="truncate text-[0.82rem] font-bold text-mist-100">{duel.names.join(' vs ')}</p>
                     <p className="truncate text-[0.7rem] font-semibold text-mist-500">{duel.topic}{duel.public ? '' : ' · private'}</p>
                   </div>
-                  <Chip className={duel.status === 'live' ? 'border-mint-500/30 bg-mint-500/12 text-mint-200' : 'border-white/12 bg-white/6 text-mist-400'}>
+                  <Chip tone={duel.status === 'live' ? 'mint' : 'neutral'}>
                     {duel.status === 'live' ? 'Live' : 'Invited'}
                   </Chip>
                 </button>
@@ -227,7 +227,7 @@ export default function Overview() {
                 <div className="flex items-center gap-2">
                   {row.pinned && <span className="text-[0.62rem] font-black tracking-wide text-gold-300">PINNED</span>}
                   <p className="min-w-0 flex-1 truncate text-[0.82rem] font-bold text-mist-100">{row.title}</p>
-                  {row.priority === 'high' && <Chip className="border-flare-500/30 bg-flare-500/12 text-flare-200">High</Chip>}
+                  {row.priority === 'high' && <Chip tone="flare">High</Chip>}
                 </div>
                 {row.body && <p className="mt-0.5 line-clamp-2 text-[0.74rem] font-medium text-mist-400">{row.body}</p>}
               </li>
@@ -258,9 +258,9 @@ export default function Overview() {
                     </p>
                   </div>
                   {row.status === 'open' ? (
-                    <Chip className="border-gold-500/30 bg-gold-500/12 text-gold-200">Open</Chip>
+                    <Chip tone="gold">Open</Chip>
                   ) : (
-                    <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Answered</Chip>
+                    <Chip tone="mint">Answered</Chip>
                   )}
                 </button>
               </li>

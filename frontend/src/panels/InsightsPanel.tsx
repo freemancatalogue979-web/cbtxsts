@@ -127,12 +127,12 @@ export default function InsightsPanel() {
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Chip className="border-gold-500/25 bg-gold-500/10 text-gold-200" icon={<Flame className="size-3.5" />}>
+                  <Chip tone="gold" icon={<Flame className="size-3.5" />}>
                     {overview.streak}-day streak (best {overview.best_streak})
                   </Chip>
-                  <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">Level {overview.level} · {overview.title}</Chip>
-                  <Chip className="border-white/12 bg-white/6 text-mist-300">Rank #{overview.rank}</Chip>
-                  <Chip className="border-mint-500/25 bg-mint-500/10 text-mint-200">Best exam {overview.best_percentage}%</Chip>
+                  <Chip tone="nova">Level {overview.level} · {overview.title}</Chip>
+                  <Chip tone="neutral">Rank #{overview.rank}</Chip>
+                  <Chip tone="mint">Best exam {overview.best_percentage}%</Chip>
                 </div>
               </>
             )}
@@ -262,7 +262,7 @@ export default function InsightsPanel() {
                 <li key={row.title} className="rounded-2xl border border-white/8 bg-ink-900/50 px-3 py-2.5">
                   <p className="text-[0.84rem] font-extrabold text-mist-100">{row.title}</p>
                   <p className="mt-0.5 text-[0.76rem] font-medium text-mist-500">{row.detail}</p>
-                  <Chip className="mt-2 border-nova-500/25 bg-nova-500/10 text-nova-200">{row.cta}</Chip>
+                  <Chip tone="nova" className="mt-2">{row.cta}</Chip>
                 </li>
               ))}
               {!plan && <Skeleton className="h-24 w-full" />}
@@ -276,8 +276,8 @@ export default function InsightsPanel() {
                 {(plan?.weak_topics as {topic: string; accuracy: number; answered: number; pool: number}[]).map((row) => (
                   <li key={row.topic} className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/8 bg-ink-900/50 px-3 py-2.5">
                     <span className="min-w-0 flex-1 truncate text-[0.82rem] font-bold text-mist-200">{row.topic}</span>
-                    <Chip className="border-rose-500/25 bg-rose-500/10 text-rose-200">{row.accuracy}%</Chip>
-                    <Chip className="border-white/12 bg-white/6 text-mist-400">{row.pool} in bank</Chip>
+                    <Chip tone="rose">{row.accuracy}%</Chip>
+                    <Chip tone="neutral">{row.pool} in bank</Chip>
                   </li>
                 ))}
               </ul>

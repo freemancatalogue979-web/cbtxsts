@@ -622,7 +622,7 @@ function UsersTab({range}: {range: AdminRange}) {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 truncate text-[0.84rem] font-bold text-mist-50">
                     {u.name}
-                    {u.ai_disabled && <Chip className="border-flare-400/40 text-flare-200">AI off</Chip>}
+                    {u.ai_disabled && <Chip tone="flare">AI off</Chip>}
                     {u.custom_quota && <Chip>custom quota</Chip>}
                   </span>
                   <span className="block truncate text-[0.7rem] text-mist-500">@{u.username} · today {u.today}/{u.daily_limit || '∞'} · month {u.month}{u.last_used ? ` · last ${formatRelative(u.last_used)}` : ''}</span>
@@ -761,7 +761,7 @@ function ModelsTab({providers, settings, set, onProviders}: {providers: Provider
           </button>
           {providers.map((p) => (
             <button key={p.id} onClick={() => set({ai_provider: p.id, ai_model: ''})} className={`rounded-xl border px-3 py-2.5 text-left ${settings.ai_provider === p.id ? 'border-nova-400/70 bg-nova-500/15' : 'border-white/10 hover:bg-white/[0.05]'}`}>
-              <span className="flex items-center gap-1.5 text-[0.84rem] font-bold text-mist-50">{p.name}{p.active && <Chip className="border-mint-400/40 text-mint-200">in use</Chip>}</span>
+              <span className="flex items-center gap-1.5 text-[0.84rem] font-bold text-mist-50">{p.name}{p.active && <Chip tone="mint">in use</Chip>}</span>
               <span className={`block text-[0.72rem] ${p.configured ? 'text-mint-300' : 'text-flare-300'}`}>{p.configured ? 'Key set' : 'No key yet — add one below'}</span>
             </button>
           ))}
@@ -858,7 +858,7 @@ function KeyRow({provider: p, onProviders}: {provider: ProviderInfo; onProviders
     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-[0.84rem] font-bold text-mist-50">{p.name}</span>
-        {p.active && <Chip className="border-mint-400/40 text-mint-200">in use</Chip>}
+        {p.active && <Chip tone="mint">in use</Chip>}
         <span className={`text-[0.72rem] ${p.configured ? 'text-mint-300' : 'text-flare-300'}`}>
           {where}
           {p.key_hint ? <code className="ml-1 rounded bg-white/10 px-1 text-mist-200">{p.key_hint}</code> : null}

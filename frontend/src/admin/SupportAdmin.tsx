@@ -170,11 +170,11 @@ export default function SupportAdmin() {
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Chip className={STATUS_STYLE[row.status] ?? ''}>{row.status_label}</Chip>
-                    <Chip className="border-white/12 bg-white/6 text-mist-400">{row.category_label}</Chip>
+                    <Chip tone="neutral">{row.category_label}</Chip>
                     {row.assignee ? (
-                      <Chip className="border-emerald-400/25 bg-emerald-500/8 text-emerald-300">@{row.assignee.split('@')[0]}</Chip>
+                      <Chip tone="mint">@{row.assignee.split('@')[0]}</Chip>
                     ) : (
-                      <Chip className="border-amber-400/25 bg-amber-500/8 text-amber-300">unassigned</Chip>
+                      <Chip tone="gold">unassigned</Chip>
                     )}
                     <span className="ml-auto text-[0.64rem] font-black text-mist-600">{row.last_message_at ? formatRelative(row.last_message_at) : ''}</span>
                   </div>

@@ -12,7 +12,7 @@ import {
   ShieldCheck, Sparkles, Square, Tags, Timer, Wand2, X, XCircle, Zap,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Button, Card, Modal, Skeleton, Switch, TextArea, ToneIcon, type Tone} from '../components/ui';
+import {Button, Card, Chip as UiChip, Modal, Skeleton, Switch, TextArea, ToneIcon, type Tone} from '../components/ui';
 import {api, type ImportJob} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {aiStaffApi, type AITask, type AITaskEstimate, type AITaskLimits, type AITaskParams, type AITaskProposal} from '../lib/tutor';
@@ -453,9 +453,9 @@ function Job({icon, tone, title, sub, on, onChange, children}: {icon: typeof Tag
 
 function Chip({on, onClick, children, title}: {on: boolean; onClick: () => void; children: ReactNode; title?: string}) {
   return (
-    <button type="button" onClick={onClick} title={title} className={`rounded-full border px-2.5 py-1 text-[0.7rem] font-extrabold transition ${on ? 'border-nova-400/60 bg-nova-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-mist-300 hover:border-white/20 hover:text-mist-100'}`}>
+    <UiChip tone="nova" selected={on} onClick={onClick} title={title}>
       {children}
-    </button>
+    </UiChip>
   );
 }
 

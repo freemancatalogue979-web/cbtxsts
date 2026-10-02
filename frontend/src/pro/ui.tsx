@@ -1,5 +1,6 @@
 /** Pro Mode primitives — flat, quiet, one accent. Styles live in pro.css. */
 import type {ReactNode} from 'react';
+import {Chip as UiChip} from '../components/ui';
 
 /** Decorative orbit rings behind a banner's icon — pure SVG, no motion. */
 function HeroArt() {
@@ -57,11 +58,11 @@ export function PageHeader({eyebrow, title, description, actions, icon, hue = 'v
 
 /** Small rounded label with an optional icon (hero meta, filters). */
 export function Chip({icon, children, hue}: {icon?: ReactNode; children: ReactNode; hue?: Hue}) {
+  // Built on the shared chip system; `.pro-chip` only re-skins it for Pro.
   return (
-    <span className="pro-chip" data-hue={hue}>
-      {icon}
+    <UiChip className="pro-chip" size="md" icon={icon} color={hue ? `var(--pro-h-${hue})` : 'var(--pro-accent)'}>
       {children}
-    </span>
+    </UiChip>
   );
 }
 
