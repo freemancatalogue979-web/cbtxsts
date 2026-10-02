@@ -9,7 +9,7 @@
  */
 import {useCallback, useEffect, useState} from 'react';
 import {CalendarDays, Clock, Loader2, Pencil, Plus, Trash2, Trophy, Users, Zap, CalendarDaysIcon} from 'lucide-react';
-import {Button, Card, Chip, Field, Modal, Select, TextInput, SwitchRow} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, PageBanner, Select, SwitchRow, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {uiClick} from '../lib/sfx';
@@ -233,14 +233,18 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <CalendarDays className="size-5 text-nova-300" />
-        <h2 className="text-[1.05rem] font-extrabold text-mist-50">Arena events</h2>
-        <span className="text-[0.7rem] font-bold text-mist-500">{formatNumber(total)} on the calendar</span>
-        <Button className="ml-auto" size="sm" onClick={openCreator} icon={<Plus className="size-4" />}>
-          New event
-        </Button>
-      </div>
+      <PageBanner
+        eyebrow="Content · Calendar"
+        tone="cyan"
+        title="Arena events"
+        subtitle={`${formatNumber(total)} on the calendar — timed arenas with their own rules and rewards.`}
+        icon={<CalendarDays className="size-4" />}
+        action={
+          <Button size="sm" onClick={openCreator} icon={<Plus className="size-4" />}>
+            New event
+          </Button>
+        }
+      />
 
       {loading && (
         <Card className="flex items-center justify-center gap-2 p-8 text-[0.8rem] font-bold text-mist-500">

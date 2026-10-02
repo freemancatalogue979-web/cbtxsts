@@ -3,7 +3,7 @@
  * Everything is enforced by the API; this screen only edits and reports. */
 import {Activity, AlertTriangle, ArrowRight, Ban, Bot, Check, CheckCircle2, CircleDashed, ClipboardCheck, Radar, ShieldCheck, Sparkles, ChevronLeft, ChevronRight, Coins, Cpu, Eraser, Gauge, KeyRound, LayoutDashboard, ListFilter, MessagesSquare, PlugZap, RefreshCw, RotateCcw, Save, ScrollText, Search, Settings2, SlidersHorizontal, ThumbsDown, ThumbsUp, ToggleRight, Users, Wand2, X, Eye, EyeOff, Trash2, FileTextIcon, UserRoundIcon} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Button, Card, Chip, Field, Modal, Select, Skeleton, StatTile, TextInput} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, PageBanner, Select, Skeleton, StatTile, TextInput} from '../components/ui';
 import {formatNumber, formatRelative} from '../lib/format';
 import {
   aiStaffApi, type AIStaffStatus, tutorAdminApi, type AdminRange, type ProviderInfo, type TutorAdminSettings, type TutorAdminUser, type TutorAdminUserDetail, type TutorLog,
@@ -114,10 +114,7 @@ export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
   if (teacherOnly) {
     return (
       <div className="space-y-3">
-        <header className="flex items-center gap-3 rounded-2xl border border-nova-400/20 bg-nova-500/8 p-3.5">
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white"><Wand2 className="size-5" /></span>
-          <div><h2 className="text-[1rem] font-extrabold text-mist-50">Teacher AI workspace</h2><p className="text-[.72rem] font-semibold text-mist-400">Analyze learning evidence and draft lessons with read-only platform tools.</p></div>
-        </header>
+        <PageBanner eyebrow="Teacher tools" tone="pulse" title="Teacher AI workspace" subtitle="Analyze learning evidence and draft lessons with read-only platform tools." icon={<Wand2 className="size-4" />} />
         <AIAssistant initialPrompt={initialPrompt} />
       </div>
     );
@@ -125,26 +122,21 @@ export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
 
   return (
     <div className="space-y-3">
-      <header className="flex min-w-0 flex-wrap items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-[0_8px_24px_-8px_rgba(168,85,247,0.7),inset_0_1px_0_rgba(255,255,255,0.3)]">
-          <Bot className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display truncate text-[1.1rem] leading-tight font-extrabold text-mist-50">AI Tutor & Assistant</h2>
-          <p className="truncate text-[0.74rem] text-mist-400">Control, limits, spend and quality for the players' tutor and the staff assistant.</p>
-        </div>
-        <div className="flex basis-full flex-wrap items-center gap-1.5 sm:basis-auto">
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-extrabold ${active?.configured ? 'border-mint-400/35 bg-mint-500/10 text-mint-200' : 'border-flare-400/35 bg-flare-500/10 text-flare-200'}`}>
-            <span className={`size-1.5 rounded-full ${active?.configured ? 'bg-mint-400' : 'bg-flare-400'}`} />
-            {active ? (active.configured ? `${active.name} connected` : `${active.name}: no key`) : 'Checking…'}
-          </span>
-          {settings && (
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-extrabold ${settings.ai_enabled ? 'border-white/10 bg-white/[0.04] text-mist-200' : 'border-gold-400/40 bg-gold-500/12 text-gold-200'}`}>
-              {settings.ai_enabled ? 'Tutor on' : 'Tutor switched off'}
-            </span>
-          )}
-        </div>
-      </header>
+      <PageBanner
+        eyebrow="System · AI Core"
+        tone="nova"
+        title="AI Tutor & Assistant"
+        subtitle="Control, limits, spend and quality for the players' tutor and the staff assistant."
+        icon={<Bot className="size-4" />}
+        action={
+          <>
+            <Chip tone={active?.configured ? 'mint' : active ? 'flare' : 'muted'} dot>
+              {active ? (active.configured ? `${active.name} connected` : `${active.name}: no key`) : 'Checking…'}
+            </Chip>
+            {settings && <Chip tone={settings.ai_enabled ? 'neutral' : 'gold'}>{settings.ai_enabled ? 'Tutor on' : 'Tutor switched off'}</Chip>}
+          </>
+        }
+      />
       <nav className="no-scrollbar -mx-1 flex min-w-0 items-end gap-3 overflow-x-auto px-1 pb-0.5" aria-label="AI Tutor sections">
         {GROUPS.map((group, gi) => (
           <div key={group.label} className={`flex shrink-0 flex-col gap-1 ${gi ? 'border-l border-white/8 pl-3' : ''}`}>

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES} from '../lib/format';
 import {useSession} from '../store/session';
@@ -116,7 +116,9 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="People · Roster"
+        tone="nova"
         title="Players"
         subtitle={`${formatNumber(total)} registered · click a row for the full sheet`}
         icon={<Users className="size-4" />}
@@ -476,7 +478,9 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="People · Leaderboards"
+        tone="cyan"
         title="Results"
         subtitle="Per-exam leaderboards, integrity review, question stats and CSV export."
         icon={<BarChart3 className="size-4" />}
@@ -706,7 +710,9 @@ function ClaimsTab({onChanged}: {onChanged: () => void}) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="People · Rewards desk"
+        tone="gold"
         title="Prize claims"
         subtitle="Approve, deliver or reject — the player is notified instantly."
         icon={<PackageCheck className="size-4" />}

@@ -7,7 +7,7 @@
  */
 import {CheckCircle2, Inbox, Loader2, Lock, Search, Send, UserCog} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, PageBanner, Select, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
@@ -76,7 +76,9 @@ export default function SupportAdmin() {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
       <section className="min-w-0 space-y-2.5">
-        <SectionHeading
+        <PageBanner
+          eyebrow="People · Help desk"
+          tone="flare"
           icon={<Inbox className="size-4" />}
           title="Support queue"
           subtitle={page ? `${page.open_count} open · ${page.unread_count} waiting on a reply · ${page.total} total` : 'Loading…'}

@@ -1,5 +1,5 @@
 /** Messages — one inbox for teacher ↔ student (and existing friend) conversations. */
-import {ArrowLeft, Check, CheckCheck, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Search, Send, Share2, ShieldOff, Users} from 'lucide-react';
+import {ArrowLeft, Check, CheckCheck, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MessagesSquare, MoreVertical, Paperclip, Search, Send, Share2, ShieldOff, Users} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent} from 'react';
 import {ApiError, api} from '../lib/api';
 import {fileUrl, formatBytes, teachers, type Conversation, type TMaterial, type TQuiz} from '../lib/teachers';
@@ -60,7 +60,7 @@ export default function Messages() {
   return (
     <ProScope>
       <div className={activeId ? 'max-md:hidden' : ''}>
-        <PageHeader eyebrow="Inbox" title="Messages" description="Conversations with your teachers, students and friends. Contact details stay private." />
+        <PageHeader eyebrow="Inbox" hue="blue" icon={<MessagesSquare />} title="Messages" description="Conversations with your teachers, students and friends. Contact details stay private." />
       </div>
       <section className="pro-card t-chat">
         <div className={`t-chat-list ${activeId ? 'max-[899px]:hidden' : ''}`}>

@@ -1,7 +1,7 @@
 /** Admin: a cross-group moderation list of every study group in the arena. */
 import {MessageSquare, Search, Users, UsersIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Modal, PageBanner, Skeleton, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -33,7 +33,9 @@ export default function GroupsAdmin() {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="People · Squads"
+        tone="mint"
         title="Study groups"
         subtitle={`${formatNumber(total)} groups · click a row for the full sheet`}
         icon={<Users className="size-4" />}

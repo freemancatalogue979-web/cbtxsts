@@ -1,8 +1,8 @@
 /** Admin console shell: rail navigation, live overview, and arena settings. */
-import {Activity, Award, LogOut, Bot, Presentation, BarChart3, Bell, BookOpen, Building2, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
+import {Activity, Award, LogOut, Bot, Presentation, Save, BarChart3, Bell, BookOpen, Building2, CalendarDays, Coins, FileText, Gamepad2, Gauge, Gift, GraduationCap, LayoutGrid, LifeBuoy, Megaphone, Menu, PackageCheck, ScrollText, Search, Settings, Shield, Sparkles, Swords, Trophy, Users, X, Zap} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
-import {Avatar, Button, Card, Chip, Field, IconButton, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, Field, IconButton, PageBanner, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
 import {Wordmark} from '../components/Brand';
 import {api} from '../lib/api';
 import {lazyScreen} from '../lib/lazy';
@@ -78,6 +78,21 @@ function Overview({onGoto}: {onGoto: (section: Section) => void}) {
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="show" className="space-y-4 sm:space-y-6">
+      <motion.div variants={staggerItem}>
+        <PageBanner
+          eyebrow="Staff console · Live"
+          tone="nova"
+          title="Command centre"
+          subtitle="The whole arena at a glance — refreshes every 15 seconds while you watch."
+          icon={<Gauge className="size-4" />}
+          stats={[
+            {label: 'online now', value: formatNumber(data.online), tone: 'mint'},
+            {label: 'in progress', value: formatNumber(data.in_progress), tone: 'pulse'},
+            {label: 'duels live', value: formatNumber(data.duels_live), tone: 'flare'},
+            {label: 'claims pending', value: formatNumber(data.prize_claims_pending), tone: data.prize_claims_pending ? 'gold' : 'cyan'},
+          ]}
+        />
+      </motion.div>
       <motion.div variants={staggerItem} className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <StatTile label="Players" value={formatNumber(data.players)} icon={<Users className="size-5" />} tone="nova" hint={`${data.online} online now`} />
         <StatTile label="Submissions" value={formatNumber(data.submissions)} icon={<ScrollText className="size-5" />} tone="pulse" hint={`${data.in_progress} in progress`} />
@@ -239,6 +254,18 @@ function SettingsPanel() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      <PageBanner
+        eyebrow="System · Configuration"
+        tone="gold"
+        title="Settings"
+        subtitle="Identity, gameplay switches and grading — saved changes broadcast to every connected player."
+        icon={<Settings className="size-4" />}
+        action={
+          <Button size="sm" onClick={save} loading={saving} icon={<Save className="size-4" />}>
+            Save
+          </Button>
+        }
+      />
       <Card className="p-4 sm:p-6">
         <SectionHeading title="Arena identity" subtitle="Shown on the login screen, slips and broadcasts." icon={<Shield className="size-4" />} />
         <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">

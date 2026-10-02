@@ -3,6 +3,7 @@ import {BadgeCheck, Ban, Check, CircleHelp, Eye, EyeOff, FileText, Flag, Graduat
 import {useCallback, useEffect, useState} from 'react';
 import {ApiError} from '../lib/api';
 import {FORMAT_LABEL, fileUrl, teacherAdmin, type AdminReport, type AdminTeacherDetail, type AdminTeacherRow} from '../lib/teachers';
+import {PageBanner} from '../components/ui';
 import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, timeAgo} from '../teach/ui';
@@ -44,39 +45,34 @@ export default function TeachersAdmin() {
 
   return (
     <ProScope>
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="pro-eyebrow">Teacher Network</p>
-          <h1 className="pro-h2">Teachers</h1>
-          <p className="pro-secondary">Verify applications, manage accounts and moderate reports.</p>
-        </div>
+      <PageBanner
+        eyebrow="People · Teacher Network"
+        tone="nova"
+        title="Teachers"
+        subtitle="Verify applications, manage accounts and moderate reports. Every decision notifies the teacher."
+        icon={<GraduationCap className="size-4" />}
+        stats={
+          summary
+            ? [
+                {label: 'pending', value: summary.counts.pending ?? 0, tone: 'gold'},
+                {label: 'verified', value: summary.verified, tone: 'mint'},
+                {label: 'suspended', value: summary.counts.suspended ?? 0, tone: 'flare'},
+                {label: 'open reports', value: summary.open_reports, tone: summary.open_reports ? 'flare' : 'pulse'},
+                {label: 'relationships', value: summary.relationships, tone: 'cyan'},
+                {label: 'requests', value: summary.pending_requests, tone: 'pulse'},
+              ]
+            : undefined
+        }
+      >
         <div className="pro-tabs" role="tablist">
           <button type="button" role="tab" className="pro-tab" aria-selected={view === 'teachers'} onClick={() => setView('teachers')}>
-            Teachers
+            <GraduationCap className="size-4" /> Teachers
           </button>
           <button type="button" role="tab" className="pro-tab" aria-selected={view === 'reports'} onClick={() => setView('reports')}>
-            Reports{summary?.open_reports ? ` · ${summary.open_reports}` : ''}
+            <Flag className="size-4" /> Reports{summary?.open_reports ? ` · ${summary.open_reports}` : ''}
           </button>
         </div>
-      </header>
-
-      {summary && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {[
-            ['Pending', summary.counts.pending ?? 0],
-            ['Verified', summary.verified],
-            ['Suspended', summary.counts.suspended ?? 0],
-            ['Open reports', summary.open_reports],
-            ['Active relationships', summary.relationships],
-            ['Pending requests', summary.pending_requests],
-          ].map(([k, v]) => (
-            <div key={k} className="t-kpi">
-              <span>{k}</span>
-              <b>{v}</b>
-            </div>
-          ))}
-        </div>
-      )}
+      </PageBanner>
 
       {view === 'reports' ? (
         <Reports onChanged={load} onOpenTeacher={setOpenId} />

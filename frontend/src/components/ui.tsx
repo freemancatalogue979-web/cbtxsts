@@ -2,7 +2,7 @@
 import {Check, CheckCircle2, Copy, Loader2, Minus, Phone, Plus, X} from 'lucide-react';
 import {AnimatePresence, motion, useDragControls} from 'motion/react';
 import type {ButtonHTMLAttributes, ComponentType, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
-import {createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
+import {cloneElement, createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
 import {avatarStyle, clamp} from '../lib/format';
 import {auraOf, frameOf, portraitOf} from '../lib/cosmetics';
 import type {CosmeticsRef} from '../lib/cosmetics';
@@ -853,6 +853,81 @@ export function SectionHeading({
       </div>
       {action}
     </div>
+  );
+}
+
+/* ---------------------------------------------------------- page banner */
+export type BannerTone = 'nova' | 'pulse' | 'flare' | 'mint' | 'gold' | 'cyan';
+export type BannerStat = {label: string; value: ReactNode; tone?: BannerTone};
+
+/**
+ * PageBanner — the header every console / network page opens with.
+ *
+ * A tinted, glowing card: icon medallion, eyebrow with a live dot, display
+ * title, subtitle, optional quick stats and a footer slot (tabs, filters).
+ * API is a superset of `SectionHeading` (title / subtitle / icon / action), so
+ * swapping one for the other is a rename. Pro mode re-skins it flat.
+ */
+export function PageBanner({
+  title,
+  subtitle,
+  icon,
+  action,
+  eyebrow,
+  tone = 'nova',
+  stats,
+  children,
+  className = '',
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+  eyebrow?: ReactNode;
+  tone?: BannerTone;
+  stats?: (BannerStat | false | null | undefined)[];
+  children?: ReactNode;
+  className?: string;
+}) {
+  const glyph = (cls: string) => (isValidElement<{className?: string}>(icon) ? cloneElement(icon, {className: cls}) : icon);
+  const shown = (stats ?? []).filter(Boolean) as BannerStat[];
+  return (
+    <header className={`pbanner ${className}`} data-tone={tone}>
+      {icon && (
+        <span className="pbanner-watermark" aria-hidden="true">
+          {glyph('pbanner-watermark-ico')}
+        </span>
+      )}
+      <div className="pbanner-row">
+        {icon && (
+          <span className="pbanner-medal" aria-hidden="true">
+            {glyph('pbanner-medal-ico')}
+          </span>
+        )}
+        <div className="pbanner-copy">
+          {eyebrow && (
+            <p className="pbanner-eyebrow">
+              <i aria-hidden="true" />
+              {eyebrow}
+            </p>
+          )}
+          <h1 className="pbanner-title">{title}</h1>
+          {subtitle && <p className="pbanner-sub">{subtitle}</p>}
+        </div>
+        {action && <div className="pbanner-actions">{action}</div>}
+      </div>
+      {shown.length > 0 && (
+        <div className="pbanner-stats">
+          {shown.map((stat) => (
+            <span key={stat.label} className="pbanner-stat" data-tone={stat.tone ?? tone}>
+              <b>{stat.value}</b>
+              <span>{stat.label}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {children && <div className="pbanner-foot">{children}</div>}
+    </header>
   );
 }
 

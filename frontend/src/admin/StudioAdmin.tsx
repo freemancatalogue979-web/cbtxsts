@@ -7,7 +7,7 @@
  */
 import {Activity, AlertTriangle, BarChart3, BookOpen, Boxes, Check, Copy, Eye, Flag, Gem, History, Layers, ListChecks, RefreshCw, Search, ShieldCheck, Sparkles, Upload, X, EyeIcon, FileQuestionIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, DifficultyChip, EmptyState, Modal, SectionHeading, Segmented, Select, Skeleton, StatTile, TextInput, TopicChip} from '../components/ui';
+import {Button, Card, Chip, DifficultyChip, EmptyState, Modal, PageBanner, SectionHeading, Segmented, Select, Skeleton, StatTile, TextInput, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -851,22 +851,25 @@ export default function StudioAdmin() {
   const [pane, setPane] = useState<Pane>('pulse');
   return (
     <div className="min-w-0 space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Question engine"
+        tone="pulse"
         title="Arena Studio"
         subtitle="Bank health, bulk editing, review queues, blueprints and builders — all backed by the authoritative question engine."
         icon={<Sparkles className="size-4" />}
-        action={<Chip tone="mint">answers are server-owned</Chip>}
-      />
-      <Segmented
-        value={pane}
-        onChange={setPane}
-        options={[
-          {value: 'pulse', label: 'Pulse', icon: Activity},
-          {value: 'bank', label: 'Question bank', icon: BookOpen},
-          {value: 'review', label: 'Review & flags', icon: AlertTriangle},
-          {value: 'builders', label: 'Builders', icon: Layers},
-        ]}
-      />
+        action={<Chip tone="mint" dot>answers are server-owned</Chip>}
+      >
+        <Segmented
+          value={pane}
+          onChange={setPane}
+          options={[
+            {value: 'pulse', label: 'Pulse', icon: Activity},
+            {value: 'bank', label: 'Question bank', icon: BookOpen},
+            {value: 'review', label: 'Review & flags', icon: AlertTriangle},
+            {value: 'builders', label: 'Builders', icon: Layers},
+          ]}
+        />
+      </PageBanner>
       {pane === 'pulse' && <Pulse />}
       {pane === 'bank' && <Bank />}
       {pane === 'review' && <Review />}

@@ -1,28 +1,5 @@
 /** Teacher Studio — the professional teaching workspace. */
-import {
-  BadgeCheck,
-  BookOpen,
-  CalendarClock,
-  Check,
-  ChevronRight,
-  ExternalLink,
-  GraduationCap,
-  Inbox,
-  LayoutDashboard,
-  ListChecks,
-  Loader2,
-  Lock,
-  MessageSquare,
-  MoreHorizontal,
-  NotebookPen,
-  Plus,
-  Search,
-  Star,
-  UserPlus,
-  UserRound,
-  Users,
-  X,
-} from 'lucide-react';
+import {BadgeCheck, BookOpen, CalendarClock, Check, ChevronRight, ExternalLink, GraduationCap, Inbox, LayoutDashboard, ListChecks, Loader2, Lock, MessageSquare, MoreHorizontal, NotebookPen, Plus, Search, Star, UserPlus, UserRound, Users, UsersRound, X} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState, type ReactNode} from 'react';
 import {ApiError} from '../lib/api';
 import {FORMAT_LABEL, teachers, type MyProfile, type Person, type StudentDetail, type StudioOverview, type StudioStudent, type TGroup, type TRequest, type TReview, type TeacherStats} from '../lib/teachers';
@@ -427,7 +404,7 @@ function Requests({onChanged}: {onChanged: () => void}) {
   const c = data?.counts ?? {};
   return (
     <div className="grid min-w-0 gap-4">
-      <PageHeader eyebrow="Teacher Studio" title="Requests" description="Students asking for your help. Respond quickly — response time is shown on your profile." />
+      <PageHeader eyebrow="Teacher Studio" hue="amber" icon={<Inbox />} title="Requests" description="Students asking for your help. Respond quickly — response time is shown on your profile." />
       <Seg
         value={state}
         onChange={setState}
@@ -474,7 +451,7 @@ function Students({groups}: {groups: TGroup[]}) {
   }, [items, term, state]);
   return (
     <div className="grid min-w-0 gap-4">
-      <PageHeader eyebrow="Teacher Studio" title="Students" description="Everyone you teach. Open a student for progress, quiz results and your private notes." />
+      <PageHeader eyebrow="Teacher Studio" hue="teal" icon={<Users />} title="Students" description="Everyone you teach. Open a student for progress, quiz results and your private notes." />
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="pro-search min-w-0 self-start">
           <Search />
@@ -728,6 +705,8 @@ function Groups({groups, onChanged}: {groups: TGroup[]; onChanged: () => void}) 
     <div className="grid min-w-0 gap-4">
       <PageHeader
         eyebrow="Teacher Studio"
+        hue="green"
+        icon={<UsersRound />}
         title="Groups"
         description="Study groups with chat, shared materials and quizzes."
         actions={
@@ -939,7 +918,7 @@ function Reviews() {
   const total = Object.values(data.distribution).reduce((a, b) => a + b, 0);
   return (
     <div className="grid min-w-0 gap-4">
-      <PageHeader eyebrow="Teacher Studio" title="Reviews" description="Only students who completed lessons with you can review. Reply publicly to show you listen." />
+      <PageHeader eyebrow="Teacher Studio" hue="amber" icon={<Star />} title="Reviews" description="Only students who completed lessons with you can review. Reply publicly to show you listen." />
       <div className="pro-card grid gap-5 p-4 sm:grid-cols-[180px_minmax(0,1fr)] md:p-5">
         <div className="grid content-center justify-items-center gap-1 text-center">
           <b className="text-[2.4rem] font-bold leading-none tracking-tight">{data.stats.review_count ? data.stats.rating.toFixed(1) : '—'}</b>
@@ -1036,6 +1015,7 @@ function ProfileView({profile, overview, onProfile}: {profile: MyProfile; overvi
     <div className="grid min-w-0 gap-4">
       <PageHeader
         eyebrow="Teacher Studio"
+        icon={<UserRound />}
         title={
           <span className="inline-flex items-center gap-2">
             Your profile {profile.verified && <VerifiedMark />}

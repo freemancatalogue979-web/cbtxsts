@@ -13,7 +13,7 @@
  */
 import {BookOpen, Check, ChevronRight, FileText, Library, Pencil, Play, Plus, ScrollText, Shuffle, Trash2, BookMarkedIcon, ClipboardListIcon, Eye} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Segmented, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -267,7 +267,9 @@ function CoursesTab({onChanged, openCourseId, onOpenCourse}: {onChanged: () => v
 
   return (
     <div className="min-w-0 space-y-3">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Course bank"
+        tone="mint"
         title="Courses"
         subtitle="Each course owns its question bank, topics, notes, materials and discussion."
         icon={<BookOpen className="size-4" />}
@@ -741,7 +743,9 @@ function QuizzesTab({onChanged, onManageQuestions, onOpenBank}: {onChanged: () =
 
   return (
     <div className="min-w-0 space-y-3">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Scheduling"
+        tone="gold"
         title="Exams"
         subtitle="Choose where each exam’s questions come from, then schedule it."
         icon={<FileText className="size-4" />}

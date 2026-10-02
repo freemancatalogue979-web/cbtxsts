@@ -8,7 +8,7 @@
  */
 import {ChevronDown, ChevronRight, Eye, Moon, Package, Pencil, Plus, Trash2, SearchIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput, TopicChip} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -98,7 +98,9 @@ export default function MysteryAdmin() {
 
   return (
     <div className="space-y-3">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Case files"
+        tone="pulse"
         icon={<Package className="size-4" />}
         title="Mystery desk"
         subtitle={rows ? `${formatNumber(total)} cases · solved rates come straight from the arena` : 'Loading…'}

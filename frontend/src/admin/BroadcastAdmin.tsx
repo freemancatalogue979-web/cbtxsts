@@ -2,7 +2,7 @@
 import {Check, Gift, Megaphone, Pencil, Plus, Sparkles, Trash2, GiftIcon, MegaphoneIcon, Pin, Eye, Info, FileText, BarChart3, Swords, Trophy, Coins, Medal} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, PillSelect, SectionHeading, SwitchRow, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, PillSelect, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
@@ -81,7 +81,9 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Live broadcast"
+        tone="flare"
         title="Announcements"
         subtitle="Broadcasts push instantly to every player currently online."
         icon={<Megaphone className="size-4" />}
@@ -244,7 +246,9 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading
+      <PageBanner
+        eyebrow="Content · Rewards"
+        tone="gold"
         title="Prize vault"
         subtitle="Rank rewards and coin purchases players can claim."
         icon={<Gift className="size-4" />}

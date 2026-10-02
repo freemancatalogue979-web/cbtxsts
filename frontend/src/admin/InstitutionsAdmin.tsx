@@ -1,6 +1,6 @@
 import {BarChart3, Building2, GraduationCap, Plus, School, Sparkles, Users} from 'lucide-react';
 import {useEffect, useState} from 'react';
-import {Button, Card, EmptyState, Field, Modal, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
+import {Button, Card, EmptyState, Field, Modal, PageBanner, SectionHeading, Skeleton, StatTile, TextInput} from '../components/ui';
 import {api, type Json} from '../lib/api';
 import {useSession} from '../store/session';
 
@@ -106,7 +106,7 @@ export default function InstitutionsAdmin({onOpenTutor}: {onOpenTutor?: (prompt:
   return (
     <div className="grid gap-4 sm:gap-6">
       <Card className="p-4 sm:p-5">
-        <SectionHeading title="Genesis for Schools" subtitle="Organizations, classes, teachers, assignments and learning intelligence" icon={<Building2 className="size-4" />} action={<div className="flex flex-wrap gap-2">{selected && !teacherOnly && <Button size="sm" variant="outline" onClick={() => setCreateTeacher(true)} icon={<Users className="size-4" />}>New teacher</Button>}{!teacherOnly && <Button size="sm" onClick={() => setCreateOrg(true)} icon={<Plus className="size-4" />}>New institution</Button>}</div>} />
+        <PageBanner eyebrow="People · Institutions" tone="cyan" title="Genesis for Schools" subtitle="Organizations, classes, teachers, assignments and learning intelligence" icon={<Building2 className="size-4" />} action={<div className="flex flex-wrap gap-2">{selected && !teacherOnly && <Button size="sm" variant="outline" onClick={() => setCreateTeacher(true)} icon={<Users className="size-4" />}>New teacher</Button>}{!teacherOnly && <Button size="sm" onClick={() => setCreateOrg(true)} icon={<Plus className="size-4" />}>New institution</Button>}</div>} />
         {loading ? <Skeleton className="h-12" /> : organizations.length ? (
           <div className="flex gap-2 overflow-x-auto pb-1">
             {organizations.map((row) => <button key={String(row.id)} type="button" onClick={() => setSelected(Number(row.id))} className={`min-h-11 shrink-0 rounded-2xl border px-3.5 text-left ${selected === Number(row.id) ? 'border-nova-400/45 bg-nova-500/15 text-nova-100' : 'border-white/10 bg-white/[.035] text-mist-300'}`}><strong className="block text-[.78rem]">{String(row.name)}</strong><small className="text-[.62rem] font-bold uppercase tracking-wider opacity-70">{String(row.kind)}</small></button>)}

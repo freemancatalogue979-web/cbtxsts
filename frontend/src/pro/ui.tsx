@@ -1,6 +1,7 @@
 /** Pro Mode primitives — flat, quiet, one accent. Styles live in pro.css. */
 import type {ReactNode} from 'react';
-import {Chip as UiChip} from '../components/ui';
+import {Chip as UiChip, PageBanner, type BannerTone} from '../components/ui';
+import {useExperience} from '../lib/mode';
 
 /** Decorative orbit rings behind a banner's icon — pure SVG, no motion. */
 function HeroArt() {
@@ -21,7 +22,23 @@ function HeroArt() {
  * Page banner. With an icon it becomes a tinted hero card (pattern + orbit
  * art in the page's hue); without, a plain title block.
  */
+const HUE_TONE: Record<Hue, BannerTone> = {violet: 'nova', blue: 'pulse', green: 'mint', amber: 'gold', rose: 'flare', teal: 'cyan'};
+
 export function PageHeader({eyebrow, title, description, actions, icon, hue = 'violet', meta, children}: {eyebrow?: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; icon?: ReactNode; hue?: Hue; meta?: ReactNode; children?: ReactNode}) {
+  const {pro} = useExperience();
+  // Standard (arena) mode: shared game banner. Pro keeps its own hero below.
+  if (!pro) {
+    return (
+      <PageBanner eyebrow={eyebrow} title={title} subtitle={description} icon={icon} action={actions} tone={HUE_TONE[hue]}>
+        {meta || children ? (
+          <>
+            {meta && <div className="flex flex-wrap gap-2">{meta}</div>}
+            {children}
+          </>
+        ) : undefined}
+      </PageBanner>
+    );
+  }
   if (!icon) {
     return (
       <header className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-3">
