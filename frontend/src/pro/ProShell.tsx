@@ -44,6 +44,9 @@ function Brand({compact = false}: {compact?: boolean}) {
 
 function NavList({tab, onTab, onDone}: {tab: Tab; onTab: (tab: Tab) => void; onDone?: () => void}) {
   const current = tab === 'profile' ? 'settings' : tab;
+  // A quiet count, no sound or toast — Pro stays distraction-free.
+  const {chatUnread} = useSession();
+  const unread = Object.values(chatUnread).reduce((sum, n) => sum + n, 0);
   const groups: string[] = [];
   for (const item of PRO_NAV) if (item.group && !groups.includes(item.group)) groups.push(item.group);
   return (
@@ -69,6 +72,11 @@ function NavList({tab, onTab, onDone}: {tab: Tab; onTab: (tab: Tab) => void; onD
                   <Icon />
                 </span>
                 <span className="truncate">{item.label}</span>
+                {item.id === 'messages' && unread > 0 && (
+                  <span className="pro-nav-count" aria-label={`${unread} unread`}>
+                    {unread > 99 ? '99+' : unread}
+                  </span>
+                )}
               </button>
             );
           })}

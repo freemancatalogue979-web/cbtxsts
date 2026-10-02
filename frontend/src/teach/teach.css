@@ -444,3 +444,13 @@
     .t-apply-foot > :last-child { justify-self: stretch; justify-content: center; }
   }
 }
+
+/* unread from a teacher — card line + count on the Message button */
+@layer components {
+  .t-new-msgs { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.74rem; font-weight: 750; color: var(--pro-accent-text, var(--color-nova-300)); }
+  .t-new-msgs > i { width: 7px; height: 7px; border-radius: 99px; background: var(--color-flare-400); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-flare-400) 25%, transparent), 0 0 10px var(--color-flare-400); }
+  .t-unread-on-btn { margin-left: 2px; background: #fff; color: var(--color-nova-700); }
+  [data-mode='pro'] .t-new-msgs > i { box-shadow: none; }
+  [data-mode='pro'] .t-unread-on-btn { color: var(--pro-accent); }
+  @media (prefers-reduced-motion: no-preference) { .t-game .t-new-msgs > i { animation: t-blink 1.6s infinite ease-in-out; } }
+}

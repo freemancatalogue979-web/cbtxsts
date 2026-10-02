@@ -1256,3 +1256,8 @@ select.pro-input { padding-right: 32px; }
     .pro-tabs-fit .pro-tab { flex: 1 1 0; min-width: 0; }
   }
 }
+
+/* unread count on a sidebar item (Messages) */
+@layer components {
+  .pro-nav-count { margin-left: auto; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; font-size: 0.68rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; background: var(--pro-accent); }
+}

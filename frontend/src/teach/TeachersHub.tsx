@@ -28,7 +28,7 @@ import {
   TrendingUp,
   MapPin,
 } from 'lucide-react';
-import {useCallback, useEffect, useMemo, useState, type FormEvent} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
 import {ApiError} from '../lib/api';
 import {
   DAYS,
@@ -45,13 +45,22 @@ import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
 import {HowItWorks, HubHero, LearningSnapshot, SectionHead, SubjectGrid, TeachCta} from './sections';
-import {ActionMenu, BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
+import {ActionMenu, BadgeRow, useLive, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
 export default function TeachersHub() {
-  const [view, setView] = useState<View>(() => (takeIntent('ag.teachers.view') as View | null) ?? 'find');
+  // An explicit intent (deep link / notification) wins; otherwise a student
+  // with teachers lands on them instead of the browse page.
+  const intentView = useRef<View | null>(takeIntent('ag.teachers.view') as View | null);
+  const [view, setViewRaw] = useState<View>(() => intentView.current ?? 'find');
+  const viewChosen = useRef(intentView.current !== null);
+  const setView = useCallback((next: View) => {
+    viewChosen.current = true;
+    setViewRaw(next);
+  }, []);
+  const {chatUnread} = useSession();
   const [openId, setOpenId] = useState<number | null>(() => {
     const raw = takeIntent('ag.teacher.open');
     return raw ? Number(raw) : null;
@@ -78,6 +87,14 @@ export default function TeachersHub() {
     teachers.learning().then(setLearning).catch(() => setLearning({teachers: [], requests: [], materials: [], quizzes: [], groups: []}));
   }, []);
   useEffect(loadLearning, [loadLearning]);
+  // Accepted / declined / completed all arrive as notifications — refresh so
+  // a newly accepted teacher shows up without a reload.
+  useLive('notify', loadLearning);
+  const liveTeachers = learning?.teachers.filter((row) => row.relationship.status !== 'ended') ?? [];
+  useEffect(() => {
+    if (!viewChosen.current && liveTeachers.length > 0) setViewRaw('mine');
+  }, [liveTeachers.length]);
+  const teacherUnread = liveTeachers.reduce((sum, row) => sum + (chatUnread[row.teacher.student_id] ?? 0), 0);
 
   useEffect(() => {
     const onNav = (event: Event) => {
@@ -125,6 +142,11 @@ export default function TeachersHub() {
             <span className="max-sm:hidden">{label}</span>
             <span className="sm:hidden">{short}</span>
             {id === 'requests' && pendingCount > 0 && <span className="t-unread">{pendingCount}</span>}
+            {id === 'mine' && teacherUnread > 0 && (
+              <span className="t-unread" title={`${teacherUnread} unread message${teacherUnread === 1 ? '' : 's'} from your teachers`}>
+                {teacherUnread}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -982,7 +1004,7 @@ function ReviewSheet({open, teacherId, teacherName, existing, onClose, onDone}: 
 
 /* ------------------------------------------------------------ my teachers */
 function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onFind}: {learning: Learning | null; onOpen: (id: number) => void; onReload: () => void; onOpenMaterial: (id: number) => void; onOpenQuiz: (id: number) => void; onFind: () => void}) {
-  const {toast} = useSession();
+  const {toast, chatUnread} = useSession();
   if (!learning) return <LoadingRows rows={3} />;
   const complete = async (relationshipId: number, name: string) => {
     if (!window.confirm(`Mark your lessons with ${name} as complete? You'll be able to leave a review and still message them.`)) return;
@@ -1034,11 +1056,18 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
                   <p className="pro-meta truncate">
                     {[rel.topic || rel.subject, `since ${new Date(rel.started_at).toLocaleDateString(undefined, {month: 'short', year: 'numeric'})}`].filter(Boolean).join(' · ')}
                   </p>
+                  {(chatUnread[t.student_id] ?? 0) > 0 && (
+                    <p className="t-new-msgs">
+                      <i aria-hidden="true" />
+                      {chatUnread[t.student_id]} new message{chatUnread[t.student_id] === 1 ? '' : 's'}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="pro-btn pro-btn-primary pro-btn-sm" onClick={() => goTo({tab: 'messages', withId: t.student_id})}>
                   <MessageSquare className="size-4" /> Message
+                  {(chatUnread[t.student_id] ?? 0) > 0 && <span className="t-unread t-unread-on-btn">{chatUnread[t.student_id]}</span>}
                 </button>
                 <button type="button" className="pro-btn pro-btn-sm" onClick={() => onOpen(t.id)}>
                   Profile

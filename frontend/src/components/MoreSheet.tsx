@@ -266,7 +266,7 @@ export default function MoreSheet({
                 <IconChip tone={meta.tone}>
                   <Icon className="size-5" />
                 </IconChip>
-                {id === 'friends' && <Badge count={chatTotal} />}
+                {(id === 'friends' || id === 'messages') && <Badge count={chatTotal} />}
               </span>
               <span className={`w-full truncate text-center text-[0.7rem] font-semibold ${active ? 'text-mist-50' : 'text-mist-200'}`}>
                 {item.label.length > 9 ? item.short : item.label}

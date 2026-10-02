@@ -865,7 +865,7 @@ export function AppShell({
                       >
                         <Icon className={`size-4 shrink-0 ${active ? 'text-nova-300' : 'text-mist-400'}`} />
                         <span className="flex-1">{item.label}</span>
-                        {item.id === 'friends' && chatTotal > 0 && (
+                        {(item.id === 'friends' || item.id === 'messages') && chatTotal > 0 && (
                           <span className="rounded bg-rose-500 px-1.5 py-0.5 text-[0.6rem] font-black text-white">
                             {chatTotal}
                           </span>
