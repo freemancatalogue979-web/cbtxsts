@@ -12,13 +12,16 @@
   font-display: swap;
 }
 
-/* Helvetica Oblique is also a selectable Standard-mode font. Form controls do
-   not reliably inherit font-style, so include them explicitly. */
-html[data-font='helvetica-oblique']:not([data-mode='pro']) body,
-html[data-font='helvetica-oblique']:not([data-mode='pro']) button,
-html[data-font='helvetica-oblique']:not([data-mode='pro']) input,
-html[data-font='helvetica-oblique']:not([data-mode='pro']) textarea,
-html[data-font='helvetica-oblique']:not([data-mode='pro']) select {
+/* The font pack chosen in settings drives BOTH Standard and Pro. Helvetica
+   Oblique carries a slant; form controls do not reliably inherit font-style,
+   so include them explicitly. Other packs stay upright. */
+html { --ag-font-style: normal; }
+html[data-font='helvetica-oblique'] { --ag-font-style: oblique 12deg; }
+html[data-font='helvetica-oblique'] body,
+html[data-font='helvetica-oblique'] button,
+html[data-font='helvetica-oblique'] input,
+html[data-font='helvetica-oblique'] textarea,
+html[data-font='helvetica-oblique'] select {
   font-family: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-style: oblique 12deg;
 }
@@ -43,8 +46,7 @@ html[data-font='helvetica-oblique']:not([data-mode='pro']) select {
   --pro-grad-text: linear-gradient(100deg, #fff 5%, #bdc5ff 48%, #87d9e9 100%);
   --pro-card-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 18px 45px -34px rgb(0 0 0 / 95%);
   --pro-lift: inset 0 1px 0 rgb(255 255 255 / 9%), 0 22px 50px -28px rgb(46 56 140 / 75%), 0 0 0 1px rgb(117 131 255 / 24%);
-  --font-sans: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-display: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* fonts come from the Standard font pack (applyFont sets --font-sans / --font-display) */
 }
 
 [data-mode='pro'][data-pro-theme='light'] {
@@ -83,14 +85,14 @@ html[data-font='helvetica-oblique']:not([data-mode='pro']) select {
   [data-mode='pro'] input,
   [data-mode='pro'] textarea,
   [data-mode='pro'] select {
-    font-family: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-style: oblique 12deg;
+    font-family: var(--font-sans);
+    font-style: var(--ag-font-style);
   }
 
   /* Stronger editorial typography. */
   .pro-h1, .pro-h2, .pro-h3,
   .pro-context-title, .pro-brand-name, .pro-metric-value {
-    font-style: oblique 12deg;
+    font-style: var(--ag-font-style);
     letter-spacing: -0.045em;
   }
   .pro-h1 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 820; line-height: 0.98; }
@@ -98,7 +100,7 @@ html[data-font='helvetica-oblique']:not([data-mode='pro']) select {
   .pro-h3 { font-weight: 740; }
   .pro-eyebrow {
     color: var(--pro-accent-text);
-    font-style: oblique 12deg;
+    font-style: var(--ag-font-style);
     font-weight: 780;
     letter-spacing: 0.16em;
   }

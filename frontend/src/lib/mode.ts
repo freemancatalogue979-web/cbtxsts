@@ -14,7 +14,6 @@
 import {useSyncExternalStore} from 'react';
 import {applyFont, applyMode, currentFont, currentMode, type ModeName} from './prefs';
 
-const PRO_FONT = "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif";
 const APPEARANCE_KEY = 'arena.pro.appearance';
 const READ_SIZE_KEY = 'arena.pro.readSize';
 const READ_WIDTH_KEY = 'arena.pro.readWidth';
@@ -142,10 +141,7 @@ export function bootExperience(): void {
   applyMode(mode);
   paintReading();
   paintAppearance();
-  if (mode === 'pro') {
-    document.documentElement.style.setProperty('--font-sans', PRO_FONT);
-    document.documentElement.style.setProperty('--font-display', PRO_FONT);
-  }
+  // Pro inherits the font pack chosen in Standard settings (applied in main.tsx).
   if (typeof window !== 'undefined' && window.matchMedia && !systemQuery) {
     systemQuery = window.matchMedia('(prefers-color-scheme: light)');
     systemQuery.addEventListener?.('change', () => {
@@ -166,13 +162,8 @@ export function setExperience(next: 'standard' | 'pro' | ModeName): void {
   const was = currentMode();
   if (was !== 'pro') write(LAST_STANDARD_KEY, was);
   applyMode(target);
-  const style = document.documentElement.style;
-  if (target === 'pro') {
-    style.setProperty('--font-sans', PRO_FONT);
-    style.setProperty('--font-display', PRO_FONT);
-  } else {
-    applyFont(currentFont());
-  }
+  // Both experiences share the player's chosen font pack.
+  applyFont(currentFont());
   paintAppearance();
   emit();
   window.dispatchEvent(new CustomEvent(EXPERIENCE_EVENT, {detail: {mode: target}}));
