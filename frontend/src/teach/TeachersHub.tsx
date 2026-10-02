@@ -27,6 +27,8 @@ import {
   Quote,
   TrendingUp,
   MapPin,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent} from 'react';
 import {ApiError} from '../lib/api';
@@ -48,6 +50,14 @@ import {HowItWorks, HubHero, LearningSnapshot, SectionHead, SubjectGrid, TeachCt
 import {ActionMenu, BadgeRow, useLive, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
+type Link = {kind: 'teacher'; studentId: number} | {kind: 'pending'};
+/** Server conflict text → which "already" case it is (null = some other error). */
+function alreadyKind(e: unknown): 'teacher' | 'pending' | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  if (/already learning/i.test(e.message)) return 'teacher';
+  if (/pending request/i.test(e.message)) return 'pending';
+  return null;
+}
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
 export default function TeachersHub() {
@@ -83,10 +93,41 @@ export default function TeachersHub() {
     window.setTimeout(() => document.getElementById('t-search')?.focus(), 60);
   };
 
+  const [learningError, setLearningError] = useState<string | null>(null);
   const loadLearning = useCallback(() => {
-    teachers.learning().then(setLearning).catch(() => setLearning({teachers: [], requests: [], materials: [], quizzes: [], groups: []}));
+    teachers
+      .learning()
+      .then((next) => {
+        setLearning(next);
+        setLearningError(null);
+      })
+      // Never pretend "no teachers" on a failed load — keep what we had and say so.
+      .catch((e) => setLearningError(errText(e)));
   }, []);
   useEffect(loadLearning, [loadLearning]);
+  // Live events can be missed (socket asleep, proxy without websockets), so
+  // also re-read when the student comes back to the app.
+  useEffect(() => {
+    const onBack = () => {
+      if (document.visibilityState === 'visible') loadLearning();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('focus', onBack);
+    return () => {
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('focus', onBack);
+    };
+  }, [loadLearning]);
+  const {toast} = useSession();
+  /** The server says we already learn with them / already asked: resync and show it. */
+  const onAlready = useCallback(
+    (kind: 'teacher' | 'pending') => {
+      loadLearning();
+      setView(kind === 'teacher' ? 'mine' : 'requests');
+      toast('info', kind === 'teacher' ? 'Already your teacher' : 'Request already sent', kind === 'teacher' ? 'They are in My teachers — message them any time.' : 'Your request is waiting in Requests.');
+    },
+    [loadLearning, setView, toast],
+  );
   // Accepted / declined / completed all arrive as notifications — refresh so
   // a newly accepted teacher shows up without a reload.
   useLive('notify', loadLearning);
@@ -95,6 +136,13 @@ export default function TeachersHub() {
     if (!viewChosen.current && liveTeachers.length > 0) setViewRaw('mine');
   }, [liveTeachers.length]);
   const teacherUnread = liveTeachers.reduce((sum, row) => sum + (chatUnread[row.teacher.student_id] ?? 0), 0);
+  // What each teacher already is to me, so Find cards don't offer "Request help" to my own teacher.
+  const myLinks = useMemo(() => {
+    const map = new Map<number, Link>();
+    for (const r of learning?.requests ?? []) if (r.status === 'pending') map.set(r.teacher_id, {kind: 'pending'});
+    for (const row of liveTeachers) if (row.relationship.status === 'active') map.set(row.teacher.id, {kind: 'teacher', studentId: row.teacher.student_id});
+    return map;
+  }, [learning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onNav = (event: Event) => {
@@ -116,6 +164,7 @@ export default function TeachersHub() {
           id={openId}
           onBack={() => setOpenId(null)}
           onChanged={loadLearning}
+          onAlready={onAlready}
           onOpenMaterial={setMaterial}
           onOpenQuiz={setQuiz}
         />
@@ -137,7 +186,17 @@ export default function TeachersHub() {
             ['groups', 'Groups', 'Groups', Users],
           ] as const
         ).map(([id, label, short, Icon]) => (
-          <button key={id} type="button" role="tab" aria-selected={view === id} className="pro-tab inline-flex items-center justify-center gap-1.5" onClick={() => setView(id)}>
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            className="pro-tab inline-flex items-center justify-center gap-1.5"
+            onClick={() => {
+              setView(id);
+              if (id === 'mine' || id === 'requests') loadLearning();
+            }}
+          >
             <Icon className="size-4 max-sm:hidden" />
             <span className="max-sm:hidden">{label}</span>
             <span className="sm:hidden">{short}</span>
@@ -151,8 +210,8 @@ export default function TeachersHub() {
         ))}
       </div>
       {view === 'find' && <LearningSnapshot learning={learning} onTab={setView} />}
-      {view === 'find' && <FindTeachers catalog={catalog} groups={openGroups} onOpen={setOpenId} onGroups={() => setView('groups')} onReloadGroups={loadLearning} />}
-      {view === 'mine' && <MyTeachers learning={learning} onOpen={setOpenId} onReload={loadLearning} onOpenMaterial={setMaterial} onOpenQuiz={setQuiz} onFind={() => setView('find')} />}
+      {view === 'find' && <FindTeachers catalog={catalog} groups={openGroups} onOpen={setOpenId} onGroups={() => setView('groups')} onReloadGroups={loadLearning} links={myLinks} onAlready={onAlready} onRequests={() => setView('requests')} />}
+      {view === 'mine' && <MyTeachers learning={learning} error={learningError} onOpen={setOpenId} onReload={loadLearning} onOpenMaterial={setMaterial} onOpenQuiz={setQuiz} onFind={() => setView('find')} />}
       {view === 'requests' && <MyRequests learning={learning} onOpen={setOpenId} onReload={loadLearning} onFind={() => setView('find')} />}
       {view === 'groups' && <TeacherGroups mine={learning?.groups ?? []} onReload={loadLearning} />}
       <MaterialSheet id={material} onClose={() => setMaterial(null)} />
@@ -162,7 +221,7 @@ export default function TeachersHub() {
 }
 
 /* ------------------------------------------------------------------ find */
-function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups}: {catalog: Catalog | null; groups: TGroup[] | null; onOpen: (id: number) => void; onGroups: () => void; onReloadGroups: () => void}) {
+function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups, links, onAlready, onRequests}: {catalog: Catalog | null; groups: TGroup[] | null; onOpen: (id: number) => void; onGroups: () => void; onReloadGroups: () => void; links: Map<number, Link>; onAlready: (kind: 'teacher' | 'pending') => void; onRequests: () => void}) {
   const [term, setTerm] = useState('');
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState('');
@@ -324,7 +383,7 @@ function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups}: {cata
       {items && items.length > 0 && (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
           {items.map((t) => (
-            <TeacherCardView key={t.id} teacher={t} onOpen={() => onOpen(t.id)} onRequest={() => setRequestFor(t)} />
+            <TeacherCardView key={t.id} teacher={t} link={links.get(t.id)} onOpen={() => onOpen(t.id)} onRequest={() => setRequestFor(t)} onRequests={onRequests} />
           ))}
         </div>
       )}
@@ -429,12 +488,23 @@ function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups}: {cata
         </div>
       </Sheet>
 
-      <RequestSheet teacher={requestFor} onClose={() => setRequestFor(null)} onSent={() => setRequestFor(null)} />
+      <RequestSheet
+        teacher={requestFor}
+        onClose={() => setRequestFor(null)}
+        onSent={() => {
+          setRequestFor(null);
+          onReloadGroups();
+        }}
+        onAlready={(kind) => {
+          setRequestFor(null);
+          onAlready(kind);
+        }}
+      />
     </div>
   );
 }
 
-function TeacherCardView({teacher: t, onOpen, onRequest}: {teacher: TeacherCard; onOpen: () => void; onRequest: () => void}) {
+function TeacherCardView({teacher: t, link, onOpen, onRequest, onRequests}: {teacher: TeacherCard; link?: Link; onOpen: () => void; onRequest: () => void; onRequests: () => void}) {
   const main = subjectLook(t.specialties[0]?.subject);
   const chips = t.specialties.flatMap((sp) => (sp.topics.length ? sp.topics.map((topic) => [sp.subject, topic] as const) : [[sp.subject, sp.subject] as const]));
   const avail = t.availability_now;
@@ -482,9 +552,19 @@ function TeacherCardView({teacher: t, onOpen, onRequest}: {teacher: TeacherCard;
           <button type="button" className="pro-btn" onClick={onOpen}>
             Profile
           </button>
-          <button type="button" className="pro-btn pro-btn-primary" onClick={onRequest} disabled={!t.accepting}>
-            <UserPlus className="size-4" /> {t.accepting ? 'Request help' : 'Not accepting'}
-          </button>
+          {link?.kind === 'teacher' ? (
+            <button type="button" className="pro-btn pro-btn-primary" onClick={() => goTo({tab: 'messages', withId: link.studentId})}>
+              <MessageSquare className="size-4" /> Message
+            </button>
+          ) : link?.kind === 'pending' ? (
+            <button type="button" className="pro-btn" onClick={onRequests} title="Your request is waiting for a reply">
+              <Clock className="size-4" /> Requested
+            </button>
+          ) : (
+            <button type="button" className="pro-btn pro-btn-primary" onClick={onRequest} disabled={!t.accepting}>
+              <UserPlus className="size-4" /> {t.accepting ? 'Request help' : 'Not accepting'}
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -510,7 +590,7 @@ function MiniStat({icon, value, label, hue}: {icon: React.ReactNode; value: Reac
 }
 
 /* --------------------------------------------------------------- request */
-function RequestSheet({teacher, onClose, onSent}: {teacher: {id: number; name: string; specialties: {subject: string; topics: string[]}[]} | null; onClose: () => void; onSent: (request: TRequest) => void}) {
+function RequestSheet({teacher, onClose, onSent, onAlready}: {teacher: {id: number; name: string; specialties: {subject: string; topics: string[]}[]} | null; onClose: () => void; onSent: (request: TRequest) => void; onAlready?: (kind: 'teacher' | 'pending') => void}) {
   const {toast} = useSession();
   const [subject, setSubject] = useState('');
   const [topic, setTopic] = useState('');
@@ -536,6 +616,11 @@ function RequestSheet({teacher, onClose, onSent}: {teacher: {id: number; name: s
       toast('success', 'Request sent', `${teacher.name} will reply soon. You can message them while you wait.`);
       onSent(req);
     } catch (e) {
+      const kind = alreadyKind(e);
+      if (kind && onAlready) {
+        onAlready(kind);
+        return;
+      }
       toast('error', 'Could not send request', errText(e));
     } finally {
       setBusy(false);
@@ -601,7 +686,7 @@ function RequestSheet({teacher, onClose, onSent}: {teacher: {id: number; name: s
 }
 
 /* --------------------------------------------------------------- profile */
-function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id: number; onBack: () => void; onChanged: () => void; onOpenMaterial: (id: number) => void; onOpenQuiz: (id: number) => void}) {
+function TeacherProfile({id, onBack, onChanged, onAlready, onOpenMaterial, onOpenQuiz}: {id: number; onBack: () => void; onChanged: () => void; onAlready: (kind: 'teacher' | 'pending') => void; onOpenMaterial: (id: number) => void; onOpenQuiz: (id: number) => void}) {
   const {toast} = useSession();
   const [teacher, setTeacher] = useState<TeacherDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -929,6 +1014,14 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
           load();
           onChanged();
         }}
+        onAlready={(kind) => {
+          setRequesting(false);
+          load();
+          if (kind === 'teacher') {
+            onAlready(kind);
+            onBack();
+          } else onAlready(kind);
+        }}
       />
       <ReviewSheet
         open={reviewing}
@@ -1003,8 +1096,20 @@ function ReviewSheet({open, teacherId, teacherName, existing, onClose, onDone}: 
 }
 
 /* ------------------------------------------------------------ my teachers */
-function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onFind}: {learning: Learning | null; onOpen: (id: number) => void; onReload: () => void; onOpenMaterial: (id: number) => void; onOpenQuiz: (id: number) => void; onFind: () => void}) {
+function MyTeachers({learning, error, onOpen, onReload, onOpenMaterial, onOpenQuiz, onFind}: {learning: Learning | null; error: string | null; onOpen: (id: number) => void; onReload: () => void; onOpenMaterial: (id: number) => void; onOpenQuiz: (id: number) => void; onFind: () => void}) {
   const {toast, chatUnread} = useSession();
+  const retry = (
+    <button type="button" className="pro-btn pro-btn-primary" onClick={onReload}>
+      <RefreshCw className="size-4" /> Try again
+    </button>
+  );
+  if (!learning && error) {
+    return (
+      <div className="pro-card">
+        <Empty icon={<WifiOff className="size-6" />} hue="amber" title="Couldn't load your teachers" body={`${error} Check your connection and try again.`} action={retry} />
+      </div>
+    );
+  }
   if (!learning) return <LoadingRows rows={3} />;
   const complete = async (relationshipId: number, name: string) => {
     if (!window.confirm(`Mark your lessons with ${name} as complete? You'll be able to leave a review and still message them.`)) return;
@@ -1024,12 +1129,16 @@ function MyTeachers({learning, onOpen, onReload, onOpenMaterial, onOpenQuiz, onF
           <Empty
             icon={<GraduationCap className="size-6" />}
             hue="blue"
-            title="No teachers yet"
-            body="When a teacher accepts your request they appear here, with everything they share with you."
+            title={error ? "Couldn't refresh your teachers" : 'No teachers yet'}
+            body={error ? `${error} Your list may be out of date.` : 'When a teacher accepts your request they appear here, with everything they share with you.'}
             action={
-              <button type="button" className="pro-btn pro-btn-primary" onClick={onFind}>
-                Find a teacher
-              </button>
+              error ? (
+                retry
+              ) : (
+                <button type="button" className="pro-btn pro-btn-primary" onClick={onFind}>
+                  Find a teacher
+                </button>
+              )
             }
           />
         </div>
