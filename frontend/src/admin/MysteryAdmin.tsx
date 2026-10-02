@@ -8,7 +8,7 @@
  */
 import {ChevronDown, ChevronRight, Eye, Moon, Package, Pencil, Plus, Trash2, SearchIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, SectionHeading, Select, Skeleton, TextArea, TextInput, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -132,7 +132,7 @@ export default function MysteryAdmin() {
                   <p className="mt-0.5 line-clamp-1 text-[0.72rem] font-semibold text-mist-400">{row.blurb}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <Chip className={row.status === 'published' ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-300' : 'border-white/12 bg-white/6 text-mist-400'}>{row.status}</Chip>
-                    {row.topic && <Chip className="border-nova-400/30 bg-nova-500/10 text-nova-200">{row.topic}</Chip>}
+                    <TopicChip topic={row.topic} />
                     <Chip>{row.clues.length} clues</Chip>
                     <Chip>{row.pass_count}/{row.question_count} q</Chip>
                     <Chip className={row.pool === 0 ? 'border-flare-400/40 bg-flare-500/12 text-flare-300' : ''}>{row.pool} in pool</Chip>

@@ -11,6 +11,7 @@ import {
   Flame,
   Gauge,
   Heart,
+  Hourglass,
   ListChecks,
   Play,
   RotateCcw,
@@ -30,7 +31,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 
 import Character from '../components/Character';
 import PracticeClock from '../components/PracticeClock';
 import {AnswerFeedback, AnswerTile, ComboMeter, Hearts} from '../components/GameQuestion';
-import {Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, SectionHeading, Segmented, Select, Skeleton} from '../components/ui';
+import {Button, Card, Chip, DifficultyChip, EmptyState, ProgressBar, ReviewOptions, ScoreChip, SectionHeading, Segmented, Select, Skeleton, TopicChip} from '../components/ui';
 import AskTutorButton from '../components/tutor/AskTutorButton';
 import {api} from '../lib/api';
 import {HAPTICS} from '../lib/haptics';
@@ -309,8 +310,8 @@ function PracticeRun({mode, label, onExit}: {mode: string; label: string; onExit
           label="Arena hero"
         />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span title={question.topic || 'Practice'} className="btag max-w-full min-w-0 border-white/12 bg-white/6 text-mist-400"><span className="min-w-0 truncate">{question.topic || 'Practice'}</span></span>
-          <Chip className="border-white/12 bg-white/6 text-mist-400">{question.difficulty || 'medium'}</Chip>
+          <TopicChip topic={question.topic || 'Practice'} />
+          <DifficultyChip level={question.difficulty || 'medium'} />
           <button
             type="button"
             onClick={() => setRisk((value) => !value)}
@@ -959,7 +960,7 @@ export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload;
                     {row.correct ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
                   </span>
  <span className="text-[0.68rem] font-black tracking-wider text-mist-500">Question {position + 1}</span>
-                  {row.topic && <Chip className="border-white/12 bg-white/6 text-[0.62rem] text-mist-400">{row.topic}</Chip>}
+                  <TopicChip topic={row.topic} />
                 </div>
                 <p className="mt-1.5 text-[0.86rem] leading-snug font-bold text-mist-100">{row.text}</p>
                 <ReviewOptions options={row.options} correct={row.correct_label} chosen={row.chosen_label} />
@@ -1015,17 +1016,17 @@ export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload;
         progress={(stats.answered / Math.max(total, 1)) * 100}
       />
 
-      <div className="flex flex-wrap gap-1.5 text-[0.7rem] font-bold">
-        <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-mist-400">{stats.answered} answered</span>
-        <span className="rounded-full border border-mint-500/25 bg-mint-500/10 px-2.5 py-1 text-mint-300">{stats.correct} correct</span>
-        <span className="rounded-full border border-flare-500/25 bg-flare-500/10 px-2.5 py-1 text-flare-300">{stats.wrong} wrong</span>
-        <span className="rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-mist-400">{stats.remaining} remaining</span>
+      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap">
+        <ScoreChip value={stats.answered} label="done" className="text-pulse-300" icon={<ListChecks />} />
+        <ScoreChip value={stats.correct} label="correct" className="text-mint-300" icon={<CheckCircle2 />} />
+        <ScoreChip value={stats.wrong} label="wrong" className="text-flare-300" icon={<XCircle />} />
+        <ScoreChip value={stats.remaining} label="left" className="text-mist-300" icon={<Hourglass />} />
       </div>
 
       <Card className="relative min-w-0 overflow-hidden p-4 sm:p-5 [overflow-wrap:anywhere]">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span title={question.topic || 'Practice'} className="btag max-w-full min-w-0 border-white/12 bg-white/6 text-mist-400"><span className="min-w-0 truncate">{question.topic || 'Practice'}</span></span>
-          <Chip className="border-white/12 bg-white/6 text-mist-400">{question.difficulty || 'medium'}</Chip>
+          <TopicChip topic={question.topic || 'Practice'} />
+          <DifficultyChip level={question.difficulty || 'medium'} />
           <span className="ml-auto text-[0.7rem] font-black tracking-wider whitespace-nowrap text-mist-500">
             Question {index + 1} of {total}
           </span>

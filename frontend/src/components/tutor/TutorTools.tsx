@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Save, Search, SkipForward, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
-import {Button, Chip, ChoiceCards, EmptyState, Field, Modal, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips, PillSelect} from '../ui';
+import {Button, Chip, ChoiceCards, DifficultyChip, EmptyState, Field, Modal, PillSelect, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips, TopicChip} from '../ui';
 import {Markdown} from '../../lib/markdown';
 import {
   downloadText, materialToMarkdown, tutorApi, type Deck, type GenKind, type GenerateSource, type NotesDoc,
@@ -604,8 +604,8 @@ export function QuizView({data, savedId, setId, meta, onBack, onSaved, onChange,
           <div className="mx-auto max-w-2xl space-y-3">
             <div className="flex flex-wrap gap-1.5">
               <Chip className="border-nova-400/30 bg-nova-500/15 text-nova-200">{q.type.replace('_', ' ')}</Chip>
-              {q.topic && <Chip>{q.topic}</Chip>}
-              {q.difficulty && <Chip>{q.difficulty}</Chip>}
+              <TopicChip topic={q.topic} />
+              <DifficultyChip level={q.difficulty} />
             </div>
             <p className="text-[1rem] leading-relaxed font-bold text-mist-50">{q.question}</p>
             {q.options.length ? (

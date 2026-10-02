@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Skeleton} from '../components/ui';
+import {Button, Card, Chip, DifficultyChip, EmptyState, ProgressBar, SectionHeading, Skeleton, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {sfx} from '../lib/sfx';
 import {useSession} from '../store/session';
@@ -356,8 +356,8 @@ export default function MysteryPanel() {
                     </div>
                   </div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    <Chip className="border-white/12 bg-white/6 text-mist-300">{row.difficulty}</Chip>
-                    {row.topic && <Chip className="border-nova-400/30 bg-nova-500/10 text-nova-200">{row.topic}</Chip>}
+                    <DifficultyChip level={row.difficulty} />
+                    <TopicChip topic={row.topic} />
                     <Chip>{row.clues.length} clues</Chip>
                     <Chip className="border-gold-400/40 bg-gold-500/12 text-gold-300">+{row.reward_xp} XP</Chip>
                   </div>

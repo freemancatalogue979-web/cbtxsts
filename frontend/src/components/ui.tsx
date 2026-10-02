@@ -230,6 +230,55 @@ export function IconButton({
  * the default now carries the game badge chrome: hard border, top highlight and
  * a solid bottom edge.
  */
+/* ------------------------------------------------------------ smart chips */
+const DIFF_TONE: Record<string, {cls: string; bars: number; label: string}> = {
+  easy: {cls: 'text-mint-300', bars: 1, label: 'Easy'},
+  medium: {cls: 'text-gold-300', bars: 2, label: 'Medium'},
+  hard: {cls: 'text-flare-300', bars: 3, label: 'Hard'},
+};
+
+/** Difficulty with a three-bar signal: easy (1, mint), medium (2, gold), hard (3, pink). */
+export function DifficultyChip({level, className = ''}: {level?: string | null; className?: string}) {
+  if (!level) return null;
+  const tone = DIFF_TONE[level.toLowerCase()] ?? {cls: 'text-mist-300', bars: 0, label: level};
+  return (
+    <span className={`btag ${tone.cls} ${className}`} title={`Difficulty: ${tone.label}`}>
+      <span className="btag-bars" aria-hidden="true">
+        {[1, 2, 3].map((n) => (
+          <i key={n} data-on={n <= tone.bars ? '' : undefined} />
+        ))}
+      </span>
+      {tone.label}
+    </span>
+  );
+}
+
+/** A topic / subject tag: tinted dot icon + truncating label. */
+export function TopicChip({topic, className = '', tone = 'text-nova-200'}: {topic?: string | null; className?: string; tone?: string}) {
+  if (!topic) return null;
+  return (
+    <span className={`btag btag-ico max-w-full min-w-0 ${tone} ${className}`} title={topic}>
+      <span className="btag-dot" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />
+        </svg>
+      </span>
+      <span className="min-w-0 truncate">{topic}</span>
+    </span>
+  );
+}
+
+/** A live counter pill — "3 correct": number bold, label quieter. */
+export function ScoreChip({value, label, icon, className = 'text-mist-300'}: {value: ReactNode; label: string; icon?: ReactNode; className?: string}) {
+  return (
+    <span className={`btag btag-score ${className}`}>
+      {icon}
+      <b>{value}</b>
+      <span>{label}</span>
+    </span>
+  );
+}
+
 export function Chip({
   children,
   className = '',

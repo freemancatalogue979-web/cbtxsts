@@ -5,18 +5,10 @@
  * you something renders inside this shell so the whole arena feels like one game.
  */
 import type {ReactNode} from 'react';
-import {Chip} from './ui';
+import {DifficultyChip} from './ui';
 
-const DIFF_STYLES: Record<string, string> = {
-  easy: 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300 font-mono text-[0.68rem] tracking-wider',
-  medium: 'border-amber-500/30 bg-amber-500/12 text-amber-300 font-mono text-[0.68rem] tracking-wider',
-  hard: 'border-red-500/30 bg-red-500/12 text-red-300 font-mono text-[0.68rem] tracking-wider',
-};
-
-export function DifficultyChip({level}: {level?: string}) {
-  if (!level) return null;
-  return <Chip className={DIFF_STYLES[level] ?? ''}>{level}</Chip>;
-}
+/** Kept here for existing imports; the chip itself lives with the other primitives. */
+export {DifficultyChip};
 
 export function QuestionCard({
   number,

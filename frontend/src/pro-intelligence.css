@@ -27,7 +27,7 @@
 .pro-intelligence-kicker svg { width: 18px; height: 18px; }
 .pro-intelligence-kicker span { margin-left: 3px; padding: 3px 7px; border: 1px solid color-mix(in srgb, #39d98a 35%, transparent); border-radius: 999px; background: color-mix(in srgb, #39d98a 10%, transparent); color: #81edb5; font-size: .52rem; }
 .pro-intelligence-title { margin-top: 5px; color: var(--pro-text); font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 900; letter-spacing: -.035em; line-height: 1.06; }
-.pro-intelligence-score { display: grid; min-width: 106px; min-height: 74px; place-content: center; border: 1px solid color-mix(in srgb, #f5b942 28%, var(--pro-border)); border-radius: 18px 6px 18px 6px; background: color-mix(in srgb, #f5b942 9%, var(--pro-surface)); text-align: center; }
+.pro-intelligence-score { display: grid; min-width: 106px; min-height: 74px; place-content: center; padding: 8px 14px; gap: 2px; border: 1px solid color-mix(in srgb, #f5b942 28%, var(--pro-border)); border-radius: 18px 6px 18px 6px; background: color-mix(in srgb, #f5b942 9%, var(--pro-surface)); text-align: center; }
 .pro-intelligence-score span { color: #ffd37a; font-size: 1.42rem; font-weight: 900; font-variant-numeric: tabular-nums; }
 .pro-intelligence-score small { color: var(--pro-muted); font-size: .57rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .pro-intelligence-score[data-state='ready'] { border-color: color-mix(in srgb, #39d98a 34%, var(--pro-border)); background: color-mix(in srgb, #39d98a 9%, var(--pro-surface)); }

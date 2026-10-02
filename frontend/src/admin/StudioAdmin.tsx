@@ -7,7 +7,7 @@
  */
 import {Activity, AlertTriangle, BarChart3, BookOpen, Boxes, Check, Copy, Eye, Flag, Gem, History, Layers, ListChecks, RefreshCw, Search, ShieldCheck, Sparkles, Upload, X, EyeIcon, FileQuestionIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, SectionHeading, Segmented, Select, Skeleton, StatTile, TextInput} from '../components/ui';
+import {Button, Card, Chip, DifficultyChip, EmptyState, Modal, SectionHeading, Segmented, Select, Skeleton, StatTile, TextInput, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -372,8 +372,8 @@ function Bank() {
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <Chip className="border-mint-500/30 bg-mint-500/12 text-mint-200">Answer {row.correct}</Chip>
                       <Chip>{row.points ?? 1} pts</Chip>
-                      <Chip className="capitalize">{row.difficulty}</Chip>
-                      {row.topic && <Chip className="border-nova-500/25 bg-nova-500/10 text-nova-200">{row.topic}</Chip>}
+                      <DifficultyChip level={row.difficulty} />
+                      <TopicChip topic={row.topic} />
                       {row.status && row.status !== 'approved' && <Chip className="capitalize border-gold-500/30 bg-gold-500/12 text-gold-200">{row.status}</Chip>}
                       {row.drawn && <Chip className="border-pulse-500/25 bg-pulse-500/10 text-pulse-200">Bank copy</Chip>}
                       {row.flagged && <Chip className="border-flare-500/35 bg-flare-500/12 text-flare-200">Flagged</Chip>}

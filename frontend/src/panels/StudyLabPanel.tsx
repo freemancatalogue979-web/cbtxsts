@@ -27,7 +27,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Skeleton} from '../components/ui';
+import {Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Skeleton, TopicChip} from '../components/ui';
 import AskTutorButton from '../components/tutor/AskTutorButton';
 import {api} from '../lib/api';
 import {sfx} from '../lib/sfx';
@@ -925,7 +925,7 @@ function MistakeScreen({onBack, onPractice}: {onBack: () => void; onPractice: (t
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.74rem] font-black">
                   <span className="max-w-full min-w-0 break-words rounded-lg bg-flare-500/12 px-2 py-1 text-flare-300">Your answer: {row.your_answer || '—'}</span>
                   <span className="max-w-full min-w-0 break-words rounded-lg bg-emerald-500/12 px-2 py-1 text-emerald-300">Correct: {row.correct_answer}</span>
-                  <Chip className="border-white/12 bg-white/6 text-mist-400">{row.topic}</Chip>
+                  <TopicChip topic={row.topic} />
                   <Chip className="border-white/12 bg-white/6 text-mist-400">×{row.hits} · {row.source}</Chip>
                 </div>
                 {row.why && <p className="mt-2 text-[0.78rem] leading-relaxed font-semibold text-mist-300"><span className="font-black text-mist-500 uppercase">Why:</span> {row.why}</p>}

@@ -914,7 +914,7 @@ export function Reader({
         <div className="relative min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <Chip className={ACCENTS[detail.accent] ?? ACCENTS.violet}>{detail.topic || 'General'}</Chip>
-            <Chip className="border-white/10 bg-white/4 text-mist-400">{detail.difficulty}</Chip>
+            <DifficultyChip level={detail.difficulty} />
             <Chip className="border-white/10 bg-white/4 text-mist-400">
               <Clock3 className="size-3" /> {detail.estimated_minutes} min
             </Chip>

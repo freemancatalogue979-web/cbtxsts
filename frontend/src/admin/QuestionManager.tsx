@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PillSelect, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, DifficultyChip, EmptyState, Field, Modal, PillSelect, Select, Skeleton, SwitchRow, TextArea, TextInput, TopicChip} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -585,8 +585,8 @@ export default function QuestionManager({
                       </span>
                       <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
                         <Chip className="border-mint-500/30 bg-mint-500/10 text-mint-200">Ans {question.correct || '—'}</Chip>
-                        <Chip className="capitalize">{question.difficulty}</Chip>
-                        {question.topic && <Chip className="max-w-[12rem] truncate text-mist-300">{question.topic}</Chip>}
+                        <DifficultyChip level={question.difficulty} />
+                        <TopicChip topic={question.topic} className="max-w-[12rem]" />
                         {question.status && question.status !== 'approved' && (
                           <Chip className="capitalize border-gold-500/30 bg-gold-500/12 text-gold-200">{question.status}</Chip>
                         )}
