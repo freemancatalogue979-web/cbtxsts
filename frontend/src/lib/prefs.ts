@@ -107,9 +107,10 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v4 makes Helvetica Oblique the new house default. A versioned key ensures
-// devices that silently stored the previous fallback receive the new default.
-const FONT_KEY = 'arena.font.v4';
+// v5 makes Space Grotesk the house default again. A versioned key ensures
+// devices that silently stored the previous default receive the new one; from
+// now on only an explicit pick in settings is stored.
+const FONT_KEY = 'arena.font.v5';
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';
@@ -206,19 +207,20 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Helvetica Oblique is the house default; a stored choice always wins. */
-export const DEFAULT_FONT: FontName = 'helvetica-oblique';
+/** Space Grotesk is the house default; a stored choice always wins. */
+export const DEFAULT_FONT: FontName = 'grotesk';
 
 export function currentFont(): FontName {
   const stored = read(FONT_KEY, DEFAULT_FONT);
   return (FONTS.some((font) => font.id === stored) ? stored : DEFAULT_FONT) as FontName;
 }
 
-export function applyFont(name: FontName): void {
+/** Paint a font pack. `persist` is false for boot/mode switches so only a real pick is remembered. */
+export function applyFont(name: FontName, persist = true): void {
   const font = FONTS.find((option) => option.id === name) ?? FONTS.find((option) => option.id === DEFAULT_FONT) ?? FONTS[0];
   const style = document.documentElement.style;
   style.setProperty('--font-sans', font.sans);
   style.setProperty('--font-display', font.display);
   document.documentElement.dataset.font = font.id;
-  write(FONT_KEY, name);
+  if (persist) write(FONT_KEY, name);
 }

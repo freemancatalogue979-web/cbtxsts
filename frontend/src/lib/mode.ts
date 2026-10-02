@@ -163,7 +163,7 @@ export function setExperience(next: 'standard' | 'pro' | ModeName): void {
   if (was !== 'pro') write(LAST_STANDARD_KEY, was);
   applyMode(target);
   // Both experiences share the player's chosen font pack.
-  applyFont(currentFont());
+  applyFont(currentFont(), false);
   paintAppearance();
   emit();
   window.dispatchEvent(new CustomEvent(EXPERIENCE_EVENT, {detail: {mode: target}}));

@@ -25,7 +25,7 @@ import './form-controls.css';
 
 // Modes (pro/game/fun) and the chosen font family apply before React renders.
 applyMode(currentMode());
-applyFont(currentFont());
+applyFont(currentFont(), false);
 // Day/night applies before paint too — the default is the night arena, with
 // daylight one tap away in the personalisation panel.
 applySkin(currentSkin());
