@@ -45,7 +45,7 @@ import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
 import {HowItWorks, HubHero, LearningSnapshot, SectionHead, SubjectGrid, TeachCta} from './sections';
-import {BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
+import {ActionMenu, BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
@@ -586,7 +586,6 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
   const [requesting, setRequesting] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [report, setReport] = useState<{kind: string; id: number; label: string} | null>(null);
-  const [menu, setMenu] = useState(false);
 
   const load = useCallback(() => {
     teachers
@@ -638,21 +637,15 @@ function TeacherProfile({id, onBack, onChanged, onOpenMaterial, onOpenQuiz}: {id
             <span className="t-glass" data-state={t.availability_now}>
               <i /> {t.availability_now === 'available' ? 'Available now' : t.availability_now === 'busy' ? 'Busy today' : t.accepting ? 'Accepting students' : 'Not accepting'}
             </span>
-            <div className="relative">
-              <button type="button" className="t-glass !p-2" aria-label="More actions" title="More" onClick={() => setMenu((m) => !m)}>
-                <MoreHorizontal />
-              </button>
-              {menu && (
-                <div className="pro-card absolute right-0 z-10 mt-1 grid w-44 p-1" onMouseLeave={() => setMenu(false)}>
-                  <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), setReport({kind: 'teacher', id: t.id, label: t.name}))}>
-                    <Flag className="size-4" /> Report
-                  </button>
-                  <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), void block())}>
-                    <Lock className="size-4" /> Block
-                  </button>
-                </div>
-              )}
-            </div>
+            <ActionMenu
+              label="More actions"
+              triggerClassName="t-glass !p-2"
+              icon={<MoreHorizontal />}
+              items={[
+                {key: 'report', label: 'Report teacher', detail: 'Staff review it privately', icon: <Flag />, onSelect: () => setReport({kind: 'teacher', id: t.id, label: t.name})},
+                {key: 'block', label: 'Block', detail: 'No messages, off your search', icon: <Lock />, danger: true, onSelect: () => void block()},
+              ]}
+            />
           </div>
         </Cover>
         <div className="t-profile-body">

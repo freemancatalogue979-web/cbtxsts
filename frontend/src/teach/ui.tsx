@@ -1,7 +1,7 @@
 /** Shared building blocks for the Teacher Network screens (Pro design language). */
 import {AnimatePresence, motion} from 'framer-motion';
 import {Atom, BadgeCheck, BookOpen, Calculator, Check, Code2, Dna, FlaskConical, Globe2, GraduationCap, Landmark, Languages, LineChart, Music2, Palette, Scale, Sigma, Star, X, type LucideIcon} from 'lucide-react';
-import {useEffect, useRef, type ReactNode} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import type {Tab} from '../lib/nav';
 import {usePlayerPhoto} from '../lib/photos';
@@ -380,4 +380,97 @@ export function responseLabel(hours: number | null): string {
   if (hours < 1) return 'Under an hour';
   if (hours < 24) return `${Math.round(hours)}h`;
   return `${Math.round(hours / 24)}d`;
+}
+
+/* ----------------------------------------------------------- action menu */
+export type MenuItem = {key: string; label: string; detail?: string; icon: ReactNode; danger?: boolean; onSelect: () => void};
+
+/**
+ * Kebab / "more" menu. Portals to <body> so covers and cards with
+ * overflow:hidden can't clip it; anchors to the trigger's right edge, flips
+ * above when there's no room below, and clamps inside the viewport.
+ */
+export function ActionMenu({label, icon, items, triggerClassName, width = 248}: {label: string; icon: ReactNode; items: MenuItem[]; triggerClassName: string; width?: number}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{top: number; left: number; up: boolean} | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const {pro} = useExperience();
+
+  useLayoutEffect(() => {
+    if (!open || !btn.current) return;
+    const r = btn.current.getBoundingClientRect();
+    const w = Math.min(width, window.innerWidth - 16);
+    const h = panel.current?.offsetHeight ?? items.length * 56 + 12;
+    const up = r.bottom + 8 + h > window.innerHeight - 8 && r.top - 8 - h > 8;
+    setPos({top: up ? r.top - 8 - h : r.bottom + 8, left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)), up});
+  }, [open, width, items.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!panel.current?.contains(t) && !btn.current?.contains(t)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        close();
+        btn.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button ref={btn} type="button" className={triggerClassName} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {icon}
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            role="menu"
+            aria-label={label}
+            className="t-menu"
+            data-skin-mode={pro ? 'pro' : 'game'}
+            data-up={pos?.up ? '' : undefined}
+            style={{top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: Math.min(width, window.innerWidth - 16), visibility: pos ? 'visible' : 'hidden'}}
+          >
+            {items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="menuitem"
+                className="t-menu-item"
+                data-danger={item.danger ? '' : undefined}
+                onClick={() => {
+                  setOpen(false);
+                  item.onSelect();
+                }}
+              >
+                <span className="t-menu-ico" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="t-menu-text">
+                  <b>{item.label}</b>
+                  {item.detail && <small>{item.detail}</small>}
+                </span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 }

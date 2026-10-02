@@ -7,7 +7,7 @@ import type {ChatMessage} from '../lib/types';
 import {Empty, LoadingRows, PageHeader} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
-import {PersonAvatar, ProScope, activeLabel, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
+import {ActionMenu, PersonAvatar, ProScope, activeLabel, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 const ROLE_LABEL: Record<Conversation['role'], string> = {teacher: 'Your teacher', student: 'Your student', request: 'Request', friend: 'Friend'};
@@ -156,7 +156,6 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [typing, setTyping] = useState(false);
-  const [menu, setMenu] = useState(false);
   const [report, setReport] = useState<{kind: string; id: number; label: string} | null>(null);
   const [share, setShare] = useState(false);
   const [material, setMaterial] = useState<number | null>(null);
@@ -318,21 +317,15 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
             <Users className="size-4" /> Student
           </button>
         )}
-        <div className="relative">
-          <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm" onClick={() => setMenu((m) => !m)} aria-label="Conversation options" title="Options">
-            <MoreVertical className="size-4" />
-          </button>
-          {menu && (
-            <div className="pro-card absolute right-0 z-10 mt-1 grid w-48 p-1" onMouseLeave={() => setMenu(false)}>
-              <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), setReport({kind: 'teacher_student', id: otherId, label: other?.name ?? 'Player'}))}>
-                <Flag className="size-4" /> Report person
-              </button>
-              <button type="button" className="pro-btn pro-btn-ghost justify-start" onClick={() => (setMenu(false), void block())}>
-                <Lock className="size-4" /> Block
-              </button>
-            </div>
-          )}
-        </div>
+        <ActionMenu
+          label="Conversation options"
+          triggerClassName="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm"
+          icon={<MoreVertical className="size-4" />}
+          items={[
+            {key: 'report', label: 'Report person', detail: 'Staff review it privately', icon: <Flag />, onSelect: () => setReport({kind: 'teacher_student', id: otherId, label: other?.name ?? 'Player'})},
+            {key: 'block', label: 'Block', detail: 'No messages either way', icon: <Lock />, danger: true, onSelect: () => void block()},
+          ]}
+        />
       </header>
 
       <div className="t-chat-scroll" ref={scrollRef} aria-live="polite">

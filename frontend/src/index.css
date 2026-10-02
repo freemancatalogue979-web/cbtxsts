@@ -2535,3 +2535,75 @@ input[type='radio'] {
 [data-mode='pro'] .pbanner-watermark { opacity: 0.06; }
 [data-mode='pro'] .pbanner-stat { color: var(--pro-text-2); }
 [data-mode='pro'] .pbanner-stat > b { color: var(--pro-text); }
+
+/* ==========================================================================
+   ACTION MENU — <ActionMenu> (teach/ui). Portalled to <body>, so it is styled
+   globally; data-skin-mode picks the arena or Pro skin.
+   ========================================================================== */
+@keyframes t-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
+.t-menu {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--color-nova-400) 26%, rgb(255 255 255 / 0.08));
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--color-nova-500) 16%, transparent), transparent 60%),
+    color-mix(in srgb, var(--color-ink-900) 96%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 22px 48px -18px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(0 0 0 / 0.25);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transform-origin: top right;
+  animation: t-menu-in 0.14s ease-out;
+}
+.t-menu[data-up] { transform-origin: bottom right; }
+.t-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 3.05rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.8rem;
+  text-align: left;
+  color: var(--color-mist-100);
+  transition: background-color 0.14s ease;
+}
+.t-menu-item:hover, .t-menu-item:focus-visible { background: rgb(255 255 255 / 0.06); outline: none; }
+.t-menu-item:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-nova-400) 60%, transparent); }
+.t-menu-ico {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.7rem;
+  color: var(--color-nova-200);
+  background: color-mix(in srgb, var(--color-nova-400) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-nova-400) 24%, transparent);
+}
+.t-menu-ico > svg { width: 1rem; height: 1rem; }
+.t-menu-text { display: grid; min-width: 0; line-height: 1.2; }
+.t-menu-text > b { font-size: 0.86rem; font-weight: 700; }
+.t-menu-text > small { margin-top: 0.12rem; font-size: 0.7rem; font-weight: 500; color: var(--color-mist-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-menu-item[data-danger] { color: var(--color-flare-300); }
+.t-menu-item[data-danger] .t-menu-ico { color: var(--color-flare-300); background: color-mix(in srgb, var(--color-flare-400) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-flare-400) 26%, transparent); }
+.t-menu-item[data-danger]:hover { background: color-mix(in srgb, var(--color-flare-500) 10%, transparent); }
+[data-skin='day'] .t-menu { box-shadow: 0 18px 40px -18px rgb(15 23 52 / 0.35), 0 0 0 1px rgb(15 23 52 / 0.06); }
+[data-skin='day'] .t-menu-item:hover { background: rgb(15 23 52 / 0.05); }
+
+.t-menu[data-skin-mode='pro'] {
+  border-radius: 12px;
+  border-color: var(--pro-border);
+  background: var(--pro-elevated);
+  box-shadow: var(--pro-shadow-pop);
+}
+.t-menu[data-skin-mode='pro'] .t-menu-item { border-radius: 8px; min-height: 2.9rem; color: var(--pro-text); }
+.t-menu[data-skin-mode='pro'] .t-menu-item:hover { background: var(--pro-hover); }
+.t-menu[data-skin-mode='pro'] .t-menu-ico { border-radius: 8px; color: var(--pro-accent-text); background: var(--pro-h-violet-soft); box-shadow: none; }
+.t-menu[data-skin-mode='pro'] .t-menu-text > small { color: var(--pro-text-3, var(--pro-text-2)); }
+.t-menu[data-skin-mode='pro'] .t-menu-item[data-danger] { color: var(--pro-h-rose); }
+.t-menu[data-skin-mode='pro'] .t-menu-item[data-danger] .t-menu-ico { color: var(--pro-h-rose); background: var(--pro-h-rose-soft); }
+@media (prefers-reduced-motion: reduce) { .t-menu { animation: none; } }
