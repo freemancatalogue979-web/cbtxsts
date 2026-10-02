@@ -212,6 +212,46 @@ export type Learning = {
   quizzes: TQuiz[];
   groups: TGroup[];
 };
+/**
+ * Safety net: an accepted request always means "this is my teacher". If the
+ * teacher list somehow lacks them (older server, odd data), show a basic card
+ * built from the request so the student is never told "No teachers yet".
+ */
+function withAcceptedFallback(data: Learning): Learning {
+  const teachers = data.teachers ?? [];
+  const known = new Set(teachers.map((row) => row.teacher.id));
+  const extra: Learning['teachers'] = [];
+  for (const req of data.requests ?? []) {
+    if (req.status !== 'accepted' || !req.teacher || known.has(req.teacher_id)) continue;
+    known.add(req.teacher_id);
+    extra.push({
+      relationship: {id: 0, status: 'active', subject: req.subject, topic: req.topic, started_at: req.responded_at ?? req.created_at, ended_at: null},
+      teacher: {
+        id: req.teacher.id,
+        student_id: req.teacher.student_id,
+        name: req.teacher.name,
+        full_name: req.teacher.name,
+        avatar_hue: req.teacher.avatar_hue,
+        has_photo: req.teacher.has_photo,
+        headline: '',
+        bio: '',
+        verified: req.teacher.verified,
+        experience_years: 0,
+        institution: '',
+        languages: [],
+        formats: 'both',
+        accepting: true,
+        availability_now: 'busy',
+        specialties: req.subject ? [{subject: req.subject, topics: req.topic ? [req.topic] : []}] : [],
+        stats: {rating: 0, review_count: 0, students_taught: 0, active_students: 0, completed_relationships: 0, response_rate: null, response_hours: null, retention: null, groups: 0, group_members: 0, materials: 0, quizzes: 0, quiz_attempts: 0},
+        badges: [],
+      },
+      can_review: false,
+      reviewed: false,
+    });
+  }
+  return extra.length ? {...data, teachers: [...teachers, ...extra]} : {...data, teachers};
+}
 export type Conversation = {
   with: Person;
   role: 'teacher' | 'student' | 'request' | 'friend';
@@ -294,7 +334,7 @@ export const teachers = {
   detail: (id: number) => request<TeacherDetail>(`${T}/${id}`),
   request: (id: number, body: {subject: string; topic: string; message: string; format: string; preferred_time: string}) => request<TRequest>(`${T}/${id}/requests`, {method: 'POST', body}),
   cancelRequest: (id: number) => request<TRequest>(`${T}/requests/${id}/cancel`, {method: 'POST'}),
-  learning: () => request<Learning>(`${T}/me/learning`),
+  learning: () => request<Learning>(`${T}/me/learning`).then(withAcceptedFallback),
   completeRelationship: (id: number) => request<{ok: boolean}>(`${T}/relationships/${id}/complete`, {method: 'POST'}),
   endRelationship: (id: number) => request<{ok: boolean}>(`${T}/relationships/${id}/end`, {method: 'POST'}),
   review: (teacherId: number, body: {rating: number; body: string; anonymous: boolean}) => request<TReview>(`${T}/${teacherId}/reviews`, {method: 'POST', body}),

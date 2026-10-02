@@ -13,6 +13,7 @@ can't drift apart:
 """
 from __future__ import annotations
 
+import logging
 import re
 import time
 import uuid
@@ -84,6 +85,8 @@ TEACHER_REPORT_KINDS = {
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
+
+logger = logging.getLogger("arena.teachers")
 
 
 def iso(value: datetime | None) -> str | None:
@@ -392,7 +395,7 @@ def badges_for(profile: TeacherProfile, stats: dict[str, Any]) -> list[dict[str,
         badges.append({"key": "top_rated", "label": "Top rated", "reason": f"{stats['rating']} average from {stats['review_count']} reviews."})
     if (stats.get("response_rate") or 0) >= 90 and (stats.get("response_hours") or 99) <= 24:
         badges.append({"key": "fast", "label": "Quick to respond", "reason": f"Answers {stats['response_rate']}% of requests, usually within a day."})
-    if profile.experience_years >= 5:
+    if (profile.experience_years or 0) >= 5:
         badges.append({"key": "experienced", "label": f"{profile.experience_years}+ years teaching", "reason": "Self-reported teaching experience."})
     if stats.get("group_members", 0) >= 10:
         badges.append({"key": "community", "label": "Community builder", "reason": f"{stats['group_members']} students across their study groups."})
@@ -421,13 +424,13 @@ def teacher_card(db: Session, profile: TeacherProfile, stats: dict[str, Any], sp
         "full_name": student.name if student else "",
         "avatar_hue": student.avatar_hue if student else 260,
         "has_photo": bool(student and student.photo),
-        "headline": profile.headline,
-        "bio": profile.bio[:220],
+        "headline": profile.headline or "",
+        "bio": (profile.bio or "")[:220],
         "verified": profile.verified,
         "experience_years": profile.experience_years,
-        "institution": profile.institution,
-        "languages": profile.languages or [],
-        "formats": profile.formats,
+        "institution": profile.institution or "",
+        "languages": profile.languages if isinstance(profile.languages, list) else [],
+        "formats": profile.formats or "both",
         "accepting": profile.accepting,
         "availability_now": availability_now(profile),
         "specialties": specialties_grouped(specialties),
@@ -436,11 +439,41 @@ def teacher_card(db: Session, profile: TeacherProfile, stats: dict[str, Any], sp
     }
 
 
+def teacher_card_safe(db: Session, profile: TeacherProfile, stats: dict[str, Any], specialties: list[TeacherSpecialty]) -> dict[str, Any]:
+    """teacher_card that never raises: odd legacy data degrades to a basic card
+    (name, avatar, message) instead of taking a whole list down with it."""
+    try:
+        return teacher_card(db, profile, stats, specialties)
+    except Exception:  # noqa: BLE001 - logged, then degrade
+        logger.exception("teacher_card failed for teacher profile %s", profile.id)
+        student = profile.student
+        return {
+            "id": profile.id,
+            "student_id": profile.student_id,
+            "name": short_name(student) or "Teacher",
+            "full_name": (student.name if student else "") or "",
+            "avatar_hue": (student.avatar_hue if student else 260) or 260,
+            "has_photo": bool(student and student.photo),
+            "headline": "",
+            "bio": "",
+            "verified": bool(profile.verified),
+            "experience_years": 0,
+            "institution": "",
+            "languages": [],
+            "formats": "both",
+            "accepting": bool(profile.accepting),
+            "availability_now": "busy",
+            "specialties": [],
+            "stats": {"rating": 0.0, "review_count": 0, "students_taught": 0, "active_students": 0, "completed_relationships": 0, "response_rate": None, "response_hours": None, "retention": None, "groups": 0, "group_members": 0, "materials": 0, "quizzes": 0, "quiz_attempts": 0},
+            "badges": [],
+        }
+
+
 def availability_now(profile: TeacherProfile) -> str:
     """"available" | "busy" | "unavailable" from the weekly slots (server time)."""
     if not profile.accepting:
         return "unavailable"
-    slots = profile.availability or []
+    slots = profile.availability if isinstance(profile.availability, list) else []
     if not slots:
         return "busy"
     now = datetime.now()
@@ -449,7 +482,7 @@ def availability_now(profile: TeacherProfile) -> str:
         try:
             if int(slot.get("day", -1)) == now.weekday() and str(slot.get("start", "")) <= hhmm < str(slot.get("end", "")):
                 return "available"
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
             continue
     return "busy"
 

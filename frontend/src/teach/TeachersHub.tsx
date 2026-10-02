@@ -1181,7 +1181,7 @@ function MyTeachers({learning, error, onOpen, onReload, onOpenMaterial, onOpenQu
                 <button type="button" className="pro-btn pro-btn-sm" onClick={() => onOpen(t.id)}>
                   Profile
                 </button>
-                {rel.status === 'active' && (
+                {rel.status === 'active' && rel.id > 0 && (
                   <button type="button" className="pro-btn pro-btn-ghost pro-btn-sm" onClick={() => void complete(rel.id, t.name)}>
                     <CheckCircle2 className="size-4" /> Mark complete
                   </button>

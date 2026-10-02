@@ -6,6 +6,8 @@ Every permission is decided here (via ``services.teachers``) — never in the UI
 """
 from __future__ import annotations
 
+import logging
+
 import json
 import random
 from datetime import timedelta
@@ -51,6 +53,7 @@ from ..models import (
 from ..services import teachers as T
 from ..services.group import log_activity
 
+logger = logging.getLogger("arena.teachers")
 router = APIRouter(prefix="/teachers", tags=["teachers"])
 
 
@@ -529,7 +532,7 @@ def search_teachers(
     total = len(results)
     window = results[(page - 1) * size : page * size]
     return {
-        "items": [T.teacher_card(db, p, stats[p.id], specs.get(p.id, [])) for _, p in window],
+        "items": [T.teacher_card_safe(db, p, stats[p.id], specs.get(p.id, [])) for _, p in window],
         "total": total,
         "page": page,
         "pages": max(1, -(-total // size)),
@@ -553,10 +556,11 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
         profile = db.get(TeacherProfile, rel.teacher_id)
         if profile is None:
             continue
+        # One teacher's odd data must never blank the student's whole list.
         teachers.append(
             {
-                "relationship": {"id": rel.id, "status": rel.status, "subject": rel.subject, "topic": rel.topic, "started_at": T.iso(rel.started_at), "ended_at": T.iso(rel.ended_at)},
-                "teacher": T.teacher_card(db, profile, stats.get(profile.id, {}), specs.get(profile.id, [])),
+                "relationship": {"id": rel.id, "status": rel.status or "active", "subject": rel.subject or "", "topic": rel.topic or "", "started_at": T.iso(rel.started_at), "ended_at": T.iso(rel.ended_at)},
+                "teacher": T.teacher_card_safe(db, profile, stats.get(profile.id, {}), specs.get(profile.id, [])),
                 "can_review": rel.status == "completed" and rel.id not in reviewed,
                 "reviewed": rel.id in reviewed,
             }
@@ -586,11 +590,25 @@ def my_learning(db: Session = Depends(get_db), student: Student = Depends(requir
     teacher_names = {p.id: T.short_name(p.student) for p in db.scalars(select(TeacherProfile).where(TeacherProfile.id.in_(list({m.teacher_id for m in materials} | {q.teacher_id for q in quizzes}) or [-1]))).all()}
     return {
         "teachers": teachers,
-        "requests": [_request_public(db, r, for_teacher=False) for r in requests],
-        "materials": [{**_material_public(db, m), "teacher_name": teacher_names.get(m.teacher_id, "")} for m in materials if T.can_view_material(db, m, student)],
-        "quizzes": [{**_quiz_summary(db, q, viewer=student), "teacher_name": teacher_names.get(q.teacher_id, "")} for q in quizzes if T.can_view_quiz(db, q, student)],
-        "groups": [_group_public(db, g, student) for g in groups],
+        "requests": _each(requests, lambda r: _request_public(db, r, for_teacher=False), "request"),
+        "materials": _each(materials, lambda m: {**_material_public(db, m), "teacher_name": teacher_names.get(m.teacher_id, "")} if T.can_view_material(db, m, student) else None, "material"),
+        "quizzes": _each(quizzes, lambda q: {**_quiz_summary(db, q, viewer=student), "teacher_name": teacher_names.get(q.teacher_id, "")} if T.can_view_quiz(db, q, student) else None, "quiz"),
+        "groups": _each(groups, lambda g: _group_public(db, g, student), "group"),
     }
+
+
+def _each(rows, build, kind: str) -> list:
+    """Build each item on its own; a broken item is logged and skipped, never fatal."""
+    out = []
+    for row in rows:
+        try:
+            item = build(row)
+        except Exception:  # noqa: BLE001
+            logger.exception("my_learning: skipped %s %s", kind, getattr(row, "id", "?"))
+            continue
+        if item is not None:
+            out.append(item)
+    return out
 
 
 @router.get("/groups/discover")
@@ -1844,7 +1862,7 @@ def teacher_profile(teacher_id: int, db: Session = Depends(get_db), student: Stu
     db.commit()
     specs = db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id == profile.id)).all()
     stats = T.stats_for(db, [profile.id])[profile.id]
-    card = T.teacher_card(db, profile, stats, list(specs))
+    card = T.teacher_card_safe(db, profile, stats, list(specs))
     quals = db.scalars(select(TeacherQualification).where(TeacherQualification.teacher_id == profile.id, TeacherQualification.status != "rejected")).all()
     groups = db.scalars(select(StudyGroup).where(StudyGroup.teacher_id == profile.id, StudyGroup.privacy != "invite")).all()
     materials = db.scalars(select(TeacherMaterial).where(TeacherMaterial.teacher_id == profile.id, TeacherMaterial.visibility == "public", TeacherMaterial.status == "active").order_by(TeacherMaterial.created_at.desc()).limit(12)).all()
