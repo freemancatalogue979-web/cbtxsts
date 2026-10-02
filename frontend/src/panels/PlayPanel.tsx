@@ -21,6 +21,7 @@ import {
   Swords,
   Target,
   Trophy,
+  Zap,
 } from 'lucide-react';
 import {motion} from 'motion/react';
 import {Suspense, useEffect, useMemo, useState} from 'react';
@@ -329,18 +330,26 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
                   </span>
                 </div>
 
-                <div className="min-w-0 flex-1 pr-14 sm:pr-24">
-                  <p className="ag-eyebrow">
+                <div className="min-w-0 flex-1 sm:pr-24">
+                  <p className="ag-eyebrow pr-14 sm:pr-0">
                     <GreetIcon className="size-3.5 text-gold-300" />
                     {greetingText}
                   </p>
-                  <h1 className="ag-title mt-1 line-clamp-2 text-[1.28rem] [overflow-wrap:anywhere] sm:text-[2.1rem]">{profile.name.split(' ').slice(0, 2).join(' ')}</h1>
-                  <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[0.74rem] font-bold text-mist-400 sm:text-[0.84rem]">
-                    <Crown className="size-3.5 shrink-0 text-gold-300" />
-                    <span className="truncate">
-                      <span className="text-nova-300">{progress.title}</span> · {tier.label} league
+                  <h1 className="ag-name mt-1 line-clamp-2 pr-10 [overflow-wrap:anywhere] sm:pr-0">{profile.name.split(' ').slice(0, 2).join(' ')}</h1>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="ag-rank" title="Your rank title">
+                      <i>
+                        <Crown />
+                      </i>
+                      {progress.title}
                     </span>
-                  </p>
+                    <span className="ag-league" style={{['--lg' as string]: tier.ring}} title="Your league">
+                      <i>
+                        <Award />
+                      </i>
+                      {tier.label}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -365,7 +374,7 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
               {/* ---- resources */}
               <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
                 {[
-                  {label: 'League', value: tier.label, icon: Award, color: tier.ring},
+                  {label: 'Week XP', value: formatNumber(profile.weekly_xp ?? 0), icon: Zap, color: 'var(--color-nova-400)'},
                   {label: 'Streak', value: `${profile.streak}d`, icon: Flame, color: 'var(--color-flare-400)'},
                   {label: 'Coins', value: formatNumber(profile.coins), icon: Coins, color: 'var(--color-gold-400)'},
                   {label: 'Accuracy', value: `${profile.stats.accuracy}%`, icon: Target, color: 'var(--color-pulse-400)'},

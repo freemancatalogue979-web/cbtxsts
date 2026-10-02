@@ -66,7 +66,7 @@
 
 /* ------------------------------------------------------------------ type */
 /* Names and headers wear the fantasy title face (solid colour — headings can hold badges). */
-.t-game :is(.pro-h1, .pro-h2, .pro-h3, .t-hub-title) { font-family: var(--font-title); font-style: normal; color: var(--color-mist-50); letter-spacing: 0.01em; }
+.t-game :is(.pro-h1, .pro-h2, .pro-h3, .t-hub-title) { font-family: var(--font-title); font-style: normal; font-weight: 400 !important; font-synthesis: none; color: var(--color-mist-50); letter-spacing: 0.01em; }
 .t-game .pro-h1 { font-size: clamp(1.55rem, 5.4vw, 2.2rem); font-weight: 900; line-height: 1.08; }
 .t-game .pro-h2 { font-size: 1.2rem; font-weight: 850; }
 .t-game .pro-h3 { font-size: 1rem; font-weight: 800; }
