@@ -58,6 +58,8 @@
 
   --font-sans: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
+  /* Fantasy title face for names and headers (Standard mode only). */
+  --font-title: "Cinzel Variable", "Cinzel", Georgia, "Times New Roman", serif;
 
   /* surfaces — true black base, violet-tinted raised steps */
   --color-ink-950: #050308;
@@ -2065,3 +2067,83 @@ input[type='checkbox'],
 input[type='radio'] {
   cursor: pointer;
 }
+
+/* ==========================================================================
+   TITLE TYPE — names and headers get the fantasy title face (Cinzel).
+   Upright on purpose: the oblique font pack would fake-slant a serif.
+   Pro mode never uses these classes.
+   ========================================================================== */
+.ag-title {
+  font-family: var(--font-title);
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.12;
+  color: var(--color-mist-50);
+  background: linear-gradient(180deg, var(--color-mist-50) 38%, color-mix(in srgb, var(--color-nova-300) 75%, var(--color-mist-50)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-bottom: 0.06em; /* descenders stay inside the clip */
+}
+.ag-title-gold {
+  background-image: linear-gradient(180deg, #fff3c4 0%, var(--color-gold-300) 55%, var(--color-gold-500) 100%);
+}
+[data-skin='day'] .ag-title-gold { background-image: linear-gradient(180deg, var(--color-gold-500), #92400e); }
+.ag-eyebrow {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; font-style: normal;
+  color: var(--color-mist-400);
+}
+
+/* --------------------------------------------------------------- home hero */
+.ag-hero { padding: 0; isolation: isolate; }
+.ag-hero__banner {
+  position: relative;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--color-nova-500) 30%, transparent), transparent 60%),
+    radial-gradient(80% 80% at 100% 0%, color-mix(in srgb, var(--color-flare-500) 18%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-nova-500) 8%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-mist-50) 7%, transparent);
+}
+.ag-hero__banner::after {
+  /* faint rune lattice */
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35;
+  background-image: radial-gradient(color-mix(in srgb, var(--color-mist-50) 14%, transparent) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(100deg, transparent 30%, #000 75%);
+}
+.ag-hero__companion {
+  position: absolute; right: -6px; bottom: -6px; display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: var(--color-ink-800); border: 2px solid color-mix(in srgb, var(--color-nova-400) 55%, transparent);
+  box-shadow: 0 4px 10px -4px rgb(0 0 0 / 0.6);
+}
+.ag-xp { height: 10px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--color-mist-50) 8%, transparent); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35); }
+.ag-xp > i {
+  display: block; height: 100%; min-width: 10px; border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-flare-500), var(--color-nova-500) 55%, var(--color-pulse-400));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+.ag-res {
+  position: relative; min-width: 0; display: grid; justify-items: center; gap: 2px; text-align: center;
+  padding: 9px 4px 8px; border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--res) 30%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--res) 16%, transparent), color-mix(in srgb, var(--res) 5%, transparent));
+}
+.ag-res > svg { width: 18px; height: 18px; color: var(--res); }
+.ag-res > b { font-size: 0.95rem; line-height: 1.1; font-weight: 900; font-style: normal; color: var(--color-mist-50); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-res > small { font-size: 0.56rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-mist-500); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 640px) {
+  .ag-res { padding: 12px 8px 10px; }
+  .ag-res > svg { width: 20px; height: 20px; }
+  .ag-res > b { font-size: 1.12rem; }
+  .ag-res > small { font-size: 0.62rem; }
+}
+.ag-ledger { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-radius: 16px; border: 1px solid color-mix(in srgb, var(--color-mist-50) 8%, transparent); background: rgb(0 0 0 / 0.18); }
+[data-skin='day'] .ag-ledger { background: color-mix(in srgb, var(--color-ink-800) 70%, transparent); }
+.ag-ledger > div { min-width: 0; padding: 8px 6px; text-align: center; }
+.ag-ledger > div + div { border-left: 1px solid color-mix(in srgb, var(--color-mist-50) 8%, transparent); }
+.ag-ledger b { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 0.88rem; font-weight: 900; font-style: normal; color: var(--color-mist-50); }
+.ag-ledger b svg { width: 13px; height: 13px; flex-shrink: 0; }
+.ag-ledger small { display: block; margin-top: 1px; font-size: 0.54rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-mist-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

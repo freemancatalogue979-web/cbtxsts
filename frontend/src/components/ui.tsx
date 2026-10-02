@@ -693,9 +693,9 @@ export function SectionHeading({
   return (
     <div className="mb-3.5 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 sm:mb-4 sm:gap-4">
       <div className="min-w-0">
-        <h2 className="flex items-center gap-2 text-[1rem] leading-tight font-extrabold text-mist-50 sm:text-lg">
+        <h2 className="flex items-center gap-2 text-[1.02rem] leading-tight sm:text-[1.2rem]">
           {icon && <span className="text-nova-400">{icon}</span>}
-          {title}
+          <span className="ag-title min-w-0">{title}</span>
         </h2>
         {subtitle && <p className="mt-1 text-[0.82rem] font-medium text-mist-500">{subtitle}</p>}
       </div>

@@ -308,7 +308,7 @@ export function Sheet({open, onClose, title, subtitle, children, footer, size = 
 export function Field({label, hint, children, error, group}: {label: string; hint?: ReactNode; children: ReactNode; error?: string | null; group?: boolean}) {
   const Tag = group ? 'div' : 'label';
   return (
-    <Tag className="grid min-w-0 content-start gap-1.5" role={group ? 'group' : undefined} aria-label={group ? label : undefined}>
+    <Tag className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5" role={group ? 'group' : undefined} aria-label={group ? label : undefined}>
       <span className="t-label">{label}</span>
       {children}
       {error ? <span className="pro-meta" style={{color: 'var(--pro-danger)'}}>{error}</span> : hint ? <span className="pro-meta">{hint}</span> : null}

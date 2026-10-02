@@ -6,14 +6,18 @@ import {
   ChevronRight,
   CircleDot,
   Coins,
+  Crown,
   Flame,
   Gift,
   Layers,
   Lock,
   Megaphone,
+  Moon,
   Play,
   RotateCcw,
   ScrollText,
+  Sun,
+  Sunset,
   Swords,
   Target,
   Trophy,
@@ -240,11 +244,15 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
     );
   }, [visible]);
 
+  const heroRing = useSize(84, 116);
+  const heroSlime = useSize(58, 92);
   if (!profile) return <Skeleton className="h-64" />;
+  const hour = new Date().getHours();
+  const greetingText = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const GreetIcon = hour < 6 || hour >= 19 ? Moon : hour < 17 ? Sun : Sunset;
 
   const progress = profile.progress;
   const tier = TIER_STYLES[profile.tier] ?? TIER_STYLES.bronze;
-  const heroRing = useSize(92, 128);
 
   return (
     <div className="space-y-5 sm:space-y-8">
@@ -296,100 +304,130 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
       {/* ------------------------------------------------------------ hero */}
       <motion.section variants={staggerContainer} initial="hidden" animate="show" className="space-y-4">
         <motion.div variants={staggerItem}>
-          <Card className="relative overflow-hidden p-4 sm:p-7">
-            {/* The hero greets you on the home screen; the chosen mascot
-                still rides along in the corner as your companion. */}
-            <Character
-              mood="idle"
-              size={104}
-              tone="day"
-              className="pointer-events-none absolute -right-2 -bottom-3 opacity-95 sm:right-3 sm:-bottom-2"
-              label="Slime mascot"
-            />
-            <Mascot
-              name={heroMascot}
-              mood="idle"
-              size={40}
-              className="pointer-events-none absolute top-2 right-2.5 opacity-90 sm:top-4 sm:right-5"
-            />
-
-            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-              <div className="flex items-center gap-4 sm:contents">
-              <div className="relative shrink-0">
-                <ProgressRing value={progress.percent} size={heroRing} stroke={9}>
-                  <span className="flex flex-col items-center">
- <span className="text-[0.54rem] font-black tracking-[0.14em] text-mist-500 sm:text-[0.6rem] sm:tracking-[0.2em]">Level</span>
-                    <span className="text-2xl leading-none font-black tabular text-mist-50 sm:text-3xl">{progress.level}</span>
- <span className="mt-0.5 max-w-[4.2rem] truncate text-[0.54rem] font-bold tracking-wide text-nova-300 sm:mt-1 sm:max-w-[5.5rem] sm:text-[0.6rem]">
-                      {progress.title}
+          <Card className="ag-hero relative overflow-hidden">
+            {/* ---- banner: level ring, name plate, XP track */}
+            <div className="ag-hero__banner px-4 pt-4 pb-4 sm:px-7 sm:pt-6 sm:pb-5">
+              {/* the slime companion peeks in from the corner */}
+              <Character
+                mood="idle"
+                size={heroSlime}
+                tone="day"
+                className="pointer-events-none absolute -top-1 right-0 opacity-95 sm:top-1 sm:right-4"
+                label="Slime mascot"
+              />
+              <div className="relative flex items-center gap-3.5 sm:gap-6">
+                <div className="relative shrink-0">
+                  <ProgressRing value={progress.percent} size={heroRing} stroke={8}>
+                    <span className="flex flex-col items-center">
+                      <span className="text-[0.5rem] font-black tracking-[0.18em] text-mist-500 uppercase not-italic sm:text-[0.58rem]">Level</span>
+                      <span className="ag-title text-[1.7rem] leading-none sm:text-[2.3rem]">{progress.level}</span>
                     </span>
+                  </ProgressRing>
+                  {/* the mascot you picked rides on the ring like a familiar */}
+                  <span className="ag-hero__companion" aria-hidden="true">
+                    <Mascot name={heroMascot} mood="idle" size={26} className="pointer-events-none" />
                   </span>
-                </ProgressRing>
-              </div>
+                </div>
 
-              <div className="min-w-0 flex-1 pr-12 text-left sm:pr-16">
- <p className="text-[0.64rem] font-black tracking-[0.16em] text-mist-500 sm:text-[0.7rem] sm:tracking-[0.24em]">
-                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}
-                </p>
-                <h1 className="mt-0.5 truncate text-xl leading-tight font-black tracking-tight text-mist-50 sm:mt-1 sm:text-[1.75rem]">
-                  {profile.name.split(' ').slice(0, 2).join(' ')}
-                </h1>
-                <p className="mt-1 text-[0.8rem] font-semibold text-mist-400 sm:mt-1.5 sm:text-[0.86rem]">
-                  {formatNumber(progress.into_level)} / {formatNumber(progress.needed)} XP to Level {progress.level + 1}
-                </p>
-
-                <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-4 sm:justify-start sm:gap-2">
-                  <Chip className={tier.className} icon={<Award className="size-3.5" />}>
-                    {tier.label}
-                  </Chip>
-                  <Chip className="border-flare-500/28 bg-flare-500/12 text-flare-300" icon={<Flame className="size-3.5" />}>
-                    {profile.streak}d streak
-                  </Chip>
-                  <Chip className="border-gold-500/28 bg-gold-500/12 text-gold-300" icon={<Coins className="size-3.5" />}>
-                    {formatNumber(profile.coins)} coins
-                  </Chip>
-                  <Chip className="border-pulse-500/28 bg-pulse-500/12 text-pulse-300" icon={<Target className="size-3.5" />}>
-                    {profile.stats.accuracy}% acc
-                  </Chip>
-                  {/* the seasonal badge this player is wearing — it resets monthly */}
-                  {profile.season ? (
-                    <Chip
-                      className="border-nova-400/30 bg-nova-500/12 py-0.5 pr-2.5 pl-1 text-nova-200"
-                      icon={<SeasonBadge rank={profile.season.rank} level={profile.season.level} size="xs" showLevel={false} />}
-                    >
-                      {profile.season.rank.label} · {profile.season.days_left}d left
-                    </Chip>
-                  ) : null}
+                <div className="min-w-0 flex-1 pr-14 sm:pr-24">
+                  <p className="ag-eyebrow">
+                    <GreetIcon className="size-3.5 text-gold-300" />
+                    {greetingText}
+                  </p>
+                  <h1 className="ag-title mt-1 line-clamp-2 text-[1.28rem] [overflow-wrap:anywhere] sm:text-[2.1rem]">{profile.name.split(' ').slice(0, 2).join(' ')}</h1>
+                  <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[0.74rem] font-bold text-mist-400 sm:text-[0.84rem]">
+                    <Crown className="size-3.5 shrink-0 text-gold-300" />
+                    <span className="truncate">
+                      <span className="text-nova-300">{progress.title}</span> · {tier.label} league
+                    </span>
+                  </p>
                 </div>
               </div>
+
+              <div className="relative mt-4 sm:mt-5">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2 text-[0.66rem] font-extrabold tracking-[0.08em] text-mist-500 uppercase sm:text-[0.7rem]">
+                  <span>
+                    <span className="inline-flex items-center gap-1">
+                      Lv {progress.level} <ChevronRight className="size-3 text-nova-300" /> Lv {progress.level + 1}
+                    </span>
+                  </span>
+                  <span className="tabular text-mist-300 normal-case">
+                    <b className="text-mist-50">{formatNumber(progress.into_level)}</b> / {formatNumber(progress.needed)} XP
+                  </span>
+                </div>
+                <div className="ag-xp" role="progressbar" aria-valuenow={Math.round(progress.percent)} aria-valuemin={0} aria-valuemax={100} aria-label="XP to next level">
+                  <i style={{width: `${Math.max(0, Math.min(100, progress.percent))}%`}} />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 p-3 sm:gap-4 sm:p-6">
+              {/* ---- resources */}
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+                {[
+                  {label: 'League', value: tier.label, icon: Award, color: tier.ring},
+                  {label: 'Streak', value: `${profile.streak}d`, icon: Flame, color: 'var(--color-flare-400)'},
+                  {label: 'Coins', value: formatNumber(profile.coins), icon: Coins, color: 'var(--color-gold-400)'},
+                  {label: 'Accuracy', value: `${profile.stats.accuracy}%`, icon: Target, color: 'var(--color-pulse-400)'},
+                ].map((r) => {
+                  const Icon = r.icon;
+                  return (
+                    <div key={r.label} className="ag-res" style={{['--res' as string]: r.color}}>
+                      <Icon />
+                      <b>{r.value}</b>
+                      <small>{r.label}</small>
+                    </div>
+                  );
+                })}
               </div>
 
-              <div className="grid gap-2 sm:flex sm:w-auto sm:flex-col">
+              {/* ---- season badge you're wearing (resets monthly) */}
+              {profile.season ? (
+                <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-nova-400/25 bg-nova-500/10 py-2 pr-3 pl-2">
+                  <SeasonBadge rank={profile.season.rank} level={profile.season.level} size="xs" showLevel={false} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-baseline justify-between gap-2">
+                      <span className="ag-title ag-title-gold truncate text-[0.92rem] sm:text-base">{profile.season.rank.label} season</span>
+                      <span className="shrink-0 text-[0.66rem] font-extrabold text-mist-400">{profile.season.days_left}d left</span>
+                    </p>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/8">
+                      <div className="h-full rounded-full bg-gradient-to-r from-gold-500 to-gold-300" style={{width: `${Math.max(4, Math.min(100, profile.season.progress?.percent ?? 0))}%`}} />
+                    </div>
+                    <p className="mt-1 truncate text-[0.62rem] font-bold text-mist-500">
+                      {profile.season.next_rank ? <>Next: {profile.season.next_rank.label}</> : 'Top rank reached'} · #{profile.season.board_rank} on the board
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* ---- actions */}
+              <div className="grid grid-cols-2 gap-2">
                 <DailyBonusButton onClaimed={load} />
                 <Button variant="outline" onClick={onOpenDuels} icon={<Swords className="size-4" />} block>
                   Duel a friend
                 </Button>
               </div>
-            </div>
 
-            <div className="relative mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-4 sm:gap-2.5">
-              {[
-                {label: 'Exams taken', value: profile.stats.exams_taken, icon: ScrollText, tone: 'text-pulse-300'},
-                {label: 'Duels won', value: profile.stats.duels_won, icon: Swords, tone: 'text-flare-300'},
-                {label: 'Best score', value: `${profile.stats.best_percentage.toFixed(0)}%`, icon: Trophy, tone: 'text-gold-300'},
-                {label: 'Badges', value: profile.badges.length, icon: Award, tone: 'text-nova-300'},
-              ].map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={stat.label} className="rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2.5 sm:px-3.5 sm:py-3">
-                    <Icon className={`size-4 ${stat.tone}`} />
-                    <p className="mt-1 text-base leading-none font-black tabular text-mist-50 sm:mt-1.5 sm:text-lg">{stat.value}</p>
- <p className="mt-1 truncate text-[0.58rem] font-bold tracking-[0.08em] text-mist-500 sm:text-[0.66rem] sm:tracking-[0.14em]">
-                      {stat.label}
-                    </p>
-                  </div>
-                );
-              })}
+              {/* ---- lifetime ledger */}
+              <div className="ag-ledger">
+                {[
+                  {label: 'Exams', value: profile.stats.exams_taken, icon: ScrollText, tone: 'text-pulse-300'},
+                  {label: 'Duels won', value: profile.stats.duels_won, icon: Swords, tone: 'text-flare-300'},
+                  {label: 'Best', value: `${profile.stats.best_percentage.toFixed(0)}%`, icon: Trophy, tone: 'text-gold-300'},
+                  {label: 'Badges', value: profile.badges.length, icon: Award, tone: 'text-nova-300'},
+                ].map((stat) => {
+                  const Icon = stat.icon;
+                  return (
+                    <div key={stat.label}>
+                      <b className="tabular">
+                        <Icon className={stat.tone} />
+                        {stat.value}
+                      </b>
+                      <small>{stat.label}</small>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </Card>
         </motion.div>
@@ -491,7 +529,8 @@ function DailyBonusButton({onClaimed}: {onClaimed: () => void}) {
 
   return (
     <Button onClick={claim} loading={busy} icon={<Gift className="size-4" />} block>
-      Claim daily bonus
+      <span className="sm:hidden">Daily bonus</span>
+      <span className="max-sm:hidden">Claim daily bonus</span>
     </Button>
   );
 }

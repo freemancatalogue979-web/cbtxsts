@@ -1,9 +1,9 @@
 /** Teacher application wizard + the same editor for approved teachers' profiles. */
-import {ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Clock, FileText, GraduationCap, Hourglass, Loader2, Plus, Send, ShieldAlert, Sparkles, Trash2, Upload, XCircle} from 'lucide-react';
+import {ArrowLeft, ArrowRight, BadgeCheck, BookOpen, CalendarClock, CheckCircle2, Clock, FileText, GraduationCap, Hourglass, Loader2, Plus, Save, ScrollText, Send, ShieldAlert, Sparkles, Trash2, Upload, UserRound, Users, XCircle} from 'lucide-react';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {ApiError} from '../lib/api';
 import {DAYS, fileUrl, teachers, type Catalog, type MyProfile, type Slot, type Specialty} from '../lib/teachers';
-import {LoadingRows, PageHeader} from '../pro/ui';
+import {LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, Toggle, timeAgo} from './ui';
 
@@ -58,7 +58,7 @@ function StatusShell({icon, hue, title, body, children}: {icon: React.ReactNode;
       <span className="mx-auto grid size-16 place-items-center rounded-2xl" style={{color: `var(--pro-h-${hue})`, background: `var(--pro-h-${hue}-soft)`}}>
         {icon}
       </span>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h1 className="pro-h2">{title}</h1>
         <div className="pro-secondary mx-auto max-w-lg">{body}</div>
       </div>
@@ -88,7 +88,7 @@ function PendingScreen({profile, onChanged, onEdit}: {profile: MyProfile; onChan
           ['Teacher Studio opens', false],
         ].map(([label, done], i) => (
           <li key={String(label)} className="flex items-center gap-3 rounded-xl p-3" style={{background: 'var(--pro-hover)'}}>
-            {done ? <CheckCircle2 className="size-5" style={{color: 'var(--pro-success)'}} /> : <span className="grid size-5 place-items-center rounded-full text-[0.7rem] font-bold" style={{border: '1.5px solid var(--pro-border-strong)', color: 'var(--pro-muted)'}}>{i + 1}</span>}
+            {done ? <CheckCircle2 className="size-5" style={{color: 'var(--pro-success)'}} /> : <span className="grid grid-cols-[minmax(0,1fr)] size-5 place-items-center rounded-full text-[0.7rem] font-bold" style={{border: '1.5px solid var(--pro-border-strong)', color: 'var(--pro-muted)'}}>{i + 1}</span>}
             <span className="font-semibold">{label}</span>
           </li>
         ))}
@@ -138,6 +138,18 @@ function SuspendedScreen({profile}: {profile: MyProfile}) {
 
 /* ----------------------------------------------------------------- wizard */
 const STEPS = ['About you', 'Subjects', 'Qualifications', 'Availability'] as const;
+const STEP_META = [
+  {short: 'About', icon: UserRound, blurb: 'The first thing students read about you.'},
+  {short: 'Subjects', icon: BookOpen, blurb: 'Students search by topic — be specific.'},
+  {short: 'Credentials', icon: ScrollText, blurb: 'Degrees and certificates staff can verify.'},
+  {short: 'Schedule', icon: CalendarClock, blurb: 'When you are usually free to teach.'},
+] as const;
+
+const PERKS = [
+  {icon: BadgeCheck, title: 'Verified badge', body: 'Staff check your credentials'},
+  {icon: Users, title: 'Real students', body: 'Found by the topics you teach'},
+  {icon: Sparkles, title: 'Your own studio', body: 'Groups, notes and quizzes'},
+] as const;
 
 function ApplyWizard({profile, onChanged, onSubmitted}: {profile: MyProfile | null; onChanged: (p: MyProfile | null) => void; onSubmitted: () => void}) {
   const {toast} = useSession();
@@ -192,59 +204,92 @@ function ApplyWizard({profile, onChanged, onSubmitted}: {profile: MyProfile | nu
     draft.availability.length > 0,
   ];
 
+  const doneCount = checks.filter(Boolean).length;
+  const StepIcon = STEP_META[step].icon;
+
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
-      {step === 0 && !profile?.submitted_at && (
-        <PageHeader
-          icon={<GraduationCap className="size-6" />}
-          hue="violet"
-          eyebrow="Teacher Studio"
-          title="Teach on Genesis"
-          description="Help students with the exact topics they struggle with. Apply once — staff verify your qualifications, then students can find and request you."
-        />
+    <div className="t-apply grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5">
+      {!profile?.submitted_at && (
+        <section className="t-apply-hero" aria-labelledby="t-apply-title">
+          <div className="t-apply-hero-crest" aria-hidden="true">
+            <GraduationCap />
+          </div>
+          <div className="min-w-0">
+            <p className="pro-eyebrow">Teacher Studio · Application</p>
+            <h1 id="t-apply-title" className="pro-h1 mt-1">Teach on Genesis</h1>
+            <p className="pro-secondary mt-1.5 max-w-xl">Help students with the exact topics they struggle with. Apply once — staff verify you, then students can find and request you.</p>
+          </div>
+          <ul className="t-apply-perks">
+            {PERKS.map(({icon: Icon, title, body}) => (
+              <li key={title}>
+                <Icon />
+                <span className="min-w-0">
+                  <b>{title}</b>
+                  <small>{body}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-      <div className="pro-card grid min-w-0 gap-5 p-4 md:p-6">
-        <div className="t-steps" aria-label="Application steps">
-          {STEPS.map((label, i) => (
-            <button key={label} type="button" aria-current={step === i ? 'step' : undefined} data-done={checks[i] && i !== step ? '' : undefined} onClick={() => void save().then((ok) => ok && setStep(i))}>
-              <i />
-              <span className="max-sm:hidden">
-                {i + 1}. {label}
-              </span>
-            </button>
-          ))}
+
+      <div className="pro-card t-apply-card grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 p-4 md:p-6">
+        {/* quest track */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="pro-eyebrow">Step {step + 1} of {STEPS.length}</p>
+            <p className="pro-meta tabular">{doneCount}/{STEPS.length} ready</p>
+          </div>
+          <ol className="t-quest" aria-label="Application steps" style={{['--quest' as string]: String(step / (STEPS.length - 1))}}>
+            {STEPS.map((label, i) => {
+              const Icon = STEP_META[i].icon;
+              return (
+                <li key={label}>
+                  <button type="button" aria-current={step === i ? 'step' : undefined} data-done={checks[i] && i !== step ? '' : undefined} onClick={() => void save().then((ok) => ok && setStep(i))}>
+                    <i>{checks[i] && i !== step ? <CheckCircle2 /> : <Icon />}</i>
+                    <span>{STEP_META[i].short}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
         </div>
 
-        <p className="pro-meta -mt-3 sm:hidden">
-          Step {step + 1} of {STEPS.length} · <b style={{color: 'var(--pro-text)'}}>{STEPS[step]}</b>
-        </p>
+        {/* step header */}
+        <header className="t-step-head">
+          <span className="t-step-head-orb" aria-hidden="true">
+            <StepIcon />
+          </span>
+          <span className="min-w-0">
+            <h2 className="pro-h2">{STEPS[step]}</h2>
+            <span className="pro-meta block">{STEP_META[step].blurb}</span>
+          </span>
+        </header>
 
         {step === 0 && <AboutStep draft={draft} setDraft={setDraft} languages={catalog?.languages ?? []} />}
         {step === 1 && <SubjectsStep draft={draft} setDraft={setDraft} catalog={catalog} />}
         {step === 2 && <QualificationsStep profile={profile} onChanged={onChanged} ensureSaved={save} />}
         {step === 3 && <AvailabilityStep draft={draft} setDraft={setDraft} />}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4" style={{borderColor: 'var(--pro-border)'}}>
-          <button type="button" className="pro-btn pro-btn-ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
-            <ArrowLeft className="size-4" /> Back
+        <div className="t-apply-foot">
+          <button type="button" className="pro-btn pro-btn-ghost" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} aria-label="Back">
+            <ArrowLeft className="size-4" /> <span className="max-sm:hidden">Back</span>
           </button>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="pro-btn" onClick={() => void save(false)} disabled={saving}>
-              Save draft
+          <button type="button" className="pro-btn" onClick={() => void save(false)} disabled={saving}>
+            <Save className="size-4" /> <span>Save<span className="max-sm:hidden"> draft</span></span>
+          </button>
+          {step < STEPS.length - 1 ? (
+            <button type="button" className="pro-btn pro-btn-primary" onClick={() => void next()} disabled={saving}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : null} Continue <ArrowRight className="size-4" />
             </button>
-            {step < STEPS.length - 1 ? (
-              <button type="button" className="pro-btn pro-btn-primary" onClick={() => void next()} disabled={saving}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null} Continue <ArrowRight className="size-4" />
-              </button>
-            ) : (
-              <button type="button" className="pro-btn pro-btn-primary" onClick={() => void submit()} disabled={saving || !checks.slice(0, 3).every(Boolean)}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Submit for review
-              </button>
-            )}
-          </div>
+          ) : (
+            <button type="button" className="pro-btn pro-btn-primary" onClick={() => void submit()} disabled={saving || !checks.slice(0, 3).every(Boolean)}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Submit
+            </button>
+          )}
         </div>
         {step === STEPS.length - 1 && !checks.slice(0, 3).every(Boolean) && (
-          <p className="pro-meta -mt-2 text-right">Complete {STEPS.filter((_, i) => i < 3 && !checks[i]).join(', ')} before submitting.</p>
+          <p className="pro-meta -mt-2 sm:text-right">Complete {STEPS.filter((_, i) => i < 3 && !checks[i]).join(', ')} before submitting.</p>
         )}
       </div>
     </div>
@@ -256,14 +301,14 @@ export function AboutStep({draft, setDraft, languages}: {draft: Draft; setDraft:
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({...d, [key]: value}));
   const allLanguages = useMemo(() => Array.from(new Set([...(languages.length ? languages : ['English', 'Pidgin', 'Igbo', 'Yoruba', 'Hausa', 'French']), ...draft.languages])), [languages, draft.languages]);
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
       <Field label="Headline" hint="One line students see in search. e.g. “Calculus & Physics tutor for 100-level students”">
         <input className="pro-input" value={draft.headline} onChange={(e) => set('headline', e.target.value)} maxLength={140} />
       </Field>
       <Field label="About you" hint={`${draft.bio.trim().length} characters · at least 60. How do you teach? Who do you help best?`}>
         <textarea className="pro-input" style={{minHeight: 140}} value={draft.bio} onChange={(e) => set('bio', e.target.value)} maxLength={3000} />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
         <Field label="Years of teaching experience">
           <input className="pro-input" type="number" min={0} max={60} value={draft.experience_years} onChange={(e) => set('experience_years', Math.max(0, Math.min(60, Number(e.target.value) || 0)))} />
         </Field>
@@ -321,7 +366,7 @@ export function SubjectsStep({draft, setDraft, catalog}: {draft: Draft; setDraft
     setCustom('');
   };
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
       <p className="pro-secondary">Pick specific topics — students search by topic, so “Organic Chemistry” beats just “Chemistry”. Up to 8 subjects.</p>
       <div className="flex min-w-0 flex-wrap gap-2">
         {subjects.map((s) => {
@@ -334,7 +379,7 @@ export function SubjectsStep({draft, setDraft, catalog}: {draft: Draft; setDraft
           );
         })}
       </div>
-      <div className="grid gap-3 rounded-2xl p-4" style={{background: 'var(--pro-hover)'}}>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl p-4" style={{background: 'var(--pro-hover)'}}>
         <p className="pro-eyebrow">{current} topics</p>
         <div className="flex flex-wrap gap-2">
           {topics.map((topic) => (
@@ -351,7 +396,7 @@ export function SubjectsStep({draft, setDraft, catalog}: {draft: Draft; setDraft
         </div>
       </div>
       {draft.specialties.length > 0 && (
-        <div className="grid gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
           <p className="pro-eyebrow">You'll appear for</p>
           {draft.specialties.map((s) => (
             <p key={s.subject} className="pro-secondary [overflow-wrap:anywhere]">
@@ -395,7 +440,7 @@ function QualificationsStep({profile, onChanged, ensureSaved}: {profile: MyProfi
     onChanged(res.profile);
   };
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
       <p className="pro-secondary">Degrees, certificates or teaching licences. Documents are seen only by Genesis staff for verification — never by students.</p>
       {(profile?.qualifications ?? []).length > 0 && (
         <div className="pro-card pro-rows overflow-hidden">
@@ -420,7 +465,7 @@ function QualificationsStep({profile, onChanged, ensureSaved}: {profile: MyProfi
           ))}
         </div>
       )}
-      <div className="grid gap-3 rounded-2xl p-4" style={{background: 'var(--pro-hover)'}}>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl p-4" style={{background: 'var(--pro-hover)'}}>
         <p className="pro-eyebrow">Add a qualification</p>
         <Field label="Title">
           <input className="pro-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. B.Sc. Mathematics (First Class)" maxLength={160} />
@@ -458,7 +503,7 @@ export function AvailabilityStep({draft, setDraft}: {draft: Draft; setDraft: (fn
   };
   const remove = (index: number) => setDraft((d) => ({...d, availability: d.availability.filter((_, i) => i !== index)}));
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
       <p className="pro-secondary">When are you usually free to teach? Students see this as a weekly guide and an “available now” signal. Phase 2 adds bookable lessons.</p>
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
         <Field label="Day">
@@ -531,7 +576,7 @@ export function ProfileEditor({profile, onChanged}: {profile: MyProfile; onChang
   };
   if (!catalog) return <LoadingRows rows={4} />;
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
       <div className="pro-tabs pro-tabs-fit" role="tablist" aria-label="Profile sections">
         {(
           [

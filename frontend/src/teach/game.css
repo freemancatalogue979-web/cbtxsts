@@ -65,7 +65,8 @@
 }
 
 /* ------------------------------------------------------------------ type */
-.t-game :is(.pro-h1, .pro-h2, .pro-h3) { font-family: inherit; color: var(--color-mist-50); letter-spacing: -0.01em; }
+/* Names and headers wear the fantasy title face (solid colour — headings can hold badges). */
+.t-game :is(.pro-h1, .pro-h2, .pro-h3, .t-hub-title) { font-family: var(--font-title); font-style: normal; color: var(--color-mist-50); letter-spacing: 0.01em; }
 .t-game .pro-h1 { font-size: clamp(1.55rem, 5.4vw, 2.2rem); font-weight: 900; line-height: 1.08; }
 .t-game .pro-h2 { font-size: 1.2rem; font-weight: 850; }
 .t-game .pro-h3 { font-size: 1rem; font-weight: 800; }
@@ -154,7 +155,7 @@
   background-image: linear-gradient(120deg, var(--color-flare-500) 0%, var(--color-nova-500) 48%, var(--color-pulse-500) 100%);
   box-shadow: 0 6px 16px -6px rgba(124, 58, 237, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
-.t-game .pro-seg-fill { display: none; }
+.t-game .pro-seg-fill { display: flex; }
 
 /* ----------------------------------------------------------------- inputs */
 .t-game .pro-input {
@@ -248,7 +249,7 @@
   background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1.3px); background-size: 16px 16px;
   -webkit-mask-image: linear-gradient(110deg, transparent 35%, #000 85%); mask-image: linear-gradient(110deg, transparent 35%, #000 85%);
 }
-.t-hub-title { font-size: clamp(1.6rem, 6vw, 2.35rem); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; color: var(--pro-text); }
+.t-hub-title { font-size: clamp(1.55rem, 5.6vw, 2.3rem); font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; color: var(--pro-text); }
 .t-hub-title em { font-style: inherit; background: var(--pro-grad-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .t-hub-stats { display: flex; flex-wrap: wrap; gap: 8px; }
 .t-hub-stat {
@@ -391,3 +392,36 @@
 .t-game .t-studio-nav button[aria-selected='true'] svg,
 .t-game .t-phone-bar button[aria-selected='true'] svg { color: #fff; }
 .t-game .t-phone-bar { background: rgba(0, 0, 0, 0.25); border-color: color-mix(in srgb, var(--color-mist-50) 8%, transparent); border-radius: 16px; }
+
+/* Teacher application — a guild charter */
+.t-game .t-apply-hero {
+  border-color: var(--qa-outline-strong, rgba(167, 139, 250, 0.3));
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--color-nova-500) 32%, transparent), transparent 58%),
+    radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, var(--color-flare-500) 20%, transparent), transparent 60%),
+    var(--color-ink-900);
+  box-shadow: 0 24px 50px -30px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.t-game .t-apply-hero-crest {
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: linear-gradient(140deg, var(--color-flare-500), var(--color-nova-500) 55%, var(--color-pulse-500));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), 0 10px 26px -10px color-mix(in srgb, var(--color-nova-500) 80%, transparent);
+}
+.t-game .t-apply-perks li { background: rgba(0, 0, 0, 0.22); border: 1px solid color-mix(in srgb, var(--color-mist-50) 8%, transparent); }
+[data-skin='day'] .t-game .t-apply-perks li { background: color-mix(in srgb, var(--color-ink-800) 80%, transparent); }
+.t-game .t-apply-perks li:nth-child(1) svg { color: var(--color-mint-400); }
+.t-game .t-apply-perks li:nth-child(2) svg { color: var(--color-pulse-300); }
+.t-game .t-apply-perks li:nth-child(3) svg { color: var(--color-gold-300); }
+.t-game .t-quest::after { background: linear-gradient(90deg, var(--color-flare-500), var(--color-nova-500)); }
+.t-game .t-quest button > i { background: var(--color-ink-900); border-color: color-mix(in srgb, var(--color-mist-50) 16%, transparent); }
+.t-game .t-quest button[data-done] > i { background: color-mix(in srgb, var(--color-nova-500) 18%, var(--color-ink-900)); border-color: var(--color-nova-400); color: var(--color-nova-200, #ddd6fe); }
+.t-game .t-quest button[aria-current='step'] > i {
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  background: linear-gradient(140deg, var(--color-flare-500), var(--color-nova-500) 55%, var(--color-pulse-500));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), 0 8px 20px -6px color-mix(in srgb, var(--color-nova-500) 80%, transparent);
+}
+.t-game .t-step-head-orb {
+  color: #fff; border: 2px solid rgba(0, 0, 0, 0.35);
+  background: linear-gradient(140deg, var(--color-nova-400), var(--color-pulse-500));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28);
+}
