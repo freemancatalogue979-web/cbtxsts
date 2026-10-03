@@ -2813,25 +2813,44 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 .agb-lockup { display: flex; align-items: center; gap: 0.6rem; min-width: 0; flex: 1 1 auto; }
 .agb-crest { position: relative; display: grid; place-items: center; width: 2.9rem; height: 2.9rem; flex-shrink: 0; }
 .agb-crest img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.5)) drop-shadow(0 0 12px rgb(250 204 21 / 0.35)); }
-@keyframes agb-rays { to { transform: rotate(360deg); } }
+@keyframes agb-spin { to { transform: rotate(360deg); } }
+@keyframes agb-spin-r { to { transform: rotate(-360deg); } }
+/* Sharp circular halo: a gold light-arc sweeping a thin ring… */
 .agb-crest-rays {
   position: absolute;
-  inset: -45%;
-  z-index: 0;
+  inset: -11%;
+  z-index: 3;
   border-radius: 50%;
-  background: repeating-conic-gradient(from 0deg, rgb(250 204 21 / 0.55) 0deg 4deg, transparent 4deg 18deg);
-  -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 62%);
-  mask-image: radial-gradient(circle, #000 18%, transparent 62%);
-  opacity: 0.55;
-  animation: agb-rays 26s linear infinite;
+  background: conic-gradient(from 0deg, transparent 0deg 150deg, rgb(168 85 247 / 0.55) 230deg, #f59e0b 300deg, #fde047 340deg, #ffffff 358deg, transparent 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
+  filter: drop-shadow(0 0 3px #facc15) drop-shadow(0 0 8px rgb(250 204 21 / 0.7));
+  pointer-events: none;
+  animation: agb-spin 2.8s linear infinite;
 }
+/* …with a glowing comet riding the arc's head */
+.agb-crest-rays::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 2px #facc15, 0 0 14px 4px rgb(250 204 21 / 0.5);
+}
+/* inner dashed violet ring turning the other way, over a soft core glow */
 .agb-crest-ring {
   position: absolute;
-  inset: 4%;
+  inset: -4%;
   z-index: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(168 85 247 / 0.55), transparent 66%);
-  box-shadow: 0 0 0 1px rgb(250 204 21 / 0.25), 0 0 22px rgb(168 85 247 / 0.55);
+  border: 1.5px dashed rgb(192 132 252 / 0.7);
+  background: radial-gradient(circle, rgb(168 85 247 / 0.45), transparent 62%);
+  box-shadow: 0 0 18px rgb(168 85 247 / 0.45), inset 0 0 12px rgb(168 85 247 / 0.35);
+  animation: agb-spin-r 14s linear infinite;
 }
 .agb-words { display: grid; min-width: 0; gap: 0.12rem; }
 .agb-name {
@@ -2896,7 +2915,7 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
   .agb-actions { gap: 0.55rem; }
 }
 @media (min-width: 1024px) { .agb-crest { width: 4.1rem; height: 4.1rem; } }
-@media (prefers-reduced-motion: reduce) { .agb-crest-rays, .agb-bar-glint::after, .agb-cta > .gbtn-face::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .agb-crest-rays, .agb-crest-ring, .agb-bar-glint::after, .agb-cta > .gbtn-face::after { animation: none; } }
 
 /* ---------------------------------------------------------------- wallet */
 .wallet-pill {

@@ -19,6 +19,10 @@ export type HeroSlide = {
   caption: string;
   accent: string;
   pos?: string;
+  /** Smaller file for phones (used via srcSet). */
+  small?: string;
+  /** Zoom into the focal point (pos) — 1 shows the whole frame. */
+  zoom?: number;
 };
 
 const INTERVAL = 6200;
@@ -73,17 +77,22 @@ export default function HeroReel({slides}: {slides: HeroSlide[]}) {
       {/* ------------------------------------------------ frames */}
       <div className="relative aspect-[4/5] w-full sm:aspect-[16/9] lg:aspect-[21/9]">
         {slides.map((frame, frameIndex) => (
-          <img
-            key={`${frame.src}-${frame.pos ?? frameIndex}`}
-            src={frame.src}
-            alt={frame.alt}
-            loading={frameIndex === 0 ? 'eager' : 'lazy'}
-            decoding="async"
-            style={{objectPosition: frame.pos ?? 'center'}}
-            className={`absolute inset-0 size-full object-cover transition-opacity duration-[900ms] ${
-              frameIndex === index ? 'opacity-100' : 'opacity-0'
-            } ${frameIndex === index && !reduced ? 'hero-kenburns' : ''}`}
-          />
+          <div
+            key={`${frame.src}-${frame.pos ?? frameIndex}-${frameIndex}`}
+            className={`absolute inset-0 transition-opacity duration-[900ms] ${frameIndex === index ? 'opacity-100' : 'opacity-0'}`}
+            style={{transform: frame.zoom && frame.zoom !== 1 ? `scale(${frame.zoom})` : undefined, transformOrigin: frame.pos ?? 'center'}}
+          >
+            <img
+              src={frame.src}
+              srcSet={frame.small ? `${frame.small} 960w, ${frame.src} 1536w` : undefined}
+              sizes={frame.small ? '(max-width: 700px) 960px, 1536px' : undefined}
+              alt={frame.alt}
+              loading={frameIndex === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              style={{objectPosition: frame.pos ?? 'center'}}
+              className={`absolute inset-0 size-full object-cover ${frameIndex === index && !reduced ? 'hero-kenburns' : ''}`}
+            />
+          </div>
         ))}
 
         {/* scrims keep captions legible on any frame */}
