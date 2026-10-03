@@ -167,6 +167,7 @@ export function Button({
       className={`gbtn ${ownDisplay ? '' : 'inline-flex'} shrink-0 items-center justify-center touch-manipulation p-0 focus-visible:outline-none
         ${block ? 'w-full' : ''} ${SIZES[size]} ${iconOnly ? SQUARE[size] : ''} ${className}`}
       data-shape={angular ? 'angular' : undefined}
+      data-variant={variant}
       data-tip={iconOnly && name ? name : undefined}
       aria-label={name}
       disabled={disabled || loading}
@@ -892,7 +893,39 @@ export function PageBanner({
   const glyph = (cls: string) => (isValidElement<{className?: string}>(icon) ? cloneElement(icon, {className: cls}) : icon);
   const shown = (stats ?? []).filter(Boolean) as BannerStat[];
   return (
-    <header className={`pbanner ${className}`} data-tone={tone}>
+    <header className={`pbanner ${icon ? 'pbanner--art' : ''} ${className}`} data-tone={tone}>
+      {/* Standard-mode scenery: light, grid, sweep, HUD corners (Pro hides these). */}
+      <span className="pbanner-scene" aria-hidden="true">
+        <span className="pbanner-grid" />
+        <span className="pbanner-sweep" />
+        <i className="pbanner-corner" data-c="tl" />
+        <i className="pbanner-corner" data-c="br" />
+      </span>
+      {icon && (
+        <span className="pbanner-art" aria-hidden="true">
+          <svg className="pbanner-rings" viewBox="0 0 200 200" fill="none">
+            <defs>
+              <linearGradient id="pbRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="currentColor" stopOpacity="0.95" />
+                <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <circle className="pbanner-ring-a" cx="100" cy="100" r="92" stroke="currentColor" strokeOpacity="0.22" strokeDasharray="2 7" />
+            <g className="pbanner-ring-b">
+              <circle cx="100" cy="100" r="74" stroke="url(#pbRing)" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="150 315" />
+              <circle cx="174" cy="100" r="4" fill="currentColor" />
+            </g>
+            <g className="pbanner-ring-c">
+              <circle cx="100" cy="100" r="58" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.2" strokeDasharray="60 22 6 22" />
+              <circle cx="100" cy="42" r="2.6" fill="currentColor" fillOpacity="0.85" />
+            </g>
+          </svg>
+          <span className="pbanner-gem">{glyph('pbanner-gem-ico')}</span>
+          <i className="pbanner-spark" data-s="1" />
+          <i className="pbanner-spark" data-s="2" />
+          <i className="pbanner-spark" data-s="3" />
+        </span>
+      )}
       {icon && (
         <span className="pbanner-watermark" aria-hidden="true">
           {glyph('pbanner-watermark-ico')}

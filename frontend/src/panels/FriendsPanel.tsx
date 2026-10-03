@@ -12,7 +12,7 @@
 import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X, CalendarPlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, EmptyState, Modal, SectionHeading, Segmented, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextInput, PageBanner} from '../components/ui';
 import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
 import {HAPTICS} from '../lib/haptics';
@@ -607,7 +607,7 @@ export default function FriendsPanel({
 
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-5">
-      <SectionHeading
+      <PageBanner tone="nova" eyebrow="Social"
         title="Friends"
         subtitle="See who is online, chat, and turn conversations into duels."
         icon={<Users className="size-4" />}

@@ -4,12 +4,30 @@
  *  Standard mode; Pro never shows mascots. */
 import {BadgeCheck, BookOpen, CheckCircle2, GraduationCap, Inbox, MessageSquare, Presentation, Search, ShieldCheck, Sparkles, Star, UserPlus, Users} from 'lucide-react';
 import Character from '../components/Character';
+import {PageBanner} from '../components/ui';
 import type {Catalog, Learning} from '../lib/teachers';
 import {goTo, subjectLook, useArena} from './ui';
 
 export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: Catalog | null; learning: Learning | null; groups: number | null; onFind: () => void; compact?: boolean}) {
   const arena = useArena();
   const mine = learning?.teachers.filter((t) => t.relationship.status === 'active').length ?? 0;
+  if (compact && arena) {
+    const shared = (learning?.materials.length ?? 0) + (learning?.quizzes.length ?? 0);
+    return (
+      <PageBanner
+        eyebrow="Mentor guild"
+        title="Your teachers & groups"
+        subtitle="Chat with your teachers, open what they share and join their study groups."
+        icon={<GraduationCap />}
+        tone="nova"
+        stats={[
+          {value: mine, label: mine === 1 ? 'teacher' : 'teachers', tone: 'nova'},
+          {value: learning ? learning.groups.length : '—', label: 'groups', tone: 'cyan'},
+          {value: shared, label: 'shared', tone: 'gold'},
+        ]}
+      />
+    );
+  }
   if (compact) {
     return (
       <section className="t-hub-hero t-hub-hero-compact" aria-labelledby="t-hub-title">

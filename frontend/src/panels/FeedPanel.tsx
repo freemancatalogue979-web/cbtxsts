@@ -2,7 +2,7 @@
 import {Activity, Award, ChevronDown, Coins, Flame, Gift, Globe, Heart, ScrollText, Sparkles, Swords, Trophy, Users, Zap} from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Card, Chip, EmptyState, SectionHeading, Segmented, Skeleton} from '../components/ui';
+import {Avatar, Card, Chip, EmptyState, SectionHeading, Segmented, Skeleton, PageBanner} from '../components/ui';
 import {api} from '../lib/api';
 import {sfx} from '../lib/sfx';
 import {formatRelative, KIND_META} from '../lib/format';
@@ -153,7 +153,7 @@ export default function FeedPanel() {
 
   return (
     <div className="min-w-0 space-y-4 overflow-x-clip sm:space-y-6">
-      <SectionHeading
+      <PageBanner tone="pulse" eyebrow="Live wire"
         title="Arena feed"
         subtitle="Every XP drop, duel and badge — yours and everyone else's."
         icon={<Activity className="size-4" />}

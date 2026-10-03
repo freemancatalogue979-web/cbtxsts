@@ -2368,164 +2368,283 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
    ========================================================================== */
 .pbanner {
   --pb: var(--color-nova-400);
-  --pb2: var(--color-pulse-500);
+  --pb2: var(--color-flare-500);
+  --pb-deep: color-mix(in srgb, var(--pb) 22%, #07060d);
+  --art: 8.6rem;
   position: relative;
   isolation: isolate;
   overflow: hidden;
   border-radius: 1.6rem;
-  padding: 1.15rem 1.25rem;
-  border: 1px solid color-mix(in srgb, var(--pb) 26%, rgb(255 255 255 / 0.06));
+  padding: 1.3rem 1.4rem;
+  border: 1px solid transparent;
   background:
-    radial-gradient(120% 150% at 0% 0%, color-mix(in srgb, var(--pb) 24%, transparent), transparent 55%),
-    radial-gradient(80% 130% at 100% 110%, color-mix(in srgb, var(--pb2) 20%, transparent), transparent 62%),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-ink-900) 94%, transparent), color-mix(in srgb, var(--color-ink-950) 96%, transparent));
+    linear-gradient(var(--color-ink-950), var(--color-ink-950)) padding-box,
+    linear-gradient(125deg, color-mix(in srgb, var(--pb) 85%, white 10%), color-mix(in srgb, var(--pb) 18%, transparent) 38%, rgb(255 255 255 / 0.05) 60%, color-mix(in srgb, var(--pb2) 70%, transparent)) border-box;
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.07),
-    0 22px 44px -28px color-mix(in srgb, var(--pb) 70%, transparent);
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 26px 50px -30px color-mix(in srgb, var(--pb) 85%, transparent),
+    0 0 60px -30px color-mix(in srgb, var(--pb2) 60%, transparent);
 }
 .pbanner[data-tone='pulse'] { --pb: var(--color-pulse-400); --pb2: var(--color-nova-500); }
 .pbanner[data-tone='flare'] { --pb: var(--color-flare-400); --pb2: var(--color-nova-500); }
-.pbanner[data-tone='mint']  { --pb: var(--color-mint-400);  --pb2: var(--color-pulse-500); }
+.pbanner[data-tone='mint']  { --pb: var(--color-mint-400);  --pb2: var(--color-cyan-500, var(--color-pulse-500)); }
 .pbanner[data-tone='gold']  { --pb: var(--color-gold-400);  --pb2: var(--color-flare-500); }
-.pbanner[data-tone='cyan']  { --pb: var(--color-cyan-400);  --pb2: var(--color-pulse-500); }
-/* dotted rune field, fading in toward the right */
-.pbanner::before {
+.pbanner[data-tone='cyan']  { --pb: var(--color-cyan-400);  --pb2: var(--color-nova-500); }
+
+/* Scenery: two light sources, deep tinted base, film grain. */
+.pbanner-scene {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(70% 120% at 100% 50%, color-mix(in srgb, var(--pb) 34%, transparent), transparent 62%),
+    radial-gradient(60% 110% at 0% 0%, color-mix(in srgb, var(--pb2) 26%, transparent), transparent 60%),
+    radial-gradient(50% 80% at 30% 120%, color-mix(in srgb, var(--pb) 18%, transparent), transparent 70%),
+    linear-gradient(160deg, var(--pb-deep), #08070f 70%);
+}
+.pbanner-scene::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -2;
-  background-image: radial-gradient(color-mix(in srgb, var(--pb) 40%, rgb(255 255 255 / 0.25)) 1px, transparent 1.3px);
-  background-size: 15px 15px;
-  opacity: 0.28;
-  -webkit-mask-image: linear-gradient(100deg, transparent 38%, #000 92%);
-  mask-image: linear-gradient(100deg, transparent 38%, #000 92%);
-  pointer-events: none;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-/* accent hairline along the top edge */
+/* perspective-ish grid fading in from the right */
+.pbanner-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--pb) 30%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--pb) 30%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+  opacity: 0.32;
+  -webkit-mask-image: radial-gradient(75% 140% at 100% 50%, #000 10%, transparent 70%);
+  mask-image: radial-gradient(75% 140% at 100% 50%, #000 10%, transparent 70%);
+}
+/* diagonal light sweep */
+.pbanner-sweep {
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: 38%;
+  width: 26%;
+  transform: rotate(22deg);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06) 45%, rgb(255 255 255 / 0.1) 50%, rgb(255 255 255 / 0.06) 55%, transparent);
+  filter: blur(2px);
+}
+/* HUD corner brackets */
+.pbanner-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--pb) 80%, white 10%);
+  filter: drop-shadow(0 0 6px var(--pb));
+  opacity: 0.9;
+}
+.pbanner-corner[data-c='tl'] { top: 9px; left: 9px; border-right: 0; border-bottom: 0; border-top-left-radius: 9px; }
+.pbanner-corner[data-c='br'] { right: 9px; bottom: 9px; border-left: 0; border-top: 0; border-bottom-right-radius: 9px; }
+/* top accent rail */
 .pbanner::after {
   content: '';
   position: absolute;
   top: 0;
-  left: 1.4rem;
-  width: 6rem;
-  height: 2px;
-  border-radius: 0 0 4px 4px;
+  left: 2.2rem;
+  width: 7.5rem;
+  height: 3px;
+  border-radius: 0 0 6px 6px;
   background: linear-gradient(90deg, var(--pb), var(--pb2));
-  box-shadow: 0 0 14px var(--pb);
+  box-shadow: 0 0 16px 1px var(--pb);
 }
-.pbanner-watermark {
+
+/* Emblem art on the right */
+.pbanner-art {
   position: absolute;
-  right: -1.2rem;
-  bottom: -2rem;
+  top: 50%;
+  right: 0.6rem;
   z-index: -1;
-  color: var(--pb);
-  opacity: 0.11;
-  transform: rotate(-14deg);
+  width: var(--art);
+  height: var(--art);
+  transform: translateY(-50%);
+  color: color-mix(in srgb, var(--pb) 85%, white 15%);
   pointer-events: none;
 }
-.pbanner-watermark-ico { width: 9.5rem; height: 9.5rem; stroke-width: 1.4; }
-.pbanner-row { display: flex; align-items: center; gap: 1rem; min-width: 0; flex-wrap: wrap; }
-.pbanner-medal {
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 3.4rem;
-  height: 3.4rem;
-  border-radius: 1.15rem;
-  color: #fff;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--pb) 88%, white), var(--pb2));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.4),
-    inset 0 -3px 0 rgb(0 0 0 / 0.2),
-    0 0 0 4px color-mix(in srgb, var(--pb) 14%, transparent),
-    0 12px 28px -10px var(--pb);
-  transform: rotate(-5deg);
-}
-.pbanner-medal::after {
+.pbanner-art::before {
   content: '';
   position: absolute;
-  inset: 3px 3px 50% 3px;
-  border-radius: 0.95rem 0.95rem 0.6rem 0.6rem;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.28), transparent);
-  pointer-events: none;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--pb) 55%, transparent), transparent 68%);
+  filter: blur(10px);
 }
-.pbanner-medal-ico { width: 1.55rem; height: 1.55rem; transform: rotate(5deg); filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.22)); }
+.pbanner-rings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--pb) 60%, transparent)); }
+.pbanner-ring-a, .pbanner-ring-b, .pbanner-ring-c { transform-origin: 100px 100px; transform-box: view-box; }
+@keyframes pb-spin { to { transform: rotate(360deg); } }
+@keyframes pb-spin-r { to { transform: rotate(-360deg); } }
+.pbanner-ring-a { animation: pb-spin 60s linear infinite; }
+.pbanner-ring-b { animation: pb-spin 14s linear infinite; }
+.pbanner-ring-c { animation: pb-spin-r 22s linear infinite; }
+.pbanner-gem {
+  position: absolute;
+  inset: 31%;
+  display: grid;
+  place-items: center;
+  border-radius: 30%;
+  transform: rotate(45deg);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.55), transparent 42%),
+    linear-gradient(145deg, color-mix(in srgb, var(--pb) 80%, white 20%), var(--pb) 50%, color-mix(in srgb, var(--pb) 65%, var(--pb2)));
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 0.35),
+    inset 0 -6px 12px rgb(0 0 0 / 0.28),
+    0 0 0 5px color-mix(in srgb, var(--pb) 20%, transparent),
+    0 14px 30px -8px var(--pb),
+    0 0 40px -6px var(--pb);
+  color: #fff;
+}
+.pbanner-gem-ico { width: 46%; height: 46%; transform: rotate(-45deg); stroke-width: 2.1; filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.35)); }
+@keyframes pb-float { 0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.95; } 50% { transform: translate(0, -6px) scale(0.75); opacity: 0.5; } }
+.pbanner-spark {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  filter: drop-shadow(0 0 4px var(--pb));
+  animation: pb-float 3.6s ease-in-out infinite;
+}
+.pbanner-spark[data-s='1'] { top: 10%; left: 18%; }
+.pbanner-spark[data-s='2'] { top: 70%; left: 4%; width: 6px; height: 6px; animation-delay: -1.2s; }
+.pbanner-spark[data-s='3'] { top: 18%; right: 4%; width: 7px; height: 7px; animation-delay: -2.3s; }
+@media (prefers-reduced-motion: reduce) {
+  .pbanner-ring-a, .pbanner-ring-b, .pbanner-ring-c, .pbanner-spark { animation: none; }
+}
+/* The art replaces the old medal and watermark in Standard mode. */
+.pbanner .pbanner-watermark { display: none; }
+.pbanner--art .pbanner-medal { display: none; }
+.pbanner-watermark { position: absolute; right: -1.2rem; bottom: -2rem; z-index: -1; color: var(--pb); opacity: 0.11; transform: rotate(-14deg); pointer-events: none; }
+.pbanner-watermark-ico { width: 9.5rem; height: 9.5rem; stroke-width: 1.4; }
+
+.pbanner-row { display: flex; align-items: center; gap: 1rem; min-width: 0; flex-wrap: wrap; }
+.pbanner-medal {
+  position: relative; display: grid; place-items: center; flex-shrink: 0;
+  width: 3.4rem; height: 3.4rem; border-radius: 1.15rem; color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--pb) 88%, white), var(--pb2));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -3px 0 rgb(0 0 0 / 0.2), 0 12px 28px -10px var(--pb);
+}
+.pbanner-medal-ico { width: 1.55rem; height: 1.55rem; }
 .pbanner-copy { min-width: 0; flex: 1 1 14rem; }
+.pbanner--art .pbanner-copy { padding-right: calc(var(--art) - 0.4rem); }
+/* actions sit left of the emblem, never on top of it */
+.pbanner--art .pbanner-actions { margin-right: calc(var(--art) - 0.4rem); }
+.pbanner--art .pbanner-copy:has(+ .pbanner-actions) { padding-right: 0; }
 .pbanner-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
-  margin-bottom: 0.35rem;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--pb) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pb) 26%, transparent), color-mix(in srgb, var(--pb) 10%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 14px -6px var(--pb);
   font-family: var(--font-label);
   font-style: normal;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.2em;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--pb) 62%, var(--color-mist-50));
+  color: color-mix(in srgb, var(--pb) 35%, white);
 }
 .pbanner-eyebrow > i {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--pb);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pb) 22%, transparent), 0 0 10px var(--pb);
+  background: color-mix(in srgb, var(--pb) 60%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pb) 30%, transparent), 0 0 10px var(--pb);
 }
 .pbanner-title {
   font-family: var(--font-title);
   font-style: normal;
   font-weight: 800;
   font-synthesis: none;
-  font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.05rem);
-  line-height: 1.04;
-  letter-spacing: -0.03em;
-  color: var(--color-mist-50);
-  text-shadow: 0 2px 0 rgb(0 0 0 / 0.35), 0 0 26px color-mix(in srgb, var(--pb) 40%, transparent);
+  font-size: clamp(1.55rem, 1.15rem + 1.4vw, 2.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: #fff;
+  background: linear-gradient(180deg, #fff 35%, color-mix(in srgb, var(--pb) 45%, white) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.45)) drop-shadow(0 0 18px color-mix(in srgb, var(--pb) 45%, transparent));
+  padding-bottom: 0.06em;
   overflow-wrap: anywhere;
 }
-.pbanner-sub { margin-top: 0.3rem; max-width: 62ch; font-size: 0.84rem; font-weight: 500; line-height: 1.45; color: var(--color-mist-400); }
+.pbanner-sub { margin-top: 0.4rem; max-width: 60ch; font-size: 0.84rem; font-weight: 500; line-height: 1.5; color: color-mix(in srgb, var(--pb) 12%, var(--color-mist-300, #c9cbe0)); }
 .pbanner-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-left: auto; min-width: 0; }
-.pbanner-stats { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.95rem; }
+.pbanner-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 .pbanner-stat {
   --ps: var(--color-nova-400);
+  position: relative;
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.38rem;
-  min-height: 1.95rem;
-  padding: 0.38rem 0.78rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--ps) 26%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ps) 14%, transparent), color-mix(in srgb, var(--ps) 5%, transparent));
-  font-size: 0.7rem;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 5.2rem;
+  padding: 0.5rem 0.8rem 0.5rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--ps) 30%, rgb(255 255 255 / 0.06));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ps) 18%, rgb(255 255 255 / 0.03)), rgb(0 0 0 / 0.25));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-size: 0.62rem;
   font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--color-mist-400);
   white-space: nowrap;
+  overflow: hidden;
 }
-.pbanner-stat > b { font-size: 0.84rem; font-weight: 900; color: color-mix(in srgb, var(--ps) 45%, var(--color-mist-50)); font-variant-numeric: tabular-nums; }
+.pbanner-stat::before { content: ''; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0; background: var(--ps); box-shadow: 0 0 8px var(--ps); }
+.pbanner-stat > b { font-family: var(--font-title); font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; text-transform: none; color: color-mix(in srgb, var(--ps) 30%, white); font-variant-numeric: tabular-nums; }
 .pbanner-stat[data-tone='pulse'] { --ps: var(--color-pulse-400); }
 .pbanner-stat[data-tone='flare'] { --ps: var(--color-flare-400); }
 .pbanner-stat[data-tone='mint']  { --ps: var(--color-mint-400); }
 .pbanner-stat[data-tone='gold']  { --ps: var(--color-gold-400); }
 .pbanner-stat[data-tone='cyan']  { --ps: var(--color-cyan-400); }
 .pbanner-foot { margin-top: 1rem; min-width: 0; }
+/* Ghost/outline buttons inside a banner become glass pills so they read as controls. */
+.pbanner-actions .gbtn:is([data-variant='ghost'], [data-variant='outline']) {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--pb) 38%, rgb(255 255 255 / 0.08));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pb) 20%, rgb(255 255 255 / 0.04)), rgb(0 0 0 / 0.3));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 6px 16px -10px var(--pb);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: color-mix(in srgb, var(--pb) 25%, white);
+}
+.pbanner-actions .gbtn:is([data-variant='ghost'], [data-variant='outline']):hover { border-color: color-mix(in srgb, var(--pb) 65%, transparent); }
 
-[data-skin='day'] .pbanner { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 18px 36px -26px color-mix(in srgb, var(--pb) 55%, transparent); }
-[data-skin='day'] .pbanner-title { text-shadow: none; }
-[data-skin='day'] .pbanner-watermark { opacity: 0.08; }
+[data-skin='day'] .pbanner { box-shadow: 0 18px 36px -26px color-mix(in srgb, var(--pb) 55%, transparent); }
 
 @media (max-width: 639px) {
-  .pbanner { padding: 1rem 0.95rem; border-radius: 1.35rem; }
+  .pbanner { --art: 6.6rem; padding: 1.1rem 1rem; border-radius: 1.35rem; }
+  .pbanner-art { right: -0.2rem; top: 0.35rem; transform: none; }
+  .pbanner--art .pbanner-copy:has(+ .pbanner-actions) { padding-right: calc(var(--art) - 1rem); }
+  .pbanner--art .pbanner-actions { margin-right: 0; }
   .pbanner-row { gap: 0.8rem; }
-  .pbanner-medal { width: 2.85rem; height: 2.85rem; border-radius: 0.95rem; }
-  .pbanner-medal-ico { width: 1.3rem; height: 1.3rem; }
   .pbanner-copy { flex-basis: 0; }
+  .pbanner--art .pbanner-copy { padding-right: calc(var(--art) - 1rem); }
   .pbanner-sub { font-size: 0.78rem; }
   .pbanner-actions { flex-basis: 100%; margin-left: 0; }
   .pbanner-actions > * { flex: 1 1 auto; }
-  .pbanner-watermark-ico { width: 7rem; height: 7rem; }
-  .pbanner-stats { gap: 0.35rem; margin-top: 0.8rem; }
-  .pbanner-stat { padding-inline: 0.62rem; }
+  .pbanner-actions > .chip { flex: 0 0 auto; }
+  .pbanner-stats { gap: 0.4rem; margin-top: 0.85rem; }
+  .pbanner-stat { min-width: 0; flex: 1 1 4.6rem; padding-inline: 0.75rem 0.6rem; }
 }
 
 /* Pro: same structure, quiet premium skin — no tilt, no glow theatrics. */
@@ -2552,6 +2671,16 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 [data-mode='pro'] .pbanner-watermark { opacity: 0.06; }
 [data-mode='pro'] .pbanner-stat { color: var(--pro-text-2); }
 [data-mode='pro'] .pbanner-stat > b { color: var(--pro-text); }
+[data-mode='pro'] .pbanner { border: 1px solid var(--pro-border); }
+[data-mode='pro'] :is(.pbanner-scene, .pbanner-art) { display: none; }
+[data-mode='pro'] .pbanner .pbanner-watermark { display: block; }
+[data-mode='pro'] .pbanner--art .pbanner-medal { display: grid; }
+[data-mode='pro'] .pbanner--art .pbanner-copy { padding-right: 0; }
+[data-mode='pro'] .pbanner-title { background: none; -webkit-text-fill-color: currentColor; filter: none; }
+[data-mode='pro'] .pbanner-eyebrow { padding: 0; border: 0; background: none; box-shadow: none; color: var(--pro-muted); }
+[data-mode='pro'] .pbanner-stat { flex-direction: row; align-items: baseline; gap: 0.38rem; min-width: 0; border-radius: 999px; text-transform: none; letter-spacing: 0; font-size: 0.7rem; backdrop-filter: none; background: var(--pro-elevated); border-color: var(--pro-border); }
+[data-mode='pro'] .pbanner-stat::before { display: none; }
+[data-mode='pro'] .pbanner-stat > b { font-family: inherit; font-size: 0.84rem; }
 
 /* ==========================================================================
    ACTION MENU — <ActionMenu> (teach/ui). Portalled to <body>, so it is styled

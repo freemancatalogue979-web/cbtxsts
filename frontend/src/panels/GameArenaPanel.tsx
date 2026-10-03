@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion, useReducedMotion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton, PageBanner} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -560,15 +560,23 @@ export default function GameArenaPanel() {
 
   return (
     <div className="w-full min-w-0 space-y-3.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <SectionHeading title="Game Arena" subtitle="Reading fills the bank — the arena spends it." />
+      <PageBanner
+        tone="cyan"
+        eyebrow="Arcade"
+        title="Game Arena"
+        subtitle="Reading fills the bank — the arena spends it."
+        icon={<Gamepad2 />}
+        action={
+          <>
         <Button size="sm" variant="ghost" icon={<Trophy className="size-4" />} onClick={() => { setView('board'); void openBoard(boardScope); }}>
           Leaderboards
         </Button>
         <Button size="sm" variant="ghost" icon={<Sparkles className="size-4" />} onClick={() => setView('locker')}>
           Locker
         </Button>
-      </div>
+          </>
+        }
+      />
 
       <BankCard bank={hub.playtime} streak={hub.streak} />
 

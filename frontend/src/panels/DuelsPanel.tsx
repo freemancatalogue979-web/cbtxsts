@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Avatar, Button, Card, Chip, CopyCode, EmptyState, Field, Modal, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, CopyCode, EmptyState, Field, Modal, SectionHeading, Skeleton, TextInput, PageBanner} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -676,7 +676,7 @@ export default function DuelsPanel({onOpenDuel, onOpenRoom}: {onOpenDuel: (duel:
 
   return (
     <div className="space-y-5 sm:space-y-8">
-      <SectionHeading
+      <PageBanner tone="flare" eyebrow="Player vs player"
         title="Duel arena"
         subtitle="Head-to-head, real time. Fastest correct answers score the most."
         icon={<Swords className="size-4" />}

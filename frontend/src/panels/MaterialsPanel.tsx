@@ -54,7 +54,7 @@ import {
 import {createPortal} from 'react-dom';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton, PageBanner} from '../components/ui';
 import {DifficultyChip, QuestionCard} from '../components/QuestionCard';
 import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
@@ -1853,12 +1853,20 @@ export default function MaterialsPanel() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-4xl space-y-3.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <SectionHeading title="Materials" subtitle="Read now, play later — reading time unlocks the arena." />
+      <PageBanner
+        tone="mint"
+        eyebrow="Library"
+        title="Materials"
+        subtitle="Read now, play later — reading time unlocks the arena."
+        icon={<BookOpen />}
+        action={
+          <>
         <Button size="sm" variant="ghost" icon={<BookOpen className="size-4" />} onClick={() => void openGlossary()}>
           Glossary
         </Button>
-      </div>
+          </>
+        }
+      />
 
       <BankStrip bank={bank} streak={mine ? {current: 0} : null} />
 

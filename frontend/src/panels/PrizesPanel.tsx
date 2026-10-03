@@ -2,7 +2,7 @@
 import {CheckCircle2, Coins, Crown, Gift, Lock, Medal, Sparkles, Tag, GiftIcon} from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Skeleton, TextArea} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, Skeleton, TextArea, PageBanner} from '../components/ui';
 import {api} from '../lib/api';
 import {coinRain} from '../lib/confetti';
 import {HAPTICS} from '../lib/haptics';
@@ -122,7 +122,7 @@ export default function PrizesPanel() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <SectionHeading
+      <PageBanner tone="gold" eyebrow="Rewards"
         title="Prize vault"
         subtitle={vault?.prize_pool_note || 'Spend coins or top the board to unlock real rewards.'}
         icon={<Gift className="size-4" />}

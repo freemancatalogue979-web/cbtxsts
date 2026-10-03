@@ -5,7 +5,7 @@
  */
 import {Crown, Flag, Plus, Search, Swords, Trophy, Users, TrophyIcon, UsersIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, CopyCode, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput} from '../components/ui';
+import {Button, Card, Chip, CopyCode, EmptyState, Field, Modal, Pager, SectionHeading, Select, Skeleton, TextInput, PageBanner} from '../components/ui';
 import {api} from '../lib/api';
 import {useSession} from '../store/session';
 import type {Course, GroupSection, PageMeta, StudyGroupSummary} from '../lib/types';
@@ -66,7 +66,7 @@ export function TournamentsPanel() {
 
   return (
     <div className="grid gap-4">
-      <SectionHeading
+      <PageBanner tone="gold" eyebrow="Competitive"
         title="Tournaments"
         subtitle="Weekly cups, campus clash and course brackets — badges and prizes for the podium."
         icon={<Trophy className="size-4" />}
