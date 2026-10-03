@@ -59,7 +59,9 @@
   --font-sans: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
   /* Chunky game title face for names and headers (Standard mode only). */
-  --font-title: "Lilita One", "Audiowide", ui-sans-serif, system-ui, sans-serif;
+  --font-title: "Bricolage Grotesque Variable", "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Small all-caps labels above titles: always upright, always the house face. */
+  --font-label: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, system-ui, sans-serif;
 
   /* surfaces — true black base, violet-tinted raised steps */
   --color-ink-950: #050308;
@@ -2078,16 +2080,27 @@ input[type='radio'] {
 }
 
 /* ==========================================================================
-   TITLE TYPE — names and headers get the game title face (Lilita One).
-   Lilita ships one weight, so never ask for bold (that fakes a smear).
+   TITLE TYPE — names and headers get the title face (Bricolage Grotesque,
+   variable 200–800): heavy, tight and upright even when the body font is
+   the oblique pack.
    Pro mode never uses these classes.
    ========================================================================== */
+/* Every Standard-mode heading uses the title face, upright and tight, whatever
+   body font pack is picked (the oblique pack would otherwise slant them).
+   Unlayered on purpose so it beats font utilities; Pro keeps its own type. */
+html:not([data-mode='pro']) :is(h1, h2, h3) {
+  font-family: var(--font-title);
+  font-style: normal;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
+}
+
 .ag-title {
   font-family: var(--font-title);
   font-style: normal;
-  font-weight: 400;
+  font-weight: 800;
   font-synthesis: none;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.025em;
   line-height: 1.12;
   color: var(--color-mist-50);
   background: linear-gradient(180deg, var(--color-mist-50) 38%, color-mix(in srgb, var(--color-nova-300) 75%, var(--color-mist-50)) 100%);
@@ -2102,7 +2115,8 @@ input[type='radio'] {
 [data-skin='day'] .ag-title-gold { background-image: linear-gradient(180deg, var(--color-gold-500), #92400e); }
 .ag-eyebrow {
   display: inline-flex; align-items: center; gap: 0.4rem;
-  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; font-style: normal;
+  font-family: var(--font-label);
+  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; font-style: normal;
   color: var(--color-mist-400);
 }
 
@@ -2160,8 +2174,8 @@ input[type='radio'] {
 
 /* -------------------------------------------------- hero name plate + rank */
 .ag-name {
-  font-family: var(--font-title); font-weight: 400; font-style: normal; font-synthesis: none;
-  font-size: 1.7rem; line-height: 1.04; letter-spacing: 0.012em;
+  font-family: var(--font-title); font-weight: 800; font-style: normal; font-synthesis: none;
+  font-size: 1.7rem; line-height: 1.04; letter-spacing: -0.03em;
   color: #fff;
   background: linear-gradient(180deg, #ffffff 0%, #ffffff 45%, #e3d5ff 100%);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
@@ -2175,8 +2189,8 @@ input[type='radio'] {
 }
 .ag-rank, .ag-league {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px 0 3px; border-radius: 999px;
-  font-family: var(--font-title); font-weight: 400; font-style: normal; font-synthesis: none;
-  font-size: 0.82rem; letter-spacing: 0.04em; line-height: 1; white-space: nowrap;
+  font-family: var(--font-title); font-weight: 750; font-style: normal; font-synthesis: none;
+  font-size: 0.82rem; letter-spacing: -0.005em; line-height: 1; white-space: nowrap;
 }
 .ag-rank > i, .ag-league > i {
   display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; flex-shrink: 0;
@@ -2442,10 +2456,12 @@ input[type='radio'] {
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  margin-bottom: 0.3rem;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  margin-bottom: 0.35rem;
+  font-family: var(--font-label);
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--pb) 62%, var(--color-mist-50));
 }
@@ -2458,11 +2474,12 @@ input[type='radio'] {
 }
 .pbanner-title {
   font-family: var(--font-title);
-  font-weight: 400;
+  font-style: normal;
+  font-weight: 800;
   font-synthesis: none;
-  font-size: clamp(1.4rem, 1.05rem + 1.3vw, 2rem);
-  line-height: 1.06;
-  letter-spacing: 0.01em;
+  font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.05rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
   color: var(--color-mist-50);
   text-shadow: 0 2px 0 rgb(0 0 0 / 0.35), 0 0 26px color-mix(in srgb, var(--pb) 40%, transparent);
   overflow-wrap: anywhere;

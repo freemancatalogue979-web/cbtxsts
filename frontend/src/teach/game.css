@@ -66,11 +66,11 @@
 
 /* ------------------------------------------------------------------ type */
 /* Names and headers wear the fantasy title face (solid colour — headings can hold badges). */
-.t-game :is(.pro-h1, .pro-h2, .pro-h3, .t-hub-title) { font-family: var(--font-title); font-style: normal; font-weight: 400 !important; font-synthesis: none; color: var(--color-mist-50); letter-spacing: 0.01em; }
+.t-game :is(.pro-h1, .pro-h2, .pro-h3, .t-hub-title) { font-family: var(--font-title); font-style: normal; font-weight: 800 !important; font-synthesis: none; color: var(--color-mist-50); letter-spacing: -0.025em; }
 .t-game .pro-h1 { font-size: clamp(1.55rem, 5.4vw, 2.2rem); font-weight: 900; line-height: 1.08; }
 .t-game .pro-h2 { font-size: 1.2rem; font-weight: 850; }
 .t-game .pro-h3 { font-size: 1rem; font-weight: 800; }
-.t-game .pro-eyebrow { color: var(--color-nova-300); font-weight: 800; letter-spacing: 0.14em; font-size: 0.66rem; }
+.t-game .pro-eyebrow { color: var(--color-nova-300); font-family: var(--font-label); font-style: normal; font-weight: 700; letter-spacing: 0.18em; font-size: 0.66rem; }
 .t-game .pro-secondary { color: var(--color-mist-300); font-weight: 500; }
 .t-game .pro-meta { color: var(--color-mist-400, #64748b); font-weight: 600; }
 .t-game .pro-body { color: var(--color-mist-100, #e2e8f0); }
