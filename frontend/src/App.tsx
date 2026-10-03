@@ -1,9 +1,9 @@
 /** Root router: login, dashboard tabs, exam engine, duel arena, results, admin. */
-import {ChevronLeft, Coins, Shield} from 'lucide-react';
+import {ChevronLeft, Shield} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {AppShell} from './components/AppShell';
-import {Wordmark} from './components/Brand';
+import {Wordmark, WalletPill} from './components/Brand';
 import {ErrorBoundary} from './components/ErrorBoundary';
 import {CelebrationLayer, Toasts} from './components/Overlays';
 import {Button, Chip} from './components/ui';
@@ -14,7 +14,6 @@ import {PRO_ONLY_TABS, TABS} from './lib/nav';
 import {isPro, useExperience} from './lib/mode';
 import ProShell from './pro/ProShell';
 import ProRoutes from './pro/ProRoutes';
-import {formatNumber} from './lib/format';
 import type {Tab} from './lib/nav';
 import type {AttemptSummary, Duel, GroupSection, Quiz, RewardEvent} from './lib/types';
 import Dashboard from './views/Dashboard';
@@ -177,9 +176,7 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
           <Wordmark size="sm" className="hidden sm:block" />
           {profile && (
             <div className="ml-auto flex items-center gap-2">
-              <Chip tone="gold" className="float-chip" icon={<Coins className="size-3.5" />}>
-                {formatNumber(profile.coins)}
-              </Chip>
+              <WalletPill coins={profile.coins} diamonds={profile.diamonds ?? 0} className="float-chip" />
               <Chip tone="nova" className="float-chip hidden sm:inline-flex">
                 Lv {profile.progress.level}
               </Chip>

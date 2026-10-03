@@ -1,5 +1,6 @@
 /** Absolute Genesis brand mark: the AG crest under a rising star, violet and gold. */
 import {useIsDesktop} from '../lib/viewport';
+import type React from 'react';
 
 /**
  * The Absolute Genesis crest — rising star, AG shield and open book — as the brand mark.
@@ -68,5 +69,77 @@ export function Wordmark({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The official brand lockup: crest in a rotating ray halo, the two-tone
+ * ABSOLUTE GENESIS wordmark and the tagline between gold rules. Pure markup;
+ * styles live in index.css (.agb-*). Shows on phones and desktops alike.
+ */
+export function BrandLockup({className = '', tagline = true}: {className?: string; tagline?: boolean}) {
+  return (
+    <div className={`agb-lockup ${className}`} aria-label="Absolute Genesis">
+      <span className="agb-crest" aria-hidden="true">
+        <span className="agb-crest-rays" />
+        <span className="agb-crest-ring" />
+        <img src="/brand/ag-logo.webp" alt="" width={616} height={629} draggable={false} />
+      </span>
+      <span className="agb-words">
+        <span className="agb-name">
+          Absolute <b>Genesis</b>
+        </span>
+        {tagline && (
+          <span className="agb-tag">
+            <i aria-hidden="true" />A completely new beginning
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Floating glass brand bar for the public pages (landing, sign-in). */
+export function BrandBar({left, children, className = ''}: {left?: React.ReactNode; children?: React.ReactNode; className?: string}) {
+  return (
+    <header className={`agb-header safe-top ${className}`}>
+      <div className="agb-bar">
+        <span className="agb-bar-glint" aria-hidden="true" />
+        {left}
+        <BrandLockup />
+        {children && <div className="agb-actions">{children}</div>}
+      </div>
+    </header>
+  );
+}
+
+/** Coins + diamonds in one HUD pill — always visible in the top bar. */
+export function WalletPill({coins, diamonds, className = '', onClick}: {coins: number; diamonds: number; className?: string; onClick?: () => void}) {
+  const fmt = (n: number) => (n >= 100000 ? `${Math.round(n / 1000)}k` : n >= 10000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : n.toLocaleString());
+  const body = (
+    <>
+      <span className="wallet-seg" data-k="coins" title={`${coins.toLocaleString()} coins`}>
+        <span className="wallet-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v9M9.5 9.5h3.75a1.75 1.75 0 0 1 0 3.5h-2.5a1.75 1.75 0 0 0 0 3.5H14.5" /></svg>
+        </span>
+        <b>{fmt(coins)}</b>
+      </span>
+      <i className="wallet-div" aria-hidden="true" />
+      <span className="wallet-seg" data-k="gems" title={`${diamonds.toLocaleString()} diamonds`}>
+        <span className="wallet-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z" /><path d="M2 9h20M12 21 8 9l4-6 4 6z" /></svg>
+        </span>
+        <b>{fmt(diamonds)}</b>
+      </span>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className={`wallet-pill ${className}`} onClick={onClick} aria-label={`${coins} coins, ${diamonds} diamonds`}>
+      {body}
+    </button>
+  ) : (
+    <span className={`wallet-pill ${className}`} aria-label={`${coins} coins, ${diamonds} diamonds`}>
+      {body}
+    </span>
   );
 }

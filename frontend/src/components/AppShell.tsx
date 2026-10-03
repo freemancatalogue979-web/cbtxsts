@@ -1,5 +1,5 @@
 /** App chrome: desktop nav tabs, mobile bottom bar, header stats, notifications. */
-import {Bell, BellRing, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Coins, Flame, Gem, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
+import {Bell, BellRing, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Flame, LogOut, Menu, MoreHorizontal, Music2, Pause, Play, Radio, Search, Shield, Sparkles, User as UserIcon, Volume2, VolumeX, Wifi, WifiOff, X} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
 import type {ReactNode} from 'react';
@@ -8,7 +8,7 @@ import {Avatar, Button, Chip, IconButton} from './ui';
 import {Holdable} from './Holdable';
 import {api} from '../lib/api';
 import {cacheRead, cacheWrite, userScope} from '../lib/cache';
-import {LogoMark} from './Brand';
+import {LogoMark, WalletPill} from './Brand';
 import SeasonBadge from './SeasonBadge';
 import {music} from '../lib/music';
 import {sfx} from '../lib/sfx';
@@ -606,21 +606,17 @@ export function AppShell({
             >
               <Search className="size-[1.1rem]" />
             </button>
-            <LivePill />
+            <span className="hidden sm:contents">
+              <LivePill />
+            </span>
             {profile && (
               <>
                 {/* Telemetry pills step in with width so the phone row never
                     jams: credits ride along (the mobile coins chip), crystals
                     from sm, streak from md — every value stays in the account
                     menu regardless. */}
-                <span className="hud-pill float-chip hidden shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-nova-300 tabular sm:inline-flex lg:hidden min-[1800px]:inline-flex" title="Data Crystals">
-                  <Gem className="size-3 text-nova-400" />
-                  {formatNumber(profile.diamonds ?? 0)}
-                </span>
-                <span className="hud-pill float-chip inline-flex shrink-0 px-2 py-1 text-[0.74rem] font-extrabold text-amber-300 tabular lg:hidden 2xl:inline-flex" title="Credits">
-                  <Coins className="size-3 text-amber-400" />
-                  {formatNumber(profile.coins)}
-                </span>
+                {/* Wallet: coins + diamonds, always on show — phone and desktop. */}
+                <WalletPill coins={profile.coins} diamonds={profile.diamonds ?? 0} className="float-chip" onClick={() => onTab('shop')} />
                 <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex lg:hidden min-[1800px]:inline-flex" title="Daily streak">
                   <Flame className="size-3.5 text-rose-400" />
                   {profile.streak}d

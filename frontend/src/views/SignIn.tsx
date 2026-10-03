@@ -10,7 +10,7 @@ import {ArrowRight, AtSign, ChevronLeft, Coins, Eye, EyeOff, Gamepad2, Lock, Mai
 import {useState} from 'react';
 import {motion} from 'motion/react';
 import {Button, Field, PhoneInput, TextInput} from '../components/ui';
-import {LogoMark} from '../components/Brand';
+import {BrandBar, LogoMark} from '../components/Brand';
 import {formatNumber, isValidPhone, normalizePhoneInput} from '../lib/format';
 import {useSession} from '../store/session';
 
@@ -127,14 +127,13 @@ export default function SignIn({
       {/* ---------------------------------------------------- branded head */}
       {/* Just the way back — no bar, no rule, no logo: the crest belongs to the
           landing page and the sign-in card carries the brand. */}
-      <header className="sticky top-0 z-50 safe-top">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-ink-950 via-ink-950/70 to-transparent" />
-        <div className="relative mx-auto flex min-h-13 max-w-6xl items-center px-2.5 py-1 sm:min-h-16 sm:px-6">
-          <Button variant="ghost" size="sm" onClick={onBack} icon={<ChevronLeft className="size-4" />} className="-ml-1.5">
-            <span className="hidden sm:inline">Explore the arena</span>
+      <BrandBar
+        left={
+          <Button variant="ghost" size="sm" onClick={onBack} icon={<ChevronLeft className="size-4" />} aria-label="Back to the arena" className="shrink-0">
+            <span className="hidden sm:inline">Explore</span>
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <main className="relative mx-auto flex min-h-[calc(100dvh-3.25rem)] max-w-md flex-col justify-center px-3 py-6 sm:max-w-lg sm:py-10">
         {/* ------------------------------------------------------ greeting */}

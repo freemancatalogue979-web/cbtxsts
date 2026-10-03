@@ -9,7 +9,7 @@
 import {Coins, Flame, Gamepad2, Medal, Shield, Sparkles, Swords, Trophy, Users, Wifi} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import {Avatar, Button, SectionHeading} from '../components/ui';
-import {Wordmark} from '../components/Brand';
+import {BrandBar} from '../components/Brand';
 import HeroReel, {type HeroSlide} from '../components/HeroReel';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
@@ -121,13 +121,9 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
       <div className="pointer-events-none fixed -bottom-32 left-1/4 size-[22rem] rounded-full bg-pulse-600/16 blur-[110px]" />
 
       {/* ---------------------------------------------------- branded head
-          No bar, no rule: the crest owns the top-left corner and the controls
-          float on the aurora. The header height never crops the brand mark. */}
-      <header className="sticky top-0 z-50 safe-top">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-ink-950 via-ink-950/72 to-transparent sm:h-32" />
-        <div className="relative flex w-full items-center gap-2 px-3 py-1 sm:h-19 sm:gap-3 sm:px-4 lg:h-24 lg:px-6">
-          <Wordmark size="brand" tagline taglineClassName="hidden md:block" />
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          The official lockup on a floating glass bar: crest in a ray halo,
+          two-tone wordmark and tagline, controls on the right. */}
+      <BrandBar>
             {(stats?.online ?? 0) > 0 && (
               <span className="hidden items-center gap-1.5 rounded-full border border-mint-500/25 bg-mint-500/10 px-2.5 py-1 text-[0.62rem] font-black tracking-wide text-mint-300 md:inline-flex">
                 <Wifi className="size-3" />
@@ -149,12 +145,10 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
             </Button>
             <InstallApp variant="icon" className="sm:hidden" />
             <InstallApp variant="pill" className="hidden sm:inline-flex" />
-            <Button size="sm" onClick={onSignIn}>
+            <Button size="sm" onClick={onSignIn} className="agb-cta">
               Sign in
             </Button>
-          </div>
-        </div>
-      </header>
+      </BrandBar>
 
       <main className="relative mx-auto max-w-6xl px-3 pb-28 sm:px-6 sm:pb-16">
         {/* ---------------------------------------------------------- hero */}
