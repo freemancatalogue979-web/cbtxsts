@@ -17,7 +17,7 @@ import {
   Medal,
   Music2,
   Palette,
-  PartyPopper,
+  LayoutGrid,
   Pause,
   Play,
   Phone,
@@ -70,7 +70,7 @@ import {
   type ThemeName,
 } from '../lib/prefs';
 
-const MODE_ICONS = {game: Gamepad2, pro: Briefcase, fun: PartyPopper} as const;
+const MODE_ICONS = {game: Gamepad2, pro: Briefcase, normal: LayoutGrid} as const;
 import {music, MUSIC_TRACKS} from '../lib/music';
 import {cacheClearAll, cacheStats} from '../lib/cache';
 import {invalidatePhoto} from '../lib/photos';

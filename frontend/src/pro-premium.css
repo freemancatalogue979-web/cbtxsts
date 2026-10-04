@@ -363,6 +363,8 @@ html[data-font='helvetica-oblique'] select {
       align-items: center;
       column-gap: 11px;
     }
+    /* no icon tile → the copy owns the full width (was squeezed into 38px) */
+    .pro-section-head:not(:has(> .pro-tile)) { grid-template-columns: minmax(0, 1fr); }
     .pro-section-head .pro-tile {
       width: 38px;
       height: 38px;
@@ -399,5 +401,52 @@ html[data-font='helvetica-oblique'] select {
       width: 100%;
       margin-top: 2px;
     }
+  }
+}
+
+/* Launch cards (topic Practice / Mini exam) — icon-led header, a hue wash,
+   segmented pickers and a summary footer. */
+@layer components {
+  .pro-launch { --hue: var(--pro-h-blue); position: relative; overflow: hidden; display: grid; align-content: start; }
+  .pro-launch[data-hue='violet'] { --hue: var(--pro-h-violet); }
+  .pro-launch::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 120px;
+    pointer-events: none;
+    background: radial-gradient(120% 100% at 0% 0%, color-mix(in oklab, var(--hue) 16%, transparent), transparent 70%);
+  }
+  .pro-launch::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 18px; bottom: auto;
+    width: 3px; height: 44px;
+    border-radius: 0 3px 3px 0;
+    background: var(--hue);
+    box-shadow: 0 0 12px color-mix(in oklab, var(--hue) 60%, transparent);
+  }
+  .pro-launch-head { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; padding: 18px 18px 14px; border-bottom: 1px solid var(--pro-border); }
+  .pro-launch-head .pro-eyebrow { display: block; color: var(--hue); font-style: normal; }
+  .pro-launch-head .pro-h3 { margin-top: 2px; font-size: 1.15rem; line-height: 1.15; }
+  .pro-launch-head .pro-meta { margin-top: 3px; line-height: 1.4; }
+  .pro-launch-body { position: relative; display: grid; gap: 14px; padding: 16px 18px 18px; }
+  .pro-launch .pro-seg { width: 100%; flex-wrap: nowrap; }
+  .pro-launch .pro-seg-item { min-width: 0; padding: 0 6px; }
+  .pro-launch-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; padding-top: 14px; border-top: 1px dashed var(--pro-border); }
+  .pro-launch-sum { font-size: 0.8rem; color: var(--pro-muted); }
+  .pro-launch-sum b { color: var(--pro-text); font-weight: 700; }
+  .pro-launch-go { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding-inline: 18px; }
+  .pro-launch-facts { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .pro-launch-facts li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--pro-border); border-radius: 10px; background: var(--pro-sunken, var(--pro-bg)); font-size: 0.84rem; color: var(--pro-text-2); }
+  .pro-launch-facts li svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--hue); }
+  .pro-launch-facts b { color: var(--pro-text); }
+  @media (max-width: 767px) {
+    .pro-launch-head { padding: 15px 14px 13px; gap: 12px; }
+    .pro-launch-head .pro-tile { width: 44px; height: 44px; }
+    .pro-launch-body { padding: 14px; }
+    .pro-launch-go { width: 100%; }
+    .pro-launch-foot { flex-direction: column; align-items: stretch; }
+    .pro-launch-sum { text-align: center; }
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Experience modes — one account, one set of data, different interfaces.
  *
- *   Standard  ('game' | 'fun' in prefs)  engaging, visual, gamified
+ *   Standard  ('game' | 'normal' in prefs)  game = bright + characters, normal = calm
  *   Pro       ('pro')                    quiet, focused, professional
  *
  * Only the *experience* changes: courses, progress, question history and
@@ -70,6 +70,12 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+/** Normal mode: the Standard app without characters or celebration effects. */
+export function isNormal(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.documentElement.dataset.mode === 'normal';
+}
+
 export function isPro(): boolean {
   if (typeof document === 'undefined') return false;
   return document.documentElement.dataset.mode === 'pro';
@@ -129,10 +135,10 @@ export function setReadingPref(key: 'size' | 'width' | 'line', value: string): v
 }
 
 /* ------------------------------------------------------ experience */
-/** The Standard flavour to return to ('game' or 'fun'). */
+/** The Standard flavour to return to ('game' or 'normal'). */
 function lastStandard(): ModeName {
   const stored = read(LAST_STANDARD_KEY, 'game');
-  return stored === 'fun' ? 'fun' : 'game';
+  return stored === 'normal' || stored === 'fun' ? 'normal' : 'game';
 }
 
 /** Apply the stored mode before first paint (called from main.tsx). */

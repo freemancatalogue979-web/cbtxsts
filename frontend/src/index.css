@@ -771,7 +771,7 @@
 }
 
 /* ==========================================================================
-   Modes — [data-mode] on <html>: game (default), pro, fun.
+   Modes — [data-mode] on <html>: game (default), pro, normal.
    Game keeps every glow and mascot; pro strips the arcade chrome down to a
    clean professional surface; fun adds bounce, wiggle and extra sparkle.
    ========================================================================== */
@@ -839,33 +839,29 @@
   }
 }
 
-[data-mode='fun'] .mascot {
-  animation: fun-hop 1.7s ease-in-out infinite;
+/* Normal mode — the Standard layout, minus the game dressing: no slime,
+   mascots, avatars-as-characters or scenery, no neon glows or gold-gradient
+   titles, a flat calm backdrop and no decorative looping motion. */
+[data-mode='normal'] :is(.hero-sprite, .mascot, .scenery, .t-hub-slime, .hero-mote, .hero-aura, .hero-frame-spin, .victory-classic, .victory-confetti, .victory-dragon, .victory-galaxy, .fx-answer-sparkle, .fx-answer-perfect, .fx-answer-knowledge) {
+  display: none !important;
 }
-
-[data-mode='fun'] .game-title {
-  animation: fun-wiggle 2.6s ease-in-out infinite;
+[data-mode='normal'] .aurora::before {
+  background: linear-gradient(180deg, #0c1017 0%, #0e131b 55%, #0c1017 100%);
 }
-
-[data-mode='fun'] .hud-pill {
-  animation: fun-pulse 2.2s ease-in-out infinite;
+[data-mode='normal'] .grid-lines { background-image: none; }
+[data-mode='normal'] :is(.glow-brand, .glow-flare, .glow-mint, .glow-cyber) {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.07), 0 8px 20px -14px rgb(0 0 0 / 0.8);
 }
-
-[data-mode='fun'] .aurora::before {
-  filter: saturate(1.35);
+[data-mode='normal'] .game-title {
+  background: none;
+  color: #f1f5f9;
+  filter: none;
 }
-
-[data-mode='fun'] button:not(:disabled):hover {
-  transform: translateY(-2px) rotate(-0.5deg);
+[data-mode='normal'] :is(.brand-gradient, .brand-gradient-animated) {
+  background-image: linear-gradient(120deg, #4f46e5, #6366f1);
+  animation: none;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  [data-mode='fun'] .mascot,
-  [data-mode='fun'] .game-title,
-  [data-mode='fun'] .hud-pill {
-    animation: none;
-  }
-}
+[data-mode='normal'] :is(.hud-pill, .game-title, .hero-kenburns, .agb-bar-glint::after) { animation: none !important; }
 
 .brand-gradient-animated {
   background-image: linear-gradient(

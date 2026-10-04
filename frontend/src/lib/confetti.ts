@@ -3,7 +3,7 @@
  * A single overlay canvas is created on demand and removed when the last
  * particle dies, so it costs nothing when idle.
  */
-import {isPro} from './mode';
+import {isNormal, isPro} from './mode';
 
 const BRAND_COLORS = ['#f43f5e', '#a855f7', '#3b82f6', '#fbbf24', '#34d399', '#ffffff'];
 
@@ -119,7 +119,7 @@ export interface BurstOptions {
 }
 
 export function burst(options: BurstOptions = {}): void {
-  if (prefersReducedMotion() || isPro()) return; // Pro Mode: no confetti
+  if (prefersReducedMotion() || isPro() || isNormal()) return; // Pro / Normal: no confetti
   if (!ensureCanvas()) return;
 
   const {
@@ -171,7 +171,7 @@ export function celebrate(options: {big?: boolean} = {}): void {
 
 /** Gold coin shower for prize claims and coin rewards. */
 export function coinRain(count = 60): void {
-  if (prefersReducedMotion() || isPro()) return;
+  if (prefersReducedMotion() || isPro() || isNormal()) return;
   if (!ensureCanvas()) return;
   for (let i = 0; i < count; i += 1) {
     particles.push({

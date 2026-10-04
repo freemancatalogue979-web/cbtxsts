@@ -455,65 +455,100 @@ function PracticeTab({courseId, topic, max, onTab, toast}: {courseId: number | n
   const [size, setSize] = useState(Math.min(10, Math.max(1, max || 10)));
   const [minutes, setMinutes] = useState(10);
   const [busy, setBusy] = useState<'practice' | 'mini' | null>(null);
+  const count = sizes.includes(size) || size === max ? size : sizes[0] ?? max;
+  const miniCount = Math.min(size, Math.max(1, max));
+  const perQ = count > 0 ? Math.round((minutes * 60) / count) : 0;
+  const Seg = ({label, options, value, onPick}: {label: string; options: {v: number; t: string}[]; value: number; onPick: (v: number) => void}) => (
+    <div className="grid gap-1.5">
+      <span className="pro-eyebrow">{label}</span>
+      <div className="pro-seg pro-seg-fill" role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.v} type="button" role="radio" aria-checked={value === o.v} className="pro-seg-item" onClick={() => onPick(o.v)}>
+            {o.t}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  const countOptions = [...(sizes.length ? sizes : [max]).map((n) => ({v: n, t: String(n)})), ...(max > 0 && !sizes.includes(max) ? [{v: max, t: `All ${max}`}] : [])];
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
-      <Section title="Practice" description="Timed practice from the question bank. Explanations are shown after each answer.">
-        <div className="grid gap-4">
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <label className="grid gap-1.5">
-              <span className="pro-meta">Questions</span>
-              <select className="pro-input" value={size} onChange={(e) => setSize(Number(e.target.value))}>
-                {(sizes.length ? sizes : [max]).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-                {max > 0 && !sizes.includes(max) && <option value={max}>All ({max})</option>}
-              </select>
-            </label>
-            <label className="grid gap-1.5">
-              <span className="pro-meta">Time limit</span>
-              <select className="pro-input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-                {[5, 10, 15, 20, 30, 45].map((n) => (
-                  <option key={n} value={n}>
-                    {n} min
-                  </option>
-                ))}
-              </select>
-            </label>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <section className="pro-card pro-launch" data-hue="blue">
+        <header className="pro-launch-head">
+          <Tile hue="blue" size="lg">
+            <Target />
+          </Tile>
+          <div className="min-w-0">
+            <span className="pro-eyebrow">Timed drill</span>
+            <h2 className="pro-h3">Practice</h2>
+            <p className="pro-meta">Questions from the bank with an explanation after every answer.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+        </header>
+        <div className="pro-launch-body">
+          <Seg label="Questions" options={countOptions} value={count} onPick={setSize} />
+          <Seg label="Time limit" options={[5, 10, 15, 20, 30, 45].map((n) => ({v: n, t: `${n}m`}))} value={minutes} onPick={setMinutes} />
+          <div className="pro-launch-foot">
+            <div className="pro-launch-sum">
+              <b className="pro-num">{count}</b> questions · <b className="pro-num">{minutes}</b> min
+              {perQ > 0 && <span> · ~{perQ >= 60 ? `${Math.round(perQ / 60)} min` : `${perQ}s`} each</span>}
+            </div>
             <button
               type="button"
-              className="pro-btn pro-btn-primary"
+              className="pro-btn pro-btn-primary pro-launch-go"
               disabled={busy !== null || !courseId || max === 0}
               onClick={async () => {
                 setBusy('practice');
-                await practiseTopic({courseId, topic, size, minutes}, onTab, toast);
+                await practiseTopic({courseId, topic, size: count, minutes}, onTab, toast);
                 setBusy(null);
               }}
             >
               {busy === 'practice' ? 'Starting…' : 'Start practice'}
+              <ChevronRight className="size-4" />
             </button>
           </div>
           {!courseId && <p className="pro-meta">Open this topic from Courses to practise it.</p>}
+          {courseId && max === 0 && <p className="pro-meta">No bank questions on this topic yet.</p>}
         </div>
-      </Section>
-      <Section title="Mini exam" description="A real, timed exam on this topic, marked and analysed when you finish.">
-        <button
-          type="button"
-          className="pro-btn"
-          disabled={busy !== null || !courseId}
-          onClick={async () => {
-            if (!courseId) return;
-            setBusy('mini');
-            await createMiniExam({courseId, topics: [topic], count: Math.min(size, Math.max(1, max)), minutes}, toast);
-            setBusy(null);
-          }}
-        >
-          {busy === 'mini' ? 'Creating…' : `Create a ${Math.min(size, Math.max(1, max))}-question mini exam`}
-        </button>
-      </Section>
+      </section>
+      <section className="pro-card pro-launch" data-hue="violet">
+        <header className="pro-launch-head">
+          <Tile hue="violet" size="lg">
+            <GraduationCap />
+          </Tile>
+          <div className="min-w-0">
+            <span className="pro-eyebrow">Exam conditions</span>
+            <h2 className="pro-h3">Mini exam</h2>
+            <p className="pro-meta">A real timed exam on this topic, marked and analysed when you finish.</p>
+          </div>
+        </header>
+        <div className="pro-launch-body">
+          <ul className="pro-launch-facts">
+            <li>
+              <ListChecks /> <b className="pro-num">{miniCount}</b> questions
+            </li>
+            <li>
+              <Activity /> <b className="pro-num">{minutes}</b> min, strict timer
+            </li>
+            <li>
+              <CheckCircle2 /> Full marking and analysis
+            </li>
+          </ul>
+          <button
+            type="button"
+            className="pro-btn pro-launch-go"
+            disabled={busy !== null || !courseId}
+            onClick={async () => {
+              if (!courseId) return;
+              setBusy('mini');
+              await createMiniExam({courseId, topics: [topic], count: miniCount, minutes}, toast);
+              setBusy(null);
+            }}
+          >
+            {busy === 'mini' ? 'Creating…' : 'Create mini exam'}
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

@@ -23,12 +23,12 @@ export const MASCOTS: {id: MascotName; name: string; blurb: string; short: strin
 ];
 
 /* ------------------------------------------------------------------ modes */
-export type ModeName = 'game' | 'pro' | 'fun';
+export type ModeName = 'game' | 'pro' | 'normal';
 
 export const MODES: {id: ModeName; name: string; blurb: string; short: string}[] = [
-  {id: 'game', name: 'Standard', blurb: 'The full arena experience — rewards, mascots, music and animation.', short: 'Full arena experience.'},
+  {id: 'game', name: 'Game', blurb: 'Colourful and bright — slime, mascots, rewards, music and animation.', short: 'Colourful game look.'},
   {id: 'pro', name: 'Pro', blurb: 'A quiet, professional study workspace. No sound, mascots or pop-ups.', short: 'Quiet and professional.'},
-  {id: 'fun', name: 'Fun', blurb: 'Bouncy, wiggly, extra sparkly. Pure playground.', short: 'Bouncy and sparkly.'},
+  {id: 'normal', name: 'Normal', blurb: 'Clean and calm — the same app with no characters, mascots, bright glows or game effects.', short: 'Clean and calm.'},
 ];
 
 /* ------------------------------------------------------------------ fonts */
@@ -198,7 +198,8 @@ export function setMusicVolume(value: number): void {
 
 
 export function currentMode(): ModeName {
-  const stored = read(MODE_KEY, 'game');
+  const raw = read(MODE_KEY, 'game');
+  const stored = raw === 'fun' ? 'normal' : raw; // 'Fun' was renamed to Normal
   return (MODES.some((mode) => mode.id === stored) ? stored : 'game') as ModeName;
 }
 
