@@ -839,6 +839,39 @@
   }
 }
 
+:root[data-mode='normal'] {
+  /* calm, professional palette — overrides whichever colour theme is picked */
+  --qa-flare-300: #e8b4bf;
+  --qa-flare-400: #d68a9a;
+  --qa-flare-500: #b45d70;
+  --qa-flare-600: #934759;
+  --qa-flare-700: #6d3442;
+  --qa-nova-300: #d4d8f0;
+  --qa-nova-400: #a5acd9;
+  --qa-nova-500: #6872c2;
+  --qa-nova-600: #4f58a6;
+  --qa-nova-700: #3b4280;
+  --qa-pulse-300: #b9c3d9;
+  --qa-pulse-400: #8d9abb;
+  --qa-pulse-500: #5d6c94;
+  --qa-pulse-600: #475478;
+  --qa-pulse-700: #333d59;
+  --qa-mint-300: #a7d7c2;
+  --qa-mint-400: #7bbfa2;
+  --qa-mint-500: #4f9e7d;
+  --qa-mint-600: #3d7f63;
+  --qa-gold-300: #eedcaa;
+  --qa-gold-400: #d9bd72;
+  --qa-gold-500: #bf9b45;
+  --qa-gold-600: #997a32;
+  --wash-1: rgba(104, 114, 194, 0.06);
+  --wash-2: rgba(93, 108, 148, 0.05);
+  --wash-3: rgba(0, 0, 0, 0.5);
+  --xp-grad: linear-gradient(90deg, #a5acd9, #6872c2);
+  --goldtext-grad: linear-gradient(180deg, #f1f5f9, #cbd5e1);
+}
+[data-mode='normal'] :is(.text-shadow-glow, [class*='drop-shadow-']) { filter: none; }
+
 /* Normal mode — the Standard layout, minus the game dressing: no slime,
    mascots, avatars-as-characters or scenery, no neon glows or gold-gradient
    titles, a flat calm backdrop and no decorative looping motion. */
@@ -858,7 +891,7 @@
   filter: none;
 }
 [data-mode='normal'] :is(.brand-gradient, .brand-gradient-animated) {
-  background-image: linear-gradient(120deg, #4f46e5, #6366f1);
+  background-image: linear-gradient(120deg, var(--qa-nova-600), var(--qa-nova-500));
   animation: none;
 }
 [data-mode='normal'] :is(.hud-pill, .game-title, .hero-kenburns, .agb-bar-glint::after) { animation: none !important; }
