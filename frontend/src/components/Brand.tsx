@@ -81,8 +81,6 @@ export function BrandLockup({className = '', tagline = true}: {className?: strin
   return (
     <div className={`agb-lockup ${className}`} aria-label="Absolute Genesis">
       <span className="agb-crest" aria-hidden="true">
-        <span className="agb-crest-rays" />
-        <span className="agb-crest-ring" />
         <img src="/brand/ag-logo.webp" alt="" width={616} height={629} draggable={false} />
       </span>
       <span className="agb-words">
