@@ -306,6 +306,67 @@ def _sse(event: str, data: dict) -> bytes:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
 
 
+_staff_jobs: dict[str, "_AgentJob"] = {}
+JOB_KEEP_SECONDS = 1800
+
+
+class _AgentJob:
+    """Buffered events of one staff-agent turn. The turn runs on a background
+    thread; any number of SSE readers replay the buffer and follow it live,
+    so a reader leaving (page closed, network blip) never stops the work."""
+
+    def __init__(self, request_id: str, admin_id: int, stop: threading.Event):
+        self.request_id = request_id
+        self.admin_id = admin_id
+        self.stop = stop
+        self.events: list[tuple[str, dict]] = []
+        self.done = False
+        self.started = time.time()
+        self.finished_at: float | None = None
+        self.cond = threading.Condition()
+
+    def push(self, event: str, data: dict) -> None:
+        with self.cond:
+            self.events.append((event, data))
+            self.cond.notify_all()
+
+    def close(self) -> None:
+        with self.cond:
+            self.done = True
+            self.finished_at = time.time()
+            self.cond.notify_all()
+
+
+def _prune_jobs() -> None:
+    now = time.time()
+    with _staff_stops_lock:
+        for rid in [r for r, j in _staff_jobs.items() if j.done and j.finished_at and now - j.finished_at > JOB_KEEP_SECONDS]:
+            _staff_jobs.pop(rid, None)
+
+
+def _stream_job(job: "_AgentJob", after: int) -> StreamingResponse:
+    def gen():
+        index = max(0, after)
+        while True:
+            with job.cond:
+                while index >= len(job.events) and not job.done:
+                    if not job.cond.wait(timeout=15):
+                        break
+                batch = job.events[index:]
+                finished = job.done
+            if batch:
+                for offset, (event, data) in enumerate(batch, start=index + 1):
+                    yield f"id: {offset}\n".encode() + _sse(event, data)
+                index += len(batch)
+            elif not finished:
+                yield b": keep-alive\n\n"
+            if finished and index >= len(job.events):
+                return
+
+    _prune_jobs()
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+
 @admin_router.post("/agent/stream")
 def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admin = Depends(require_institution_staff)) -> StreamingResponse:
     """Same turn as /agent, streamed as server-sent events so the console can
@@ -330,13 +391,17 @@ def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admi
 
     started = time.monotonic()
 
-    def events():
+    job = _AgentJob(request_id, admin_id, stop)
+    with _staff_stops_lock:
+        _staff_jobs[request_id] = job
+
+    def produce():
         text, usage, model = "", None, planned_model
         tools: list[dict] = []
         actions: list[dict] = []
         settled = False
         try:
-            yield _sse("meta", {"request_id": request_id, "model": planned_model, "thinking": thinking})
+            yield ("meta", {"request_id": request_id, "model": planned_model, "thinking": thinking})
             with session_scope() as s:
                 me = s.get(Admin, admin_id)
                 ctx = ai_core.ToolContext(db=s, role=role, request_id=request_id, admin=me, course_hint=course_hint)
@@ -345,13 +410,13 @@ def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admi
                         if kind in {"tool", "tool_done"}:
                             if kind == "tool_done":
                                 tools.append(value)
-                            yield _sse("tool", value)
+                            yield ("tool", value)
                         elif kind == "status":
-                            yield _sse("status", {"text": value})
+                            yield ("status", {"text": value})
                         elif kind == "thinking":
-                            yield _sse("thinking", value)
+                            yield ("thinking", value)
                         elif kind == "note":
-                            yield _sse("note", {"text": value})
+                            yield ("note", {"text": value})
                         elif kind == "usage":
                             usage = value
                         elif kind == "model":
@@ -363,46 +428,51 @@ def staff_agent_stream(payload: dict, db: Session = Depends(get_db), admin: Admi
                 finally:
                     actions = list(ctx.actions)
             if actions:
-                yield _sse("actions", {"actions": actions})
+                yield ("actions", {"actions": actions})
                 if any(a.get("type") == "task" for a in actions):
                     tasks.kick()
             if stop.is_set():
                 settled = True
                 with session_scope() as s:
                     record(s, model=model, usage=usage, status_="cancelled")
-                yield _sse("cancelled", {"tools": tools})
+                yield ("cancelled", {"tools": tools})
                 return
             for n in range(0, len(text), 160):
-                yield _sse("delta", {"text": text[n:n + 160]})
+                yield ("delta", {"text": text[n:n + 160]})
             with session_scope() as s:
                 cost = record(s, model=model, usage=usage)
             settled = True
-            yield _sse("done", {"usage": cost, "tools": tools, "model": model, "ms": int((time.monotonic() - started) * 1000)})
+            yield ("done", {"usage": cost, "tools": tools, "model": model, "ms": int((time.monotonic() - started) * 1000)})
         except tutor.TutorError as error:
             settled = True
             log.warning("staff agent failed: %s", error.technical)
             with session_scope() as s:
                 record(s, model=model, usage=usage, status_="error", error=error.technical)
             if actions:
-                yield _sse("actions", {"actions": actions})
-            yield _sse("error", {"detail": str(error), "status": error.status})
+                yield ("actions", {"actions": actions})
+            yield ("error", {"detail": str(error), "status": error.status})
         except Exception:  # noqa: BLE001
             settled = True
             log.exception("staff agent crashed")
-            yield _sse("error", {"detail": "The assistant hit an unexpected error. Try again.", "status": 500})
+            yield ("error", {"detail": "The assistant hit an unexpected error. Try again.", "status": 500})
         finally:
             with _staff_stops_lock:
                 _staff_stops.pop(request_id, None)
-            if not settled:
-                stop.set()
-                log.info("staff agent abandoned by client (%s)", request_id)
-                try:
-                    with session_scope() as s:
-                        record(s, model=model, usage=usage, status_="cancelled")
-                except Exception:  # noqa: BLE001
-                    log.exception("could not record abandoned staff request")
 
-    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+    def worker() -> None:
+        # Runs on its own thread: closing the page or losing the connection
+        # never stops the turn — only the Stop button (stop event) does.
+        try:
+            for event, data in produce():
+                job.push(event, data)
+        except Exception:  # noqa: BLE001
+            log.exception("staff agent worker crashed")
+            job.push("error", {"detail": "The assistant hit an unexpected error. Try again.", "status": 500})
+        finally:
+            job.close()
+
+    threading.Thread(target=worker, name=f"staff-agent-{request_id}", daemon=True).start()
+    return _stream_job(job, 0)
 
 
 @admin_router.post("/agent/{request_id}/stop")
@@ -412,6 +482,25 @@ def staff_agent_stop(request_id: str, admin: Admin = Depends(require_institution
     if event:
         event.set()
     return {"ok": True, "stopped": event is not None}
+
+
+@admin_router.get("/agent/{request_id}/events")
+def staff_agent_events(request_id: str, after: int = Query(0, ge=0), admin: Admin = Depends(require_institution_staff)) -> StreamingResponse:
+    """Re-attach to a running (or recently finished) turn: replays events after
+    ``after`` and follows the rest live."""
+    with _staff_stops_lock:
+        job = _staff_jobs.get(request_id)
+    if job is None or job.admin_id != admin.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That reply is no longer available.")
+    return _stream_job(job, after)
+
+
+@admin_router.get("/agent/active")
+def staff_agent_active(admin: Admin = Depends(require_institution_staff)) -> dict:
+    with _staff_stops_lock:
+        rows = [j for j in _staff_jobs.values() if j.admin_id == admin.id]
+    rows.sort(key=lambda j: -j.started)
+    return {"jobs": [{"request_id": j.request_id, "done": j.done, "events": len(j.events), "started": j.started} for j in rows[:5]]}
 
 
 @admin_router.get("/proposals")
