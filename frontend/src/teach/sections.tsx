@@ -17,7 +17,7 @@ export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: 
     const shared = (learning?.materials.length ?? 0) + (learning?.quizzes.length ?? 0);
     return (
       <PageBanner
-        eyebrow="Mentor guild"
+        eyebrow={calm ? "Teacher network" : "Mentor guild"}
         title="Your teachers & groups"
         subtitle="Chat with your teachers, open what they share and join their study groups."
         icon={<GraduationCap />}
@@ -38,7 +38,7 @@ export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: 
             <GraduationCap className="!size-5" />
           </span>
           <div className="min-w-0">
-            <p className="pro-eyebrow">{arena ? 'Mentor guild' : 'Teacher network'}</p>
+            <p className="pro-eyebrow">{arena && !calm ? 'Mentor guild' : 'Teacher network'}</p>
             <h1 id="t-hub-title" className="pro-h2 truncate">
               Your teachers &amp; groups
             </h1>
@@ -51,7 +51,7 @@ export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: 
     <section className="t-hub-hero" aria-labelledby="t-hub-title">
       <div className="relative z-[1] grid min-w-0 gap-3.5">
         <p className="pro-eyebrow flex items-center gap-1.5">
-          <Sparkles className="size-3.5" /> {arena ? 'Mentor guild · Teacher network' : 'Teacher network'}
+          <Sparkles className="size-3.5" /> {arena && !calm ? 'Mentor guild · Teacher network' : 'Teacher network'}
         </p>
         <h1 id="t-hub-title" className="t-hub-title max-w-[17ch] [overflow-wrap:anywhere]">
           Learn faster with a <em>real teacher</em>

@@ -894,6 +894,12 @@
   background-image: linear-gradient(120deg, var(--qa-nova-600), var(--qa-nova-500));
   animation: none;
 }
+/* quiet the remaining loud accents: solid buttons, subject orbs, glow blobs */
+[data-mode='normal'] .gbtn-face[data-solid] { filter: saturate(0.72); }
+[data-mode='normal'] .t-subject-orb { filter: saturate(0.45) brightness(0.92); }
+[data-mode='normal'] .t-subject-ghost { opacity: 0.05; }
+[data-mode='normal'] :is(.blur-3xl, .blur-2xl) { opacity: 0.1 !important; }
+[data-mode='normal'] .ag-upnext-ring { filter: saturate(0.5); }
 [data-mode='normal'] :is(.hud-pill, .game-title, .hero-kenburns, .agb-bar-glint::after) { animation: none !important; }
 
 .brand-gradient-animated {

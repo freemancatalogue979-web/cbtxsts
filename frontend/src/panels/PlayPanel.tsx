@@ -596,7 +596,7 @@ function ContinueCard({quiz, onStart}: {quiz: Quiz; onStart: () => void}) {
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
           <div className="flex min-w-0 flex-1 items-center gap-3.5 sm:gap-4">
             {/* time ring (in progress) or course badge (up next) */}
-            <div className="relative shrink-0">
+            <div className="ag-upnext-ring relative shrink-0">
               <ProgressRing value={timePct} size={68} stroke={6} gradientId="ring-brand">
                 <span className="grid size-12 place-items-center rounded-full text-white shadow-inner" style={{background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 60%, #a78bfa), color-mix(in srgb, ${accent} 50%, #1e1b4b))`}}>
                   {attempt ? <Play className="size-5 translate-x-px fill-current" /> : <ScrollText className="size-5" />}
