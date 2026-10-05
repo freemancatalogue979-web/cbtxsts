@@ -690,41 +690,105 @@ export interface StaffStreamHandlers {
 }
 
 /** POST to the staff assistant and read its server-sent events live. Errors
- * before the stream starts (limits, no key) throw ApiError. Abort the signal
- * to stop reading (also call aiStaffApi.stopAgent so the server stops work). */
+ * before the stream starts (limits, no key) throw ApiError. The turn itself
+ * runs on the server: if the connection drops, this re-attaches and replays
+ * from the last event seen. Abort the signal to stop reading (and call
+ * aiStaffApi.stopAgent to actually stop the work). */
 export async function streamStaffAgent(
   body: {messages: {role: 'user' | 'assistant'; content: string; reasoning?: string}[]; course_id?: number | null; thinking?: boolean},
   handlers: StaffStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const token = tokenStore.get();
-  let response: Response;
-  try {
-    response = await fetch('/api/admin/ai/agent/stream', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? {Authorization: `Bearer ${token}`} : {})},
-      body: JSON.stringify(body),
-      signal,
-    });
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') return;
-    throw new ApiError('Cannot reach the arena server. Check your connection and try again.', 0);
+  return followStaffAgent(
+    (token) =>
+      fetch('/api/admin/ai/agent/stream', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        body: JSON.stringify(body),
+        signal,
+      }),
+    null,
+    handlers,
+    signal,
+  );
+}
+
+/** Re-attach to a turn that is (or was recently) running on the server. */
+export async function resumeStaffAgent(requestId: string, handlers: StaffStreamHandlers, signal?: AbortSignal): Promise<void> {
+  return followStaffAgent(null, requestId, handlers, signal);
+}
+
+async function followStaffAgent(
+  open: ((token: string | null) => Promise<Response>) | null,
+  knownId: string | null,
+  handlers: StaffStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  let requestId = knownId;
+  let seen = 0;
+  let finished = false;
+  let retries = 0;
+  const wrapped: StaffStreamHandlers = {
+    ...handlers,
+    onMeta: (meta) => {
+      requestId = meta.request_id;
+      handlers.onMeta?.(meta);
+    },
+  };
+  for (;;) {
+    const token = tokenStore.get();
+    let response: Response;
+    try {
+      response =
+        open && !requestId
+          ? await open(token)
+          : await fetch(`/api/admin/ai/agent/${requestId}/events?after=${seen}`, {headers: {Accept: 'text/event-stream', ...(token ? {Authorization: `Bearer ${token}`} : {})}, signal});
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
+      if (requestId && retries < 8) {
+        retries += 1;
+        await new Promise((r) => setTimeout(r, Math.min(8000, 800 * retries)));
+        continue;
+      }
+      throw new ApiError('Cannot reach the arena server. Check your connection and try again.', 0);
+    }
+    if (!response.ok || !response.body) {
+      if (requestId && response.status === 404) {
+        handlers.onError?.('That reply is no longer available on the server.');
+        return;
+      }
+      await readJson(response);
+      throw new ApiError('The assistant did not answer. Try again.', response.status);
+    }
+    const result = await readStaffEvents(response, wrapped, signal, (id) => (seen = Math.max(seen, id)));
+    if (result === 'finished') finished = true;
+    if (finished || signal?.aborted) return;
+    // dropped mid-turn: the server keeps working — re-attach and replay the rest
+    if (!requestId || retries >= 8) {
+      handlers.onError?.('The connection dropped while the assistant was working. Try again.');
+      return;
+    }
+    retries += 1;
+    handlers.onStatus?.('Reconnecting — the assistant is still working…');
+    await new Promise((r) => setTimeout(r, Math.min(6000, 600 * retries)));
   }
-  if (!response.ok || !response.body) {
-    await readJson(response);
-    throw new ApiError('The assistant did not answer. Try again.', response.status);
-  }
-  const reader = response.body.getReader();
+}
+
+async function readStaffEvents(response: Response, handlers: StaffStreamHandlers, signal: AbortSignal | undefined, onId: (id: number) => void): Promise<'finished' | 'dropped'> {
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let finished = false;
   const handle = (block: string) => {
     let event = 'message';
     let data = '';
+    let id = 0;
     for (const line of block.split('\n')) {
       if (line.startsWith('event:')) event = line.slice(6).trim();
       else if (line.startsWith('data:')) data += line.slice(5).trim();
+      else if (line.startsWith('id:')) id = Number(line.slice(3).trim()) || 0;
     }
+    if (id) onId(id);
     if (!data) return;
     let parsed: Record<string, unknown>;
     try {
@@ -764,11 +828,9 @@ export async function streamStaffAgent(
     }
     if (buffer.trim()) handle(buffer);
   } catch (error) {
-    if ((error as Error).name === 'AbortError') return;
-    if (!finished) handlers.onError?.('The connection dropped while the assistant was working. Try again.');
-    return;
+    if ((error as Error).name === 'AbortError' || signal?.aborted) return 'finished';
   }
-  if (!finished && !signal?.aborted) handlers.onError?.('The reply stopped early. Try again.');
+  return finished ? 'finished' : 'dropped';
 }
 export interface Proposal {
   id: number;
@@ -834,6 +896,8 @@ export interface AITaskParams {
   reclassify_difficulty?: boolean;
   only_untagged?: boolean;
   generate_questions?: number;
+  write_materials?: boolean;
+  remove_duplicates?: boolean;
   difficulty?: {easy: number; medium: number; hard: number};
   topics?: string[];
   topic_count?: number;
@@ -871,7 +935,7 @@ export interface AITask {
   proposals: AITaskProposal[];
 }
 export interface AITaskLimits {max_questions: number; default_max_cost: number; hard_max_cost: number; workers: number}
-export interface AITaskApproval {approved: number; topics: number; questions: number; classified: number; materials: number; errors: string[]}
+export interface AITaskApproval {approved: number; topics: number; questions: number; classified: number; materials: number; edited?: number; deleted?: number; new_materials?: number; errors: string[]}
 
 export const aiStaffApi = {
   tasks: (courseId?: number | null) => call<{tasks: AITask[]; limits: AITaskLimits}>(`/api/admin/ai/tasks${courseId ? `?course_id=${courseId}` : ''}`),
@@ -879,14 +943,14 @@ export const aiStaffApi = {
   estimateTask: (params: AITaskParams) => call<{estimate: AITaskEstimate; title: string}>('/api/admin/ai/tasks/estimate', 'POST', params),
   startTask: (params: AITaskParams) => call<AITask>('/api/admin/ai/tasks', 'POST', params),
   cancelTask: (id: number) => call<AITask>(`/api/admin/ai/tasks/${id}/cancel`, 'POST'),
-  approveTask: (id: number) => call<AITaskApproval>(`/api/admin/ai/tasks/${id}/approve-all`, 'POST'),
+  approveTask: (id: number, confirm = false) => call<AITaskApproval>(`/api/admin/ai/tasks/${id}/approve-all`, 'POST', {confirm}),
   status: () => call<AIStaffStatus>('/api/admin/ai/status'),
   chat: (messages: {role: 'user' | 'assistant'; content: string}[], course_id?: number | null) =>
     call<{reply: string; tools: StaffToolInfo[]; actions: AgentAction[]; usage: {cost: number}; request_id: string}>('/api/admin/ai/agent', 'POST', {messages, course_id}),
   stopAgent: (requestId: string) => call<{ok: boolean; stopped: boolean}>(`/api/admin/ai/agent/${requestId}/stop`, 'POST'),
   proposals: (status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') => call<{proposals: Proposal[]}>(`/api/admin/ai/proposals?status=${status}`),
   proposal: (id: number) => call<Proposal>(`/api/admin/ai/proposals/${id}`),
-  approve: (id: number, body: {selected?: number[]; items?: Record<string, unknown>[]}) => call<Proposal>(`/api/admin/ai/proposals/${id}/approve`, 'POST', body),
+  approve: (id: number, body: {selected?: number[]; items?: Record<string, unknown>[]; confirm?: boolean}) => call<Proposal>(`/api/admin/ai/proposals/${id}/approve`, 'POST', body),
   reject: (id: number, reason: string) => call<Proposal>(`/api/admin/ai/proposals/${id}/reject`, 'POST', {reason}),
   usage: (days = 30) => call<AIUsageReport>(`/api/admin/ai/usage?days=${days}`),
   insights: (courseId?: number | null) => call<AIInsights>(`/api/admin/ai/insights${courseId ? `?course_id=${courseId}` : ''}`),

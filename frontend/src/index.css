@@ -2664,7 +2664,98 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 }
 .pbanner-actions .gbtn:is([data-variant='ghost'], [data-variant='outline']):hover { border-color: color-mix(in srgb, var(--pb) 65%, transparent); }
 
-[data-skin='day'] .pbanner { box-shadow: 0 18px 36px -26px color-mix(in srgb, var(--pb) 55%, transparent); }
+/* Daylight banners: tinted paper with ink type instead of a night-sky slab, so
+   every page header (players and staff) follows the light skin. */
+[data-skin='day'] .pbanner {
+  --pb-deep: color-mix(in srgb, var(--pb) 9%, #ffffff);
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(125deg, color-mix(in srgb, var(--pb) 70%, white), color-mix(in srgb, var(--pb) 16%, transparent) 40%, rgb(15 23 52 / 0.08) 62%, color-mix(in srgb, var(--pb2) 55%, transparent)) border-box;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 18px 36px -26px color-mix(in srgb, var(--pb) 55%, transparent), 0 2px 6px -3px rgb(15 23 52 / 0.12);
+}
+[data-skin='day'] .pbanner-scene {
+  background:
+    radial-gradient(70% 120% at 100% 50%, color-mix(in srgb, var(--pb) 20%, transparent), transparent 62%),
+    radial-gradient(60% 110% at 0% 0%, color-mix(in srgb, var(--pb2) 12%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--pb-deep), #ffffff 72%);
+}
+[data-skin='day'] .pbanner-scene::after { opacity: 0.035; mix-blend-mode: multiply; }
+[data-skin='day'] .pbanner-grid { opacity: 0.22; }
+[data-skin='day'] .pbanner-sweep { display: none; }
+[data-skin='day'] .pbanner-corner { filter: none; opacity: 0.7; }
+[data-skin='day'] .pbanner::after { box-shadow: none; }
+[data-skin='day'] .pbanner-eyebrow {
+  background: color-mix(in srgb, var(--pb) 11%, white);
+  border-color: color-mix(in srgb, var(--pb) 32%, transparent);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--pb) 70%, var(--color-mist-50));
+}
+[data-skin='day'] .pbanner-title {
+  background: linear-gradient(180deg, var(--color-mist-50) 40%, color-mix(in srgb, var(--pb) 55%, var(--color-mist-50)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: none;
+}
+[data-skin='day'] .pbanner-sub { color: var(--color-mist-400); }
+[data-skin='day'] .pbanner-rings { filter: none; }
+[data-skin='day'] .pbanner-watermark { opacity: 0.08; }
+[data-skin='day'] .pbanner-stat {
+  border-color: color-mix(in srgb, var(--ps) 28%, rgb(15 23 52 / 0.06));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ps) 12%, white), #ffffff);
+  box-shadow: 0 1px 2px rgb(15 23 52 / 0.06);
+  color: var(--color-mist-500);
+}
+[data-skin='day'] .pbanner-stat::before { box-shadow: none; }
+[data-skin='day'] .pbanner-stat > b { color: color-mix(in srgb, var(--ps) 55%, var(--color-mist-50)); }
+[data-skin='day'] .pbanner-actions .gbtn:is([data-variant='ghost'], [data-variant='outline']) {
+  background: color-mix(in srgb, var(--pb) 8%, white);
+  border-color: color-mix(in srgb, var(--pb) 30%, rgb(15 23 52 / 0.08));
+  box-shadow: 0 1px 2px rgb(15 23 52 / 0.06);
+  color: color-mix(in srgb, var(--pb) 60%, var(--color-mist-50));
+}
+/* White type on a translucent accent tint (selected tabs, pills) vanishes on
+   paper — use that accent's deep shade instead. */
+[data-skin='day'] [class*='bg-nova-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-nova-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-nova-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-nova-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-nova-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-nova-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-nova-300); }
+[data-skin='day'] [class*='bg-pulse-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-pulse-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-pulse-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-pulse-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-pulse-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-pulse-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-pulse-300); }
+[data-skin='day'] [class*='bg-mint-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-mint-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-mint-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-mint-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-mint-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-mint-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-mint-300); }
+[data-skin='day'] [class*='bg-cyan-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-cyan-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-cyan-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-cyan-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-cyan-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-cyan-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-cyan-300); }
+[data-skin='day'] [class*='bg-flare-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-flare-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='bg-flare-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-flare-400/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-flare-500/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*='from-flare-600/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-flare-300); }
+/* Same for white type on glassy white/black washes (segmented tabs, inputs). */
+[data-skin='day'] [class^='bg-white/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*=' bg-white/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class^='from-white/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*=' from-white/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class^='bg-black/'][class*='text-white']:not(.keep-dark):not(.keep-dark *),
+[data-skin='day'] [class*=' bg-black/'][class*='text-white']:not(.keep-dark):not(.keep-dark *) { color: var(--color-mist-50); }
+/* Sunken fields written as bg-black/N for the night skin read as dark holes on
+   paper — make them a soft ink wash instead. */
+[data-skin='day'] [class*='bg-black/']:not(.keep-dark):not(.keep-dark *) { background-color: rgb(15 23 52 / 0.045); }
+[data-skin='day'] [class*='bg-ink-900/9']:not(.keep-dark):not(.keep-dark *) { background-color: rgb(255 255 255 / 0.94); }
 
 @media (max-width: 639px) {
   .pbanner { --art: 6.6rem; padding: 1.1rem 1rem; border-radius: 1.35rem; }

@@ -8,7 +8,7 @@
  * lands in Review as proposals; "Approve all" applies a finished task in one go.
  */
 import {
-  AlertTriangle, BookOpen, CheckCircle2, ChevronDown, Clock, Coins, FileQuestion, FileUp, Layers, ListTree, Loader2, Paperclip, Play, RotateCcw,
+  AlertTriangle, BookOpen, BookOpenText, CopyX, PenLine, Trash2, CheckCircle2, ChevronDown, Clock, Coins, FileQuestion, FileUp, Layers, ListTree, Loader2, Paperclip, Play, RotateCcw,
   ShieldCheck, Sparkles, Square, Tags, Timer, Wand2, X, XCircle, Zap,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
@@ -41,7 +41,7 @@ const STATUS: Record<AITask['status'], {label: string; pill: string; tone: Tone}
   cancelled: {label: 'Cancelled', pill: 'bg-white/8 text-mist-400', tone: 'nova'},
   interrupted: {label: 'Interrupted', pill: 'bg-amber-400/15 text-amber-200', tone: 'amber'},
 };
-const KIND_LABEL: Record<string, string> = {topics: 'topics', questions: 'questions', classification: 'question mappings', material_topics: 'material tags'};
+const KIND_LABEL: Record<string, string> = {topics: 'topics', questions: 'new questions', classification: 'question mappings', material_topics: 'material tags', edits: 'question edits', deletions: 'questions deleted (permanent)', material: 'new study materials'};
 const MIXES: {id: string; label: string; mix: {easy: number; medium: number; hard: number}}[] = [
   {id: 'balanced', label: 'Balanced', mix: {easy: 30, medium: 50, hard: 20}},
   {id: 'gentle', label: 'Easier', mix: {easy: 50, medium: 35, hard: 15}},
@@ -217,6 +217,8 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
   const [rerate, setRerate] = useState(false);
   const [untagged, setUntagged] = useState(false);
   const [generate, setGenerate] = useState(true);
+  const [writeNotes, setWriteNotes] = useState(false);
+  const [dedupe, setDedupe] = useState(false);
   const [count, setCount] = useState(100);
   const [mix, setMix] = useState('balanced');
   const [instructions, setInstructions] = useState('');
@@ -243,6 +245,8 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
     setUntagged(!!prefill.only_untagged);
     setGenerate((prefill.generate_questions ?? 0) > 0);
     if (prefill.generate_questions) setCount(prefill.generate_questions);
+    setWriteNotes(!!prefill.write_materials);
+    setDedupe(!!prefill.remove_duplicates);
     setInstructions(prefill.instructions ?? '');
     setMaxCost(prefill.max_cost ?? null);
   }, [prefill]);
@@ -256,10 +260,12 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
     reclassify_difficulty: rerate,
     only_untagged: untagged,
     generate_questions: generate ? Math.max(1, Math.min(limits?.max_questions ?? 1000, count || 0)) : 0,
+    write_materials: writeNotes,
+    remove_duplicates: dedupe,
     difficulty: (MIXES.find((m) => m.id === mix) ?? MIXES[0]).mix,
     instructions: instructions.trim(),
     ...(maxCost ? {max_cost: maxCost} : {}),
-  }), [course?.id, picked, buildTopics, classify, mapMaterials, rerate, untagged, generate, count, mix, instructions, maxCost, limits?.max_questions]);
+  }), [course?.id, picked, buildTopics, classify, mapMaterials, rerate, untagged, generate, count, mix, instructions, maxCost, limits?.max_questions, writeNotes, dedupe]);
 
   useEffect(() => {
     if (!course) return;
@@ -300,7 +306,7 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
   };
 
   const toggleMaterial = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  const nothing = !buildTopics && !classify && !mapMaterials && !generate;
+  const nothing = !buildTopics && !classify && !mapMaterials && !generate && !writeNotes && !dedupe;
   const ceiling = maxCost ?? limits?.default_max_cost ?? 1;
   const over = !!estimate && estimate.cost > ceiling;
 
@@ -378,6 +384,8 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
                 </div>
               )}
             </Job>
+            <Job icon={BookOpenText} tone="mint" title="Write study notes for the bank" sub="One reading per topic that explains everything its questions test" on={writeNotes} onChange={setWriteNotes} />
+            <Job icon={CopyX} tone="flare" title="Remove duplicate questions" sub="Keeps the best copy of each — you confirm before anything is deleted" on={dedupe} onChange={setDedupe} />
           </div>
         </section>
 
@@ -506,8 +514,8 @@ function TaskCardView({task, focused, onOpenProposal, onChanged, onRerun}: {
   const approveAll = async () => {
     setBusy('approve');
     try {
-      const res = await aiStaffApi.approveTask(task.id);
-      const parts = [res.topics && `${res.topics} topics`, res.questions && `${res.questions} questions`, res.classified && `${res.classified} questions mapped`, res.materials && `${res.materials} materials tagged`].filter(Boolean);
+      const res = await aiStaffApi.approveTask(task.id, deleting > 0);
+      const parts = [res.topics && `${res.topics} topics`, res.questions && `${res.questions} questions`, res.classified && `${res.classified} questions mapped`, res.materials && `${res.materials} materials tagged`, res.edited && `${res.edited} edited`, res.deleted && `${res.deleted} deleted`, res.new_materials && `${res.new_materials} study notes`].filter(Boolean);
       toast('success', 'Approved and saved', parts.join(' · ') + (res.errors.length ? ` · ${res.errors.length} skipped` : ''));
       setConfirm(false);
       onChanged();
@@ -518,6 +526,7 @@ function TaskCardView({task, focused, onOpenProposal, onChanged, onRerun}: {
     }
   };
   const counts = pending.reduce<Record<string, number>>((acc, p) => ({...acc, [p.kind]: (acc[p.kind] ?? 0) + p.count}), {});
+  const deleting = counts.deletions ?? 0;
 
   return (
     <div ref={ref} className={`min-w-0 overflow-hidden rounded-2xl border bg-gradient-to-b from-white/[0.045] to-white/[0.015] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.8)] ${focused ? 'border-nova-400/50' : active(task) ? 'border-nova-400/25' : 'border-white/8'}`}>
@@ -622,7 +631,7 @@ function TaskCardView({task, focused, onOpenProposal, onChanged, onRerun}: {
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(false)} icon={<X className="size-4" />}>Cancel</Button>
-            <Button variant="mint" onClick={() => void approveAll()} loading={busy === 'approve'} icon={<ShieldCheck className="size-4" />}>Approve all</Button>
+            <Button variant={deleting ? 'danger' : 'mint'} onClick={() => void approveAll()} loading={busy === 'approve'} icon={deleting ? <Trash2 className="size-4" /> : <ShieldCheck className="size-4" />}>{deleting ? `Approve & delete ${deleting}` : 'Approve all'}</Button>
           </>
         }
       >
@@ -630,9 +639,10 @@ function TaskCardView({task, focused, onOpenProposal, onChanged, onRerun}: {
           <p>This approves {pending.length} proposal{pending.length === 1 ? '' : 's'} and saves the following to <b className="text-mist-100">{task.course ?? 'the course'}</b>:</p>
           <ul className="space-y-1">
             {Object.entries(counts).map(([k, n]) => (
-              <li key={k} className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1.5"><CheckCircle2 className="size-4 text-mint-300" /><b className="text-mist-50">{formatNumber(n)}</b> {KIND_LABEL[k] ?? k}</li>
+              <li key={k} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 ${k === 'deletions' ? 'bg-flare-500/10 text-flare-100' : 'bg-white/[0.04]'}`}>{k === 'deletions' ? <Trash2 className="size-4 text-flare-300" /> : <CheckCircle2 className="size-4 text-mint-300" />}<b className="text-mist-50">{formatNumber(n)}</b> {KIND_LABEL[k] ?? k}</li>
             ))}
           </ul>
+          {deleting > 0 && <p className="flex items-start gap-2 rounded-lg border border-flare-400/30 bg-flare-500/[0.08] px-2.5 py-2 text-[0.76rem] font-bold text-flare-100"><AlertTriangle className="mt-px size-4 shrink-0" />Deleted questions can't be restored. Open the deletion proposal first if you want to keep some of them.</p>}
           <p className="text-[0.74rem] text-mist-500">Every item is re-checked by the same validators as the editors, and versions are recorded. To pick items one by one, open a proposal instead.</p>
         </div>
       </Modal>
@@ -652,7 +662,7 @@ function Result({label, value, sub}: {label: string; value: string; sub: string}
 
 function ProposalRow({p, onOpen}: {p: AITaskProposal; onOpen: () => void}) {
   const pill = p.status === 'pending' ? 'bg-amber-400/15 text-amber-200' : p.status === 'approved' ? 'bg-mint-500/15 text-mint-200' : 'bg-white/8 text-mist-400';
-  const Icon = p.kind === 'topics' ? ListTree : p.kind === 'questions' ? FileQuestion : p.kind === 'material_topics' ? Paperclip : Layers;
+  const Icon = p.kind === 'topics' ? ListTree : p.kind === 'questions' ? FileQuestion : p.kind === 'material_topics' ? Paperclip : p.kind === 'edits' ? PenLine : p.kind === 'deletions' ? Trash2 : p.kind === 'material' ? BookOpenText : Layers;
   return (
     <button onClick={onOpen} className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-white/[0.05]">
       <Icon className="size-3.5 shrink-0 text-mist-400" />

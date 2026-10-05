@@ -14,7 +14,7 @@
 import {
   AlertTriangle, ArrowUp, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ClipboardCheck, Coins, Copy, Eraser, FileQuestion, Filter, GraduationCap,
   History, Inbox, Layers, ListTree, Loader2, Lock, MessageSquarePlus, Paperclip, Pencil, Radar, RefreshCw, RotateCcw, Search, ShieldCheck, Sparkles, Tags,
-  Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText,
+  Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText, BookOpenText, PenLine, Trash2,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
 import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone} from '../components/ui';
@@ -26,13 +26,14 @@ import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {Markdown} from '../lib/markdown';
 import {
-  aiStaffApi, streamStaffAgent, type AgentTurn, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type TaskCard, type ToolCallRow, type ToolEvent,
+  aiStaffApi, resumeStaffAgent, streamStaffAgent, type AgentAction, type AgentTurn, type StaffStreamHandlers, type StaffToolInfo, type AIInsightIssue, type AIInsights, type AIStaffStatus, type Proposal, type ProposalCard, type TaskCard, type ToolCallRow, type ToolEvent,
 } from '../lib/tutor';
 import type {Course} from '../lib/types';
 import {useSession} from '../store/session';
 
 type View = 'assistant' | 'insights' | 'tasks' | 'review' | 'activity';
 const THREAD_KEY = 'ag.staff.assistant';
+const PENDING_KEY = 'ag.staff.assistant.pending';
 const COURSE_KEY = 'ag.staff.course';
 const THINK_KEY = 'ag.staff.think';
 const KIND: Record<string, {label: string; icon: typeof Tags; tone: Tone}> = {
@@ -40,6 +41,9 @@ const KIND: Record<string, {label: string; icon: typeof Tags; tone: Tone}> = {
   topics: {label: 'Topics', icon: ListTree, tone: 'cyan'},
   classification: {label: 'Classification', icon: Tags, tone: 'pulse'},
   material_topics: {label: 'Material tags', icon: FileText, tone: 'gold'},
+  edits: {label: 'Edits', icon: PenLine, tone: 'cyan'},
+  deletions: {label: 'Deletions', icon: Trash2, tone: 'flare'},
+  material: {label: 'Study notes', icon: BookOpenText, tone: 'mint'},
 };
 const SEVERITY: Record<AIInsightIssue['severity'], {label: string; dot: string; pill: string; tone: Tone}> = {
   high: {label: 'High', dot: 'bg-flare-400', pill: 'border-flare-400/35 bg-flare-500/12 text-flare-200', tone: 'flare'},
@@ -343,7 +347,13 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
     if (el) el.scrollTo({top: el.scrollHeight, behavior: 'smooth'});
   }, [turns, busy, live]);
   useEffect(() => { localStorage.setItem(THINK_KEY, think ? '1' : '0'); }, [think]);
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Leaving the console only detaches the reader — the reply keeps running on
+  // the server and is re-joined on return (PENDING_KEY stays set).
+  useEffect(() => () => {
+    const controller = abortRef.current;
+    abortRef.current = null;
+    controller?.abort();
+  }, []);
   useEffect(() => {
     const el = input.current;
     if (!el) return;
@@ -395,19 +405,33 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
     setLiveStatus(think ? 'Thinking…' : 'Working…');
     const controller = new AbortController();
     abortRef.current = controller;
+    const thread = next.filter((t) => !t.failed && t.content.trim()).slice(-12).map(({role, content: c, reasoning}) => ({role, content: c, ...(reasoning ? {reasoning} : {})}));
+    try {
+      await streamStaffAgent({messages: thread, course_id: course?.id ?? null, thinking: think}, handlersFor(controller, turn), controller.signal);
+      finishLive(controller, {stopped: true}); // stream ended without a final event (aborted / dropped)
+    } catch (e) {
+      toast('error', 'Assistant unavailable', errText(e));
+      finishLive(controller, {failed: true, content: errText(e)});
+    }
+  }, [busy, turns, course, toast, think]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Live handlers for one turn. The request id is remembered (sessionStorage)
+   * so leaving the console and coming back re-attaches to the running reply. */
+  function handlersFor(controller: AbortController, start: AgentTurn) {
     const patch = (fn: (t: AgentTurn) => AgentTurn) => {
       if (!liveRef.current || abortRef.current !== controller) return;
       liveRef.current = fn(liveRef.current);
       setLive(liveRef.current);
     };
-    const thread = next.filter((t) => !t.failed && t.content.trim()).slice(-12).map(({role, content: c, reasoning}) => ({role, content: c, ...(reasoning ? {reasoning} : {})}));
-    try {
-      await streamStaffAgent({messages: thread, course_id: course?.id ?? null, thinking: think}, {
-        onMeta: (m) => { requestRef.current = m.request_id; },
-        onStatus: (text) => setLiveStatus(text),
-        onThinking: (th) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'thought', step: th.step, text: th.text}]})),
-        onNote: (text) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'note', text}]})),
-        onTool: (tool) => patch((t) => {
+    return {
+        onMeta: (m: {request_id: string}) => {
+          requestRef.current = m.request_id;
+          sessionStorage.setItem(PENDING_KEY, JSON.stringify({id: m.request_id, at: start.meta?.at, thinking: start.thinking}));
+        },
+        onStatus: (text: string) => setLiveStatus(text),
+        onThinking: (th: {step: number; text: string}) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'thought', step: th.step, text: th.text}]})),
+        onNote: (text: string) => patch((t) => ({...t, work: [...(t.work ?? []), {kind: 'note', text}]})),
+        onTool: (tool: StaffToolInfo) => patch((t) => {
           const work = [...(t.work ?? [])];
           if (tool.status !== 'running') {
             const at = work.findIndex((w) => w.kind === 'tool' && w.tool.name === tool.name && w.tool.status === 'running');
@@ -418,22 +442,40 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
           }
           return {...t, work: [...work, {kind: 'tool', tool}]};
         }),
-        onActions: (actions) => patch((t) => ({...t, actions})),
-        onDelta: (text) => { setLiveStatus('Writing the answer…'); patch((t) => ({...t, content: t.content + text})); },
-        onDone: (done) => finishLive(controller, {meta: {cost: done.usage?.cost, ms: done.ms}}),
+        onActions: (actions: AgentAction[]) => patch((t) => ({...t, actions})),
+        onDelta: (text: string) => { setLiveStatus('Writing the answer…'); patch((t) => ({...t, content: t.content + text})); },
+        onDone: (done: {usage?: {cost?: number}; ms?: number}) => finishLive(controller, {meta: {cost: done.usage?.cost, ms: done.ms}}),
         onCancelled: () => finishLive(controller, {stopped: true}),
-        onError: (detail) => {
+        onError: (detail: string) => {
           toast('error', 'Assistant unavailable', detail);
           const partial = liveRef.current?.content.trim();
           finishLive(controller, partial ? {stopped: true} : {failed: true, content: detail});
         },
-      }, controller.signal);
-      finishLive(controller, {stopped: true}); // stream ended without a final event (aborted / dropped)
-    } catch (e) {
-      toast('error', 'Assistant unavailable', errText(e));
-      finishLive(controller, {failed: true, content: errText(e)});
+    } satisfies StaffStreamHandlers;
+  }
+
+  // Re-attach to a reply that kept running on the server while we were away.
+  useEffect(() => {
+    let pending: {id: string; at?: string; thinking?: boolean} | null = null;
+    try {
+      pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
+    } catch {
+      pending = null;
     }
-  }, [busy, turns, course, toast, think]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!pending?.id || abortRef.current) return;
+    const turn: AgentTurn = {role: 'assistant', content: '', work: [], thinking: pending.thinking, meta: {at: pending.at ?? new Date().toISOString()}};
+    const controller = new AbortController();
+    abortRef.current = controller;
+    liveRef.current = turn;
+    requestRef.current = pending.id;
+    startedRef.current = performance.now();
+    setLive(turn);
+    setBusy(true);
+    setLiveStatus('Re-joining the running reply…');
+    void resumeStaffAgent(pending.id, handlersFor(controller, turn), controller.signal)
+      .then(() => finishLive(controller, {stopped: true}))
+      .catch((e) => finishLive(controller, {failed: true, content: errText(e)}));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Move the live turn into the thread (once per request). */
   function finishLive(controller: AbortController, extra: Partial<AgentTurn>) {
@@ -442,6 +484,7 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
     liveRef.current = null;
     abortRef.current = null;
     requestRef.current = null;
+    sessionStorage.removeItem(PENDING_KEY);
     const work = turn.work ?? [];
     const final: AgentTurn = {
       ...turn,
@@ -1188,6 +1231,7 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [editing, setEditing] = useState<number | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
   const [q, setQ] = useState('');
@@ -1203,6 +1247,7 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
     setShow('all');
     setPage(0);
     setRejecting(false);
+    setConfirming(false);
     setReason('');
     if (!id) return;
     aiStaffApi.proposal(id).then((row) => {
@@ -1217,12 +1262,16 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
   const pending = p?.status === 'pending';
   const approve = async () => {
     if (!p) return;
+    if (p.kind === 'deletions' && !confirming) {
+      setConfirming(true);
+      return;
+    }
     setBusy('approve');
     try {
-      const res = await aiStaffApi.approve(p.id, {items, selected: [...picked].sort((a, b) => a - b)});
-      const r = res.result as {created?: number; updated?: number; skipped_existing?: unknown[]; errors?: unknown[]};
+      const res = await aiStaffApi.approve(p.id, {items, selected: [...picked].sort((a, b) => a - b), confirm: p.kind === 'deletions'});
+      const r = res.result as {created?: number; updated?: number; deleted?: number; skipped_existing?: unknown[]; errors?: unknown[]};
       const skipped = (r.skipped_existing?.length ?? 0) + (r.errors?.length ?? 0);
-      toast('success', 'Approved and saved', [r.created ? `${r.created} created` : '', r.updated ? `${r.updated} updated` : '', skipped ? `${skipped} skipped` : ''].filter(Boolean).join(' · ') || undefined);
+      toast('success', 'Approved and saved', [r.created ? `${r.created} created` : '', r.updated ? `${r.updated} updated` : '', r.deleted ? `${r.deleted} deleted` : '', skipped ? `${skipped} skipped` : ''].filter(Boolean).join(' · ') || undefined);
       onDecided();
       onClose();
     } catch (e) {
@@ -1284,11 +1333,16 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
             <Button variant="ghost" onClick={() => setRejecting(false)}>Back</Button>
             <Button variant="danger" onClick={() => void reject()} loading={busy === 'reject'} icon={<XCircle className="size-4" />}>Reject proposal</Button>
           </>
+        ) : confirming ? (
+          <>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>Back</Button>
+            <Button variant="danger" onClick={() => void approve()} loading={busy === 'approve'} icon={<Trash2 className="size-4" />}>Delete {picked.size} permanently</Button>
+          </>
         ) : (
           <>
             <Button variant="ghost" onClick={() => setRejecting(true)} icon={<X className="size-4" />}>Reject</Button>
             <Button variant="mint" onClick={() => void approve()} loading={busy === 'approve'} disabled={picked.size === 0} icon={<ShieldCheck className="size-4" />}>
-              Approve {picked.size} of {items.length}
+              {p.kind === 'deletions' ? `Delete ${picked.size} of ${items.length}` : `Approve ${picked.size} of ${items.length}`}
             </Button>
           </>
         )
@@ -1302,6 +1356,12 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
               <StatusPill status={p.status} /> {p.decided_at ? formatRelative(p.decided_at) : ''}
               {p.status === 'rejected' && Boolean((p.result as {reason?: string}).reason) && <span className="font-normal text-mist-500">— {(p.result as {reason?: string}).reason}</span>}
             </p>
+          )}
+          {confirming && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-flare-400/35 bg-flare-500/[0.09] px-3 py-2.5 text-[0.8rem] text-flare-100">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-flare-300" />
+              <p><b>Delete {picked.size} question{picked.size === 1 ? '' : 's'} for good?</b> They are removed from the bank, practice and future exams, and can't be restored. Past attempts keep their scores.</p>
+            </div>
           )}
           {rejecting && (
             <Field label="Reason (optional)" hint="Helps the team see why this was declined.">
@@ -1430,9 +1490,22 @@ function ItemCard({kind, item, index, selectable, selected, onToggle, editing, o
               )}
             </>
           )}
+          {kind === 'edits' && <EditDiff item={item} />}
+          {kind === 'deletions' && (
+            <>
+              <p className="text-[0.8rem] leading-snug font-bold text-mist-100 [overflow-wrap:anywhere]"><span className="text-mist-500">#{s('question_id')}</span> {s('text')}</p>
+              {s('keep_id') ? (
+                <p className="mt-1.5 rounded-lg border border-mint-400/20 bg-mint-500/[0.06] px-2 py-1 text-[0.72rem] text-mist-300 [overflow-wrap:anywhere]">
+                  <b className="text-mint-200">Keeps #{s('keep_id')}</b>{s('similarity') ? ` · ${s('similarity')}% similar` : ''} — {s('keep_text')}
+                </p>
+              ) : s('reason') ? <p className="mt-1 text-[0.72rem] text-mist-400"><b className="text-mist-300">Why: </b>{s('reason')}</p> : null}
+              {s('topic') && <p className="mt-1 text-[0.66rem] font-bold text-mist-500">{s('topic')}</p>}
+            </>
+          )}
+          {kind === 'material' && <MaterialPreview item={item} />}
           {flag && <p className="mt-1 text-[0.68rem] font-bold text-amber-300">{flag}</p>}
         </div>
-        {selectable && kind !== 'classification' && kind !== 'material_topics' && (
+        {selectable && ['questions', 'topics'].includes(kind) && (
           <Button size="sm" variant="ghost" icon={editing ? <CheckCircle2 className="size-3.5" /> : <Pencil className="size-3.5" />} label={editing ? 'Done editing' : 'Edit'} onClick={onEdit} />
         )}
       </div>
@@ -1474,3 +1547,70 @@ function ItemCard({kind, item, index, selectable, selected, onToggle, editing, o
   );
 }
 
+
+
+const FIELD_LABEL: Record<string, string> = {text: 'Question', option_a: 'Option A', option_b: 'Option B', option_c: 'Option C', option_d: 'Option D', correct: 'Answer', explanation: 'Explanation', topic: 'Topic', difficulty: 'Difficulty'};
+
+/** Before → after for an AI-proposed question edit. */
+function EditDiff({item}: {item: Item}) {
+  const before = (item.before as Record<string, unknown>) ?? {};
+  const after = (item.after as Record<string, unknown>) ?? {};
+  return (
+    <>
+      <p className="text-[0.8rem] leading-snug font-bold text-mist-100 [overflow-wrap:anywhere]"><span className="text-mist-500">#{String(item.question_id ?? '')}</span> {String(item.text ?? '')}</p>
+      <div className="mt-1.5 space-y-1">
+        {Object.keys(after).map((k) => (
+          <div key={k} className="rounded-lg border border-white/6 bg-black/15 px-2 py-1.5 text-[0.74rem]">
+            <p className="text-[0.62rem] font-extrabold tracking-wide text-mist-500 uppercase">{FIELD_LABEL[k] ?? k}</p>
+            {String(before[k] ?? '') && <p className="text-mist-500 line-through decoration-flare-400/60 [overflow-wrap:anywhere]">{String(before[k])}</p>}
+            <p className="font-semibold text-mint-100 [overflow-wrap:anywhere]">{String(after[k] ?? '') || '—'}</p>
+          </div>
+        ))}
+      </div>
+      {String(item.reason ?? '') && <p className="mt-1 text-[0.72rem] text-mist-400"><b className="text-mist-300">Why: </b>{String(item.reason)}</p>}
+    </>
+  );
+}
+
+type Block = {type?: string; text?: string; title?: string; term?: string; meaning?: string; items?: string[]};
+
+/** Readable preview of an AI-written study material (sections + blocks). */
+function MaterialPreview({item}: {item: Item}) {
+  const [open, setOpen] = useState(false);
+  const sections = (item.sections as {title?: string; blocks?: Block[]}[]) ?? [];
+  const summary = (item.summary as string[]) ?? [];
+  const covers = (item.covers_question_ids as number[]) ?? [];
+  const words = sections.reduce((n, sec) => n + (sec.blocks ?? []).reduce((m, b) => m + `${b.text ?? ''} ${b.meaning ?? ''} ${(b.items ?? []).join(' ')}`.split(/\s+/).filter(Boolean).length, 0), 0);
+  return (
+    <>
+      <p className="flex min-w-0 items-center gap-1.5 text-[0.86rem] font-extrabold text-mist-50"><BookOpenText className="size-4 shrink-0 text-mint-300" /><span className="min-w-0 [overflow-wrap:anywhere]">{String(item.title ?? 'Study notes')}</span></p>
+      <p className="mt-0.5 text-[0.68rem] font-bold text-mist-500">{[String(item.topic ?? ''), `${sections.length} section${sections.length === 1 ? '' : 's'}`, `~${formatNumber(words)} words`, covers.length ? `covers ${covers.length} question${covers.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}</p>
+      {summary.length > 0 && <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[0.74rem] text-mist-300">{summary.slice(0, 6).map((x) => <li key={x}>{x}</li>)}</ul>}
+      <button onClick={() => setOpen(!open)} className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[0.7rem] font-extrabold text-mist-200 hover:border-mint-400/40">
+        <ChevronDown className={`size-3.5 transition ${open ? 'rotate-180' : ''}`} /> {open ? 'Hide' : 'Read'} the notes
+      </button>
+      {open && (
+        <div className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto overscroll-contain rounded-xl border border-white/8 bg-black/20 p-3">
+          {sections.map((sec, i) => (
+            <section key={i} className="space-y-1.5">
+              <h4 className="text-[0.82rem] font-extrabold text-mist-50">{sec.title}</h4>
+              {(sec.blocks ?? []).map((b, j) => <BlockView key={j} b={b} />)}
+            </section>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function BlockView({b}: {b: Block}) {
+  const t = b.type ?? 'paragraph';
+  if (t === 'heading' || t === 'subheading') return <p className="pt-1 text-[0.78rem] font-extrabold text-mist-100">{b.text}</p>;
+  if (t === 'list' || t === 'numbers' || t === 'summary') {
+    const L = t === 'numbers' ? 'ol' : 'ul';
+    return <L className={`${t === 'numbers' ? 'list-decimal' : 'list-disc'} space-y-0.5 pl-4 text-[0.76rem] text-mist-300`}>{b.title && <p className="-ml-4 font-bold text-mist-200">{b.title}</p>}{(b.items ?? []).map((x, k) => <li key={k}>{x}</li>)}</L>;
+  }
+  if (t === 'definition' || t === 'keyterm') return <p className="rounded-lg bg-white/[0.04] px-2 py-1 text-[0.76rem] text-mist-300"><b className="text-mist-50">{b.term || b.title}</b> — {b.meaning || b.text}</p>;
+  if (t === 'note' || t === 'tip' || t === 'example' || t === 'quote') return <p className={`rounded-lg border-l-2 px-2 py-1 text-[0.76rem] ${t === 'tip' ? 'border-mint-400 text-mint-100' : t === 'example' ? 'border-cyan-400 text-cyan-100' : 'border-amber-400 text-amber-100'} bg-white/[0.03]`}>{b.title && <b>{b.title}: </b>}{b.text}</p>;
+  return <p className="text-[0.76rem] leading-relaxed text-mist-300">{b.text}</p>;
+}
