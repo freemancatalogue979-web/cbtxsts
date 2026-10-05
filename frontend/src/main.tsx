@@ -1,6 +1,6 @@
 import '@fontsource-variable/montserrat';
 import '@fontsource-variable/space-grotesk';
-import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource-variable/plus-jakarta-sans';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
