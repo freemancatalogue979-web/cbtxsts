@@ -858,6 +858,8 @@ async def _finish_practice(token: str, elapsed_ms: int, db: Session, student: St
         if final.get("summary"):
             return {"ok": True, "already": True, **final["summary"]}
         return {"ok": True, "already": True, "score": final.get("score", 0), "correct": final.get("correct", 0)}
+    if challenge.status in ("abandoned", "expired"):
+        raise HTTPException(status.HTTP_410_GONE, "This practice has ended.")
 
     state = dict(challenge.payload or {})
     answer_map: dict[str, Any] = dict(state.get("answers") or {})
