@@ -52,15 +52,17 @@ def approve(db: Session, p: AIProposal, admin: Admin, *, selected: list[int] | N
     if p.status != "pending":
         raise ProposalError("This proposal was already decided.", 409)
     course = db.get(Course, p.course_id) if p.course_id else None
-    if course is None:
+    if course is None and p.kind not in COURSELESS:
         raise ProposalError("The course no longer exists.", 404)
     items = _items(p, selected, edited)
     if not items:
         raise ProposalError("Select at least one item to approve.", 422)
     if p.kind == "deletions" and not confirm:
         raise ProposalError(f"Deleting {len(items)} question(s) is permanent — confirm to continue.", 428)
+    if p.kind == "players" and not confirm and any(i.get("action") == "delete" for i in items):
+        raise ProposalError("Deleting player accounts is permanent — confirm to continue.", 428)
     applier = {"topics": _apply_topics, "questions": _apply_questions, "classification": _apply_classification, "material_topics": _apply_material_topics,
-               "edits": _apply_edits, "deletions": _apply_deletions, "material": _apply_material}.get(p.kind)
+               "edits": _apply_edits, "deletions": _apply_deletions, "material": _apply_material, "players": _apply_players}.get(p.kind)
     if applier is None:
         raise ProposalError("Unknown proposal type.", 422)
     result = applier(db, course, items, admin)
@@ -82,6 +84,14 @@ def reject(db: Session, p: AIProposal, admin: Admin, reason: str = "") -> None:
     p.result = {"reason": reason[:300]}
     audit(db, actor=admin.email, action="ai_proposal.reject", target_type="ai_proposal", target_id=p.id, detail={"reason": reason[:300]})
     db.flush()
+
+
+COURSELESS = {"players"}
+
+
+def needs_confirm(p: AIProposal) -> bool:
+    items = (p.payload or {}).get("items") or []
+    return p.kind == "deletions" or (p.kind == "players" and any(i.get("action") == "delete" for i in items))
 
 
 # ----------------------------------------------------------------- appliers
@@ -244,3 +254,68 @@ def _apply_material(db: Session, course: Course, items: list[dict], admin: Admin
         record_material_version(db, m, note="Created from AI proposal", author=admin.email)
         created.append(m.id)
     return {"created": len(created), "material_ids": created, "errors": errors}
+
+
+PHONE_RE = __import__("re").compile(r"^0[789][01]\d{8}$")
+USERNAME_RE = __import__("re").compile(r"^[A-Za-z0-9_.]{3,24}$")
+FIELD_LIMITS = {"name": 160, "username": 24, "phone": 20, "reg_no": 40, "level": 40, "faculty": 120, "campus": 120, "class_name": 120, "bio": 240, "status_text": 80}
+
+
+def _apply_players(db: Session, course: Course | None, items: list[dict], admin: Admin) -> dict:
+    from ...game import award_xp
+    from ...models import Activity, Student
+
+    done: dict[str, int] = {}
+    errors: list[str] = []
+    for item in items:
+        st = db.get(Student, int(item.get("student_id") or 0))
+        if st is None:
+            errors.append(f"#{item.get('student_id')}: player no longer exists")
+            continue
+        action = item.get("action")
+        reason = str(item.get("reason") or "Staff change (AI assistant)")[:200]
+        try:
+            if action == "update":
+                after = {k: str(v).strip()[:FIELD_LIMITS[k]] for k, v in (item.get("after") or {}).items() if k in FIELD_LIMITS}
+                if "name" in after and not after["name"]:
+                    raise ValueError("name can't be empty")
+                if "phone" in after:
+                    if not PHONE_RE.match(after["phone"]):
+                        raise ValueError(f"phone {after['phone']} isn't a valid Nigerian mobile number")
+                    if db.scalar(select(Student.id).where(Student.phone == after["phone"], Student.id != st.id)):
+                        raise ValueError("another player already uses that phone")
+                if "username" in after:
+                    if not USERNAME_RE.match(after["username"]):
+                        raise ValueError("username must be 3-24 letters, numbers, _ or .")
+                    if db.scalar(select(Student.id).where(func.lower(Student.username) == after["username"].lower(), Student.id != st.id)):
+                        raise ValueError("that username is taken")
+                for k, v in after.items():
+                    setattr(st, k, v or None if k == "reg_no" else v)
+            elif action == "adjust":
+                delta = {k: int(v) for k, v in (item.get("delta") or {}).items() if k in ("xp", "coins", "diamonds")}
+                if delta.get("coins"):
+                    st.coins = max(0, st.coins + delta["coins"])
+                if delta.get("diamonds"):
+                    st.diamonds = max(0, int(st.diamonds or 0) + delta["diamonds"])
+                if delta.get("xp", 0) > 0:
+                    award_xp(db, st, delta["xp"])
+                elif delta.get("xp", 0) < 0:
+                    st.xp = max(0, st.xp + delta["xp"])
+                db.add(Activity(student_id=st.id, kind="xp", title=reason, detail="Staff adjustment: " + ", ".join(f"{v:+d} {k}" for k, v in delta.items()),
+                                amount=delta.get("xp") or delta.get("coins") or delta.get("diamonds") or 0))
+            elif action in ("ban", "unban"):
+                st.is_banned = action == "ban"
+            elif action == "delete":
+                audit(db, actor=admin.email, action="student.delete", target_type="student", target_id=st.id, detail={"via": "ai_proposal", "name": st.name, "username": st.username, "reason": reason})
+                db.delete(st)
+                db.flush()
+                done[action] = done.get(action, 0) + 1
+                continue
+            else:
+                raise ValueError(f"unknown action {action}")
+            audit(db, actor=admin.email, action=f"student.{action}", target_type="student", target_id=st.id, detail={"via": "ai_proposal", "reason": reason, **({"after": item.get("after")} if action == "update" else {}), **({"delta": item.get("delta")} if action == "adjust" else {})})
+            db.flush()
+            done[action] = done.get(action, 0) + 1
+        except ValueError as error:
+            errors.append(f"{st.name} (#{st.id}): {error}")
+    return {"updated": sum(done.values()), "players": done, "errors": errors}

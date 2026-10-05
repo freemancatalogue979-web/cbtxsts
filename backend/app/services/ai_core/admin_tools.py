@@ -193,12 +193,12 @@ def get_student_report(ctx: ToolContext, args: dict) -> dict:
 
 
 # ---------------------------------------------------------------- proposals
-def _proposal(ctx: ToolContext, kind: str, course: Course, title: str, summary: str, payload: dict) -> dict:
-    row = AIProposal(kind=kind, course_id=course.id, title=title[:200], summary=summary[:600], payload=payload, created_by=ctx.admin.id if ctx.admin else None)
+def _proposal(ctx: ToolContext, kind: str, course: Course | None, title: str, summary: str, payload: dict) -> dict:
+    row = AIProposal(kind=kind, course_id=course.id if course else None, title=title[:200], summary=summary[:600], payload=payload, created_by=ctx.admin.id if ctx.admin else None)
     ctx.db.add(row)
     ctx.db.flush()
     count = len(payload.get("items") or [])
-    ctx.actions.append({"type": "proposal", "id": row.id, "kind": kind, "title": row.title, "course": course.code, "count": count})
+    ctx.actions.append({"type": "proposal", "id": row.id, "kind": kind, "title": row.title, "course": course.code if course else None, "count": count})
     return {"proposal_id": row.id, "status": "pending", "items": count, "summary": f"Proposal #{row.id} saved for review ({count} items). Nothing changes until a staff member approves it in the review panel."}
 
 
@@ -553,3 +553,150 @@ def propose_material(ctx: ToolContext, args: dict) -> dict:
     item = {k: args.get(k) for k in ("title", "topic", "description", "summary", "covers_question_ids")}
     item["sections"] = sections
     return _proposal(ctx, "material", course, f"Material: {args['title'][:150]}", f"{len(sections)} sections" + (f" covering {len(args.get('covers_question_ids') or [])} questions" if args.get("covers_question_ids") else ""), {"items": [item]})
+
+
+
+# ------------------------------------------------------------------ players
+# Admin-only (staff/owner — never teachers). Reads are direct; every change is
+# a proposal the admin approves, and deleting a player needs confirmation.
+PLAYER_FIELDS = ("name", "username", "phone", "reg_no", "level", "faculty", "campus", "class_name", "bio", "status_text")
+PLAYER_ACTIONS = ("update", "adjust", "ban", "unban", "delete")
+
+
+def _player_row(st: Student) -> dict:
+    return {"id": st.id, "name": st.name, "username": st.username, "phone": st.phone, "reg_no": st.reg_no, "level": st.level,
+            "class_name": st.class_name, "xp": st.xp, "coins": st.coins, "diamonds": int(getattr(st, "diamonds", 0) or 0),
+            "streak": st.streak, "exams_taken": st.exams_taken, "banned": bool(st.is_banned),
+            "last_active": st.last_active.isoformat() if st.last_active else None, "joined": st.created_at.date().isoformat() if st.created_at else None}
+
+
+@tool(
+    "find_players",
+    description=("Search players (students) by name, username, phone, reg number or player code, or list them sorted. "
+                 "Use it to find a player's id before get_player or propose_player_changes."),
+    parameters={"type": "object", "properties": {
+        "query": {"type": "string", "maxLength": 80},
+        "sort": {"type": "string", "enum": ["name", "recent", "newest", "xp", "coins"]},
+        "banned_only": {"type": "boolean"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+    }},
+    roles=STAFF, label="Looking up players", staff_only=True,
+)
+def find_players(ctx: ToolContext, args: dict) -> dict:
+    q = select(Student)
+    needle = str(args.get("query") or "").strip().lower()
+    if needle:
+        like = f"%{needle}%"
+        q = q.where(or_(func.lower(Student.name).like(like), func.lower(Student.username).like(like), Student.phone.like(like),
+                        func.lower(func.coalesce(Student.reg_no, "")).like(like), func.lower(Student.player_code) == needle))
+    if args.get("banned_only"):
+        q = q.where(Student.is_banned.is_(True))
+    order = {"recent": Student.last_active.desc(), "newest": Student.created_at.desc(), "xp": Student.xp.desc(), "coins": Student.coins.desc()}.get(args.get("sort") or "", Student.name)
+    total = ctx.db.scalar(select(func.count()).select_from(q.subquery())) or 0
+    rows = ctx.db.scalars(q.order_by(order).limit(int(args.get("limit") or 20))).all()
+    return {"total": int(total), "players": [_player_row(st) for st in rows]}
+
+
+@tool(
+    "get_player",
+    description="Full details of one player: profile, wallet, progress, badges, recent exam attempts and activity, ban status.",
+    parameters={"type": "object", "properties": {"student_id": {"type": "integer", "minimum": 1}}, "required": ["student_id"]},
+    roles=STAFF, label="Opening a player record", staff_only=True,
+)
+def get_player(ctx: ToolContext, args: dict) -> dict:
+    from ...models import Activity
+    from ...serializers import student_profile
+
+    st = ctx.db.get(Student, int(args["student_id"]))
+    if st is None:
+        raise ToolError("No player with that id.")
+    profile = student_profile(ctx.db, st)
+    for k in ("cosmetics", "recent", "activity"):
+        profile.pop(k, None)
+    attempts = ctx.db.scalars(select(Attempt).where(Attempt.student_id == st.id).order_by(Attempt.id.desc()).limit(8)).all()
+    acts = ctx.db.scalars(select(Activity).where(Activity.student_id == st.id).order_by(Activity.id.desc()).limit(8)).all()
+    return {
+        "player": {**profile, "banned": bool(st.is_banned), "joined": st.created_at.isoformat() if st.created_at else None},
+        "recent_attempts": [{"quiz_id": a.quiz_id, "score": getattr(a, "score", None), "percentage": round(float(getattr(a, "percentage", 0) or 0), 1),
+                             "at": (getattr(a, "submitted_at", None) or getattr(a, "started_at", None) or getattr(a, "created_at", None)).isoformat() if (getattr(a, "submitted_at", None) or getattr(a, "started_at", None) or getattr(a, "created_at", None)) else None} for a in attempts],
+        "recent_activity": [{"kind": x.kind, "title": x.title, "detail": x.detail} for x in acts],
+    }
+
+
+@tool(
+    "get_arena_overview",
+    description="Arena-wide numbers: players (total, active today/this week, banned, new this week), courses, quizzes, questions, materials and exam attempts.",
+    parameters={"type": "object", "properties": {}},
+    roles=STAFF, label="Reading arena stats", staff_only=True,
+)
+def get_arena_overview(ctx: ToolContext, args: dict) -> dict:
+    from datetime import date, timedelta
+
+    db = ctx.db
+    today = date.today()
+    week = today - timedelta(days=7)
+    count = lambda q: int(db.scalar(q) or 0)  # noqa: E731
+    return {
+        "players": {"total": count(select(func.count(Student.id))), "active_today": count(select(func.count(Student.id)).where(Student.last_active >= today)),
+                    "active_week": count(select(func.count(Student.id)).where(Student.last_active >= week)),
+                    "banned": count(select(func.count(Student.id)).where(Student.is_banned.is_(True))),
+                    "new_week": count(select(func.count(Student.id)).where(Student.created_at >= week))},
+        "courses": count(select(func.count(Course.id))), "quizzes": count(select(func.count(Quiz.id))),
+        "questions": count(select(func.count(Question.id))), "materials": count(select(func.count(Material.id))),
+        "attempts": count(select(func.count(Attempt.id))),
+    }
+
+
+@tool(
+    "propose_player_changes",
+    description=("Propose changes to players for the admin to approve: update profile details (name, username, phone, reg_no, level, faculty, campus, "
+                 "class_name, bio, status_text), adjust wallet/progress (xp, coins, diamonds as +/- amounts), ban, unban, or delete the account. "
+                 "One entry per player. Nothing changes until approved; deleting needs an extra confirmation."),
+    parameters={"type": "object", "properties": {
+        "changes": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"type": "object", "properties": {
+            "student_id": {"type": "integer", "minimum": 1},
+            "action": {"type": "string", "enum": list(PLAYER_ACTIONS)},
+            "fields": {"type": "object", "properties": {k: {"type": "string", "maxLength": 240} for k in PLAYER_FIELDS}},
+            "xp": {"type": "integer", "minimum": -100000, "maximum": 100000},
+            "coins": {"type": "integer", "minimum": -1000000, "maximum": 1000000},
+            "diamonds": {"type": "integer", "minimum": -100000, "maximum": 100000},
+            "reason": {"type": "string", "maxLength": 200},
+        }, "required": ["student_id", "action"]}},
+        "rationale": {"type": "string", "maxLength": 400},
+    }, "required": ["changes"]},
+    roles=STAFF, label="Drafting player changes for review", writes=True, staff_only=True,
+)
+def propose_player_changes(ctx: ToolContext, args: dict) -> dict:
+    items, problems = [], []
+    for ch in args["changes"]:
+        st = ctx.db.get(Student, int(ch["student_id"]))
+        if st is None:
+            problems.append(f"#{ch['student_id']}: no such player")
+            continue
+        action = ch["action"]
+        item: dict = {"student_id": st.id, "name": st.name, "username": st.username, "action": action, "reason": str(ch.get("reason") or "")[:200]}
+        if action == "update":
+            fields = {k: str(v).strip() for k, v in (ch.get("fields") or {}).items() if k in PLAYER_FIELDS and str(v).strip() != str(getattr(st, k) or "")}
+            if not fields:
+                problems.append(f"#{st.id}: nothing to change")
+                continue
+            item["before"] = {k: str(getattr(st, k) or "") for k in fields}
+            item["after"] = fields
+        elif action == "adjust":
+            delta = {k: int(ch.get(k) or 0) for k in ("xp", "coins", "diamonds") if int(ch.get(k) or 0)}
+            if not delta:
+                problems.append(f"#{st.id}: no amounts to adjust")
+                continue
+            item["before"] = {k: int(getattr(st, k, 0) or 0) for k in delta}
+            item["delta"] = delta
+        elif action in ("ban", "unban") and bool(st.is_banned) == (action == "ban"):
+            problems.append(f"#{st.id}: already {'banned' if st.is_banned else 'not banned'}")
+            continue
+        items.append(item)
+    if not items:
+        raise ToolError("No valid changes: " + "; ".join(problems[:8]))
+    acts = Counter(i["action"] for i in items)
+    out = _proposal(ctx, "players", None, f"Player changes ({len(items)})", args.get("rationale", "") or ", ".join(f"{n} {a}" for a, n in acts.items()), {"items": items})
+    if problems:
+        out["skipped"] = problems[:20]
+    return out

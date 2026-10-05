@@ -32,6 +32,8 @@ TEACHER = "teacher"
 STAFF = "staff"
 OWNER = "owner"
 STAFF_ROLES = frozenset({STAFF, OWNER})
+# Tools teachers never get, even read-only (player records hold private details).
+STAFF_ONLY: set[str] = set()
 
 
 class ToolError(Exception):
@@ -73,13 +75,15 @@ class Tool:
 _TOOLS: dict[str, Tool] = {}
 
 
-def tool(name: str, *, description: str, parameters: dict | None = None, roles: set[str] | frozenset[str], label: str, writes: bool = False):
+def tool(name: str, *, description: str, parameters: dict | None = None, roles: set[str] | frozenset[str], label: str, writes: bool = False, staff_only: bool = False):
     params = parameters or {"type": "object", "properties": {}}
     params.setdefault("type", "object")
     params.setdefault("properties", {})
 
     def register(fn: Callable[[ToolContext, dict], Any]):
         _TOOLS[name] = Tool(name=name, description=description, parameters=params, handler=fn, roles=frozenset(roles), label=label, writes=writes)
+        if staff_only:
+            STAFF_ONLY.add(name)
         return fn
 
     return register
@@ -89,7 +93,7 @@ def _allowed(tool: Tool, role: str) -> bool:
     # Teachers may use staff lookup/analysis tools, but never tools that write
     # platform data. Their generated lessons remain drafts until platform staff
     # publish them through normal review workflows.
-    return role in tool.roles or (role == TEACHER and STAFF in tool.roles and not tool.writes)
+    return role in tool.roles or (role == TEACHER and STAFF in tool.roles and not tool.writes and tool.name not in STAFF_ONLY)
 
 
 def specs_for(role: str) -> list[dict]:

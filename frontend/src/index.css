@@ -58,8 +58,9 @@
 
   --font-sans: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Space Grotesk Variable", "Audiowide", "Montserrat Variable", ui-sans-serif, sans-serif;
-  /* Chunky game title face for names and headers (Standard mode only). */
-  --font-title: "Plus Jakarta Sans Variable", "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Titles use the font pack the player picked in their profile (applyFont sets
+     --font-sans on <html>), so headers always match the rest of their app. */
+  --font-title: var(--font-sans, "Space Grotesk Variable"), ui-sans-serif, system-ui, sans-serif;
   /* Small all-caps labels above titles: always upright, always the house face. */
   --font-label: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, system-ui, sans-serif;
 
@@ -2115,9 +2116,8 @@ input[type='radio'] {
 }
 
 /* ==========================================================================
-   TITLE TYPE — names and headers get the title face (Plus Jakarta Sans,
-   variable 200–800): heavy, tight and upright even when the body font is
-   the oblique pack.
+   TITLE TYPE — names and headers use the player's chosen font pack (the
+   one picked in their profile), set heavier and tighter than body text.
    Pro mode never uses these classes.
    ========================================================================== */
 /* Every Standard-mode heading uses the title face, upright and tight, whatever
@@ -2605,17 +2605,17 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 .pbanner-title {
   font-family: var(--font-title);
   font-style: normal;
-  font-weight: 800;
+  font-weight: 750;
   font-synthesis: none;
-  font-size: clamp(1.55rem, 1.15rem + 1.4vw, 2.2rem);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+  font-size: clamp(1.5rem, 1.12rem + 1.3vw, 2.1rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   color: #fff;
   background: linear-gradient(180deg, #fff 35%, color-mix(in srgb, var(--pb) 45%, white) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.45)) drop-shadow(0 0 18px color-mix(in srgb, var(--pb) 45%, transparent));
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.3)) drop-shadow(0 0 14px color-mix(in srgb, var(--pb) 30%, transparent));
   padding-bottom: 0.06em;
   overflow-wrap: anywhere;
 }

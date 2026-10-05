@@ -14,7 +14,7 @@
 import {
   AlertTriangle, ArrowUp, BookOpen, Bot, Check, CheckCircle2, ChevronDown, ClipboardCheck, Coins, Copy, Eraser, FileQuestion, Filter, GraduationCap,
   History, Inbox, Layers, ListTree, Loader2, Lock, MessageSquarePlus, Paperclip, Pencil, Radar, RefreshCw, RotateCcw, Search, ShieldCheck, Sparkles, Tags,
-  Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText, BookOpenText, PenLine, Trash2,
+  Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText, BookOpenText, PenLine, Trash2, Users, Ban, Coins as CoinsIcon,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
 import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone} from '../components/ui';
@@ -44,7 +44,10 @@ const KIND: Record<string, {label: string; icon: typeof Tags; tone: Tone}> = {
   edits: {label: 'Edits', icon: PenLine, tone: 'cyan'},
   deletions: {label: 'Deletions', icon: Trash2, tone: 'flare'},
   material: {label: 'Study notes', icon: BookOpenText, tone: 'mint'},
+  players: {label: 'Players', icon: Users, tone: 'pulse'},
 };
+/** Approvals that remove things for good ask for a second, explicit click. */
+const isDestructive = (kind: string, items: Item[]) => kind === 'deletions' || (kind === 'players' && items.some((it) => it.action === 'delete'));
 const SEVERITY: Record<AIInsightIssue['severity'], {label: string; dot: string; pill: string; tone: Tone}> = {
   high: {label: 'High', dot: 'bg-flare-400', pill: 'border-flare-400/35 bg-flare-500/12 text-flare-200', tone: 'flare'},
   medium: {label: 'Medium', dot: 'bg-amber-400', pill: 'border-amber-400/35 bg-amber-500/12 text-amber-200', tone: 'amber'},
@@ -1262,13 +1265,15 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
   const pending = p?.status === 'pending';
   const approve = async () => {
     if (!p) return;
-    if (p.kind === 'deletions' && !confirming) {
+    const chosen = items.filter((_, i) => picked.has(i));
+    const destructive = isDestructive(p.kind, chosen);
+    if (destructive && !confirming) {
       setConfirming(true);
       return;
     }
     setBusy('approve');
     try {
-      const res = await aiStaffApi.approve(p.id, {items, selected: [...picked].sort((a, b) => a - b), confirm: p.kind === 'deletions'});
+      const res = await aiStaffApi.approve(p.id, {items, selected: [...picked].sort((a, b) => a - b), confirm: destructive});
       const r = res.result as {created?: number; updated?: number; deleted?: number; skipped_existing?: unknown[]; errors?: unknown[]};
       const skipped = (r.skipped_existing?.length ?? 0) + (r.errors?.length ?? 0);
       toast('success', 'Approved and saved', [r.created ? `${r.created} created` : '', r.updated ? `${r.updated} updated` : '', r.deleted ? `${r.deleted} deleted` : '', skipped ? `${skipped} skipped` : ''].filter(Boolean).join(' · ') || undefined);
@@ -1336,7 +1341,7 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
         ) : confirming ? (
           <>
             <Button variant="ghost" onClick={() => setConfirming(false)}>Back</Button>
-            <Button variant="danger" onClick={() => void approve()} loading={busy === 'approve'} icon={<Trash2 className="size-4" />}>Delete {picked.size} permanently</Button>
+            <Button variant="danger" onClick={() => void approve()} loading={busy === 'approve'} icon={<Trash2 className="size-4" />}>{p.kind === 'players' ? 'Yes, apply' : `Delete ${picked.size} permanently`}</Button>
           </>
         ) : (
           <>
@@ -1360,7 +1365,11 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
           {confirming && (
             <div className="flex items-start gap-2.5 rounded-xl border border-flare-400/35 bg-flare-500/[0.09] px-3 py-2.5 text-[0.8rem] text-flare-100">
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-flare-300" />
-              <p><b>Delete {picked.size} question{picked.size === 1 ? '' : 's'} for good?</b> They are removed from the bank, practice and future exams, and can't be restored. Past attempts keep their scores.</p>
+              {p.kind === 'players' ? (
+                <p><b>This includes deleting player accounts.</b> Their profile, wallet, progress and history are removed for good and can't be restored.</p>
+              ) : (
+                <p><b>Delete {picked.size} question{picked.size === 1 ? '' : 's'} for good?</b> They are removed from the bank, practice and future exams, and can't be restored. Past attempts keep their scores.</p>
+              )}
             </div>
           )}
           {rejecting && (
@@ -1503,6 +1512,7 @@ function ItemCard({kind, item, index, selectable, selected, onToggle, editing, o
             </>
           )}
           {kind === 'material' && <MaterialPreview item={item} />}
+          {kind === 'players' && <PlayerChange item={item} />}
           {flag && <p className="mt-1 text-[0.68rem] font-bold text-amber-300">{flag}</p>}
         </div>
         {selectable && ['questions', 'topics'].includes(kind) && (
@@ -1613,4 +1623,54 @@ function BlockView({b}: {b: Block}) {
   if (t === 'definition' || t === 'keyterm') return <p className="rounded-lg bg-white/[0.04] px-2 py-1 text-[0.76rem] text-mist-300"><b className="text-mist-50">{b.term || b.title}</b> — {b.meaning || b.text}</p>;
   if (t === 'note' || t === 'tip' || t === 'example' || t === 'quote') return <p className={`rounded-lg border-l-2 px-2 py-1 text-[0.76rem] ${t === 'tip' ? 'border-mint-400 text-mint-100' : t === 'example' ? 'border-cyan-400 text-cyan-100' : 'border-amber-400 text-amber-100'} bg-white/[0.03]`}>{b.title && <b>{b.title}: </b>}{b.text}</p>;
   return <p className="text-[0.76rem] leading-relaxed text-mist-300">{b.text}</p>;
+}
+
+
+const PLAYER_ACTION: Record<string, {label: string; cls: string}> = {
+  update: {label: 'Edit details', cls: 'bg-cyan-500/12 text-cyan-200'},
+  adjust: {label: 'Adjust wallet', cls: 'bg-amber-500/12 text-amber-200'},
+  ban: {label: 'Ban', cls: 'bg-flare-500/12 text-flare-200'},
+  unban: {label: 'Unban', cls: 'bg-mint-500/12 text-mint-200'},
+  delete: {label: 'Delete account', cls: 'bg-flare-500/20 text-flare-100'},
+};
+const PLAYER_FIELD: Record<string, string> = {name: 'Name', username: 'Username', phone: 'Phone', reg_no: 'Reg no', level: 'Level', faculty: 'Faculty', campus: 'Campus', class_name: 'Class', bio: 'Bio', status_text: 'Status'};
+
+/** One proposed change to a player account. */
+function PlayerChange({item}: {item: Item}) {
+  const action = String(item.action ?? '');
+  const A = PLAYER_ACTION[action] ?? {label: action, cls: 'bg-white/8 text-mist-300'};
+  const before = (item.before as Record<string, unknown>) ?? {};
+  const after = (item.after as Record<string, unknown>) ?? {};
+  const delta = (item.delta as Record<string, number>) ?? {};
+  return (
+    <>
+      <p className="flex min-w-0 flex-wrap items-center gap-1.5 text-[0.84rem] font-extrabold text-mist-50">
+        {action === 'ban' || action === 'delete' ? <Ban className="size-4 shrink-0 text-flare-300" /> : action === 'adjust' ? <CoinsIcon className="size-4 shrink-0 text-amber-300" /> : <Users className="size-4 shrink-0 text-mist-400" />}
+        <span className="min-w-0 [overflow-wrap:anywhere]">{String(item.name ?? '')}</span>
+        <span className="text-[0.7rem] font-bold text-mist-500">@{String(item.username ?? '')} · #{String(item.student_id ?? '')}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-extrabold uppercase ${A.cls}`}>{A.label}</span>
+      </p>
+      {action === 'update' && (
+        <div className="mt-1.5 grid gap-1 sm:grid-cols-2">
+          {Object.keys(after).map((k) => (
+            <div key={k} className="min-w-0 rounded-lg border border-white/6 bg-black/15 px-2 py-1.5 text-[0.74rem]">
+              <p className="text-[0.62rem] font-extrabold tracking-wide text-mist-500 uppercase">{PLAYER_FIELD[k] ?? k}</p>
+              {String(before[k] ?? '') && <p className="text-mist-500 line-through decoration-flare-400/60 [overflow-wrap:anywhere]">{String(before[k])}</p>}
+              <p className="font-semibold text-mint-100 [overflow-wrap:anywhere]">{String(after[k] ?? '') || '—'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {action === 'adjust' && (
+        <p className="mt-1.5 flex flex-wrap gap-1.5">
+          {Object.entries(delta).map(([k, v]) => (
+            <span key={k} className="rounded-lg bg-white/[0.04] px-2 py-0.5 text-[0.72rem] text-mist-300">
+              <b className="text-mist-400 uppercase">{k}</b> {formatNumber(Number(before[k] ?? 0))} → <b className={v >= 0 ? 'text-mint-200' : 'text-flare-200'}>{formatNumber(Math.max(0, Number(before[k] ?? 0) + v))}</b> <span className="text-mist-500">({v > 0 ? '+' : ''}{formatNumber(v)})</span>
+            </span>
+          ))}
+        </p>
+      )}
+      {String(item.reason ?? '') && <p className="mt-1 text-[0.72rem] text-mist-400"><b className="text-mist-300">Why: </b>{String(item.reason)}</p>}
+    </>
+  );
 }
