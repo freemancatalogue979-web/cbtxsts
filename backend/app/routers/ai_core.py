@@ -444,7 +444,7 @@ def approve_proposal(proposal_id: int, payload: dict | None = None, db: Session 
     selected = payload.get("selected") if isinstance(payload.get("selected"), list) else None
     edited = payload.get("items") if isinstance(payload.get("items"), list) else None
     try:
-        result = proposals.approve(db, p, admin, selected=selected, edited=edited)
+        result = proposals.approve(db, p, admin, selected=selected, edited=edited, confirm=bool(payload.get("confirm")))
     except proposals.ProposalError as error:
         db.rollback()
         raise _err(error) from error
@@ -690,27 +690,29 @@ def cancel_task(task_id: int, db: Session = Depends(get_db), admin: Admin = Depe
 
 
 @admin_router.post("/tasks/{task_id}/approve-all")
-def approve_task(task_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
+def approve_task(task_id: int, payload: dict | None = None, db: Session = Depends(get_db), admin: Admin = Depends(require_admin)) -> dict:
     """Staff approve every pending proposal a task produced, in a safe order
     (topics first, then material tags, question mapping, new questions)."""
     t = db.get(AITask, task_id)
     if t is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found.")
-    order = {"topics": 0, "material_topics": 1, "classification": 2, "questions": 3}
+    order = {"topics": 0, "material_topics": 1, "classification": 2, "edits": 3, "questions": 4, "material": 5, "deletions": 6}
+    confirm = bool((payload or {}).get("confirm"))
     ids = [p["id"] for p in (t.result or {}).get("proposals", [])]
     rows = sorted(db.execute(select(AIProposal).where(AIProposal.id.in_(ids or [0]), AIProposal.status == "pending")).scalars(), key=lambda p: (order.get(p.kind, 9), p.id))
     if not rows:
         raise HTTPException(status.HTTP_409_CONFLICT, "Nothing left to approve for this task.")
-    summary = {"approved": 0, "topics": 0, "questions": 0, "classified": 0, "materials": 0, "errors": []}
+    summary = {"approved": 0, "topics": 0, "questions": 0, "classified": 0, "materials": 0, "edited": 0, "deleted": 0, "new_materials": 0, "errors": []}
     for p in rows:
         try:
-            result = proposals.approve(db, p, admin)
+            result = proposals.approve(db, p, admin, confirm=confirm)
         except proposals.ProposalError as error:
             summary["errors"].append(f"#{p.id}: {error.message}")
             continue
         summary["approved"] += 1
-        key = {"topics": "topics", "questions": "questions", "classification": "classified", "material_topics": "materials"}[p.kind]
-        summary[key] += int(result.get("created") or result.get("updated") or 0)
+        key = {"topics": "topics", "questions": "questions", "classification": "classified", "material_topics": "materials",
+               "edits": "edited", "deletions": "deleted", "material": "new_materials"}.get(p.kind, "materials")
+        summary[key] += int(result.get("created") or result.get("updated") or result.get("deleted") or 0)
         summary["errors"] += [f"#{p.id}: {e}" for e in (result.get("errors") or [])[:5]]
     db.commit()
     return summary

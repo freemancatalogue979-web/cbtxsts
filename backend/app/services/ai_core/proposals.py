@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ...models import Admin, AIProposal, Course, CourseTopic, Material, Question
+from ...models import Admin, AIProposal, Course, CourseTopic, Material, MaterialSection, Question
 from ..course_bank import ensure_bank_quiz
 from ..questions import AnswerValidationError, apply_question_fields, audit, record_version, validate_payload, validate_saved_question
 
@@ -48,7 +48,7 @@ def _items(p: AIProposal, selected: list[int] | None, edited: list[dict] | None)
     return items
 
 
-def approve(db: Session, p: AIProposal, admin: Admin, *, selected: list[int] | None = None, edited: list[dict] | None = None) -> dict:
+def approve(db: Session, p: AIProposal, admin: Admin, *, selected: list[int] | None = None, edited: list[dict] | None = None, confirm: bool = False) -> dict:
     if p.status != "pending":
         raise ProposalError("This proposal was already decided.", 409)
     course = db.get(Course, p.course_id) if p.course_id else None
@@ -57,7 +57,10 @@ def approve(db: Session, p: AIProposal, admin: Admin, *, selected: list[int] | N
     items = _items(p, selected, edited)
     if not items:
         raise ProposalError("Select at least one item to approve.", 422)
-    applier = {"topics": _apply_topics, "questions": _apply_questions, "classification": _apply_classification, "material_topics": _apply_material_topics}.get(p.kind)
+    if p.kind == "deletions" and not confirm:
+        raise ProposalError(f"Deleting {len(items)} question(s) is permanent — confirm to continue.", 428)
+    applier = {"topics": _apply_topics, "questions": _apply_questions, "classification": _apply_classification, "material_topics": _apply_material_topics,
+               "edits": _apply_edits, "deletions": _apply_deletions, "material": _apply_material}.get(p.kind)
     if applier is None:
         raise ProposalError("Unknown proposal type.", 422)
     result = applier(db, course, items, admin)
@@ -169,3 +172,75 @@ def _apply_material_topics(db: Session, course: Course, items: list[dict], admin
         updated.append(m.id)
     db.flush()
     return {"updated": len(updated), "material_ids": updated, "errors": errors}
+
+
+EDIT_FIELDS = ("text", "option_a", "option_b", "option_c", "option_d", "correct", "explanation", "topic", "subtopic", "difficulty", "objective")
+
+
+def _apply_edits(db: Session, course: Course, items: list[dict], admin: Admin) -> dict:
+    updated, errors = [], []
+    for item in items:
+        q = db.get(Question, int(item.get("question_id") or 0))
+        if q is None or q.course_id != course.id:
+            errors.append(f"question {item.get('question_id')} not found in {course.code}")
+            continue
+        change = {k: v for k, v in (item.get("after") or {}).items() if k in EDIT_FIELDS and isinstance(v, str) and v.strip()}
+        if not change:
+            continue
+        try:
+            apply_question_fields(db, q, change, author=admin.email, note="AI edit (staff approved)")
+        except (AnswerValidationError, ValueError) as error:
+            errors.append(f"question {q.id}: {getattr(error, 'message', str(error))}")
+            continue
+        updated.append(q.id)
+    return {"updated": len(updated), "question_ids": updated, "errors": errors}
+
+
+def _apply_deletions(db: Session, course: Course, items: list[dict], admin: Admin) -> dict:
+    deleted, errors = [], []
+    for item in items:
+        q = db.get(Question, int(item.get("question_id") or 0))
+        if q is None or q.course_id != course.id:
+            errors.append(f"question {item.get('question_id')} not found in {course.code}")
+            continue
+        audit(db, actor=admin.email, action="question.delete", target_type="question", target_id=q.id,
+              detail={"text": (q.text or "")[:120], "correct": q.correct, "via": "ai_proposal", "reason": str(item.get("reason") or "")[:200]})
+        db.delete(q)
+        deleted.append(int(item["question_id"]))
+    db.flush()
+    return {"deleted": len(deleted), "question_ids": deleted, "errors": errors}
+
+
+def _apply_material(db: Session, course: Course, items: list[dict], admin: Admin) -> dict:
+    """Each item is one complete material: title, topic, summary and sections
+    of typed blocks. Saved published so students can read it straight away."""
+    import json as _json
+
+    from ..materials import record_version as record_material_version, sanitise_blocks
+
+    created, errors = [], []
+    for index, item in enumerate(items):
+        title = str(item.get("title") or "").strip()[:200]
+        sections = [s for s in item.get("sections") or [] if isinstance(s, dict)]
+        if not title or not sections:
+            errors.append(f"#{index + 1}: a material needs a title and at least one section")
+            continue
+        summary = [str(x).strip()[:300] for x in item.get("summary") or [] if str(x).strip()][:12]
+        words = sum(len(str(b.get("text") or " ".join(map(str, b.get("items") or []))).split()) for s in sections for b in s.get("blocks") or [] if isinstance(b, dict))
+        m = Material(course_id=course.id, title=title, kind="material", topic=str(item.get("topic") or "").strip()[:120],
+                     description=str(item.get("description") or "").strip()[:500], difficulty="intermediate",
+                     estimated_minutes=max(3, min(240, round(words / 180))), summary=_json.dumps(summary), tags=_json.dumps(["AI notes"]),
+                     author=f"AI notes · approved by {admin.email}"[:120], status="published")
+        db.add(m)
+        db.flush()
+        for pos, sec in enumerate(sections[:60], start=1):
+            blocks = sanitise_blocks(sec.get("blocks") or [])
+            if not blocks:
+                continue
+            sw = sum(len(str(b.get("text") or " ".join(map(str, b.get("items") or []))).split()) for b in blocks)
+            db.add(MaterialSection(material_id=m.id, position=pos, title=str(sec.get("title") or f"Part {pos}")[:200],
+                                   body=_json.dumps(blocks), estimated_minutes=max(1, round(sw / 180))))
+        db.flush()
+        record_material_version(db, m, note="Created from AI proposal", author=admin.email)
+        created.append(m.id)
+    return {"created": len(created), "material_ids": created, "errors": errors}

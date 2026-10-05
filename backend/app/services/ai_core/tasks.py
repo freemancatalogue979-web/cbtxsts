@@ -41,7 +41,9 @@ MAX_TOPICS = 40
 LOG_KEEP = 200
 DEFAULT_MAX_COST = 1.0        # USD per task unless overridden (never unlimited)
 HARD_MAX_COST = 10.0
-STAGES = ("read", "topics", "materials", "classify", "generate")
+STAGES = ("read", "topics", "materials", "classify", "generate", "dedupe", "write")
+WRITE_BATCH = 22             # bank questions per material-writing call
+WRITE_SOURCE_CHARS = 6000
 
 
 class TaskError(Exception):
@@ -118,11 +120,17 @@ def clean_params(db: Session, course: Course, raw: dict) -> dict:
     if sum(mix.values()) <= 0:
         mix = {"easy": 30, "medium": 50, "hard": 20}
     topics = [re.sub(r"\s+", " ", str(t)).strip()[:120] for t in raw.get("topics") or [] if str(t).strip()][:MAX_TOPICS]
+    # A focused job (write materials / remove duplicates) does only that unless
+    # the other steps were asked for explicitly.
+    focused = bool(raw.get("write_materials") or raw.get("remove_duplicates")) and not count
+    default_on = not focused
     params = {
         "material_ids": material_ids,
-        "build_topics": bool(raw.get("build_topics", True)),
-        "classify_questions": bool(raw.get("classify_questions", True)),
-        "map_materials": bool(raw.get("map_materials", True)),
+        "build_topics": bool(raw.get("build_topics", default_on)),
+        "classify_questions": bool(raw.get("classify_questions", default_on)),
+        "map_materials": bool(raw.get("map_materials", default_on)),
+        "write_materials": bool(raw.get("write_materials", False)),
+        "remove_duplicates": bool(raw.get("remove_duplicates", False)),
         "reclassify_difficulty": bool(raw.get("reclassify_difficulty", False)),
         "only_untagged": bool(raw.get("only_untagged", False)),
         "generate_questions": count,
@@ -132,7 +140,7 @@ def clean_params(db: Session, course: Course, raw: dict) -> dict:
         "instructions": str(raw.get("instructions") or "").strip()[:1500],
         "max_cost": round(max(0.01, min(HARD_MAX_COST, float(raw.get("max_cost") or default_max_cost()))), 2),
     }
-    if not (params["build_topics"] or params["classify_questions"] or params["map_materials"] or count):
+    if not (params["build_topics"] or params["classify_questions"] or params["map_materials"] or count or params["write_materials"] or params["remove_duplicates"]):
         raise TaskError("Pick at least one thing for the task to do.", 422)
     return params
 
@@ -200,6 +208,11 @@ def estimate(db: Session, course: Course, params: dict) -> dict:
         calls += n
         tokens_in += n * (SOURCE_CHARS // 4 + 1100)
         tokens_out += int(count * 1.15 * 330)
+    if params.get("write_materials") and bank:
+        n = math.ceil(bank / WRITE_BATCH) + 1
+        calls += n
+        tokens_in += bank * 160 + n * (WRITE_SOURCE_CHARS // 4 + 900)
+        tokens_out += n * 3800
     impl, model = tutor.ai_target(db)
     cost = providers.estimate_cost(impl.name, model, {"input": tokens_in, "output": tokens_out})
     minutes = max(1, math.ceil(calls / workers() * 25 / 60)) if calls else 0
@@ -234,6 +247,10 @@ def describe(params: dict, course: Course) -> str:
         parts.append("map questions")
     if params.get("generate_questions"):
         parts.append(f"{params['generate_questions']} new questions")
+    if params.get("write_materials"):
+        parts.append("write study materials")
+    if params.get("remove_duplicates"):
+        parts.append("remove duplicates")
     if params.get("map_materials") and not parts:
         parts.append("tag materials")
     return f"{course.code}: " + (", ".join(parts) or "course task")
@@ -483,7 +500,8 @@ class _Job:
         p = self.params
         count = int(p.get("generate_questions") or 0)
         self.plan = [s for s, on in (("read", True), ("topics", True), ("materials", p.get("map_materials")),
-                                     ("classify", p.get("classify_questions")), ("generate", count > 0)) if on]
+                                     ("classify", p.get("classify_questions")), ("generate", count > 0),
+                                     ("dedupe", p.get("remove_duplicates")), ("write", p.get("write_materials"))) if on]
         self.log(f"Started on {self.course.code} with {self.impl.name} · {self.model}")
 
         # 1. read
@@ -497,7 +515,8 @@ class _Job:
 
         # 2. topics
         topics = self.build_topics(passages)
-        if not topics:
+        needs_topics = p.get("map_materials") or p.get("classify_questions") or count or p.get("build_topics")
+        if not topics and needs_topics:
             raise _Stop("No topics could be found — add material text or curated topics and try again.", "failed")
 
         # 3. materials → topic
@@ -511,6 +530,14 @@ class _Job:
         # 5. generate
         if count:
             self.generate(topics, passages, count)
+
+        # 6. duplicates across the whole bank
+        if p.get("remove_duplicates"):
+            self.dedupe()
+
+        # 7. study materials that cover every bank question
+        if p.get("write_materials"):
+            self.write_materials(passages)
 
         made = sum(x["count"] for x in self.result["proposals"])
         self.finish("done", f"Done · {len(self.result['proposals'])} proposal(s) with {made} item(s) ready for review · ${self.task.cost:.4f}")
@@ -892,3 +919,118 @@ class _Job:
         self.result["generate"] = {"asked": count, "made": n, **stats}
         extra = f" ({stats['duplicates']} duplicates and {stats['invalid']} malformed drafts were discarded)" if stats["duplicates"] or stats["invalid"] else ""
         self.log(f"Wrote {n} of {count} question(s){extra}.", "info" if n >= count else "warn")
+
+
+# ----------------------------------------------------------- cleanup & notes
+def _dedupe(self: _Job) -> None:
+    from .admin_tools import duplicate_groups
+
+    self.progress("dedupe", 0, 1, "Scanning the bank for duplicates")
+    rows = _bank_questions(self.db, self.course)
+    groups = duplicate_groups(rows, threshold=0.9)
+    by_id = {q.id: q for q in rows}
+    items = [{"question_id": d, "text": (by_id[d].text or "")[:200], "topic": by_id[d].topic or "", "keep_id": g["keep"],
+              "keep_text": (by_id[g["keep"]].text or "")[:200], "similarity": g["similarity"], "reason": f"duplicate of #{g['keep']} ({g['similarity']}% similar)"}
+             for g in groups for d in g["drop"]]
+    self.result["duplicates"] = {"checked": len(rows), "groups": len(groups), "extra_copies": len(items)}
+    if items:
+        self.propose("deletions", f"Remove {len(items)} duplicate questions from {self.course.code}",
+                     f"{len(groups)} duplicate groups among {len(rows)} questions; the best copy of each group is kept.", items)
+        self.log(f"Found {len(groups)} duplicate group(s) — {len(items)} extra cop(ies) proposed for removal.")
+    else:
+        self.log(f"No duplicates among {len(rows)} questions.")
+    self.progress("dedupe", 1, 1, "Duplicates checked")
+
+
+def _answer_text(q: Question) -> str:
+    opts = {k: v for k, v in zip("ABCD", (q.option_a, q.option_b, q.option_c, q.option_d)) if v}
+    letters = [c for c in str(q.correct or "").upper() if c in opts]
+    return "; ".join(opts[c] for c in letters) or str(q.correct or "")
+
+
+def _write_materials(self: _Job, passages: list[dict]) -> None:
+    p = self.params
+    rows = _bank_questions(self.db, self.course)
+    wanted = {t.lower() for t in p.get("topics") or []}
+    by_topic: dict[str, list[Question]] = defaultdict(list)
+    for q in rows:
+        name = (q.topic or "").strip() or "General"
+        if wanted and name.lower() not in wanted:
+            continue
+        by_topic[name].append(q)
+    if not by_topic:
+        self.log("No bank questions to write materials from.", "warn")
+        return
+    sources: dict[str, list[dict]] = defaultdict(list)
+    for x in passages:
+        for t in x.get("topics") or []:
+            sources[t.lower()].append(x)
+    jobs: list[tuple[str, int, list[Question]]] = []
+    for name, qs in sorted(by_topic.items(), key=lambda kv: -len(kv[1])):
+        for part, start in enumerate(range(0, len(qs), WRITE_BATCH)):
+            jobs.append((name, part, qs[start : start + WRITE_BATCH]))
+    total = len(jobs)
+    self.progress("write", 0, total, f"Writing study notes for {len(by_topic)} topic(s)")
+    self.log(f"Writing materials for {len(by_topic)} topic(s) from {sum(len(v) for v in by_topic.values())} question(s) in {total} part(s).")
+    instructions = p.get("instructions") or ""
+    prompts = []
+    for name, part, qs in jobs:
+        pool = sources.get(name.lower()) or []
+        source = ""
+        if pool:
+            x = pool[part % len(pool)]
+            source = f"Material: {x['material']}\n" + x["text"][:WRITE_SOURCE_CHARS]
+        lines = "\n".join(
+            f"[{q.id}] {q.text}\n  Correct answer: {_answer_text(q)}" + (f"\n  Why: {q.explanation.strip()[:400]}" if (q.explanation or "").strip() else "")
+            for q in qs)
+        prompts.append([
+            {"role": "system", "content": "You are an expert university lecturer writing clear, accurate study notes for an exam-prep platform. Reply with JSON only."},
+            {"role": "user", "content": (
+                f"Course: {self.course.code} — {self.course.title}\nTopic: {name}" + (f" (part {part + 1})" if part else "") + "\n"
+                + (f"Staff instructions: {instructions}\n" if instructions else "")
+                + "\nWrite study notes on this topic. A student who reads ONLY these notes must be able to answer every question below: "
+                "teach each fact, rule, case, date, formula and definition they test, explain WHY, and add short examples. "
+                "Organise by idea (not question by question), use plain English, never mention the questions, never write a quiz or an answer list. "
+                "Block types: heading, subheading, paragraph, list (items), numbers (items), definition (term, meaning), keyterm (term, meaning), example (text), note (text), tip (text), summary (items).\n"
+                "JSON: {\"title\":\"...\",\"summary\":[\"key takeaway\", ...],\"sections\":[{\"title\":\"...\",\"blocks\":[{\"type\":\"paragraph\",\"text\":\"...\"}]}],"
+                "\"covers\":[question ids fully covered]}\n\n"
+                f"QUESTIONS (with answers):\n{lines}\n\n" + (f"COURSE MATERIAL (use it, prefer its wording):\n{source}" if source else "No course material — rely on accurate standard knowledge of the subject."))},
+        ])
+    built: dict[str, dict] = {}
+    done = [0]
+
+    def got(index: int, data: dict | None, error: str) -> None:
+        name, part, qs = jobs[index]
+        done[0] += 1
+        self.progress("write", done[0], total, f"Wrote part {done[0]} of {total}")
+        if not data or not isinstance(data.get("sections"), list):
+            return
+        entry = built.setdefault(name, {"title": "", "topic": name, "summary": [], "sections": [], "covers": set(), "questions": set()})
+        if part == 0 or not entry["title"]:
+            entry["title"] = str(data.get("title") or f"{name}: study notes")[:200]
+        entry["summary"] += [str(x)[:300] for x in data.get("summary") or [] if str(x).strip()]
+        for sec in data["sections"]:
+            if isinstance(sec, dict) and sec.get("blocks"):
+                entry["sections"].append({"title": str(sec.get("title") or name)[:200], "blocks": sec["blocks"]})
+        ids = {q.id for q in qs}
+        entry["questions"] |= ids
+        entry["covers"] |= {int(i) for i in data.get("covers") or [] if str(i).isdigit() and int(i) in ids}
+
+    self.many(prompts, 6000, got)
+    made = 0
+    for name, entry in built.items():
+        if not entry["sections"]:
+            continue
+        item = {"title": entry["title"], "topic": name, "description": f"Study notes covering {len(entry['questions'])} bank question(s) on {name}.",
+                "summary": entry["summary"][:12], "sections": entry["sections"][:60], "covers_question_ids": sorted(entry["covers"]),
+                "question_count": len(entry["questions"])}
+        missing = len(entry["questions"]) - len(entry["covers"])
+        self.propose("material", f"Material: {entry['title'][:150]}", f"{len(item['sections'])} sections · covers {len(entry['covers'])} of {len(entry['questions'])} questions"
+                     + (f" ({missing} not confirmed)" if missing else ""), [item])
+        made += 1
+    self.result["materials_written"] = made
+    self.log(f"Wrote {made} material(s) for review.")
+
+
+_Job.dedupe = _dedupe
+_Job.write_materials = _write_materials

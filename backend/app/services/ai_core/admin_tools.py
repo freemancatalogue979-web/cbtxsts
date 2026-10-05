@@ -1,10 +1,11 @@
 """Tools for the staff AI assistant.
 
-Staff tools read freely across courses (drafts included) but every *change*
-is a proposal: ``propose_*`` tools only store an :class:`AIProposal`. A staff
-member reviews it in the console and approves (optionally trimming/editing) —
-only then does :mod:`proposals` write official content. There are no delete,
-publish, grading or permission tools at all.
+Staff tools read freely across courses (drafts included) and can draft any
+content change — new questions, edits, deletions, duplicate clean-ups, whole
+study materials, topics and classifications. Every change is stored as an
+:class:`AIProposal`; a staff member approves it in the console (deletions need
+an extra confirmation) and only then does :mod:`proposals` write it. There are
+still no publish-exam, grading, settings or permission tools.
 """
 
 from __future__ import annotations
@@ -306,7 +307,8 @@ def propose_classification(ctx: ToolContext, args: dict) -> dict:
     "start_ai_task",
     description=("Start a BACKGROUND task for bulk work that is too big for one reply: read whole course materials, build a topic list from them, "
                  "map EVERY existing bank question onto those topics, tag materials with topics, and/or generate 1-1000 new questions grounded in the "
-                 "material. Runs with no size limit and produces proposals for staff review. Use this for any request over ~20 questions or 'all questions'."),
+                 "material, write full study materials that cover every bank question (write_materials), and remove duplicates across the whole bank "
+                 "(remove_duplicates). Runs with no size limit and produces proposals for staff review. Use this for any request over ~20 questions or 'all questions'."),
     parameters={"type": "object", "properties": {
         "course_id": COURSE_ID,
         "material_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": 50, "description": "Materials to read; omit for all course materials."},
@@ -320,6 +322,8 @@ def propose_classification(ctx: ToolContext, args: dict) -> dict:
         "topics": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 40, "description": "Only these topics (for generation); omit to cover all."},
         "topic_count": {"type": "integer", "minimum": 0, "maximum": 40, "description": "Target number of topics to build (0 = automatic)."},
         "instructions": {"type": "string", "maxLength": 1500, "description": "Extra guidance from staff (style, level, focus)."},
+        "write_materials": {"type": "boolean", "description": "Write study materials per topic from the bank questions (+ course material) so that reading them is enough to answer every question (default false)."},
+        "remove_duplicates": {"type": "boolean", "description": "Scan the whole bank and propose removing duplicate questions (default false)."},
     }, "required": ["course_id"]},
     roles=STAFF, label="Starting a background AI task", writes=True,
 )
@@ -363,3 +367,189 @@ def get_ai_task(ctx: ToolContext, args: dict) -> dict:
     if args.get("course_id"):
         stmt = stmt.where(AITask.course_id == args["course_id"])
     return {"tasks": [brief(t) for t in ctx.db.execute(stmt).scalars()]}
+
+
+# ------------------------------------------------------------ editing & cleanup
+MAX_EDITS = 120
+MAX_DELETIONS = 400
+
+
+def _qtext(text: str) -> str:
+    return re.sub(r"\W+", " ", (text or "").lower()).strip()
+
+
+def duplicate_groups(rows: list[Question], threshold: float = 0.9) -> list[dict]:
+    """Cluster near-duplicate questions. Candidates come from an inverted word
+    index (fast on big banks); SequenceMatcher confirms. In each cluster the
+    best copy is kept: has an explanation, has a topic, then the oldest id."""
+    import difflib
+
+    norm = {q.id: _qtext(q.text) for q in rows}
+    words = {qid: set(t.split()) for qid, t in norm.items()}
+    index: dict[str, list[int]] = {}
+    for qid, ws in words.items():
+        for w in ws:
+            index.setdefault(w, []).append(qid)
+    common = max(60, len(rows) // 8)
+    parent = {q.id: q.id for q in rows}
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    best: dict[tuple[int, int], float] = {}
+    for qid, ws in words.items():
+        if not ws:
+            continue
+        counts: Counter = Counter()
+        for w in ws:
+            bucket = index[w]
+            if len(bucket) > common:
+                continue
+            counts.update(o for o in bucket if o > qid)
+        for other, shared in counts.items():
+            if shared / max(len(ws), len(words[other]), 1) < 0.55:
+                continue
+            ratio = difflib.SequenceMatcher(None, norm[qid], norm[other]).ratio()
+            if ratio >= threshold:
+                best[(qid, other)] = ratio
+                parent[find(other)] = find(qid)
+    by_id = {q.id: q for q in rows}
+    clusters: dict[int, list[int]] = {}
+    for a, b in best:
+        for x in (a, b):
+            clusters.setdefault(find(x), [])
+            if x not in clusters[find(x)]:
+                clusters[find(x)].append(x)
+    out = []
+    for members in clusters.values():
+        ranked = sorted(members, key=lambda i: (not (by_id[i].explanation or "").strip(), not (by_id[i].topic or "").strip(), i))
+        keep, drop = ranked[0], ranked[1:]
+        sim = max((v for (a, b), v in best.items() if a in members and b in members), default=0)
+        out.append({"keep": keep, "drop": drop, "similarity": round(sim * 100, 1)})
+    out.sort(key=lambda g: -g["similarity"])
+    return out
+
+
+@tool(
+    "propose_question_edits",
+    description=("Propose fixes to existing questions: reword text, rewrite options, change the correct letter, add/improve the explanation, "
+                 "or change topic/difficulty. Use ids from search_questions. Stored for staff review."),
+    parameters={"type": "object", "properties": {
+        "course_id": COURSE_ID,
+        "rationale": {"type": "string", "maxLength": 500},
+        "edits": {"type": "array", "maxItems": MAX_EDITS, "items": {"type": "object", "properties": {
+            "question_id": {"type": "integer", "minimum": 1},
+            "text": {"type": "string", "maxLength": 1200}, "option_a": {"type": "string", "maxLength": 400}, "option_b": {"type": "string", "maxLength": 400},
+            "option_c": {"type": "string", "maxLength": 400}, "option_d": {"type": "string", "maxLength": 400},
+            "correct": {"type": "string", "enum": ["A", "B", "C", "D"]}, "explanation": {"type": "string", "maxLength": 1500},
+            "topic": {"type": "string", "maxLength": 120}, "subtopic": {"type": "string", "maxLength": 120},
+            "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]}, "objective": {"type": "string", "maxLength": 240},
+            "reason": {"type": "string", "maxLength": 240},
+        }, "required": ["question_id"]}},
+    }, "required": ["course_id", "edits"]},
+    roles=STAFF, label="Drafting question edits for review", writes=True,
+)
+def propose_question_edits(ctx: ToolContext, args: dict) -> dict:
+    from .proposals import EDIT_FIELDS
+
+    course = _course(ctx, args["course_id"])
+    ids = [e["question_id"] for e in args["edits"]]
+    questions = {q.id: q for q in ctx.db.execute(select(Question).where(Question.id.in_(ids), Question.course_id == course.id)).scalars()}
+    items, missing = [], []
+    for e in args["edits"]:
+        q = questions.get(e["question_id"])
+        if q is None:
+            missing.append(e["question_id"])
+            continue
+        before = {k: getattr(q, k) or "" for k in EDIT_FIELDS}
+        after = {k: v for k, v in e.items() if k in EDIT_FIELDS and isinstance(v, str) and v.strip() and v != before.get(k)}
+        if after:
+            items.append({"question_id": q.id, "text": (q.text or "")[:200], "before": {k: before[k] for k in after}, "after": after, "reason": e.get("reason", "")})
+    if not items:
+        raise ToolError("Nothing to change (unknown ids or identical values)." + (f" Unknown: {missing[:10]}" if missing else ""))
+    out = _proposal(ctx, "edits", course, f"Edit {len(items)} questions in {course.code}", args.get("rationale", ""), {"items": items})
+    if missing:
+        out["unknown_ids"] = missing[:20]
+    return out
+
+
+@tool(
+    "propose_question_deletions",
+    description="Propose deleting questions from a course bank (wrong, broken, off-syllabus or unwanted). Stored for staff review; deleting needs an extra confirmation when approved.",
+    parameters={"type": "object", "properties": {
+        "course_id": COURSE_ID,
+        "question_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": MAX_DELETIONS},
+        "reason": {"type": "string", "maxLength": 300},
+    }, "required": ["course_id", "question_ids"]},
+    roles=STAFF, label="Drafting deletions for review", writes=True,
+)
+def propose_question_deletions(ctx: ToolContext, args: dict) -> dict:
+    course = _course(ctx, args["course_id"])
+    rows = list(ctx.db.execute(select(Question).where(Question.id.in_(args["question_ids"]), Question.course_id == course.id)).scalars())
+    if not rows:
+        raise ToolError("None of those questions are in this course.")
+    reason = args.get("reason", "")
+    items = [{"question_id": q.id, "text": (q.text or "")[:200], "topic": q.topic or "", "reason": reason} for q in rows]
+    return _proposal(ctx, "deletions", course, f"Delete {len(items)} questions from {course.code}", reason, {"items": items})
+
+
+@tool(
+    "propose_duplicate_cleanup",
+    description=("Find ALL near-duplicate questions in a course bank and propose deleting the extra copies, keeping the best one of each group "
+                 "(has explanation, has topic, oldest). Stored for staff review; deletion needs confirmation."),
+    parameters={"type": "object", "properties": {"course_id": COURSE_ID, "threshold": {"type": "number", "minimum": 0.8, "maximum": 0.99}}, "required": ["course_id"]},
+    roles=STAFF, label="Finding duplicates to remove", writes=True,
+)
+def propose_duplicate_cleanup(ctx: ToolContext, args: dict) -> dict:
+    course = _course(ctx, args["course_id"])
+    rows = list(ctx.db.scalars(_bank(course.id)).all())
+    groups = duplicate_groups(rows, threshold=float(args.get("threshold") or 0.9))
+    if not groups:
+        return {"checked": len(rows), "groups": 0, "summary": f"No duplicates found among {len(rows)} questions."}
+    by_id = {q.id: q for q in rows}
+    items = [{"question_id": d, "text": (by_id[d].text or "")[:200], "topic": by_id[d].topic or "", "keep_id": g["keep"],
+              "keep_text": (by_id[g["keep"]].text or "")[:200], "similarity": g["similarity"], "reason": f"duplicate of #{g['keep']} ({g['similarity']}% similar)"}
+             for g in groups for d in g["drop"]][:MAX_DELETIONS]
+    out = _proposal(ctx, "deletions", course, f"Remove {len(items)} duplicate questions from {course.code}",
+                    f"{len(groups)} duplicate groups among {len(rows)} questions; the best copy of each is kept.", {"items": items})
+    out["groups"] = len(groups)
+    return out
+
+
+BLOCK_SCHEMA = {"type": "object", "properties": {
+    "type": {"type": "string", "enum": ["heading", "subheading", "paragraph", "list", "numbers", "definition", "keyterm", "example", "note", "tip", "summary", "quote", "table"]},
+    "text": {"type": "string", "maxLength": 4000}, "title": {"type": "string", "maxLength": 200},
+    "term": {"type": "string", "maxLength": 200}, "meaning": {"type": "string", "maxLength": 1500},
+    "items": {"type": "array", "items": {"type": "string", "maxLength": 600}, "maxItems": 30},
+}, "required": ["type"]}
+
+
+@tool(
+    "propose_material",
+    description=("Write a complete study material (reading notes) for a topic, saved for staff review and published to students when approved. "
+                 "Base it on the course material and the bank questions for that topic (search_questions with topic) so that a student who reads it "
+                 "can answer every one of those questions: cover each fact, rule, case, date and definition the questions test, with explanations. "
+                 "For whole courses or topics with many questions use start_ai_task with write_materials=true instead."),
+    parameters={"type": "object", "properties": {
+        "course_id": COURSE_ID,
+        "title": {"type": "string", "maxLength": 200}, "topic": {"type": "string", "maxLength": 120},
+        "description": {"type": "string", "maxLength": 500},
+        "summary": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 12},
+        "sections": {"type": "array", "maxItems": 30, "items": {"type": "object", "properties": {
+            "title": {"type": "string", "maxLength": 200}, "blocks": {"type": "array", "items": BLOCK_SCHEMA, "maxItems": 60},
+        }, "required": ["title", "blocks"]}},
+        "covers_question_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": 400},
+    }, "required": ["course_id", "title", "sections"]},
+    roles=STAFF, label="Writing a study material for review", writes=True,
+)
+def propose_material(ctx: ToolContext, args: dict) -> dict:
+    course = _course(ctx, args["course_id"])
+    sections = [s for s in args["sections"] if s.get("blocks")]
+    if not sections:
+        raise ToolError("The material has no content.")
+    item = {k: args.get(k) for k in ("title", "topic", "description", "summary", "covers_question_ids")}
+    item["sections"] = sections
+    return _proposal(ctx, "material", course, f"Material: {args['title'][:150]}", f"{len(sections)} sections" + (f" covering {len(args.get('covers_question_ids') or [])} questions" if args.get("covers_question_ids") else ""), {"items": [item]})
