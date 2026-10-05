@@ -791,6 +791,8 @@ export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload;
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const askedAt = useRef(Date.now());
   const finishing = useRef(false);
+  const leave = useRef(onNewPractice);
+  leave.current = onNewPractice;
   const skew = useRef(0);
   const skewFor = useRef<string | null>(null);
 
@@ -812,6 +814,15 @@ export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload;
       HAPTICS.win();
       sfx.play('win');
     } catch (error) {
+      const code = (error as {status?: number}).status ?? 0;
+      // The run no longer exists (or can't be graded): it has ended — drop it
+      // and go straight back to normal practice instead of hunting for it.
+      if (code === 404 || code === 410 || code >= 500) {
+        api.arena.abandonPractice(run.token).catch(() => undefined);
+        toast('info', 'Practice ended', 'That run is no longer available — back to practice.');
+        leave.current();
+        return;
+      }
       finishing.current = false;
       toast('error', 'Could not finish practice', (error as Error).message);
     }

@@ -7,6 +7,7 @@ itself XP.
 """
 from __future__ import annotations
 
+import logging
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -36,6 +37,8 @@ from ..schemas import BossAnswerIn, BossStartIn, PracticeAnswerIn, PracticeStart
 from ..serializers import iso, question_public, student_profile
 from ..services.questions import answer_matches, display_order, mastery_scope_update, register_question_attempt
 from ..services import study_lab
+
+log = logging.getLogger("arena.practice")
 
 router = APIRouter(prefix="/arena", tags=["arena"])
 
@@ -828,6 +831,25 @@ async def finish_practice(
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
 ) -> dict:
+    """Grade and close a run. If anything it points at has gone (a deleted
+    course, a broken question), the run is closed as ended rather than
+    failing with a server error — the client then returns to practice."""
+    try:
+        return await _finish_practice(token, elapsed_ms, db, student)
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001 — never strand a student mid-run
+        log.exception("practice finish failed for token %s; closing the run as ended", token)
+        db.rollback()
+        challenge = db.scalar(select(PracticeChallenge).where(PracticeChallenge.token == token))
+        if challenge is not None and challenge.student_id == student.id and challenge.status == "open":
+            challenge.status = "abandoned"
+            challenge.finished_at = utcnow()
+            db.commit()
+        raise HTTPException(status.HTTP_410_GONE, "This practice has ended.")
+
+
+async def _finish_practice(token: str, elapsed_ms: int, db: Session, student: Student) -> dict:
     challenge = db.scalar(select(PracticeChallenge).where(PracticeChallenge.token == token))
     if challenge is None or challenge.student_id != student.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "That run is no longer available.")
@@ -880,7 +902,7 @@ async def finish_practice(
                 "topic": entry.get("topic") or "",
                 "options": entry["options"],
                 "chosen_label": chosen_label,
-                "chosen_text": (question.options.get(answered.get("selected"), "") if answered else "") or None,
+                "chosen_text": ((question.options or {}).get(answered.get("selected"), "") if answered and isinstance(question.options, dict) else "") or None,
                 "correct_label": entry.get("correct_label"),
                 "correct_text": ", ".join(text for text in (entry.get("answer_text") or []) if text),
                 "correct": bool(answered and answered.get("correct")),
@@ -909,7 +931,7 @@ async def finish_practice(
         student_id=student.id,
         mode=mode,
         # the ledger remembers what was practised (course + topic)
-        course_id=state.get("course_id") or None,
+        course_id=(state.get("course_id") if state.get("course_id") and db.get(Course, int(state["course_id"])) is not None else None),
         topic=str(state.get("topic") or "")[:120],
         score=score,
         correct=correct,
