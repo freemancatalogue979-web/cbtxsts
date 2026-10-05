@@ -575,7 +575,7 @@ function NotesTab({scope, topic}: {scope: string; topic: string}) {
   };
 
   return (
-    <Section title="Notes" description="Private to you. Saved automatically on this device." action={<span className="pro-meta">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? 'Saved' : ''}</span>}>
+    <Section icon={<NotebookPen />} hue="amber" title="Notes" description="Private to you. Saved automatically on this device." action={<span className="pro-meta">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? 'Saved' : ''}</span>}>
       <textarea
         className="pro-input pro-read min-h-[18rem] w-full resize-y py-3"
         style={{maxWidth: 'none'}}

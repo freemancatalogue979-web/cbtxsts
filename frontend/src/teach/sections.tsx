@@ -2,6 +2,7 @@
  *  teach CTA and a learning snapshot. Token-driven, so they fit both the Pro
  *  workspace and the Standard arena skin (game.css). The slime only appears in
  *  Standard mode; Pro never shows mascots. */
+import {useExperience} from '../lib/mode';
 import {BadgeCheck, BookOpen, CheckCircle2, GraduationCap, Inbox, MessageSquare, Presentation, Search, ShieldCheck, Sparkles, Star, UserPlus, Users} from 'lucide-react';
 import Character from '../components/Character';
 import {PageBanner} from '../components/ui';
@@ -10,6 +11,7 @@ import {goTo, subjectLook, useArena} from './ui';
 
 export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: Catalog | null; learning: Learning | null; groups: number | null; onFind: () => void; compact?: boolean}) {
   const arena = useArena();
+  const calm = useExperience().mode === 'normal';
   const mine = learning?.teachers.filter((t) => t.relationship.status === 'active').length ?? 0;
   if (compact && arena) {
     const shared = (learning?.materials.length ?? 0) + (learning?.quizzes.length ?? 0);
@@ -94,7 +96,7 @@ export function HubHero({catalog, learning, groups, onFind, compact}: {catalog: 
           </button>
         </div>
       </div>
-      {arena ? (
+      {arena && !calm ? (
         <Character mood="idle" size={128} className="t-hub-slime max-md:!w-[84px] max-md:!h-[94px]" label="Genesis slime" />
       ) : (
         <div className="t-hub-art" aria-hidden>

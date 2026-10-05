@@ -875,7 +875,7 @@
 /* Normal mode — the Standard layout, minus the game dressing: no slime,
    mascots, avatars-as-characters or scenery, no neon glows or gold-gradient
    titles, a flat calm backdrop and no decorative looping motion. */
-[data-mode='normal'] :is(.hero-sprite, .mascot, .scenery, .t-hub-slime, .hero-mote, .hero-aura, .hero-frame-spin, .victory-classic, .victory-confetti, .victory-dragon, .victory-galaxy, .fx-answer-sparkle, .fx-answer-perfect, .fx-answer-knowledge) {
+[data-mode='normal'] :is(.hero-sprite, .mascot, .scenery, .t-hub-slime, .ag-hero__companion, .hero-mote, .hero-aura, .hero-frame-spin, .victory-classic, .victory-confetti, .victory-dragon, .victory-galaxy, .fx-answer-sparkle, .fx-answer-perfect, .fx-answer-knowledge) {
   display: none !important;
 }
 [data-mode='normal'] .aurora::before {
