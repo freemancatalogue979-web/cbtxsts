@@ -54,7 +54,7 @@ import {
 import {createPortal} from 'react-dom';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton, PageBanner} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Modal, ProgressBar, SectionHeading, Segmented, Skeleton, PageBanner, askConfirm, Select} from '../components/ui';
 import {DifficultyChip, QuestionCard} from '../components/QuestionCard';
 import Character from '../components/Character';
 import {AnswerFeedback, AnswerTile} from '../components/GameQuestion';
@@ -439,7 +439,7 @@ function MyNotesTab({
   };
 
   const remove = async (note: MaterialNote) => {
-    if (!window.confirm(`Delete “${titleOf(note)}”? You can undo this straight after.`)) return;
+    if (!(await askConfirm(`Delete “${titleOf(note)}”? You can undo this straight after.`))) return;
     try {
       await api.materials.removeNote(materialId, note.id);
       setNotes((current) => current.filter((item) => item.id !== note.id));
@@ -615,7 +615,7 @@ function MyNotesTab({
             />
             <label className="block min-w-0 text-[0.74rem] font-bold text-mist-400">
               About
-              <select
+              <Select
                 value={form.section_id ?? ''}
                 onChange={(event) => setForm({...form, section_id: event.target.value ? Number(event.target.value) : null})}
                 className="mt-1 h-10 w-full min-w-0 rounded-xl border border-white/12 bg-ink-950/60 px-3 text-[0.86rem] text-mist-100 outline-none focus:border-nova-400/50"
@@ -626,7 +626,7 @@ function MyNotesTab({
                     {section.position}. {section.title}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             {form.quote ? <p className="truncate text-[0.72rem] text-mist-500">Quoting: “{form.quote}”</p> : null}
           </div>
@@ -1964,7 +1964,7 @@ export default function MaterialsPanel() {
                 </button>
               ) : null}
             </label>
-            <select
+            <Select
               value={difficulty}
               onChange={(event) => setDifficulty(event.target.value)}
               className="min-w-0 rounded-xl border border-white/12 bg-ink-950/60 px-2.5 py-2.5 text-[0.82rem] font-bold text-mist-200 outline-none"
@@ -1973,7 +1973,7 @@ export default function MaterialsPanel() {
               <option value="beginner">Beginner</option>
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
-            </select>
+            </Select>
           </div>
 
           {topics.length ? (

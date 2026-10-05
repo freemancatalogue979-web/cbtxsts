@@ -516,7 +516,24 @@ function AdminProfile({onSettings, onExit, onSwitch}: {onSettings: () => void; o
 export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; onSwitchToPlayer?: () => void}) {
   const {profile} = useSession();
   const teacherOnly = String((profile as unknown as {role?: string} | null)?.role || '') === 'teacher';
-  const [section, setSection] = useState<Section>(teacherOnly ? 'institutions' : 'overview');
+  // Remember the open section so a reload (phone discarded the tab, an app
+  // update) lands back on the same screen instead of the overview.
+  const [section, setSection] = useState<Section>(() => {
+    try {
+      const saved = sessionStorage.getItem('ag.admin.section') as Section | null;
+      if (saved && SECTIONS.some((row) => row.id === saved)) return saved;
+    } catch {
+      /* storage blocked */
+    }
+    return teacherOnly ? 'institutions' : 'overview';
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('ag.admin.section', section);
+    } catch {
+      /* ignore */
+    }
+  }, [section]);
   // Bumping the key remounts a section so it re-fetches after a mutation.
   const [bump, setBump] = useState(0);
   const [tutorPrompt, setTutorPrompt] = useState('');

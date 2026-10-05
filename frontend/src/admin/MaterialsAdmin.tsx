@@ -37,7 +37,7 @@ import {
   Wand2, BookOpenIcon, HistoryIcon, Link2Icon, StickyNoteIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput, SwitchRow} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, SectionHeading, Segmented, Select, Skeleton, TextArea, TextInput, SwitchRow, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -374,8 +374,8 @@ function MaterialEditor({
     void load();
   }, [load]);
 
-  const leave = () => {
-    if (dirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+  const leave = async () => {
+    if (dirty && !(await askConfirm('You have unsaved changes. Leave without saving?'))) return;
     onBack();
   };
 
@@ -442,7 +442,7 @@ function MaterialEditor({
 
   const restore = async (row: VersionRow, label = 'Version restored') => {
     if (materialId === 'new') return;
-    if (dirty && !window.confirm('Discard your unsaved changes and restore this version?')) return;
+    if (dirty && !(await askConfirm('Discard your unsaved changes and restore this version?'))) return;
     try {
       await api.materials.restoreVersion(materialId, row.id);
       toast('success', label, 'The restore is saved as a new version, so you can undo it too.');
@@ -806,7 +806,7 @@ function MaterialEditor({
                   icon={<Trash2 className="size-4" />}
                   onClick={async () => {
                     const extra = noteCount ? ` Its ${noteCount} note${noteCount === 1 ? '' : 's'} will stay in the course's Notes tab.` : '';
-                    if (!window.confirm(`Delete this ${noun} for good?${extra}`)) return;
+                    if (!(await askConfirm(`Delete this ${noun} for good?${extra}`))) return;
                     try {
                       await api.materials.remove(materialId);
                       toast('success', `${isNote ? 'Note' : 'Material'} deleted`);
@@ -1096,7 +1096,7 @@ function MaterialNotes({
   };
 
   const remove = async (row: MaterialCard) => {
-    if (!window.confirm(`Delete “${row.title}”? You can undo this straight after.`)) return;
+    if (!(await askConfirm(`Delete “${row.title}”? You can undo this straight after.`))) return;
     try {
       const snapshot = await api.materials.adminRead(row.id);
       await api.materials.remove(row.id);
@@ -1707,7 +1707,7 @@ function MaterialsTab({
   };
 
   const remove = async (row: MaterialCard) => {
-    if (!window.confirm(`Delete “${row.title}”?`)) return;
+    if (!(await askConfirm(`Delete “${row.title}”?`))) return;
     try {
       await api.materials.remove(row.id);
       toast('info', `${isNotes ? 'Note' : 'Material'} deleted`);

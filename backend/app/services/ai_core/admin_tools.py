@@ -700,3 +700,148 @@ def propose_player_changes(ctx: ToolContext, args: dict) -> dict:
     if problems:
         out["skipped"] = problems[:20]
     return out
+
+
+# ------------------------------------------------- direct question deletion
+# Full power on request: the admin asked for it, so these act immediately (no
+# proposal). Every deleted question is snapshotted into the audit log first so
+# restore_deleted_questions can bring it back exactly as it was.
+MAX_DIRECT_DELETE = 500
+
+
+def _snapshot(q: Question) -> dict:
+    from datetime import date, datetime
+
+    out = {}
+    for col in Question.__table__.columns:
+        v = getattr(q, col.key, None)
+        out[col.key] = v.isoformat() if isinstance(v, (datetime, date)) else v
+    return out
+
+
+def _delete_now(ctx: ToolContext, rows: list[Question], reason: str, batch: str) -> list[int]:
+    from ..questions import audit
+
+    actor = ctx.admin.email if ctx.admin else "ai"
+    ids = []
+    for q in rows:
+        audit(ctx.db, actor=actor, action="question.delete", target_type="question", target_id=q.id,
+              detail={"via": "ai_direct", "batch": batch, "reason": reason[:200], "text": (q.text or "")[:120], "snapshot": _snapshot(q)})
+        ids.append(q.id)
+        ctx.db.delete(q)
+    ctx.db.flush()
+    return ids
+
+
+@tool(
+    "delete_questions",
+    description=("DELETE questions right now (no review step) when the admin asks to delete/remove them. Give the question ids "
+                 "(find them with search_questions / analyze_question_bank). Also accepts a whole topic of a course. Deleted questions are "
+                 "snapshotted and can be brought back with restore_deleted_questions."),
+    parameters={"type": "object", "properties": {
+        "course_id": COURSE_ID,
+        "question_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": MAX_DIRECT_DELETE},
+        "topic": {"type": "string", "maxLength": 120, "description": "Delete every bank question tagged with this topic in the course."},
+        "reason": {"type": "string", "maxLength": 200},
+    }, "required": ["course_id"]},
+    roles=STAFF, label="Deleting questions", writes=True, staff_only=True,
+)
+def delete_questions(ctx: ToolContext, args: dict) -> dict:
+    import uuid
+
+    course = _course(ctx, args["course_id"])
+    stmt = select(Question).where(Question.course_id == course.id)
+    if args.get("question_ids"):
+        stmt = stmt.where(Question.id.in_(args["question_ids"]))
+    elif args.get("topic"):
+        stmt = stmt.where(func.lower(Question.topic) == str(args["topic"]).strip().lower())
+    else:
+        raise ToolError("Say which questions: give question_ids or a topic.")
+    rows = list(ctx.db.scalars(stmt.limit(MAX_DIRECT_DELETE)).all())
+    if not rows:
+        raise ToolError("No matching questions in this course.")
+    batch = uuid.uuid4().hex[:10]
+    ids = _delete_now(ctx, rows, str(args.get("reason") or ""), batch)
+    return {"deleted": len(ids), "question_ids": ids[:60], "batch": batch, "course": course.code,
+            "summary": f"Deleted {len(ids)} question(s) from {course.code}. They can be restored with batch {batch}."}
+
+
+@tool(
+    "remove_duplicate_questions",
+    description=("Find near-duplicate questions in a course bank and DELETE the extra copies right now, keeping the best copy of each group "
+                 "(has explanation, has topic, oldest). Use when the admin asks to remove/clean duplicates. Restorable with restore_deleted_questions."),
+    parameters={"type": "object", "properties": {"course_id": COURSE_ID, "threshold": {"type": "number", "minimum": 0.8, "maximum": 0.99}}, "required": ["course_id"]},
+    roles=STAFF, label="Removing duplicate questions", writes=True, staff_only=True,
+)
+def remove_duplicate_questions(ctx: ToolContext, args: dict) -> dict:
+    import uuid
+
+    course = _course(ctx, args["course_id"])
+    rows = list(ctx.db.scalars(_bank(course.id)).all())
+    groups = duplicate_groups(rows, threshold=float(args.get("threshold") or 0.9))
+    if not groups:
+        return {"checked": len(rows), "deleted": 0, "summary": f"No duplicates found among {len(rows)} questions."}
+    by_id = {q.id: q for q in rows}
+    drop = [by_id[d] for g in groups for d in g["drop"] if d in by_id][:MAX_DIRECT_DELETE]
+    batch = uuid.uuid4().hex[:10]
+    ids = _delete_now(ctx, drop, "duplicate", batch)
+    return {"checked": len(rows), "groups": len(groups), "deleted": len(ids), "kept": [g["keep"] for g in groups][:60], "batch": batch,
+            "summary": f"Removed {len(ids)} duplicate(s) in {len(groups)} group(s) from {course.code}; the best copy of each was kept. Restorable with batch {batch}."}
+
+
+@tool(
+    "restore_deleted_questions",
+    description="Bring back questions deleted by the assistant (or in the console): give the batch id from a delete, or question ids.",
+    parameters={"type": "object", "properties": {
+        "batch": {"type": "string", "maxLength": 20},
+        "question_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "maxItems": MAX_DIRECT_DELETE},
+    }},
+    roles=STAFF, label="Restoring deleted questions", writes=True, staff_only=True,
+)
+def restore_deleted_questions(ctx: ToolContext, args: dict) -> dict:
+    from datetime import date, datetime
+
+    from sqlalchemy import Date, DateTime
+
+    from ...models import AuditLog
+    from ..questions import audit
+
+    stmt = select(AuditLog).where(AuditLog.action == "question.delete", AuditLog.target_type == "question").order_by(AuditLog.id.desc())
+    if args.get("question_ids"):
+        stmt = stmt.where(AuditLog.target_id.in_(args["question_ids"]))
+    elif not args.get("batch"):
+        raise ToolError("Give the batch id from the delete, or the question ids.")
+    restored, skipped = [], []
+    seen = set()
+    for log_row in ctx.db.scalars(stmt.limit(2000)).all():
+        detail = log_row.detail or {}
+        if args.get("batch") and detail.get("batch") != args["batch"]:
+            continue
+        snap = detail.get("snapshot")
+        if not snap or log_row.target_id in seen:
+            continue
+        seen.add(log_row.target_id)
+        if ctx.db.get(Question, log_row.target_id) is not None:
+            skipped.append(log_row.target_id)
+            continue
+        values = {}
+        for col in Question.__table__.columns:
+            if col.key not in snap:
+                continue
+            v = snap[col.key]
+            if v is not None and isinstance(col.type, DateTime) and isinstance(v, str):
+                v = datetime.fromisoformat(v)
+            elif v is not None and isinstance(col.type, Date) and isinstance(v, str):
+                v = date.fromisoformat(v)
+            values[col.key] = v
+        if values.get("quiz_id") and ctx.db.get(Quiz, values["quiz_id"]) is None:
+            skipped.append(log_row.target_id)
+            continue
+        ctx.db.add(Question(**values))
+        restored.append(log_row.target_id)
+    ctx.db.flush()
+    for qid in restored:
+        audit(ctx.db, actor=ctx.admin.email if ctx.admin else "ai", action="question.restore_deleted", target_type="question", target_id=qid, detail={"via": "ai_direct"})
+    if not restored and not skipped:
+        raise ToolError("Nothing to restore for that batch / those ids.")
+    return {"restored": len(restored), "question_ids": restored[:60], "already_present_or_missing_exam": skipped[:30]}

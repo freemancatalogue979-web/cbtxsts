@@ -28,6 +28,11 @@ export default defineConfig({
     port: 5173,
     // Preview tunnels (https://<port>-<sandbox>.e2b.app) must be accepted.
     allowedHosts: true,
+    // Vite's live-reload socket force-RELOADS the page whenever it reconnects
+    // (phone locked, signal blip, tunnel hiccup) — players lose their place.
+    // The app reconnects its own socket and refreshes data in place, so the
+    // dev socket stays off unless a developer opts in with VITE_HMR=1.
+    hmr: process.env.VITE_HMR === '1' ? undefined : false,
     proxy,
   },
   preview: {

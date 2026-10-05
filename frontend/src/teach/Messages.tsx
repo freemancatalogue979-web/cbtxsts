@@ -8,6 +8,7 @@ import {Empty, LoadingRows, PageHeader} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
 import {ActionMenu, PersonAvatar, ProScope, activeLabel, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
+import {askConfirm} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 const ROLE_LABEL: Record<Conversation['role'], string> = {teacher: 'Your teacher', student: 'Your student', request: 'Request', friend: 'Friend'};
@@ -276,7 +277,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   };
 
   const block = async () => {
-    if (!window.confirm(`Block ${other?.name ?? 'this person'}? Neither of you will be able to message the other.`)) return;
+    if (!(await askConfirm(`Block ${other?.name ?? 'this person'}? Neither of you will be able to message the other.`))) return;
     await teachers.block(otherId);
     toast('info', 'Blocked');
     onChanged();

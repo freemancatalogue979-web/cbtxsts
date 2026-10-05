@@ -12,7 +12,7 @@ import {
   Target, ThumbsDown, ThumbsUp, Trash2, X, Ghost, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, Switch, SwitchRow, PillSelect} from '../components/ui';
+import {Button, Field, Modal, Select, Skeleton, TextArea, TextInput, copyText, Switch, SwitchRow, PillSelect, askConfirm} from '../components/ui';
 import {DeckView, GenerateSheet, LibraryView, MaterialView, NotesView, PlanView, QuizView, toolFromResult, type GenRequest, type ToolState} from '../components/tutor/TutorTools';
 import {Markdown} from '../lib/markdown';
 import {formatRelative} from '../lib/format';
@@ -664,7 +664,7 @@ export default function TutorPanel() {
               onUpload={() => docInput.current?.click()}
               onUseUpload={(u) => { setLibrary(false); setAttached({context: {upload_id: u.id}, label: u.title}); inputRef.current?.focus(); }}
               onDeleteUpload={async (u) => {
-                if (!window.confirm(`Delete "${u.title}"?`)) return;
+                if (!(await askConfirm(`Delete "${u.title}"?`))) return;
                 try {
                   await tutorApi.deleteUpload(u.id);
                   setUploads((list) => list.filter((x) => x.id !== u.id));
@@ -935,7 +935,7 @@ function ChatRow({chat, active, onOpen, onRename, onArchive, onDelete}: {chat: C
           <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); onArchive(); }}>
             {chat.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} {chat.archived ? 'Unarchive' : 'Archive'}
           </button>
-          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-flare-300 hover:bg-flare-500/10" onClick={() => { setMenu(false); if (window.confirm('Delete this chat?')) onDelete(); }}>
+          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-flare-300 hover:bg-flare-500/10" onClick={async () => { setMenu(false); if (await askConfirm('Delete this chat?')) onDelete(); }}>
             <Trash2 className="size-3.5" /> Delete
           </button>
         </div>

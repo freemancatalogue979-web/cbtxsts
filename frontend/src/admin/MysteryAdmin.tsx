@@ -8,7 +8,7 @@
  */
 import {ChevronDown, ChevronRight, Eye, Moon, Package, Pencil, Plus, Trash2, SearchIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput, TopicChip} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput, TopicChip, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -74,7 +74,7 @@ export default function MysteryAdmin() {
   }, [load]);
 
   const remove = async (row: CaseRow) => {
-    if (!window.confirm(`Delete “${row.title}” and every solve attached to it?`)) return;
+    if (!(await askConfirm(`Delete “${row.title}” and every solve attached to it?`))) return;
     try {
       await api.admin.mysteryDelete(row.id);
       toast('info', 'Case deleted');

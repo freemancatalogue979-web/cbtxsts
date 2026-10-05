@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from .. import game
@@ -113,6 +113,7 @@ def _pool(
     course_id: int | None = None,
     quiz_id: int | None = None,
     topic: str = "",
+    topics: list[str] | None = None,
     difficulty: str = "",
     adaptive_student: Student | None = None,
     adaptive: bool = True,
@@ -136,7 +137,13 @@ def _pool(
         stmt = stmt.where(Question.course_id == course_id, Question.source_id.is_(None), Question.exam_only.is_(False))
     else:
         stmt = stmt.where(Question.source_id.is_(None), Question.exam_only.is_(False))
-    if topic:
+    if topics:
+        named = [t.lower() for t in topics if t]
+        clauses = [func.lower(Question.topic).in_(named)] if named else []
+        if "" in topics:  # untagged questions ("General")
+            clauses += [Question.topic.is_(None), Question.topic == ""]
+        stmt = stmt.where(or_(*clauses))
+    elif topic:
         stmt = stmt.where(func.lower(Question.topic) == topic.lower())
     if difficulty:
         stmt = stmt.where(Question.difficulty == difficulty.lower())
@@ -249,7 +256,7 @@ def _run_payload(db: Session, challenge: PracticeChallenge, *, include_answers: 
             if course
             else None
         ),
-        "topic": state.get("topic") or "",
+        "topic": state.get("topic") or state.get("topic_label") or "",
         "requested_size": int(state.get("requested_size") or len(ids)),
         "xp_rate": CUSTOM_XP_PER_CORRECT,
         "target_score": 0,
@@ -581,9 +588,17 @@ def _start_custom(payload: PracticeStartIn, db: Session, student: Student) -> di
         previous.finished_at = utcnow()
 
     topic = (payload.topic or "").strip()
-    pool = _pool(db, course_id=course.id, topic=topic, strict=True)
+    mixed: list[str] = []
+    for t in payload.topics or []:
+        t = str(t).strip()[:120]
+        if t.lower() not in {m.lower() for m in mixed}:
+            mixed.append(t)
+    if len(mixed) == 1 and mixed[0]:
+        topic, mixed = mixed[0], []  # one named topic: the classic single-topic run
+    label = " + ".join(m or "General" for m in mixed)[:200]
+    pool = _pool(db, course_id=course.id, topic="" if mixed else topic, topics=mixed or None, strict=True)
     if not pool:
-        scope = f" for {topic}" if topic else f" for {course.title}"
+        scope = f" for {label or topic}" if (label or topic) else f" for {course.title}"
         raise HTTPException(status.HTTP_409_CONFLICT, f"No practice questions are available{scope} yet.")
 
     available = len(pool)
@@ -592,7 +607,7 @@ def _start_custom(payload: PracticeStartIn, db: Session, student: Student) -> di
         requested = min(DEFAULT_CUSTOM_SIZE, available)
     if requested > available:
         raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Only {available} questions are available for this topic."
+            status.HTTP_409_CONFLICT, f"Only {available} questions are available for {'these topics' if mixed else 'this topic'}."
         )
 
     # Random unique selection + random order for this session only — the bank
@@ -626,7 +641,9 @@ def _start_custom(payload: PracticeStartIn, db: Session, student: Student) -> di
             "course_id": course.id,
             "course_code": course.code,
             "course_title": course.title,
-            "topic": topic,
+            "topic": "" if mixed else topic,
+            "topics": mixed,
+            "topic_label": label,
             "requested_size": requested,
             "target_score": 0,
             "powerups": {},

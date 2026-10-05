@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput, askConfirm} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES} from '../lib/format';
 import {useSession} from '../store/session';
@@ -78,7 +78,7 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
   };
 
   const remove = async (player: PlayerSummary) => {
-    if (!window.confirm(`Delete ${player.name}? All their attempts, duels and XP go too.`)) return;
+    if (!(await askConfirm(`Delete ${player.name}? All their attempts, duels and XP go too.`))) return;
     try {
       await api.admin.deleteStudent(player.id);
       toast('info', 'Player deleted');
@@ -452,7 +452,7 @@ function ResultsTab({onChanged}: {onChanged: () => void}) {
 
   const clearAll = async () => {
     if (!quizId) return;
-    if (!window.confirm('Delete every attempt for this exam? Players lose the XP they earned from it.')) return;
+    if (!(await askConfirm('Delete every attempt for this exam? Players lose the XP they earned from it.'))) return;
     try {
       await api.admin.clearResults(quizId);
       toast('info', 'Results cleared');

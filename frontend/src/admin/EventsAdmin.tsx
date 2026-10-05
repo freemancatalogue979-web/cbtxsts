@@ -9,7 +9,7 @@
  */
 import {useCallback, useEffect, useState} from 'react';
 import {CalendarDays, Clock, Loader2, Pencil, Plus, Trash2, Trophy, Users, Zap, CalendarDaysIcon} from 'lucide-react';
-import {Button, Card, Chip, Field, Modal, PageBanner, Select, SwitchRow, TextInput} from '../components/ui';
+import {Button, Card, Chip, Field, Modal, PageBanner, Select, SwitchRow, TextInput, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {uiClick} from '../lib/sfx';
@@ -219,7 +219,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
   };
 
   const remove = async (event: ArenaEventSummary) => {
-    if (!window.confirm(`Delete "${event.name}"? This cannot be undone.`)) return;
+    if (!(await askConfirm(`Delete "${event.name}"? This cannot be undone.`))) return;
     uiClick('cancel');
     try {
       await api.adminDeleteEvent(event.id);

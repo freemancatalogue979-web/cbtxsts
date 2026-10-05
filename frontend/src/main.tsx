@@ -4,6 +4,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {ErrorBoundary} from './components/ErrorBoundary.tsx';
+import {ConfirmHost} from './components/ui.tsx';
 import {music} from './lib/music';
 import {applyFont, applyMode, applySkin, currentFont, currentMode, currentSkin} from './lib/prefs';
 import {sfx} from './lib/sfx';
@@ -65,6 +66,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary label="app">
       <SessionProvider>
         <App />
+        <ConfirmHost />
       </SessionProvider>
     </ErrorBoundary>
   </StrictMode>,

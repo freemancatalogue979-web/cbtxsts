@@ -6,6 +6,7 @@ import {fileUrl, formatBytes, teachers, type TAttempt, type TMaterial, type TQui
 import {Badge, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, Sheet, VerifiedMark, timeAgo} from './ui';
+import {askConfirm} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
@@ -187,8 +188,8 @@ export function QuizRunner({quizId, onClose}: {quizId: number | null; onClose: (
     });
   };
 
-  const close = () => {
-    if (running && !window.confirm('Leave the quiz? Your answers are saved and the timer keeps running.')) return;
+  const close = async () => {
+    if (running && !(await askConfirm('Leave the quiz? Your answers are saved and the timer keeps running.'))) return;
     onClose();
   };
 

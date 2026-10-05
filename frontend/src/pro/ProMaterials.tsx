@@ -12,6 +12,7 @@ import type {MaterialCard, MaterialDetail, MyLearning} from '../lib/types';
 import {Reader} from '../panels/MaterialsPanel';
 import {useSession} from '../store/session';
 import {Badge, Empty, LoadingRows, Metric, PageHeader, Ring, Seg, Tile, hueForCourse, minutesLabel, type Hue, Cover} from './ui';
+import {Select} from '../components/ui';
 
 type CourseRow = {id: number; code: string; title: string; accent?: string};
 type View = 'library' | 'notes' | 'bookmarks' | 'glossary';
@@ -194,24 +195,24 @@ export default function ProMaterials() {
             </label>
             <div className="flex min-w-0 flex-wrap gap-2 md:flex-nowrap">
               {courses.length > 0 && (
-                <select className="pro-input min-w-0 flex-1 md:w-44 md:flex-none" value={courseId} onChange={(e) => setCourseId(Number(e.target.value))} aria-label="Course">
+                <Select className="pro-input min-w-0 flex-1 md:w-44 md:flex-none" value={courseId} onChange={(e) => setCourseId(Number(e.target.value))} aria-label="Course">
                   <option value={0}>All courses</option>
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.code}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
               {topics.length > 0 && (
-                <select className="pro-input min-w-0 flex-1 md:w-48 md:flex-none" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
+                <Select className="pro-input min-w-0 flex-1 md:w-48 md:flex-none" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
                   <option value="">All topics</option>
                   {topics.map((t) => (
                     <option key={t.topic} value={t.topic}>
                       {t.topic} ({t.count})
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             </div>
           </div>

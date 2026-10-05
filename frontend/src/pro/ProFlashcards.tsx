@@ -9,6 +9,7 @@ import {api} from '../lib/api';
 import {DECK_PRESETS, StudyView, type DeckPayload, type Progress as DeckProgress} from '../panels/FlashcardsPanel';
 import {useSession} from '../store/session';
 import {Badge, Empty, LoadingRows, Metric, PageHeader, Progress, Ring, Tile, type Hue} from './ui';
+import {Select} from '../components/ui';
 
 const KIND_HUE: Record<string, Hue> = {daily: 'blue', weakness: 'rose', wrong: 'rose', recent: 'teal', favorites: 'amber', mixed: 'violet', custom: 'green'};
 
@@ -248,12 +249,12 @@ export default function ProFlashcards() {
             </label>
             <label className="grid gap-1.5">
               <span className="pro-meta font-medium">Difficulty</span>
-              <select className="pro-input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+              <Select className="pro-input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
                 <option value="">Any</option>
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
-              </select>
+              </Select>
             </label>
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" className="pro-btn pro-btn-ghost" onClick={() => setCreating(false)}>Cancel</button>

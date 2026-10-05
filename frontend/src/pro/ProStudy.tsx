@@ -16,6 +16,7 @@ import {useSession} from '../store/session';
 import {AI_ACTIONS, askAbout, createMiniExam, practiseTopic} from './actions';
 import {setFocus, useFocus} from './focus';
 import {Badge, Chip, Cover, Empty, LoadingRows, PageHeader, Ring, Section, Tile, hueForCourse, pct, toneFor, type Hue} from './ui';
+import {Select} from '../components/ui';
 
 type Json = Record<string, any>;
 type CourseRow = {id: number; code: string; title: string; accent?: string; available: number; topics: {topic: string; key: string; count: number}[]};
@@ -255,7 +256,7 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
         }
         actions={
           course && course.topics.length > 1 ? (
-            <select
+            <Select
               className="pro-input w-auto max-w-[16rem]"
               aria-label="Switch topic"
               value={course.topics.find((t) => t.topic.toLowerCase() === topic.toLowerCase())?.topic ?? ''}
@@ -266,7 +267,7 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
                   {t.topic}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : undefined
         }
       />

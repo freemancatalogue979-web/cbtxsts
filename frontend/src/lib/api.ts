@@ -639,6 +639,7 @@ export const api = {
       course_id?: number | null;
       quiz_id?: number | null;
       topic?: string;
+      topics?: string[];
       difficulty?: string;
       lives?: number;
       time_limit_seconds?: number;

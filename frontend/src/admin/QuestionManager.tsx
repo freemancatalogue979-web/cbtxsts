@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Avatar, Button, Card, Chip, DifficultyChip, EmptyState, Field, Modal, PillSelect, Select, Skeleton, SwitchRow, TextArea, TextInput, TopicChip} from '../components/ui';
+import {Avatar, Button, Card, Chip, DifficultyChip, EmptyState, Field, Modal, PillSelect, Select, Skeleton, SwitchRow, TextArea, TextInput, TopicChip, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -393,7 +393,7 @@ export default function QuestionManager({
   };
 
   const remove = async (question: QuestionPublic) => {
-    if (!window.confirm('Delete this question?')) return;
+    if (!(await askConfirm('Delete this question?'))) return;
     try {
       await api.admin.deleteQuestion(question.id);
       toast('info', 'Question deleted');

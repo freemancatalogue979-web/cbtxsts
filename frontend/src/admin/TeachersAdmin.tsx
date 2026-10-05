@@ -3,7 +3,7 @@ import {BadgeCheck, Ban, Check, CircleHelp, Eye, EyeOff, FileText, Flag, Graduat
 import {useCallback, useEffect, useState} from 'react';
 import {ApiError} from '../lib/api';
 import {FORMAT_LABEL, fileUrl, teacherAdmin, type AdminReport, type AdminTeacherDetail, type AdminTeacherRow} from '../lib/teachers';
-import {PageBanner} from '../components/ui';
+import {PageBanner, askConfirm} from '../components/ui';
 import {Empty, LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, timeAgo} from '../teach/ui';
@@ -441,7 +441,7 @@ function Reports({onChanged, onOpenTeacher}: {onChanged: () => void; onOpenTeach
   }, [state]);
   useEffect(load, [load]);
   const decide = async (r: AdminReport, status: 'resolved' | 'dismissed', action = 'none') => {
-    if (action === 'suspend_teacher' && !window.confirm('Suspend this teacher? Their profile is hidden immediately.')) return;
+    if (action === 'suspend_teacher' && !(await askConfirm('Suspend this teacher? Their profile is hidden immediately.'))) return;
     try {
       await teacherAdmin.decideReport(r.id, status, action);
       toast('success', status === 'dismissed' ? 'Report dismissed' : 'Report resolved');

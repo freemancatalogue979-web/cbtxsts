@@ -10,6 +10,7 @@ import {
   type TutorOverview, type TutorQuality,
 } from '../lib/tutor';
 import {useSession} from '../store/session';
+import {useSessionState} from '../lib/useSessionState';
 import AIAssistant from './AIAssistant';
 
 type Tab = 'overview' | 'assistant' | 'settings' | 'usage' | 'costs' | 'users' | 'conversations' | 'models' | 'limits' | 'logs' | 'features';
@@ -73,7 +74,8 @@ const errText = (e: unknown) => (e as Error).message || 'Something went wrong.';
 export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
   const {toast, profile} = useSession();
   const teacherOnly = String((profile as unknown as {role?: string} | null)?.role || '') === 'teacher';
-  const [tab, setTab] = useState<Tab>(initialPrompt ? 'assistant' : 'overview');
+  const [savedTab, setTab] = useSessionState<Tab>('ag.admin.tutor.tab', 'overview', (v) => ['overview', 'assistant', 'settings', 'usage', 'costs', 'users', 'conversations', 'models', 'limits', 'logs', 'features'].includes(v));
+  const tab: Tab = initialPrompt && savedTab === 'overview' ? 'assistant' : savedTab;
   const [range, setRange] = useState<AdminRange>({range: '7d'});
   const [settings, setSettings] = useState<TutorAdminSettings | null>(null);
   const [saved, setSaved] = useState<TutorAdminSettings | null>(null);

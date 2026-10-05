@@ -8,6 +8,7 @@ import {Empty, LoadingRows, Seg} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, VisibilityBadge} from './content';
 import {Field, PersonAvatar, Sheet, StatusPill, timeAgo} from './ui';
+import {askConfirm, Select} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
@@ -25,13 +26,13 @@ function VisibilityPicker({value, groupId, groups, onChange}: {value: Visibility
         </div>
       </Field>
       {value === 'group' && (
-        <select className="pro-input" value={groupId ?? ''} onChange={(e) => onChange('group', Number(e.target.value))} aria-label="Group">
+        <Select className="pro-input" value={groupId ?? ''} onChange={(e) => onChange('group', Number(e.target.value))} aria-label="Group">
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
             </option>
           ))}
-        </select>
+        </Select>
       )}
     </div>
   );
@@ -113,7 +114,7 @@ export function StudioMaterials({groups}: {groups: TGroup[]}) {
   useEffect(load, [load]);
   const shown = (items ?? []).filter((m) => filter === 'all' || m.visibility === filter);
   const remove = async (m: TMaterial) => {
-    if (!window.confirm(`Delete “${m.title}”? Students lose access.`)) return;
+    if (!(await askConfirm(`Delete “${m.title}”? Students lose access.`))) return;
     try {
       await teachers.deleteMaterial(m.id);
       load();
@@ -458,8 +459,8 @@ export function StudioQuizzes({groups}: {groups: TGroup[]}) {
                   className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm"
                   aria-label="Delete"
                   title="Delete"
-                  onClick={() => {
-                    if (window.confirm(`Delete “${q.title}”? Quizzes with attempts are archived instead.`)) void act(() => teachers.deleteQuiz(q.id), 'Quiz removed');
+                  onClick={async () => {
+                    if ((await askConfirm(`Delete “${q.title}”? Quizzes with attempts are archived instead.`))) void act(() => teachers.deleteQuiz(q.id), 'Quiz removed');
                   }}
                 >
                   <Trash2 className="size-4" />
@@ -709,13 +710,13 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
         <span className="pro-badge" data-tone="accent">
           Q{index + 1}
         </span>
-        <select className="pro-input !h-9 !w-auto !py-0 text-[0.82rem]" value={q.kind} onChange={(e) => setKind(e.target.value as QKind)} aria-label="Question type">
+        <Select className="pro-input !h-9 !w-auto !py-0 text-[0.82rem]" value={q.kind} onChange={(e) => setKind(e.target.value as QKind)} aria-label="Question type">
           {(Object.keys(KIND_LABEL) as QKind[]).map((k) => (
             <option key={k} value={k}>
               {KIND_LABEL[k]}
             </option>
           ))}
-        </select>
+        </Select>
         {q.source_question_id && (
           <span className="pro-badge" data-tone="info">
             Bank
@@ -803,11 +804,11 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
               <input className="pro-input" type="number" min={1} max={20} value={q.marks} onChange={(e) => onChange({marks: Math.max(1, Math.min(20, Number(e.target.value) || 1))})} />
             </Field>
             <Field label="Difficulty">
-              <select className="pro-input" value={q.difficulty} onChange={(e) => onChange({difficulty: e.target.value as TQuestion['difficulty']})}>
+              <Select className="pro-input" value={q.difficulty} onChange={(e) => onChange({difficulty: e.target.value as TQuestion['difficulty']})}>
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
-              </select>
+              </Select>
             </Field>
           </div>
         </div>
@@ -870,13 +871,13 @@ function BankImport({open, onClose, onAdd}: {open: boolean; onClose: () => void;
       <div className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_90px_auto] sm:items-end">
           <Field label="Course">
-            <select className="pro-input" value={courseId ?? ''} onChange={(e) => setCourseId(Number(e.target.value))}>
+            <Select className="pro-input" value={courseId ?? ''} onChange={(e) => setCourseId(Number(e.target.value))}>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.code} — {c.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Topic (optional)">
             <input className="pro-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Any" />

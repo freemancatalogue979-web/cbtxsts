@@ -13,7 +13,7 @@
  */
 import {BookOpen, Check, ChevronRight, FileText, Library, Pencil, Play, Plus, ScrollText, Shuffle, Trash2, BookMarkedIcon, ClipboardListIcon, Eye} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Segmented, Select, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Segmented, Select, Skeleton, SwitchRow, TextArea, TextInput, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -216,7 +216,7 @@ function CoursesTab({onChanged, openCourseId, onOpenCourse}: {onChanged: () => v
   useEffect(load, [load]);
 
   const remove = async (course: Course) => {
-    if (!window.confirm(`Delete ${course.code}? Its exams stay but lose the course link.`)) return;
+    if (!(await askConfirm(`Delete ${course.code}? Its exams stay but lose the course link.`))) return;
     try {
       await api.admin.deleteCourse(course.id);
       toast('info', 'Course deleted');
@@ -708,7 +708,7 @@ function QuizzesTab({onChanged, onManageQuestions, onOpenBank}: {onChanged: () =
   };
 
   const remove = async (quiz: Quiz) => {
-    if (!window.confirm(`Delete “${quiz.title}” and all its attempts? This cannot be undone.`)) return;
+    if (!(await askConfirm(`Delete “${quiz.title}” and all its attempts? This cannot be undone.`))) return;
     try {
       await api.admin.deleteQuiz(quiz.id);
       toast('info', 'Exam deleted');

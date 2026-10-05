@@ -27,7 +27,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Character from '../components/Character';
 import Scenery from '../components/Scenery';
 import {AnswerTile} from '../components/GameQuestion';
-import {Button, Card, Chip, EmptyState, Modal, ProgressBar, ProgressRing, SectionHeading, Skeleton, TextInput, XpFloat} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Modal, ProgressBar, ProgressRing, SectionHeading, Skeleton, TextInput, XpFloat, Select} from '../components/ui';
 import {Holdable} from '../components/Holdable';
 import {api, type Json} from '../lib/api';
 import {formatNumber} from '../lib/format';
@@ -464,14 +464,14 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
           <span className="study-filter-icon"><Shuffle /></span>
           <span className="study-filter-copy">
             <span>Order</span>
-            <select
+            <Select
               value={String(shuffle)}
               onChange={(event) => { const value = event.target.value === 'true'; setShuffle(value); load({shuffle: value}); }}
               aria-label="Card order"
             >
               <option value="true">Shuffled</option>
               <option value="false">In order</option>
-            </select>
+            </Select>
           </span>
           <ChevronDown className="study-filter-chevron" />
         </label>
@@ -480,14 +480,14 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
           <span className="study-filter-icon"><Layers /></span>
           <span className="study-filter-copy">
             <span>Session</span>
-            <select
+            <Select
               value={dueOnly ? 'due' : 'all'}
               onChange={(event) => { const value = event.target.value === 'due'; setDueOnly(value); load({due_only: value}); }}
               aria-label="Session scope"
             >
               <option value="due">Due only</option>
               <option value="all">Whole deck</option>
-            </select>
+            </Select>
           </span>
           <ChevronDown className="study-filter-chevron" />
         </label>
@@ -496,14 +496,14 @@ export function StudyView({deckId, mode, onExit}: {deckId: number; mode: 'q_to_a
           <span className="study-filter-icon"><Bookmark /></span>
           <span className="study-filter-copy">
             <span>Cards</span>
-            <select
+            <Select
               value={bookmarkedOnly ? 'star' : 'all'}
               onChange={(event) => { const value = event.target.value === 'star'; setBookmarkedOnly(value); load({bookmarked: value}); }}
               aria-label="Card filter"
             >
               <option value="all">All cards</option>
               <option value="star">Bookmarked</option>
-            </select>
+            </Select>
           </span>
           <ChevronDown className="study-filter-chevron" />
         </label>
@@ -784,7 +784,7 @@ export default function FlashcardsPanel() {
           </label>
           <label className="grid gap-1.5">
             <span className="text-[0.76rem] font-bold text-mist-400">Difficulty</span>
-            <select
+            <Select
               value={difficulty}
               onChange={(event) => setDifficulty(event.target.value)}
               className="rounded-2xl border border-white/12 bg-ink-900/70 px-3 py-2.5 text-[0.86rem] font-semibold text-mist-100 outline-none focus:border-nova-400/60"
@@ -793,7 +793,7 @@ export default function FlashcardsPanel() {
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
-            </select>
+            </Select>
           </label>
         </div>
       </Modal>

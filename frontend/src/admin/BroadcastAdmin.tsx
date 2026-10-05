@@ -2,7 +2,7 @@
 import {Check, Gift, Megaphone, Pencil, Plus, Sparkles, Trash2, GiftIcon, MegaphoneIcon, Pin, Eye, Info, FileText, BarChart3, Swords, Trophy, Coins, Medal} from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, PillSelect, Skeleton, SwitchRow, TextArea, TextInput} from '../components/ui';
+import {Button, Card, Chip, EmptyState, Field, Modal, PageBanner, PillSelect, Skeleton, SwitchRow, TextArea, TextInput, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
@@ -68,7 +68,7 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
   };
 
   const remove = async (notice: Notice) => {
-    if (!window.confirm('Delete this announcement?')) return;
+    if (!(await askConfirm('Delete this announcement?'))) return;
     try {
       await api.admin.deleteNotification(notice.id);
       toast('info', 'Announcement deleted');
@@ -223,7 +223,7 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
   };
 
   const remove = async (prize: Prize) => {
-    if (!window.confirm(`Delete “${prize.title}”?`)) return;
+    if (!(await askConfirm(`Delete “${prize.title}”?`))) return;
     try {
       await api.admin.deletePrize(prize.id);
       toast('info', 'Prize deleted');

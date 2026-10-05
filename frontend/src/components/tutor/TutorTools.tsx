@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Save, Search, SkipForward, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
-import {Button, Chip, ChoiceCards, DifficultyChip, EmptyState, Field, Modal, PillSelect, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips, TopicChip} from '../ui';
+import {Button, Chip, ChoiceCards, DifficultyChip, EmptyState, Field, Modal, PillSelect, Segmented, Select, Skeleton, Stepper, TextArea, TextInput, ToggleChips, TopicChip, askConfirm} from '../ui';
 import {Markdown} from '../../lib/markdown';
 import {
   downloadText, materialToMarkdown, tutorApi, type Deck, type GenKind, type GenerateSource, type NotesDoc,
@@ -339,7 +339,7 @@ function DeleteButton({kind, savedId, onDeleted, label = 'Delete'}: {kind: Saved
       icon={<Trash2 className="size-4" />}
       onClick={async () => {
         if (!savedId) return onDeleted();
-        if (!window.confirm('Delete this from My AI Resources?')) return;
+        if (!(await askConfirm('Delete this from My AI Resources?'))) return;
         try {
           await tutorApi.deleteSaved(kind, savedId);
           toast('success', 'Deleted');
@@ -962,7 +962,7 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
         await tutorApi.duplicateSaved(item.kind, item.id);
         toast('success', 'Copy made');
       } else {
-        if (!window.confirm(`Delete "${item.title}"?`)) return;
+        if (!(await askConfirm(`Delete "${item.title}"?`))) return;
         await tutorApi.deleteSaved(item.kind, item.id);
         toast('success', 'Deleted');
       }

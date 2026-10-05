@@ -8,7 +8,7 @@
  */
 import {ArrowLeft, BookOpen, FileText, Hash, Library, MessageSquare, NotebookPen, Pencil, Plus, Shuffle, ScrollText, Trash2, TagIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {Button, Card, EmptyState, Field, Modal, Segmented, Skeleton, TextArea, TextInput} from '../components/ui';
+import {Button, Card, EmptyState, Field, Modal, Segmented, Skeleton, TextArea, TextInput, askConfirm} from '../components/ui';
 import {api} from '../lib/api';
 import {formatDate, formatNumber} from '../lib/format';
 import {useSession} from '../store/session';
@@ -128,7 +128,7 @@ function TopicsSection({course, onChanged}: {course: Course; onChanged: () => vo
   };
 
   const remove = async (row: CourseTopicRow) => {
-    if (!row.id || !window.confirm(`Remove “${row.name}” from the topic list? Questions and notes keep their topic label.`)) return;
+    if (!row.id || !(await askConfirm(`Remove “${row.name}” from the topic list? Questions and notes keep their topic label.`))) return;
     try {
       const payload = await api.admin.deleteCourseTopic(row.id);
       setRows(payload.topics);
@@ -234,7 +234,7 @@ function DiscussionSection({course}: {course: Course}) {
   }, [course.id, toast]);
   useEffect(load, [load]);
   const remove = async (post: CourseDiscussionPost) => {
-    if (!window.confirm('Delete this post?')) return;
+    if (!(await askConfirm('Delete this post?'))) return;
     try {
       await api.admin.deleteCourseDiscussionPost(post.id);
       toast('info', 'Post deleted');

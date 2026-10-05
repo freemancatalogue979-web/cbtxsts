@@ -1,8 +1,9 @@
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
-import {Check, CheckCircle2, Copy, Loader2, Minus, Phone, Plus, X} from 'lucide-react';
+import {AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, HelpCircle, Loader2, Minus, Phone, Plus, Search, X} from 'lucide-react';
 import {AnimatePresence, motion, useDragControls} from 'motion/react';
-import type {ButtonHTMLAttributes, ComponentType, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
-import {cloneElement, createElement, isValidElement, useCallback, useEffect, useRef, useState} from 'react';
+import type {ButtonHTMLAttributes, ChangeEvent, ComponentType, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
+import {Children, cloneElement, createElement, Fragment, isValidElement, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {avatarStyle, clamp} from '../lib/format';
 import {auraOf, frameOf, portraitOf} from '../lib/cosmetics';
 import type {CosmeticsRef} from '../lib/cosmetics';
@@ -746,11 +747,289 @@ export function TextArea({className = '', ...rest}: TextareaHTMLAttributes<HTMLT
   return <textarea className={`${CONTROL} resize-y ${className}`} {...rest} />;
 }
 
-export function Select({className = '', children, ...rest}: SelectHTMLAttributes<HTMLSelectElement>) {
+/* ---------------------------------------------------------------- pickers */
+export type PickOption = {value: string; label: string; disabled?: boolean; group?: string; hint?: string};
+
+/** Read <option>/<optgroup> children (also inside fragments, arrays, maps). */
+function optionsFrom(children: ReactNode, group?: string, out: PickOption[] = []): PickOption[] {
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    const props = child.props as {value?: unknown; children?: ReactNode; disabled?: boolean; label?: string; hidden?: boolean};
+    if (child.type === Fragment) optionsFrom(props.children, group, out);
+    else if (child.type === 'optgroup') optionsFrom(props.children, props.label, out);
+    else if (child.type === 'option') {
+      if (props.hidden) return;
+      const text = Children.toArray(props.children).map((c) => (typeof c === 'string' || typeof c === 'number' ? String(c) : '')).join('').trim();
+      out.push({value: props.value === undefined ? text : String(props.value), label: text || String(props.value ?? ''), disabled: props.disabled, group});
+    }
+  });
+  return out;
+}
+
+/** The designed list shown inside the picker sheet (single or multi). */
+function PickList({options, isOn, onPick, multi, query}: {options: PickOption[]; isOn: (v: string) => boolean; onPick: (o: PickOption) => void; multi?: boolean; query: string}) {
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? options.filter((o) => `${o.label} ${o.hint ?? ''} ${o.group ?? ''}`.toLowerCase().includes(needle)) : options;
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>('[data-on="true"]')?.scrollIntoView({block: 'center'});
+  }, []);
+  if (!shown.length) return <p className="rounded-2xl border border-dashed border-white/12 px-3 py-8 text-center text-[0.84rem] text-mist-400">Nothing matches “{query}”.</p>;
+  let lastGroup: string | undefined;
   return (
-    <select className={`${CONTROL} ag-select appearance-none pr-10 ${className}`} {...rest}>
-      {children}
-    </select>
+    <div ref={listRef} className="pick-list space-y-1" role="listbox" aria-multiselectable={multi || undefined}>
+      {shown.map((o, i) => {
+        const on = isOn(o.value);
+        const heading = o.group && o.group !== lastGroup ? o.group : null;
+        lastGroup = o.group;
+        return (
+          <Fragment key={`${o.value}-${i}`}>
+            {heading && <p className="px-1 pt-2 pb-0.5 text-[0.64rem] font-extrabold tracking-[0.14em] text-mist-500 uppercase">{heading}</p>}
+            <button
+              type="button"
+              role="option"
+              aria-selected={on}
+              data-on={on}
+              disabled={o.disabled}
+              onClick={() => onPick(o)}
+              className={`pick-row group flex w-full min-w-0 items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+                on ? 'border-nova-400/45 bg-nova-500/[0.13]' : 'border-white/6 bg-white/[0.025] hover:border-white/14 hover:bg-white/[0.05]'
+              }`}
+            >
+              <span className="min-w-0 flex-1">
+                <span className={`block text-[0.9rem] leading-snug font-semibold [overflow-wrap:anywhere] ${on ? 'text-mist-50' : 'text-mist-100'}`}>{o.label}</span>
+                {o.hint && <span className="mt-0.5 block text-[0.72rem] font-medium text-mist-400">{o.hint}</span>}
+              </span>
+              <span
+                aria-hidden
+                className={`grid size-[22px] shrink-0 place-items-center border-2 transition ${multi ? 'rounded-[7px]' : 'rounded-full'} ${
+                  on ? 'border-nova-400 bg-nova-500 text-white shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-nova-500)_18%,transparent)]' : 'border-white/22 group-hover:border-white/40'
+                }`}
+              >
+                {on && (multi ? <Check className="size-3.5" strokeWidth={3} /> : <span className="size-2 rounded-full bg-white" />)}
+              </span>
+            </button>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function PickSearch({value, onChange, count}: {value: string; onChange: (v: string) => void; count: number}) {
+  return (
+    <label className="mb-3 flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 focus-within:border-nova-400/55">
+      <Search className="size-4 shrink-0 text-mist-500" />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={`Search ${count} options`} className="min-w-0 flex-1 bg-transparent text-[0.88rem] text-mist-100 outline-none placeholder:text-mist-500" aria-label="Search options" />
+      {value && (
+        <button type="button" onClick={() => onChange('')} aria-label="Clear search" className="grid size-6 place-items-center rounded-full text-mist-500 hover:bg-white/[0.06] hover:text-mist-200">
+          <X className="size-3.5" />
+        </button>
+      )}
+    </label>
+  );
+}
+
+const portal = (node: ReactNode) => (typeof document === 'undefined' ? node : createPortal(node, document.body));
+
+/**
+ * Drop-down replacement: same props as a native <select> (value, onChange,
+ * <option>/<optgroup> children), but opens the arena's own picker sheet —
+ * a bottom sheet on phones, a dialog on desktop — with wrapping labels,
+ * a clear selected state and search for long lists.
+ */
+export function Select({
+  className = '',
+  children,
+  value,
+  defaultValue,
+  onChange,
+  disabled,
+  label,
+  title,
+  id,
+  name,
+  'aria-label': ariaLabel,
+}: SelectHTMLAttributes<HTMLSelectElement> & {label?: string}) {
+  const options = useMemo(() => optionsFrom(children), [children]);
+  const [inner, setInner] = useState(String(defaultValue ?? options[0]?.value ?? ''));
+  const current = value !== undefined ? String(value) : inner;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const chosen = options.find((o) => o.value === current);
+  const heading = label || ariaLabel || title || 'Choose an option';
+  const pick = (o: PickOption) => {
+    if (value === undefined) setInner(o.value);
+    onChange?.({target: {value: o.value, name}, currentTarget: {value: o.value, name}} as unknown as ChangeEvent<HTMLSelectElement>);
+    setOpen(false);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        id={id}
+        disabled={disabled}
+        title={title}
+        aria-label={ariaLabel ?? label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => { setQuery(''); setOpen(true); }}
+        className={`${className.includes('pro-input') ? '' : CONTROL} ag-picker relative flex items-center gap-2 !pr-10 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      >
+        <span className={`min-w-0 flex-1 truncate ${chosen ? '' : 'text-mist-500'}`}>{chosen?.label ?? 'Choose…'}</span>
+        <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-mist-400" />
+      </button>
+      {name && <input type="hidden" name={name} value={current} />}
+      {portal(
+        <Modal open={open} onClose={() => setOpen(false)} title={heading} subtitle={options.length > 1 ? `${options.length} options` : undefined} size="sm">
+          {options.length > 8 && <PickSearch value={query} onChange={setQuery} count={options.length} />}
+          <PickList options={options} isOn={(v) => v === current} onPick={pick} query={query} />
+        </Modal>,
+      )}
+    </>
+  );
+}
+
+/**
+ * Pick several options at once (mix topics, filter by many tags…). An empty
+ * selection means "all" and is labelled with `allLabel`.
+ */
+export function MultiSelect({
+  options,
+  values,
+  onChange,
+  label,
+  allLabel = 'All',
+  className = '',
+  disabled,
+  max,
+}: {
+  options: PickOption[];
+  values: string[];
+  onChange: (values: string[]) => void;
+  label: string;
+  allLabel?: string;
+  className?: string;
+  disabled?: boolean;
+  max?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const set = new Set(values);
+  const names = options.filter((o) => set.has(o.value)).map((o) => o.label);
+  const summary = names.length === 0 ? allLabel : names.length === 1 ? names[0] : `${names[0]} + ${names.length - 1} more`;
+  const toggle = (o: PickOption) => {
+    if (set.has(o.value)) onChange(values.filter((v) => v !== o.value));
+    else if (!max || values.length < max) onChange([...values, o.value]);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        aria-haspopup="listbox"
+        onClick={() => { setQuery(''); setOpen(true); }}
+        className={`${className.includes('pro-input') ? '' : CONTROL} ag-picker relative flex items-center gap-2 !pr-10 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      >
+        <span className="min-w-0 flex-1 truncate">{summary}</span>
+        {names.length > 1 && <span className="shrink-0 rounded-full bg-nova-500/20 px-2 py-0.5 text-[0.68rem] font-extrabold text-nova-200">{names.length}</span>}
+        <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-mist-400" />
+      </button>
+      {portal(
+        <Modal
+          open={open}
+          onClose={() => setOpen(false)}
+          title={label}
+          subtitle={values.length ? `${values.length} selected${max ? ` · up to ${max}` : ''}` : `None selected = ${allLabel.toLowerCase()}`}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => onChange([])} disabled={!values.length}>Clear</Button>
+              <Button onClick={() => setOpen(false)} icon={<Check className="size-4" />}>Done{values.length ? ` · ${values.length}` : ''}</Button>
+            </>
+          }
+        >
+          {options.length > 8 && <PickSearch value={query} onChange={setQuery} count={options.length} />}
+          {!max && options.length > 2 && (
+            <div className="mb-2 flex items-center gap-1 text-[0.74rem] font-bold text-mist-400">
+              <button type="button" className="rounded-full px-2.5 py-1 hover:bg-white/[0.06] hover:text-mist-100" onClick={() => onChange(options.filter((o) => !o.disabled).map((o) => o.value))}>Select all</button>
+              <span className="ml-auto">{values.length}/{options.length}</span>
+            </div>
+          )}
+          <PickList options={options} isOn={(v) => set.has(v)} onPick={toggle} multi query={query} />
+        </Modal>,
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------- confirm */
+export type ConfirmOptions = {title?: string; message?: ReactNode; confirmLabel?: string; cancelLabel?: string; danger?: boolean};
+type ConfirmRequest = ConfirmOptions & {resolve: (ok: boolean) => void};
+let confirmSink: ((request: ConfirmRequest) => void) | null = null;
+const DANGER_WORDS = /^(delete|remove|block|suspend|discard|withdraw|leave|ban|reset|clear|cancel)\b/i;
+
+/**
+ * The arena's own yes/no dialog — use instead of window.confirm.
+ *   if (!(await askConfirm('Delete this note? You can undo straight after.'))) return;
+ * A plain string is split into a title (first sentence) and a body; words like
+ * Delete/Remove/Block make it a red, destructive confirmation.
+ */
+export function askConfirm(input: string | ConfirmOptions): Promise<boolean> {
+  let opts: ConfirmOptions = typeof input === 'string' ? {} : input;
+  if (typeof input === 'string') {
+    const cut = input.search(/[?.!](\s|$)/);
+    const title = cut > 0 ? input.slice(0, cut + 1) : input;
+    const rest = cut > 0 ? input.slice(cut + 1).trim() : '';
+    opts = {title, message: rest || undefined};
+  }
+  const head = String(opts.title ?? '');
+  const danger = opts.danger ?? DANGER_WORDS.test(head);
+  const verb = head.match(DANGER_WORDS)?.[1] ?? head.match(/^(\w+)/)?.[1];
+  const confirmLabel = opts.confirmLabel ?? (danger && verb ? verb[0].toUpperCase() + verb.slice(1).toLowerCase() : /^(mark|withdraw|leave|restore|send|publish|approve)\b/i.test(head) && verb ? verb[0].toUpperCase() + verb.slice(1).toLowerCase() : 'Confirm');
+  return new Promise((resolve) => {
+    if (!confirmSink) {
+      resolve(typeof window !== 'undefined' ? window.confirm([head, typeof opts.message === 'string' ? opts.message : ''].filter(Boolean).join('\n\n')) : false);
+      return;
+    }
+    confirmSink({...opts, danger, confirmLabel, resolve});
+  });
+}
+
+/** Mount once near the app root; askConfirm() talks to it. */
+export function ConfirmHost() {
+  const [queue, setQueue] = useState<ConfirmRequest[]>([]);
+  useEffect(() => {
+    confirmSink = (request) => setQueue((q) => [...q, request]);
+    return () => {
+      confirmSink = null;
+    };
+  }, []);
+  const current = queue[0];
+  const settle = (ok: boolean) => {
+    current?.resolve(ok);
+    setQueue((q) => q.slice(1));
+  };
+  return portal(
+    <Modal
+      open={!!current}
+      onClose={() => settle(false)}
+      title={current?.title || 'Are you sure?'}
+      icon={current?.danger ? AlertTriangle : HelpCircle}
+      tone={current?.danger ? 'flare' : 'nova'}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => settle(false)}>{current?.cancelLabel ?? 'Cancel'}</Button>
+          <Button variant={current?.danger ? 'danger' : 'primary'} onClick={() => settle(true)} autoFocus>
+            {current?.confirmLabel ?? 'Confirm'}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[0.88rem] leading-relaxed text-mist-300">{current?.message || (current?.danger ? "This can't be undone." : 'Do you want to continue?')}</p>
+    </Modal>,
   );
 }
 

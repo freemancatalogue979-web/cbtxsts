@@ -442,6 +442,8 @@ class PracticeStartIn(BaseModel):
     course_id: int | None = None
     quiz_id: int | None = None
     topic: str = ""
+    # Mix several topics in one custom run ("" = untagged / General questions).
+    topics: list[str] = Field(default_factory=list, max_length=40)
     difficulty: str = ""
     adaptive: bool = True
     time_limit_seconds: int = 0

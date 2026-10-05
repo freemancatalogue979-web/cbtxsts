@@ -12,7 +12,7 @@
 import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X, CalendarPlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextInput, PageBanner} from '../components/ui';
+import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextInput, PageBanner, askConfirm, Select} from '../components/ui';
 import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
 import {HAPTICS} from '../lib/haptics';
@@ -534,7 +534,7 @@ export default function FriendsPanel({
 
   const removeFriend = useCallback(
     async (friend: PlayerSummary) => {
-      if (!window.confirm(`Remove ${friend.name} from your friends?`)) return;
+      if (!(await askConfirm(`Remove ${friend.name} from your friends?`))) return;
       try {
         await api.removeFriend(friend.id);
         sfx.play('whoosh');
@@ -1142,7 +1142,7 @@ export default function FriendsPanel({
           <div className="space-y-3">
             <div>
               <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">Exam</label>
-              <select
+              <Select
                 value={planFor.quizId}
                 onChange={(event) => setPlanFor({...planFor, quizId: Number(event.target.value)})}
                 className="mt-1 w-full rounded-2xl border border-white/12 bg-ink-900/70 px-3.5 py-3 text-base font-semibold text-mist-50 focus:border-nova-400/60 focus:outline-none"
@@ -1152,7 +1152,7 @@ export default function FriendsPanel({
                     {quiz.title}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-[0.68rem] font-black tracking-[0.16em] text-mist-500">When (optional)</label>

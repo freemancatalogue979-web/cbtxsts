@@ -48,6 +48,7 @@ import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
 import {HowItWorks, HubHero, LearningSnapshot, SectionHead, SubjectGrid, TeachCta} from './sections';
 import {ActionMenu, BadgeRow, useLive, Cover, Field, PersonAvatar, ProScope, Sheet, StarInput, StatTile, Stars, StatusPill, SubjectChip, Toggle, VerifiedMark, goTo, responseLabel, subjectLook, takeIntent, timeAgo, hueOf, type HueName} from './ui';
+import {askConfirm, Select} from '../components/ui';
 
 type View = 'find' | 'mine' | 'requests' | 'groups';
 type Link = {kind: 'teacher'; studentId: number} | {kind: 'pending'};
@@ -311,22 +312,22 @@ function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups, links,
       )}
 
       <div className="grid min-w-0 grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center">
-        <select className="pro-input min-w-0 md:w-48" value={subject} onChange={(e) => (setSubject(e.target.value), setTopic(''))} aria-label="Subject">
+        <Select className="pro-input min-w-0 md:w-48" value={subject} onChange={(e) => (setSubject(e.target.value), setTopic(''))} aria-label="Subject">
           <option value="">All subjects</option>
           {catalog?.subjects.map((s) => (
             <option key={s.subject} value={s.subject}>
               {s.subject}
             </option>
           ))}
-        </select>
-        <select className="pro-input min-w-0 md:w-48" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic" disabled={!subject}>
+        </Select>
+        <Select className="pro-input min-w-0 md:w-48" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic" disabled={!subject}>
           <option value="">{subject ? 'All topics' : 'Pick a subject first'}</option>
           {topics.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
-        </select>
+        </Select>
         <button type="button" className="t-chip-btn justify-center" aria-pressed={verified} onClick={() => setVerified((v) => !v)}>
           <ShieldCheck className="size-4" /> Verified
         </button>
@@ -446,44 +447,44 @@ function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups, links,
       >
         <div className="grid gap-4">
           <Field label="Minimum rating">
-            <select className="pro-input" value={minRating} onChange={(e) => setMinRating(Number(e.target.value))}>
+            <Select className="pro-input" value={minRating} onChange={(e) => setMinRating(Number(e.target.value))}>
               <option value={0}>Any rating</option>
               <option value={3}>3.0+</option>
               <option value={4}>4.0+</option>
               <option value={4.5}>4.5+</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Experience">
-            <select className="pro-input" value={minExperience} onChange={(e) => setMinExperience(Number(e.target.value))}>
+            <Select className="pro-input" value={minExperience} onChange={(e) => setMinExperience(Number(e.target.value))}>
               <option value={0}>Any</option>
               <option value={2}>2+ years</option>
               <option value={5}>5+ years</option>
               <option value={10}>10+ years</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Teaching format">
-            <select className="pro-input" value={format} onChange={(e) => setFormat(e.target.value)}>
+            <Select className="pro-input" value={format} onChange={(e) => setFormat(e.target.value)}>
               <option value="">Any</option>
               <option value="one">One-on-one</option>
               <option value="group">Group</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Language">
-            <select className="pro-input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <Select className="pro-input" value={language} onChange={(e) => setLanguage(e.target.value)}>
               <option value="">Any</option>
               {catalog?.languages.map((l) => (
                 <option key={l}>{l}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Sort by">
-            <select className="pro-input" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <Select className="pro-input" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="relevance">Best match</option>
               <option value="rating">Highest rated</option>
               <option value="experience">Most experienced</option>
               <option value="students">Most students</option>
               <option value="newest">Newest</option>
-            </select>
+            </Select>
           </Field>
         </div>
       </Sheet>
@@ -647,19 +648,19 @@ function RequestSheet({teacher, onClose, onSent, onAlready}: {teacher: {id: numb
       <div className="grid gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Subject">
-            <select className="pro-input" value={subject} onChange={(e) => (setSubject(e.target.value), setTopic(teacher?.specialties.find((s) => s.subject === e.target.value)?.topics[0] ?? ''))}>
+            <Select className="pro-input" value={subject} onChange={(e) => (setSubject(e.target.value), setTopic(teacher?.specialties.find((s) => s.subject === e.target.value)?.topics[0] ?? ''))}>
               {teacher?.specialties.map((s) => (
                 <option key={s.subject}>{s.subject}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Topic">
-            <select className="pro-input" value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <Select className="pro-input" value={topic} onChange={(e) => setTopic(e.target.value)}>
               {topics.map((t) => (
                 <option key={t}>{t}</option>
               ))}
               {topics.length === 0 && <option value="">General</option>}
-            </select>
+            </Select>
           </Field>
         </div>
         <Field label="What do you need help with?" hint={`${message.trim().length}/1500 · at least 10 characters`}>
@@ -724,7 +725,7 @@ function TeacherProfile({id, onBack, onChanged, onAlready, onOpenMaterial, onOpe
     }
   };
   const block = async () => {
-    if (!window.confirm(`Block ${t.name}? They won't be able to message you and you won't see them in search.`)) return;
+    if (!(await askConfirm(`Block ${t.name}? They won't be able to message you and you won't see them in search.`))) return;
     await teachers.block(t.student_id);
     toast('info', 'Blocked', 'You can unblock from Messages → Blocked.');
     onChanged();
@@ -1112,7 +1113,7 @@ function MyTeachers({learning, error, onOpen, onReload, onOpenMaterial, onOpenQu
   }
   if (!learning) return <LoadingRows rows={3} />;
   const complete = async (relationshipId: number, name: string) => {
-    if (!window.confirm(`Mark your lessons with ${name} as complete? You'll be able to leave a review and still message them.`)) return;
+    if (!(await askConfirm(`Mark your lessons with ${name} as complete? You'll be able to leave a review and still message them.`))) return;
     try {
       await teachers.completeRelationship(relationshipId);
       toast('success', 'Marked complete', 'You can now leave a review.');

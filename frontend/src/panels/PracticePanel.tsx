@@ -31,7 +31,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type ReactNode} from 
 import Character from '../components/Character';
 import PracticeClock from '../components/PracticeClock';
 import {AnswerFeedback, AnswerTile, ComboMeter, Hearts} from '../components/GameQuestion';
-import {Button, Card, Chip, DifficultyChip, EmptyState, ProgressBar, ReviewOptions, ScoreChip, SectionHeading, Segmented, Select, Skeleton, TopicChip} from '../components/ui';
+import {Button, Card, Chip, DifficultyChip, EmptyState, MultiSelect, ProgressBar, ReviewOptions, ScoreChip, SectionHeading, Segmented, Skeleton, TopicChip} from '../components/ui';
 import AskTutorButton from '../components/tutor/AskTutorButton';
 import {api} from '../lib/api';
 import {HAPTICS} from '../lib/haptics';
@@ -657,15 +657,17 @@ function PickChip({active, children, onClick, disabled = false}: {active: boolea
 }
 
 /** Course → Topic → Number of questions → Duration → Start. */
-function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStart: (courseId: number, topicKey: string, count: number, minutes: number) => void; busy: boolean}) {
+function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStart: (courseId: number, topicKeys: string[], count: number, minutes: number) => void; busy: boolean}) {
   const [courseId, setCourseId] = useState<number | null>(null);
-  const [topicKey, setTopicKey] = useState('');
+  const [topicKeys, setTopicKeys] = useState<string[]>([]);
   const [count, setCount] = useState(0);
   const [minutes, setMinutes] = useState(30);
 
   const course = catalog.courses.find((row) => row.id === courseId) ?? catalog.courses[0] ?? null;
   const topics = course?.topics ?? [];
-  const available = topicKey ? (topics.find((row) => row.key === topicKey)?.count ?? 0) : (course?.available ?? 0);
+  const chosenTopics = topics.filter((row) => topicKeys.includes(row.key));
+  const available = chosenTopics.length ? chosenTopics.reduce((sum, row) => sum + row.count, 0) : (course?.available ?? 0);
+  const scopeLabel = chosenTopics.length === 1 ? chosenTopics[0].topic : chosenTopics.length ? `these ${chosenTopics.length} topics` : 'this course';
   const standardCounts = (catalog.count_choices?.length ? catalog.count_choices : [5, 10, 20, 30, 40, 50]).filter((size) => size <= available);
   const choices = standardCounts.length ? [...standardCounts, available] : available > 0 ? [available] : [];
   const uniqueChoices = [...new Set(choices)];
@@ -688,7 +690,7 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
     <Card className="p-4 sm:p-5">
       <SectionHeading
         title="Set up your practice"
-        subtitle="Pick a course, a topic, how many questions and how long — the server draws random questions and owns the clock."
+        subtitle="Pick a course, one or more topics, how many questions and how long — the server draws random questions and owns the clock."
         icon={<Target className="size-4" />}
       />
 
@@ -704,7 +706,7 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
                 type="button"
                 onClick={() => {
                   setCourseId(row.id);
-                  setTopicKey('');
+                  setTopicKeys([]);
                   setCount(0);
                 }}
                 className={`rounded-2xl border p-3 text-left transition-colors touch-manipulation ${
@@ -724,16 +726,25 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
 
       {/* 2 — topic */}
       <div className="mt-4">
- <p className="text-[0.7rem] font-black tracking-wider text-mist-500">2 · Topic</p>
+ <p className="text-[0.7rem] font-black tracking-wider text-mist-500">2 · Topics <span className="font-semibold tracking-normal text-mist-600">— pick one or mix several</span></p>
         <div className="mt-2">
-          <Select value={topicKey} onChange={(event) => {setTopicKey(event.target.value); setCount(0);}} aria-label="Topic">
-            <option value="">All topics ({course?.available ?? 0} questions)</option>
-            {topics.map((topic) => (
-              <option key={topic.key || 'general'} value={topic.key}>
-                {topic.topic} ({topic.count} {topic.count === 1 ? 'question' : 'questions'})
-              </option>
-            ))}
-          </Select>
+          <MultiSelect
+            label="Choose topics"
+            allLabel={`All topics (${course?.available ?? 0} questions)`}
+            values={topicKeys}
+            onChange={(next) => {setTopicKeys(next); setCount(0);}}
+            options={topics.map((topic) => ({value: topic.key, label: topic.topic, hint: `${topic.count} ${topic.count === 1 ? 'question' : 'questions'}`}))}
+            className="w-full"
+          />
+          {chosenTopics.length > 1 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {chosenTopics.map((row) => (
+                <Chip key={row.key || 'general'} tone="nova" size="sm" onRemove={() => {setTopicKeys(topicKeys.filter((k) => k !== row.key)); setCount(0);}}>
+                  {row.topic}
+                </Chip>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -749,7 +760,7 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
         </div>
         {available > 0 && effectiveCount >= available && (
           <p className="mt-2 text-[0.76rem] font-semibold text-amber-300">
-            Only {available} {available === 1 ? 'question is' : 'questions are'} available for {topicKey ? topics.find((row) => row.key === topicKey)?.topic ?? 'this topic' : 'this course'}.
+            Only {available} {available === 1 ? 'question is' : 'questions are'} available for {scopeLabel}.
           </p>
         )}
       </div>
@@ -772,7 +783,7 @@ function CustomSetup({catalog, onStart, busy}: {catalog: PracticeCatalog; onStar
         size="md"
         disabled={busy || !course || available < 1 || effectiveCount < 1 || capped}
         icon={<Play className="size-4" />}
-        onClick={() => course && onStart(course.id, topicKey, effectiveCount, minutes)}
+        onClick={() => course && onStart(course.id, topicKeys, effectiveCount, minutes)}
       >
         {busy ? 'Preparing your questions…' : 'Start practice'}
       </Button>
@@ -1159,13 +1170,14 @@ function CustomPractice() {
     };
   }, [loadCatalog]);
 
-  const start = async (courseId: number, topicKey: string, count: number, minutes: number) => {
+  const start = async (courseId: number, topicKeys: string[], count: number, minutes: number) => {
     setBusy(true);
     try {
       const payload = (await api.arena.startPractice({
         mode: 'custom',
         course_id: courseId,
-        topic: topicKey,
+        topic: topicKeys.length === 1 ? topicKeys[0] : '',
+        topics: topicKeys.length > 1 || (topicKeys.length === 1 && !topicKeys[0]) ? topicKeys : [],
         size: count,
         time_limit_seconds: minutes * 60,
       })) as unknown as CustomRunPayload;
@@ -1198,7 +1210,7 @@ function CustomPractice() {
   if (phase === 'run' && run) {
     return <CustomRun run={run} expired={expired} onNewPractice={() => void backToSetup()} />;
   }
-  return <CustomSetup catalog={catalog as PracticeCatalog} onStart={(courseId, topicKey, count, minutes) => void start(courseId, topicKey, count, minutes)} busy={busy} />;
+  return <CustomSetup catalog={catalog as PracticeCatalog} onStart={(courseId, topicKeys, count, minutes) => void start(courseId, topicKeys, count, minutes)} busy={busy} />;
 }
 
 /* --------------------------------------------------------------------- panel */

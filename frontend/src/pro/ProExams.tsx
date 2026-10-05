@@ -11,6 +11,7 @@ import {miniExamApi, openMiniExam, type MiniExam} from '../lib/tutor';
 import {useSession} from '../store/session';
 import {createMiniExam} from './actions';
 import {Badge, Empty, LoadingRows, PageHeader, Ring, Section, Tile, hueForCourse, pct, toneFor} from './ui';
+import {Select} from '../components/ui';
 
 type CourseRow = {id: number; code: string; title: string; available: number; topics: {topic: string}[]};
 type Filter = 'open' | 'upcoming' | 'completed' | 'mini';
@@ -198,62 +199,62 @@ function CreateMini({courses, toast}: {courses: CourseRow[]; toast: ReturnType<t
       >
         <label className="grid gap-1.5">
           <span className="pro-meta">Course</span>
-          <select className="pro-input" value={courseId} onChange={(e) => { setCourseId(Number(e.target.value)); setTopic(''); }}>
+          <Select className="pro-input" value={courseId} onChange={(e) => { setCourseId(Number(e.target.value)); setTopic(''); }}>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} — {c.title}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="grid gap-1.5">
           <span className="pro-meta">Topic</span>
-          <select className="pro-input" value={topic} onChange={(e) => setTopic(e.target.value)}>
+          <Select className="pro-input" value={topic} onChange={(e) => setTopic(e.target.value)}>
             <option value="">All topics</option>
             {(course?.topics ?? []).map((t) => (
               <option key={t.topic} value={t.topic}>
                 {t.topic}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="grid gap-1.5">
             <span className="pro-meta">Questions</span>
-            <select className="pro-input" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+            <Select className="pro-input" value={count} onChange={(e) => setCount(Number(e.target.value))}>
               {[5, 10, 20, 30, 40, 50].map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1.5">
             <span className="pro-meta">Time</span>
-            <select className="pro-input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
+            <Select className="pro-input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
               {[5, 10, 15, 20, 30, 45, 60].map((n) => (
                 <option key={n} value={n}>
                   {n} min
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1.5">
             <span className="pro-meta">Difficulty</span>
-            <select className="pro-input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+            <Select className="pro-input" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
               <option value="mixed">Mixed</option>
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1.5">
             <span className="pro-meta">Focus</span>
-            <select className="pro-input" value={focus} onChange={(e) => setFocusMode(e.target.value as 'mixed' | 'weak' | 'new')}>
+            <Select className="pro-input" value={focus} onChange={(e) => setFocusMode(e.target.value as 'mixed' | 'weak' | 'new')}>
               <option value="mixed">Balanced</option>
               <option value="weak">Weak areas</option>
               <option value="new">Unseen questions</option>
-            </select>
+            </Select>
           </label>
         </div>
         <button type="submit" className="pro-btn pro-btn-primary mt-1" disabled={busy || !courseId}>

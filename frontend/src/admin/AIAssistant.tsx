@@ -17,7 +17,7 @@ import {
   Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText, BookOpenText, PenLine, Trash2, Users, Ban, Coins as CoinsIcon,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
-import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone} from '../components/ui';
+import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone, Select} from '../components/ui';
 import {ToolTrail} from '../components/tutor/AgentBits';
 import TasksView, {attachFile, TaskInline, type AttachedMaterial} from './AITasks';
 import {StopButton, ThinkToggle, WorkLog} from './AssistantBits';
@@ -30,6 +30,7 @@ import {
 } from '../lib/tutor';
 import type {Course} from '../lib/types';
 import {useSession} from '../store/session';
+import {useSessionState} from '../lib/useSessionState';
 
 type View = 'assistant' | 'insights' | 'tasks' | 'review' | 'activity';
 const THREAD_KEY = 'ag.staff.assistant';
@@ -124,7 +125,7 @@ function readCourse(): number | null {
 /* =================================================================== shell */
 export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n: number) => void; initialPrompt?: string}) {
   const {toast} = useSession();
-  const [view, setView] = useState<View>('assistant');
+  const [view, setView] = useSessionState<View>('ag.admin.ai.view', 'assistant', (v) => ['assistant', 'insights', 'tasks', 'review', 'activity'].includes(v));
   const [status, setStatus] = useState<AIStaffStatus | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseIdState] = useState<number | null>(readCourse);
@@ -209,7 +210,7 @@ function Hero({status, courses, courseId, onCourse, onReview}: {
           <BookOpen className="size-4 shrink-0 text-nova-300" />
           <span className="min-w-0 flex-1">
             <span className="block text-[0.58rem] font-extrabold tracking-[0.16em] text-mist-500 uppercase">Working in</span>
-            <select
+            <Select
               value={courseId ?? ''}
               onChange={(e) => onCourse(e.target.value ? Number(e.target.value) : null)}
               className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-6 text-[0.84rem] font-bold text-mist-50 outline-none"
@@ -217,7 +218,7 @@ function Hero({status, courses, courseId, onCourse, onReview}: {
             >
               <option value="">All courses</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
-            </select>
+            </Select>
           </span>
           <ChevronDown className="pointer-events-none absolute right-3 size-4 text-mist-400" />
         </label>
@@ -1386,10 +1387,10 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
                   {q && <button onClick={() => setQ('')} aria-label="Clear search" className="text-mist-500 hover:text-mist-200"><X className="size-3.5" /></button>}
                 </label>
                 {topics.length > 1 && (
-                  <select value={topic} onChange={(e) => { setTopic(e.target.value); setPage(0); }} aria-label="Filter by topic" className="ag-select h-9 max-w-[42%] min-w-0 appearance-none truncate rounded-xl border border-white/10 bg-black/25 px-2.5 text-[0.76rem] font-bold text-mist-200 outline-none">
+                  <Select value={topic} onChange={(e) => { setTopic(e.target.value); setPage(0); }} aria-label="Filter by topic" className="ag-select h-9 max-w-[42%] min-w-0 appearance-none truncate rounded-xl border border-white/10 bg-black/25 px-2.5 text-[0.76rem] font-bold text-mist-200 outline-none">
                     <option value="all">All topics</option>
                     {topics.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
-                  </select>
+                  </Select>
                 )}
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-1 text-[0.7rem] font-extrabold">

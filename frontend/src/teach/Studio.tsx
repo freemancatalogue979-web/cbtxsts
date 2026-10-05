@@ -8,6 +8,7 @@ import {useSession} from '../store/session';
 import {ApplicationGate, ProfileEditor} from './Apply';
 import {StudioMaterials, StudioQuizzes} from './StudioContent';
 import {BadgeRow, Cover, Field, PersonAvatar, ProScope, Sheet, Stars, StatusPill, SubjectChip, VerifiedMark, subjectLook, goTo, responseLabel, takeIntent, timeAgo, useLive} from './ui';
+import {askConfirm, Select} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
@@ -550,7 +551,7 @@ function StudentSheet({studentId, groups, onClose, onChanged}: {studentId: numbe
     }
   };
   const complete = async () => {
-    if (!data || !window.confirm(`Mark your lessons with ${data.student.name} as completed? They'll be able to leave a review.`)) return;
+    if (!data || !(await askConfirm(`Mark your lessons with ${data.student.name} as completed? They'll be able to leave a review.`))) return;
     try {
       await teachers.completeRelationship(data.relationship.id);
       toast('success', 'Marked as completed');
@@ -615,13 +616,13 @@ function StudentSheet({studentId, groups, onClose, onChanged}: {studentId: numbe
                 <input className="pro-input" value={notes.weak_areas} onChange={(e) => setNotes({...notes, weak_areas: e.target.value})} maxLength={2000} placeholder="e.g. chain rule, word problems" />
               </Field>
               <Field label="Progress">
-                <select className="pro-input" value={notes.progress} onChange={(e) => setNotes({...notes, progress: e.target.value})}>
+                <Select className="pro-input" value={notes.progress} onChange={(e) => setNotes({...notes, progress: e.target.value})}>
                   {PROGRESS_OPTIONS.map((o) => (
                     <option key={o} value={o}>
                       {o || '—'}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
             <Field label="Next step">
@@ -673,7 +674,7 @@ function StudentSheet({studentId, groups, onClose, onChanged}: {studentId: numbe
               <h3 className="pro-h3">Groups</h3>
               {data.groups.length > 0 && <p className="pro-secondary">Member of {data.groups.map((g) => g.name).join(', ')}</p>}
               <div className="flex gap-2">
-                <select className="pro-input min-w-0 flex-1" value={inviteGroup} onChange={(e) => setInviteGroup(e.target.value ? Number(e.target.value) : '')} aria-label="Add to group">
+                <Select className="pro-input min-w-0 flex-1" value={inviteGroup} onChange={(e) => setInviteGroup(e.target.value ? Number(e.target.value) : '')} aria-label="Add to group">
                   <option value="">Add to a group…</option>
                   {groups
                     .filter((g) => !data.groups.some((x) => x.id === g.id))
@@ -682,7 +683,7 @@ function StudentSheet({studentId, groups, onClose, onChanged}: {studentId: numbe
                         {g.name}
                       </option>
                     ))}
-                </select>
+                </Select>
                 <button type="button" className="pro-btn" onClick={() => void invite()} disabled={!inviteGroup}>
                   <UserPlus className="size-4" /> Add
                 </button>

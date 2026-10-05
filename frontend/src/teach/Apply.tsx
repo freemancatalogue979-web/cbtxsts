@@ -6,6 +6,7 @@ import {DAYS, fileUrl, teachers, type Catalog, type MyProfile, type Slot, type S
 import {LoadingRows} from '../pro/ui';
 import {useSession} from '../store/session';
 import {Field, Toggle, timeAgo} from './ui';
+import {askConfirm, Select} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
 
@@ -70,7 +71,7 @@ function StatusShell({icon, hue, title, body, children}: {icon: React.ReactNode;
 function PendingScreen({profile, onChanged, onEdit}: {profile: MyProfile; onChanged: (p: MyProfile) => void; onEdit: () => void}) {
   const {toast} = useSession();
   const withdraw = async () => {
-    if (!window.confirm('Withdraw your application? You can edit and resubmit any time.')) return;
+    if (!(await askConfirm('Withdraw your application? You can edit and resubmit any time.'))) return;
     try {
       const res = await teachers.withdraw();
       onChanged(res.profile);
@@ -507,13 +508,13 @@ export function AvailabilityStep({draft, setDraft}: {draft: Draft; setDraft: (fn
       <p className="pro-secondary">When are you usually free to teach? Students see this as a weekly guide and an “available now” signal. Phase 2 adds bookable lessons.</p>
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
         <Field label="Day">
-          <select className="pro-input" value={day} onChange={(e) => setDay(Number(e.target.value))}>
+          <Select className="pro-input" value={day} onChange={(e) => setDay(Number(e.target.value))}>
             {DAYS.map((d, i) => (
               <option key={d} value={i}>
                 {d}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="From">
           <input className="pro-input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
