@@ -30,6 +30,13 @@ def normalize_phone(raw: str) -> str:
     digits = _NON_DIGITS.sub("", raw or "")
     if not digits:
         return ""
+    stripped = (raw or "").strip()
+    # International numbers outside Nigeria keep an explicit +<country code>:
+    #   +1 201 555 0123 -> +12015550123, 0044 7400 123456 -> +447400123456
+    if stripped.startswith("+") and not digits.startswith("234"):
+        return "+" + digits
+    if digits.startswith("00") and not digits.startswith("00234"):
+        return "+" + digits[2:]
     # International forms fold back to the 11-digit local number:
     #   +234 803 123 4567 -> 234 + 10 digits -> 08031234567
     #   00234 803 123 4567 -> 00234 + 10 digits -> 08031234567
@@ -53,6 +60,9 @@ def format_phone(phone: str) -> str:
 
 def is_valid_phone(raw: str) -> bool:
     digits = normalize_phone(raw)
+    if digits.startswith("+"):
+        # E.164: country code + subscriber number, 8–15 digits in total.
+        return 8 <= len(digits) - 1 <= 15 and digits[1] != "0"
     return len(digits) == 11 and digits.startswith("0") and digits[1] in "789"
 
 

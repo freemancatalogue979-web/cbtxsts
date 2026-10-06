@@ -31,118 +31,28 @@ from .models import (
 )
 from .security import hash_password
 from .services.course_bank import ensure_bank_quiz, promote_legacy_exam_questions
-from .seed_data.questions import QUESTIONS
+from .seed_data.general import COURSES as GENERAL_COURSES
+from .seed_data.general import questions_for
 from .seed_data.roster import ROSTER
 
-JURISPRUDENCE_QUESTIONS = [
-    {
-        "text": "Who defined law as the command of an uncommanded sovereign backed by threats of sanction?",
-        "option_a": "Hans Kelsen",
-        "option_b": "John Austin",
-        "option_c": "H.L.A. Hart",
-        "option_d": "Thomas Aquinas",
-        "correct": "B",
-        "explanation": "John Austin established the Imperative/Command Theory of Law in Province of Jurisprudence Determined.",
-        "difficulty": "easy",
-        "topic": "Positivism",
-    },
-    {
-        "text": "Which philosopher authored \"The Morality of Law\" and proposed the eight internal desiderata of law?",
-        "option_a": "Ronald Dworkin",
-        "option_b": "Lon L. Fuller",
-        "option_c": "John Finnis",
-        "option_d": "Jeremy Bentham",
-        "correct": "B",
-        "explanation": "Fuller introduced procedural natural law and the 8 principles of the inner morality of law.",
-        "difficulty": "medium",
-        "topic": "Natural Law",
-    },
-    {
-        "text": "Hans Kelsen posited that every legal system derives its ultimate validity from what foundational norm?",
-        "option_a": "The Volksgeist",
-        "option_b": "The Grundnorm",
-        "option_c": "Rule of Recognition",
-        "option_d": "Lex Aeterna",
-        "correct": "B",
-        "explanation": "Kelsen's Pure Theory of Law centres on hierarchical validity derived from the Grundnorm.",
-        "difficulty": "easy",
-        "topic": "Positivism",
-    },
-    {
-        "text": "The concept of the \"Rule of Recognition\" was introduced into analytical jurisprudence by:",
-        "option_a": "H.L.A. Hart",
-        "option_b": "Karl Olivecrona",
-        "option_c": "Joseph Raz",
-        "option_d": "Lord Denning",
-        "correct": "A",
-        "explanation": "Hart introduced the secondary rule of recognition in The Concept of Law.",
-        "difficulty": "medium",
-        "topic": "Positivism",
-    },
-    {
-        "text": "The Historical School of Jurisprudence, championed by Savigny, posits that law is:",
-        "option_a": "Imposed from above by sovereign command",
-        "option_b": "A tool of capitalist exploitation",
-        "option_c": "Found in the common consciousness of the people (Volksgeist)",
-        "option_d": "Derived purely from divine revelation",
-        "correct": "C",
-        "explanation": "Savigny argued law develops like language from the internal spirit of a people.",
-        "difficulty": "medium",
-        "topic": "Historical School",
-    },
-    {
-        "text": "Jeremy Bentham's utility principle judges law by its ability to:",
-        "option_a": "Reflect divine command",
-        "option_b": "Maximise pleasure and minimise pain",
-        "option_c": "Preserve tradition",
-        "option_d": "Enforce the Grundnorm",
-        "correct": "B",
-        "explanation": "Bentham's utilitarianism measures law by the greatest happiness of the greatest number.",
-        "difficulty": "easy",
-        "topic": "Utilitarianism",
-    },
-    {
-        "text": "Which school of thought argues that law and morality are necessarily connected?",
-        "option_a": "Legal positivism",
-        "option_b": "Natural law",
-        "option_c": "Legal realism",
-        "option_d": "Marxist jurisprudence",
-        "correct": "B",
-        "explanation": "Natural law theory holds that an unjust law is not truly law.",
-        "difficulty": "easy",
-        "topic": "Natural Law",
-    },
-    {
-        "text": "The realist school of jurisprudence is best associated with which idea?",
-        "option_a": "Law is what the courts actually do",
-        "option_b": "Law is a closed logical system",
-        "option_c": "Law derives from morality alone",
-        "option_d": "Law is the command of God",
-        "correct": "A",
-        "explanation": "American realists such as Holmes focused on judicial behaviour over abstract doctrine.",
-        "difficulty": "medium",
-        "topic": "Realism",
-    },
-]
-
 PRIZES = [
-    {"title": "₦50,000 Arena Champion Cash Prize", "description": "Season winner takes the grand cash prize plus the Arena Champion trophy.", "tier": "platinum", "kind": "rank", "min_rank": 1, "max_rank": 1, "icon": "crown", "sort_order": 1},
-    {"title": "₦25,000 Runner-Up Prize", "description": "Second on the season leaderboard.", "tier": "gold", "kind": "rank", "min_rank": 2, "max_rank": 2, "icon": "medal", "sort_order": 2},
-    {"title": "₦15,000 Third Place Prize", "description": "Third on the season leaderboard.", "tier": "gold", "kind": "rank", "min_rank": 3, "max_rank": 3, "icon": "award", "sort_order": 3},
-    {"title": "10GB Premium Data Bundle", "description": "For everyone who finishes inside the top 10.", "tier": "silver", "kind": "rank", "min_rank": 4, "max_rank": 10, "icon": "wifi", "sort_order": 4},
-    {"title": "Arena Hoodie & Merch Pack", "description": "Limited edition hoodie, cap and sticker pack for the top 25.", "tier": "silver", "kind": "rank", "min_rank": 11, "max_rank": 25, "icon": "shirt", "sort_order": 5},
+    {"title": "Season Champion Prize", "description": "Season winner takes the grand prize plus the Champion trophy.", "tier": "platinum", "kind": "rank", "min_rank": 1, "max_rank": 1, "icon": "crown", "sort_order": 1},
+    {"title": "Runner-Up Prize", "description": "Second on the season leaderboard.", "tier": "gold", "kind": "rank", "min_rank": 2, "max_rank": 2, "icon": "medal", "sort_order": 2},
+    {"title": "Third Place Prize", "description": "Third on the season leaderboard.", "tier": "gold", "kind": "rank", "min_rank": 3, "max_rank": 3, "icon": "award", "sort_order": 3},
+    {"title": "Premium Data Bundle", "description": "For everyone who finishes inside the top 10.", "tier": "silver", "kind": "rank", "min_rank": 4, "max_rank": 10, "icon": "wifi", "sort_order": 4},
+    {"title": "Hoodie & Merch Pack", "description": "Limited edition hoodie, cap and sticker pack for the top 25.", "tier": "silver", "kind": "rank", "min_rank": 11, "max_rank": 25, "icon": "shirt", "sort_order": 5},
     {"title": "Study Kit (Notebook + Pen Set)", "description": "Reward for the top 50 players of the season.", "tier": "bronze", "kind": "rank", "min_rank": 26, "max_rank": 50, "icon": "notebook-pen", "sort_order": 6},
-    {"title": "₦2,000 Airtime Voucher", "description": "Redeem any time with your arena coins.", "tier": "bronze", "kind": "coins", "cost_coins": 450, "icon": "smartphone", "stock": 40, "sort_order": 7},
+    {"title": "Mobile Top-up Voucher", "description": "Redeem any time with your coins.", "tier": "bronze", "kind": "coins", "cost_coins": 450, "icon": "smartphone", "stock": 40, "sort_order": 7},
     {"title": "Pizza & Drinks Voucher", "description": "Share it with your duel rival. Redeem with coins.", "tier": "silver", "kind": "coins", "cost_coins": 900, "icon": "pizza", "stock": 15, "sort_order": 8},
-    {"title": "Arena Champion Frame", "description": "Personalised desktop frame for the duel with the most wins.", "tier": "gold", "kind": "coins", "cost_coins": 1500, "icon": "frame", "stock": 5, "sort_order": 9},
+    {"title": "Champion Desk Frame", "description": "Personalised desk frame for the player with the most duel wins.", "tier": "gold", "kind": "coins", "cost_coins": 1500, "icon": "frame", "stock": 5, "sort_order": 9},
 ]
 
 NOTICES = [
     {
-        "title": "Arena Season is LIVE",
-        "message": "Constitutional Law Arena Exam is open now — 70 questions, 25 minutes, server-side timer. Climb the leaderboard and grab the ₦50,000 champion prize.",
+        "title": "The new season is LIVE",
+        "message": "The English Language Mock Exam is open now — 20 questions, 25 minutes, server-side timer. Climb the leaderboard and go for the Season Champion prize.",
         "kind": "exam",
-        "target_course": "LAW 411",
+        "target_course": "ENG 101",
         "is_pinned": True,
     },
     {
@@ -174,7 +84,7 @@ def seed_config(db: Session) -> Config:
         config = Config(
             id=1,
             grading_scale=game.DEFAULT_GRADING_SCALE,
-            prize_pool_note="Season prize pool: ₦90,000 cash + data bundles, merch and vouchers.",
+            prize_pool_note="Season prizes: champion trophy, data bundles, merch and vouchers.",
         )
         db.add(config)
         db.flush()
@@ -196,19 +106,20 @@ def seed_admin(db: Session) -> None:
 
 
 def seed_courses(db: Session) -> dict[str, Course]:
-    wanted = [
-        ("LAW 411", "Nigerian Constitutional Law", "Supremacy of the Constitution, fundamental rights, federalism and the structure of the Nigerian state.", "violet"),
-        ("LAW 421", "Jurisprudence & Legal Theory", "Schools of legal thought: natural law, positivism, realism, historical and Marxist theories.", "blue"),
-        ("LAW 431", "Commercial Law & Sale of Goods", "Formation of commercial contracts, sale of goods, agency and negotiable instruments.", "red"),
-    ]
+    """General-subject starter courses (English, Maths, sciences, computing)."""
+    from .models import CourseTopic
+
     courses: dict[str, Course] = {}
-    for code, title, description, accent in wanted:
-        course = db.scalar(select(Course).where(Course.code == code))
+    for row in GENERAL_COURSES:
+        course = db.scalar(select(Course).where(Course.code == row["code"]))
         if course is None:
-            course = Course(code=code, title=title, description=description, accent=accent, credit_units=3)
+            course = Course(code=row["code"], title=row["title"], description=row["description"], accent=row["accent"], credit_units=3)
             db.add(course)
             db.flush()
-        courses[code] = course
+            for position, name in enumerate(row["topics"], start=1):
+                db.add(CourseTopic(course_id=course.id, name=name, position=position))
+            db.flush()
+        courses[row["code"]] = course
     return courses
 
 
@@ -241,10 +152,10 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
     now = utcnow()
     specs = [
         {
-            "key": "constitutional",
-            "title": "Constitutional Law Arena Exam",
-            "course": "LAW 411",
-            "instructions": "40 objective questions drawn at random from the LAW 411 bank • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
+            "key": "english",
+            "title": "English Language Mock Exam",
+            "course": "ENG 101",
+            "instructions": "20 questions drawn at random from the English bank • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
             "duration_minutes": 25,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
@@ -252,14 +163,28 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "shuffle_questions": True,
             "allow_duel": True,
             "question_source": "course_random",
-            "draw_count": 40,
+            "draw_count": 20,
         },
         {
-            "key": "speed",
-            "title": "Constitutional Speed Round",
-            "course": "LAW 411",
-            "instructions": "15 questions in 6 minutes. Built for duels and rapid-fire practice.",
-            "duration_minutes": 6,
+            "key": "maths",
+            "title": "Maths Speed Round",
+            "course": "MTH 101",
+            "instructions": "12 quick-fire maths questions in 10 minutes. Built for duels and rapid practice.",
+            "duration_minutes": 10,
+            "status": "active",
+            "scheduled_at": now - timedelta(minutes=5),
+            "end_at": now + timedelta(days=14),
+            "shuffle_questions": True,
+            "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 12,
+        },
+        {
+            "key": "biology",
+            "title": "Biology Mock Exam",
+            "course": "BIO 101",
+            "instructions": "15 questions on cells, genetics, the body, ecology and plants • 15 minutes.",
+            "duration_minutes": 15,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
             "end_at": now + timedelta(days=14),
@@ -269,10 +194,24 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "draw_count": 15,
         },
         {
-            "key": "jurisprudence",
-            "title": "Jurisprudence Blitz",
-            "course": "LAW 421",
-            "instructions": "8 questions on the schools of legal thought. Perfect warm-up duel material.",
+            "key": "chemistry",
+            "title": "Chemistry Challenge",
+            "course": "CHM 101",
+            "instructions": "12 questions on atoms, bonding, reactions and acids • 12 minutes.",
+            "duration_minutes": 12,
+            "status": "active",
+            "scheduled_at": now - timedelta(minutes=5),
+            "end_at": now + timedelta(days=14),
+            "shuffle_questions": True,
+            "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 12,
+        },
+        {
+            "key": "computing",
+            "title": "Computer Science Basics",
+            "course": "CSC 101",
+            "instructions": "12 questions on hardware, binary, algorithms and networks • 10 minutes.",
             "duration_minutes": 10,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
@@ -280,19 +219,21 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "shuffle_questions": True,
             "allow_duel": True,
             "question_source": "course_random",
-            "draw_count": 8,
+            "draw_count": 12,
         },
         {
-            "key": "commercial",
-            "title": "Commercial Law Challenge",
-            "course": "LAW 431",
-            "instructions": "Opens next week. Bank XP on the other arenas until then.",
-            "duration_minutes": 20,
+            "key": "physics",
+            "title": "Physics Weekly Test",
+            "course": "PHY 101",
+            "instructions": "Opens next week. Bank XP on the other exams until then.",
+            "duration_minutes": 15,
             "status": "scheduled",
             "scheduled_at": now + timedelta(days=7),
-            "end_at": now + timedelta(days=7, minutes=20),
+            "end_at": now + timedelta(days=21),
             "shuffle_questions": True,
             "allow_duel": False,
+            "question_source": "course_random",
+            "draw_count": 15,
         },
     ]
 
@@ -310,8 +251,8 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
     promote_legacy_exam_questions(db)
     # Fresh databases: questions are seeded into the COURSE BANK; the exams
     # above draw from it at random, per player.
-    seed_questions(db, ensure_bank_quiz(db, courses["LAW 411"]), QUESTIONS)
-    seed_questions(db, ensure_bank_quiz(db, courses["LAW 421"]), JURISPRUDENCE_QUESTIONS)
+    for code, course in courses.items():
+        seed_questions(db, ensure_bank_quiz(db, course), questions_for(code))
     return quizzes
 
 
@@ -325,10 +266,10 @@ def seed_students(db: Session) -> list[Student]:
             phone=row["phone"],
             name=row["name"],
             reg_no=row.get("reg_no"),
-            faculty=row.get("faculty", "Faculty of Law"),
-            campus=row.get("campus", "UNEC (Enugu Campus)"),
-            class_name=row.get("class_name", "030 Law Class"),
-            level=row.get("level", "400 Level"),
+            faculty=row.get("faculty", "General Studies"),
+            campus=row.get("campus", "Online Campus"),
+            class_name=row.get("class_name", "General Class"),
+            level=row.get("level", "Year 1"),
             avatar_hue=_hue(row["name"]),
             week_key=game.week_key(),
             player_code=game.make_player_code(db),
@@ -338,6 +279,38 @@ def seed_students(db: Session) -> list[Student]:
         created.append(student)
     db.flush()
     return created
+
+
+def seed_materials(db: Session, courses: dict[str, Course]) -> int:
+    """Readable study notes for each starter course (only when the course has none)."""
+    import json
+
+    from .models import Material, MaterialSection
+    from .seed_data.general import MATERIALS
+    from .services.materials import sanitise_blocks
+
+    made = 0
+    for row in MATERIALS:
+        course = courses.get(row["course"])
+        if course is None:
+            continue
+        if db.scalar(select(Material.id).where(Material.course_id == course.id, Material.title == row["title"])):
+            continue
+        now = utcnow()
+        material = Material(
+            course_id=course.id, title=row["title"], kind="material", topic=row["topic"], description=row["description"],
+            difficulty=row["difficulty"], estimated_minutes=row["minutes"], icon=row.get("icon", "book"), accent=course.accent,
+            summary=json.dumps(row["summary"]), tags=json.dumps([row["topic"], course.code]), author="Genesis Academy",
+            status="published", published_at=now, created_at=now, updated_at=now,
+        )
+        db.add(material)
+        db.flush()
+        per = max(2, round(row["minutes"] / max(1, len(row["sections"]))))
+        for position, (title, blocks) in enumerate(row["sections"], start=1):
+            db.add(MaterialSection(material_id=material.id, position=position, title=title, body=json.dumps(sanitise_blocks(blocks)), estimated_minutes=per))
+        made += 1
+    db.flush()
+    return made
 
 
 def seed_badges(db: Session) -> None:
@@ -367,6 +340,7 @@ def seed_all(db: Session) -> dict[str, int]:
     seed_badges(db)
     courses = seed_courses(db)
     quizzes = seed_quizzes(db, courses)
+    seed_materials(db, courses)
     created: list[Student] = []  # no seeded class roster — only real registrations play
     seed_prizes(db)
     seed_notifications(db)

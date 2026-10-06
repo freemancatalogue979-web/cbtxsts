@@ -11,7 +11,7 @@ import {useState} from 'react';
 import {motion} from 'motion/react';
 import {Button, Field, PhoneInput, TextInput} from '../components/ui';
 import {BrandBar, LogoMark} from '../components/Brand';
-import {formatNumber, isValidPhone, normalizePhoneInput} from '../lib/format';
+import {buildPhone, formatNumber, isValidPhone, normalizePhoneInput, phoneCountry} from '../lib/format';
 import {useSession} from '../store/session';
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
@@ -38,7 +38,9 @@ export default function SignIn({
 
   /* ------------------------------------------------------- sign-up state */
   const [username, setUsername] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('NG');
+  const [phoneLocal, setPhoneLocal] = useState('');
+  const phone = buildPhone(phoneCountryCode, phoneLocal);
   const [signupPassword, setSignupPassword] = useState('');
   const [showSignupPass, setShowSignupPass] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -50,7 +52,8 @@ export default function SignIn({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const validPhone = isValidPhone(phone);
+  const validPhone = isValidPhone(phone, phoneCountryCode);
+  const phoneHint = phoneCountryCode === 'NG' ? 'Enter a valid 11-digit Nigerian number.' : `Enter a valid ${phoneCountry(phoneCountryCode).name} mobile number.`;
   const validUsername = USERNAME_RE.test(username.trim().toLowerCase());
   const strongEnough = signupPassword.length >= 6;
   const signupReady = validUsername && validPhone && strongEnough;
@@ -81,7 +84,7 @@ export default function SignIn({
       return;
     }
     if (!validPhone) {
-      setError('Enter a valid 11-digit Nigerian phone number, e.g. 08031234567.');
+      setError(phoneHint);
       return;
     }
     if (!strongEnough) {
@@ -235,7 +238,7 @@ export default function SignIn({
                       <AtSign className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-mist-500" />
                       <TextInput
                         className="pl-11"
-                        placeholder="ada_love or 08031234567"
+                        placeholder="your username or phone number"
                         autoComplete="username"
                         autoCapitalize="none"
                         value={identifier}
@@ -308,14 +311,18 @@ export default function SignIn({
 
                   <Field
                     label="Phone number"
-                    error={phone && !validPhone ? 'Enter a valid 11-digit Nigerian number.' : undefined}
+                    error={phone && !validPhone ? phoneHint : undefined}
                   >
                     <PhoneInput
                       invalid={Boolean(phone && !validPhone)}
-                      value={phone.replace(/^\+?234|^0/, '')}
+                      country={phoneCountryCode}
+                      onCountry={setPhoneCountryCode}
+                      value={phoneLocal}
                       onChange={(event) => {
-                        const cleaned = normalizePhoneInput(event.target.value).replace(/^\+?234/, '').replace(/^0/, '');
-                        setPhone(cleaned ? `0${cleaned}` : '');
+                        let cleaned = normalizePhoneInput(event.target.value);
+                        const dial = phoneCountry(phoneCountryCode).dial;
+                        if (cleaned.startsWith('+' + dial)) cleaned = cleaned.slice(dial.length + 1);
+                        setPhoneLocal(cleaned.replace(/\D/g, '').replace(/^0+/, '').slice(0, 12));
                       }}
                     />
                   </Field>

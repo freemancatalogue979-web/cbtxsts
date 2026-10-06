@@ -4,7 +4,7 @@ import {AnimatePresence, motion, useDragControls} from 'motion/react';
 import type {ButtonHTMLAttributes, ChangeEvent, ComponentType, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, SVGProps, TextareaHTMLAttributes} from 'react';
 import {Children, cloneElement, createElement, Fragment, isValidElement, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {avatarStyle, clamp} from '../lib/format';
+import {avatarStyle, clamp, PHONE_COUNTRIES, phoneCountry} from '../lib/format';
 import {auraOf, frameOf, portraitOf} from '../lib/cosmetics';
 import type {CosmeticsRef} from '../lib/cosmetics';
 import {usePlayerPhoto} from '../lib/photos';
@@ -709,36 +709,67 @@ export function TextInput({className = '', ...rest}: InputHTMLAttributes<HTMLInp
 export function PhoneInput({
   value,
   onChange,
-  placeholder = '803 123 4567',
+  placeholder,
   invalid = false,
   id,
+  country,
+  onCountry,
 }: {
   value: string;
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   invalid?: boolean;
   id?: string;
+  /** ISO code from PHONE_COUNTRIES. With `onCountry` the prefix becomes a country picker. */
+  country?: string;
+  onCountry?: (code: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const current = phoneCountry(country || 'NG');
+  const prefix = (
+    <>
+      {onCountry ? <span aria-hidden className="text-base leading-none">{current.flag}</span> : <Phone className="size-4 shrink-0 text-nova-400" />}
+      +{current.dial}
+      {onCountry && <ChevronDown aria-hidden className="size-3.5 text-mist-500" />}
+    </>
+  );
+  const prefixClass = 'flex shrink-0 items-center gap-1.5 border-r border-white/10 bg-white/[0.05] px-2.5 text-[0.82rem] font-black text-mist-300 sm:px-3.5 sm:text-[0.88rem]';
   return (
     <div
       className={`flex items-stretch overflow-hidden rounded-2xl border bg-ink-900/70 transition-colors focus-within:border-nova-400/60 focus-within:bg-ink-850 focus-within:ring-2 focus-within:ring-nova-500/25 ${
         invalid ? 'border-flare-500/50' : 'border-white/12'
       }`}
     >
-      <span className="flex shrink-0 items-center gap-1.5 border-r border-white/10 bg-white/[0.05] px-2.5 text-[0.82rem] font-black text-mist-300 sm:px-3.5 sm:text-[0.88rem]">
-        <Phone className="size-4 shrink-0 text-nova-400" />
-        +234
-      </span>
+      {onCountry ? (
+        <button type="button" className={`${prefixClass} hover:bg-white/[0.09]`} aria-label={`Country code: ${current.name}`} onClick={() => { setQuery(''); setOpen(true); }}>
+          {prefix}
+        </button>
+      ) : (
+        <span className={prefixClass}>{prefix}</span>
+      )}
       <input
         id={id}
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
+        placeholder={placeholder ?? current.sample}
         inputMode="tel"
-        autoComplete="tel"
+        autoComplete="tel-national"
         aria-label="Phone number"
         className="min-w-0 flex-1 bg-transparent px-3 py-3 text-base font-semibold tracking-wide text-mist-50 tabular placeholder:font-medium placeholder:text-mist-600 focus:outline-none sm:px-3.5 sm:text-[0.92rem]"
       />
+      {onCountry &&
+        portal(
+          <Modal open={open} onClose={() => setOpen(false)} title="Country code" subtitle="Where is your phone number from?" size="sm">
+            <PickSearch value={query} onChange={setQuery} count={PHONE_COUNTRIES.length} />
+            <PickList
+              options={PHONE_COUNTRIES.map((row) => ({value: row.code, label: `${row.flag}  ${row.name}`, hint: `+${row.dial}`}))}
+              isOn={(v) => v === current.code}
+              onPick={(o) => { onCountry(o.value); setOpen(false); }}
+              query={query}
+            />
+          </Modal>,
+        )}
     </div>
   );
 }

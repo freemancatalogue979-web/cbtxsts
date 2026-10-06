@@ -63,10 +63,10 @@ class Student(Base):
     password_hash: Mapped[str] = mapped_column(String(120), default="")
     name: Mapped[str] = mapped_column(String(160))
     reg_no: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    faculty: Mapped[str] = mapped_column(String(120), default="Faculty of Law")
-    campus: Mapped[str] = mapped_column(String(120), default="UNEC (Enugu Campus)")
-    class_name: Mapped[str] = mapped_column(String(120), default="030 Law Class")
-    level: Mapped[str] = mapped_column(String(40), default="400 Level")
+    faculty: Mapped[str] = mapped_column(String(120), default="General Studies")
+    campus: Mapped[str] = mapped_column(String(120), default="Online Campus")
+    class_name: Mapped[str] = mapped_column(String(120), default="General Class")
+    level: Mapped[str] = mapped_column(String(40), default="Year 1")
     avatar_hue: Mapped[int] = mapped_column(Integer, default=265)
     photo: Mapped[str | None] = mapped_column(Text, nullable=True)  # base64 data URL, ≤ ~400KB
 
@@ -886,10 +886,10 @@ class Config(Base):
     __tablename__ = "config"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    institution: Mapped[str] = mapped_column(String(180), default="University of Nigeria, Nsukka")
-    campus: Mapped[str] = mapped_column(String(120), default="Enugu Campus (UNEC)")
-    faculty: Mapped[str] = mapped_column(String(120), default="Faculty of Law")
-    season_name: Mapped[str] = mapped_column(String(160), default="2025/2026 Arena Season")
+    institution: Mapped[str] = mapped_column(String(180), default="Absolute Genesis Academy")
+    campus: Mapped[str] = mapped_column(String(120), default="Online Campus")
+    faculty: Mapped[str] = mapped_column(String(120), default="General Studies")
+    season_name: Mapped[str] = mapped_column(String(160), default="2026/2027 Season")
     prize_pool_note: Mapped[str] = mapped_column(String(240), default="")
     grading_scale: Mapped[list] = mapped_column(JSON, default=list)
     duels_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

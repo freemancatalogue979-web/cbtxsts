@@ -42,7 +42,7 @@ class RegisterIn(BaseModel):
     def _valid_phone(cls, value: str) -> str:
         normalized = normalize_phone(value)
         if not is_valid_phone(normalized):
-            raise ValueError("Enter a valid 11-digit Nigerian phone number")
+            raise ValueError("Enter a valid phone number (Nigerian 0803…, or international with +country code)")
         return normalized
 
 
@@ -60,7 +60,7 @@ class PhoneLoginRequest(BaseModel):
     def _valid_phone(cls, value: str) -> str:
         normalized = normalize_phone(value)
         if not is_valid_phone(normalized):
-            raise ValueError("Enter a valid 11-digit Nigerian phone number, e.g. 08031234567")
+            raise ValueError("Enter a valid phone number (Nigerian 0803…, or international with +country code)")
         return normalized
 
 
@@ -95,7 +95,7 @@ class PhoneLookupRequest(BaseModel):
     def _valid_phone(cls, value: str) -> str:
         normalized = normalize_phone(value)
         if not is_valid_phone(normalized):
-            raise ValueError("Enter a valid 11-digit Nigerian phone number, e.g. 08031234567")
+            raise ValueError("Enter a valid phone number (Nigerian 0803…, or international with +country code)")
         return normalized
 
 
@@ -600,7 +600,7 @@ class StudentIn(BaseModel):
     def _valid(cls, value: str) -> str:
         normalized = normalize_phone(value)
         if not is_valid_phone(normalized):
-            raise ValueError("Enter a valid 11-digit Nigerian phone number")
+            raise ValueError("Enter a valid phone number (Nigerian 0803…, or international with +country code)")
         return normalized
 
 

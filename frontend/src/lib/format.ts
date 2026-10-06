@@ -8,6 +8,10 @@ export function formatPhone(phone: string): string {
   if (digits.length === 10) {
     return `0${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
   }
+  if ((phone || '').startsWith('+')) {
+    const country = [...PHONE_COUNTRIES].sort((a, b) => b.dial.length - a.dial.length).find((row) => digits.startsWith(row.dial));
+    return country ? `+${country.dial} ${digits.slice(country.dial.length)}` : phone;
+  }
   return phone || '';
 }
 
@@ -15,8 +19,47 @@ export function normalizePhoneInput(value: string): string {
   return value.replace(/[^\d+]/g, '').slice(0, 16);
 }
 
-export function isValidPhone(value: string): boolean {
-  let digits = (value || '').replace(/\D/g, '');
+/** Countries offered in the sign-up phone picker. `len` = digits after the dial code (no trunk zero). */
+export const PHONE_COUNTRIES: {code: string; dial: string; name: string; flag: string; len: [number, number]; sample: string}[] = [
+  {code: 'NG', dial: '234', name: 'Nigeria', flag: '🇳🇬', len: [10, 10], sample: '803 123 4567'},
+  {code: 'US', dial: '1', name: 'United States', flag: '🇺🇸', len: [10, 10], sample: '201 555 0123'},
+  {code: 'GB', dial: '44', name: 'United Kingdom', flag: '🇬🇧', len: [10, 10], sample: '7400 123456'},
+  {code: 'CA', dial: '1', name: 'Canada', flag: '🇨🇦', len: [10, 10], sample: '416 555 0123'},
+  {code: 'IE', dial: '353', name: 'Ireland', flag: '🇮🇪', len: [9, 9], sample: '85 123 4567'},
+  {code: 'GH', dial: '233', name: 'Ghana', flag: '🇬🇭', len: [9, 9], sample: '24 123 4567'},
+  {code: 'KE', dial: '254', name: 'Kenya', flag: '🇰🇪', len: [9, 9], sample: '712 345678'},
+  {code: 'ZA', dial: '27', name: 'South Africa', flag: '🇿🇦', len: [9, 9], sample: '82 123 4567'},
+  {code: 'IN', dial: '91', name: 'India', flag: '🇮🇳', len: [10, 10], sample: '98765 43210'},
+  {code: 'AU', dial: '61', name: 'Australia', flag: '🇦🇺', len: [9, 9], sample: '412 345 678'},
+  {code: 'DE', dial: '49', name: 'Germany', flag: '🇩🇪', len: [10, 11], sample: '1512 3456789'},
+  {code: 'FR', dial: '33', name: 'France', flag: '🇫🇷', len: [9, 9], sample: '6 12 34 56 78'},
+  {code: 'AE', dial: '971', name: 'United Arab Emirates', flag: '🇦🇪', len: [9, 9], sample: '50 123 4567'},
+];
+
+export function phoneCountry(code: string) {
+  return PHONE_COUNTRIES.find((row) => row.code === code) ?? PHONE_COUNTRIES[0];
+}
+
+/** Stored form: Nigerian numbers stay local (08031234567); everyone else is +<dial><number>. */
+export function buildPhone(code: string, local: string): string {
+  const country = phoneCountry(code);
+  const digits = local.replace(/\D/g, '').replace(/^0+/, '');
+  if (!digits) return '';
+  return country.dial === '234' ? `0${digits}` : `+${country.dial}${digits}`;
+}
+
+export function isValidPhone(value: string, code?: string): boolean {
+  const raw = (value || '').trim();
+  if (raw.startsWith('+') && !raw.startsWith('+234')) {
+    const digits = raw.replace(/\D/g, '');
+    if (code) {
+      const country = phoneCountry(code);
+      const rest = digits.slice(country.dial.length);
+      return digits.startsWith(country.dial) && rest.length >= country.len[0] && rest.length <= country.len[1];
+    }
+    return digits.length >= 8 && digits.length <= 15;
+  }
+  let digits = raw.replace(/\D/g, '');
   if (digits.startsWith('234')) digits = digits.slice(3);
   if (digits.startsWith('0')) digits = digits.slice(1);
   // Nigerian mobile numbers are 10 digits after the trunk zero: 7xx/8xx/9xx.
