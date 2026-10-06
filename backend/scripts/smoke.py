@@ -485,8 +485,8 @@ async def main() -> None:
     status_code, unreacted = call("POST", f"/api/activity/{target_activity}/react", token=token_a)
     check("feed reactions toggle off", status_code == 200 and unreacted["mine"] is False, str(unreacted)[:160])
 
-    status_code, patched = call("PATCH", "/api/me", token=token_b, body={"bio": "Law student, duel addict.", "status_text": "Grinding jurisprudence"})
-    check("profile bio + status update", status_code == 200 and patched["bio"] == "Law student, duel addict.", str(patched)[:160])
+    status_code, patched = call("PATCH", "/api/me", token=token_b, body={"bio": "Engineering student, duel addict.", "status_text": "Grinding quadratic equations"})
+    check("profile bio + status update", status_code == 200 and patched["bio"] == "Engineering student, duel addict.", str(patched)[:160])
 
     status_code, analytics = call("GET", "/api/study/analytics", token=token_a)
     check(

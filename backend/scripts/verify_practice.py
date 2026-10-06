@@ -162,21 +162,21 @@ def check_catalog(admin: str, student: str) -> dict:
     check("catalog loads", status == 200, (status, catalog))
     courses = catalog["courses"]
     check("at least one course offers practice", len(courses) >= 1, courses)
-    juris = next((row for row in courses if "Jurisprudence" in row["title"]), None)
-    check("Jurisprudence course listed", juris is not None, [row["title"] for row in courses])
-    topics = {row["topic"]: row for row in (juris["topics"] if juris else [])}
+    maths = next((row for row in courses if "Mathematics" in row["title"]), None)
+    check("Mathematics course listed", maths is not None, [row["title"] for row in courses])
+    topics = {row["topic"]: row for row in (maths["topics"] if maths else [])}
     check(
-        "Historical School topic present with its count",
-        topics.get("Historical School", {}).get("count", 0) >= 1,
+        "Algebra topic present with its count",
+        topics.get("Algebra", {}).get("count", 0) >= 1,
         topics,
     )
-    check("course availability equals the sum of its topics", juris["available"] == sum(row["count"] for row in juris["topics"]), juris)
+    check("course availability equals the sum of its topics", maths["available"] == sum(row["count"] for row in maths["topics"]), maths)
 
     print("\n[2] setup rules — the bank decides the maximum")
     status, payload = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Historical School", "size": 20, "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": maths["id"], "topic": "Algebra", "size": 20, "time_limit_seconds": 600},
         token=student,
     )
     check("requesting more than the bank holds is refused", status == 409, (status, payload))
@@ -186,41 +186,41 @@ def check_catalog(admin: str, student: str) -> dict:
     announced = _re.search(r"Only (\d+) questions? are available", refused)
     check(
         "the refusal says exactly how many exist",
-        bool(announced) and int(announced.group(1)) == topics["Historical School"]["count"] and "available" in refused,
+        bool(announced) and int(announced.group(1)) == topics["Algebra"]["count"] and "available" in refused,
         refused,
     )
 
     status, payload = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Nowhere", "size": 5, "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": maths["id"], "topic": "Nowhere", "size": 5, "time_limit_seconds": 600},
         token=student,
     )
     check("empty topic is refused, not silently widened", status == 409, (status, payload))
-    return juris
+    return maths
 
 
 # ---------------------------------------------------------------------------
 # 3 + 4 + 5. one full run: random, unique, shuffled, refresh-proof
 # ---------------------------------------------------------------------------
-def check_full_run(admin: str, student: str, juris: dict) -> None:
+def check_full_run(admin: str, student: str, maths: dict) -> None:
     print("\n[3] random unique selection + shuffled order")
-    size = min(8, juris["available"])
+    size = min(8, maths["available"])
     status, default_run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "", "size": 0, "time_limit_seconds": 1200},
+        {"mode": "custom", "course_id": maths["id"], "topic": "", "size": 0, "time_limit_seconds": 1200},
         token=student,
     )
     check(
         "an unset size falls back to the bank's real maximum",
-        status == 200 and len(default_run["questions"]) == min(20, juris["available"]),
-        (status, len(default_run.get("questions") or []), juris["available"]),
+        status == 200 and len(default_run["questions"]) == min(20, maths["available"]),
+        (status, len(default_run.get("questions") or []), maths["available"]),
     )
     status, run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "", "size": size, "time_limit_seconds": 1200},
+        {"mode": "custom", "course_id": maths["id"], "topic": "", "size": size, "time_limit_seconds": 1200},
         token=student,
     )
     check("run starts with the requested size", status == 200 and len(run["questions"]) == size, (status, run))
@@ -357,13 +357,13 @@ def check_full_run(admin: str, student: str, juris: dict) -> None:
 # ---------------------------------------------------------------------------
 # 6. the server clock
 # ---------------------------------------------------------------------------
-def check_server_clock(student: str, juris: dict) -> None:
+def check_server_clock(student: str, maths: dict) -> None:
     print("\n[6] the timer belongs to the server")
-    positivism = next((row["count"] for row in juris["topics"] if row["topic"] == "Positivism"), 0)
+    trigonometry = next((row["count"] for row in maths["topics"] if row["topic"] == "Trigonometry"), 0)
     status, run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Positivism", "size": min(3, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": maths["id"], "topic": "Trigonometry", "size": min(3, trigonometry), "time_limit_seconds": 600},
         token=student,
     )
     check("timed run starts", status == 200, (status, run))
@@ -386,7 +386,7 @@ def check_server_clock(student: str, juris: dict) -> None:
     status, fresh = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Positivism", "size": min(2, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": maths["id"], "topic": "Trigonometry", "size": min(2, trigonometry), "time_limit_seconds": 600},
         token=student,
     )
     token = fresh["token"]
@@ -407,22 +407,22 @@ def check_server_clock(student: str, juris: dict) -> None:
 # ---------------------------------------------------------------------------
 # 8. the upload path — correct answer as real text
 # ---------------------------------------------------------------------------
-def check_text_answers(admin: str, juris_course_id: int) -> None:
+def check_text_answers(admin: str, maths_course_id: int) -> None:
     print("\n[8] uploads may state the correct answer as its actual text")
     status, quizzes = call("GET", "/admin/quizzes", token=admin)
-    quiz = next(row for row in quizzes if row["course"] and row["course"]["id"] == juris_course_id)
+    quiz = next(row for row in quizzes if row["course"] and row["course"]["id"] == maths_course_id)
     status, created = call(
         "POST",
         f"/admin/quizzes/{quiz['id']}/questions",
         {
-            "text": "Who is regarded as the father of the Historical School of Jurisprudence?",
-            "option_a": "John Austin",
-            "option_b": "Savigny",
-            "option_c": "Jeremy Bentham",
-            "option_d": "Roscoe Pound",
-            "correct": "Savigny",
-            "explanation": "Savigny founded the Historical School, emphasising the Volksgeist.",
-            "topic": "Historical School",
+            "text": "Solve: x^2 - 9 = 0.",
+            "option_a": "x = 3 only",
+            "option_b": "x = 3 or -3",
+            "option_c": "x = 9",
+            "option_d": "x = 0",
+            "correct": "x = 3 or -3",
+            "explanation": "x^2 = 9, and a positive number has two square roots, so x = 3 or x = -3.",
+            "topic": "Quadratic Equations",
         },
         token=admin,
     )
@@ -430,13 +430,13 @@ def check_text_answers(admin: str, juris_course_id: int) -> None:
     check("the stored answer is the canonical key, not the text", created["correct"] in ("A", "B", "C", "D"), created["correct"])
 
     paper = (
-        f"Who defined law as the command of the sovereign? (paste check {digits(4)})\n"
-        "A. H.L.A. Hart\n"
-        "B. John Austin\n"
-        "C. Roscoe Pound\n"
-        "D. Thomas Aquinas\n"
-        "Answer: John Austin\n"
-        "Explanation: Austin's command theory in a single line.\n"
+        f"What is the value of 2^5? (paste check {digits(4)})\n"
+        "A. 10\n"
+        "B. 25\n"
+        "C. 32\n"
+        "D. 64\n"
+        "Answer: 32\n"
+        "Explanation: 2^5 = 2 x 2 x 2 x 2 x 2 = 32.\n"
     )
     status, bulk = call(
         "POST",
@@ -451,7 +451,7 @@ def check_text_answers(admin: str, juris_course_id: int) -> None:
     )
     check(
         "the pasted text answer lands on the right canonical key",
-        status == 200 and [row["correct"] for row in bulk["questions"]] == ["B"],
+        status == 200 and [row["correct"] for row in bulk["questions"]] == ["C"],
         bulk.get("questions"),
     )
 
@@ -519,10 +519,10 @@ def check_legacy_modes(student: str) -> None:
 def main() -> None:
     admin = admin_token()
     student, _profile = new_student()
-    juris = check_catalog(admin, student)
-    check_full_run(admin, student, juris)
-    check_server_clock(student, juris)
-    check_text_answers(admin, juris["id"])
+    maths = check_catalog(admin, student)
+    check_full_run(admin, student, maths)
+    check_server_clock(student, maths)
+    check_text_answers(admin, maths["id"])
     check_legacy_modes(student)
 
     print(f"\npractice suite: {PASSED} passed, {FAILED} failed")

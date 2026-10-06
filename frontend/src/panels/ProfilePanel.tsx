@@ -464,7 +464,7 @@ export default function ProfilePanel({
               <TextInput
                 value={statusText}
                 onChange={(event) => setStatusText(event.target.value.slice(0, 80))}
-                placeholder="e.g. Grinding jurisprudence 📚"
+                placeholder="e.g. Grinding quadratic equations 📚"
               />
             </Field>
             <Field label="Bio">

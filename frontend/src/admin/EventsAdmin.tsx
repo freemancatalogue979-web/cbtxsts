@@ -368,7 +368,7 @@ export default function EventsAdmin({onChanged}: {onChanged?: () => void}) {
             <TextInput value={form.description} maxLength={400} onChange={(e) => set('description', e.target.value)} placeholder="A one-hour sprint across the whole syllabus." />
           </Field>
           <Field label="Topics (optional)" hint="Comma-separated — narrows the question draw.">
-            <TextInput value={form.topics} onChange={(e) => set('topics', e.target.value)} placeholder="Natural Law, Jurisprudence" />
+            <TextInput value={form.topics} onChange={(e) => set('topics', e.target.value)} placeholder="Concord & Tenses, Comprehension" />
           </Field>
           <Field label="Starts at" hint="Server time drives everything.">
             <TextInput type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />

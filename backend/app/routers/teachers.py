@@ -421,7 +421,7 @@ def catalog(db: Session = Depends(get_db), student: Student = Depends(require_st
         .limit(10)
     ).all()
     chips = [name for name, _ in popular]
-    for fallback in ["Calculus", "Physics", "Chemistry", "Biology", "English", "Constitutional Law"]:
+    for fallback in ["Algebra", "Geometry", "Use of English", "Comprehension", "Physics", "Chemistry", "Biology"]:
         if len(chips) >= 8:
             break
         if fallback not in chips:

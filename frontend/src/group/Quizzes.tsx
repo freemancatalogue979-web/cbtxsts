@@ -108,7 +108,7 @@ function CreateQuiz({onDone, onCancel}: {onDone: () => void; onCancel: () => voi
             </Select>
           </Field>
           <Field label="Topic (optional)">
-            <TextInput value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Constitutional Law" maxLength={120} />
+            <TextInput value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Trigonometry" maxLength={120} />
           </Field>
         </div>
         <Field label="Description (optional)">

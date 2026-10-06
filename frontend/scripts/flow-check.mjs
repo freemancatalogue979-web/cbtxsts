@@ -208,7 +208,7 @@ async function main() {
   await wait(1200);
   click(byText('button', 'New duel'));
   await wait(600);
-  const courseChip = byText('button', 'LAW 421');
+  const courseChip = byText('button', 'ENG 101');
   check('duel creator offers course banks', Boolean(courseChip), text().slice(0, 160));
   click(courseChip);
   await wait(200);

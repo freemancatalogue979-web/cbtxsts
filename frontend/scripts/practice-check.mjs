@@ -104,24 +104,24 @@ async function main() {
   await wait(1200);
   check('the practice setup interface is the landing view', text().includes('Set up your practice'), text().slice(0, 220));
   check('setup walks Course → Topic → Questions → Duration', ['1 · Course', '2 · Topic', '3 · Number of questions', '4 · Practice duration'].every((step) => text().includes(step)), text().slice(0, 400));
-  check('courses arrive from the bank with live counts', /Jurisprudence & Legal Theory/.test(text()) && /\d+ questions/.test(text()), text().slice(0, 400));
+  check('courses arrive from the bank with live counts', /Elementary Mathematics/.test(text()) && /\d+ questions/.test(text()), text().slice(0, 400));
   check('duration options run 10 to 60 minutes', ['10 min', '30 min', '60 min'].every((option) => text().includes(option)), '');
 
   /* ------------------------------------------------ pick a course and a topic */
-  const jurisCard = [...window.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Jurisprudence'));
-  click(jurisCard);
+  const mathsCard = [...window.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Elementary Mathematics'));
+  click(mathsCard);
   await wait(300);
   const topicSelect = window.document.querySelector('select');
-  check('topic dropdown lists the course topics with counts', Boolean(topicSelect) && (topicSelect.textContent || '').includes('Historical School'), topicSelect?.textContent?.slice(0, 200));
-  const historical = [...(topicSelect?.options ?? [])].find((option) => option.text.includes('Historical School'));
-  check('the topic declares its real availability', Boolean(historical) && /1 question/.test(historical.text), historical?.text);
-  if (topicSelect && historical) {
+  check('topic dropdown lists the course topics with counts', Boolean(topicSelect) && (topicSelect.textContent || '').includes('Algebra'), topicSelect?.textContent?.slice(0, 200));
+  const thinTopic = [...(topicSelect?.options ?? [])].find((option) => option.text.includes('Algebra'));
+  check('the topic declares its real availability', Boolean(thinTopic) && /1 question/.test(thinTopic.text), thinTopic?.text);
+  if (topicSelect && thinTopic) {
     const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-    setter.call(topicSelect, historical.value);
+    setter.call(topicSelect, thinTopic.value);
     topicSelect.dispatchEvent(new window.Event('change', {bubbles: true}));
     await wait(400);
   }
-  check('a thin topic says exactly how many questions exist', text().includes('Only 1 question is available for Historical School'), text().slice(0, 500));
+  check('a thin topic says exactly how many questions exist', text().includes('Only 1 question is available for Algebra'), text().slice(0, 500));
 
   /* ------------------------------------ switch to the full course and start */
   if (topicSelect) {

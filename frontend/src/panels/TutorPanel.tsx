@@ -1182,7 +1182,7 @@ function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onC
             </Field>
           </div>
           <Field label="My goals (optional)">
-            <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Pass LAW 411 with an A, understand case law better" />
+            <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Pass MTH 101 with an A, understand quadratic equations better" />
           </Field>
           <SwitchRow label="Socratic mode for this chat" description="The tutor asks guiding questions before explaining." checked={socratic} onChange={onSocratic} />
         </div>

@@ -3,8 +3,8 @@
 *A completely new beginning.*
 
 A real-time computer-based testing **and** quiz-competition platform: timed exams, live 1v1 duels,
-XP, levels, streaks, coins, badges, leaderboards and a prize vault — for the UNN Faculty of Law
-(or any institution you configure).
+XP, levels, streaks, coins, badges, leaderboards and a prize vault — shipped with **ENG 101 Use of
+English** and **MTH 101 Elementary Mathematics** (or any institution and courses you configure).
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite + WebSockets   → http://localhost:3000
@@ -66,9 +66,12 @@ npm run dev
 
 Open **http://localhost:5173**.
 
-* First boot creates `backend/data/arena.db` and seeds **content only**: **93 questions** across
-  **4 exams**, **16 badges**, **9 prizes** and a few announcements. **No students are seeded** —
-  every account is a real registration.
+* First boot creates `backend/data/arena.db` and seeds **content only**: **2 courses** (ENG 101 Use of
+  English, MTH 101 Elementary Mathematics) with **166 banked questions** (73 + 93), **4 exams** that
+  draw from those banks, **16 badges**, **9 prizes** and a few announcements. **No students are
+  seeded** — every account is a real registration. On every boot the seeder also deletes the retired
+  law catalogue (`LAW 411`, `LAW 421`, `LAW 431`) — courses, banks, exams and attempts — from any
+  database that still holds it.
 * The front face is a branded landing page (animated picture reel of the uploaded game splash art, live
   stats, current top five) wearing the **Absolute Genesis crest** everywhere the brand appears —
   header, sign-in, favicon — with a game-HUD look (glossy coin/gem pills, gold XP bars, violet washes)
@@ -608,7 +611,9 @@ its **data** was migrated into the database layer:
 * `students.json` (356 records) → `students` table, each assigned a deterministic Nigerian phone
   number because login is now phone-based. Original names, reg numbers, levels and classes kept.
 * `seedQuestions.json` (70 Constitutional Law questions) → `questions` table, attached to the
-  *Constitutional Law Arena Exam*, plus three smaller exams built from the same bank.
+  *Constitutional Law Arena Exam*, plus three smaller exams built from the same bank. That law
+  catalogue (and the law-class roster) has since been **retired and deleted**; the seeded banks are
+  now `app/seed_data/english_questions.py` and `app/seed_data/maths_questions.py`.
 * Firebase config, Firestore rules and the ~9 MB of duplicate logo imagery were deleted.
 
 Nothing is stored in the browser except the session token; the database is the only source of truth.

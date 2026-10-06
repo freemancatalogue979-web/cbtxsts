@@ -1,129 +1,47 @@
 """Database seeder.
 
 Runs on startup and is fully idempotent: it only fills in what is missing. The
-legacy JSON roster/question bank was converted once into
-``app/seed_data/*.py``; from then on SQLite is the only source of truth.
+platform ships with two courses — **ENG 101 Use of English** and **MTH 101
+Elementary Mathematics** — whose question banks live in ``app/seed_data/*.py``;
+from then on SQLite is the only source of truth.
+
+The law catalogue this arena used to ship (LAW 411/421/431) is retired: on every
+boot the seeder deletes those courses, their banks, their exams and everything
+hanging off them, then makes sure English and Mathematics exist.
 """
 from __future__ import annotations
 
-import random
+import warnings
 from datetime import timedelta
 
 from sqlalchemy import func, select
+from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.orm import Session
 
 from . import game
 from .config import DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_NAME, DEFAULT_ADMIN_PASSWORD
 from .models import (
-    Activity,
     Admin,
     Badge,
     Config,
     Course,
-    Friendship,
     Notification,
     Prize,
     Question,
     Quiz,
     Student,
-    StudentBadge,
     utcnow,
 )
 from .security import hash_password
 from .services.course_bank import ensure_bank_quiz, promote_legacy_exam_questions
-from .seed_data.questions import QUESTIONS
-from .seed_data.roster import ROSTER
+from .seed_data.english_questions import ENGLISH_QUESTIONS
+from .seed_data.maths_questions import MATHEMATICS_QUESTIONS
 
-JURISPRUDENCE_QUESTIONS = [
-    {
-        "text": "Who defined law as the command of an uncommanded sovereign backed by threats of sanction?",
-        "option_a": "Hans Kelsen",
-        "option_b": "John Austin",
-        "option_c": "H.L.A. Hart",
-        "option_d": "Thomas Aquinas",
-        "correct": "B",
-        "explanation": "John Austin established the Imperative/Command Theory of Law in Province of Jurisprudence Determined.",
-        "difficulty": "easy",
-        "topic": "Positivism",
-    },
-    {
-        "text": "Which philosopher authored \"The Morality of Law\" and proposed the eight internal desiderata of law?",
-        "option_a": "Ronald Dworkin",
-        "option_b": "Lon L. Fuller",
-        "option_c": "John Finnis",
-        "option_d": "Jeremy Bentham",
-        "correct": "B",
-        "explanation": "Fuller introduced procedural natural law and the 8 principles of the inner morality of law.",
-        "difficulty": "medium",
-        "topic": "Natural Law",
-    },
-    {
-        "text": "Hans Kelsen posited that every legal system derives its ultimate validity from what foundational norm?",
-        "option_a": "The Volksgeist",
-        "option_b": "The Grundnorm",
-        "option_c": "Rule of Recognition",
-        "option_d": "Lex Aeterna",
-        "correct": "B",
-        "explanation": "Kelsen's Pure Theory of Law centres on hierarchical validity derived from the Grundnorm.",
-        "difficulty": "easy",
-        "topic": "Positivism",
-    },
-    {
-        "text": "The concept of the \"Rule of Recognition\" was introduced into analytical jurisprudence by:",
-        "option_a": "H.L.A. Hart",
-        "option_b": "Karl Olivecrona",
-        "option_c": "Joseph Raz",
-        "option_d": "Lord Denning",
-        "correct": "A",
-        "explanation": "Hart introduced the secondary rule of recognition in The Concept of Law.",
-        "difficulty": "medium",
-        "topic": "Positivism",
-    },
-    {
-        "text": "The Historical School of Jurisprudence, championed by Savigny, posits that law is:",
-        "option_a": "Imposed from above by sovereign command",
-        "option_b": "A tool of capitalist exploitation",
-        "option_c": "Found in the common consciousness of the people (Volksgeist)",
-        "option_d": "Derived purely from divine revelation",
-        "correct": "C",
-        "explanation": "Savigny argued law develops like language from the internal spirit of a people.",
-        "difficulty": "medium",
-        "topic": "Historical School",
-    },
-    {
-        "text": "Jeremy Bentham's utility principle judges law by its ability to:",
-        "option_a": "Reflect divine command",
-        "option_b": "Maximise pleasure and minimise pain",
-        "option_c": "Preserve tradition",
-        "option_d": "Enforce the Grundnorm",
-        "correct": "B",
-        "explanation": "Bentham's utilitarianism measures law by the greatest happiness of the greatest number.",
-        "difficulty": "easy",
-        "topic": "Utilitarianism",
-    },
-    {
-        "text": "Which school of thought argues that law and morality are necessarily connected?",
-        "option_a": "Legal positivism",
-        "option_b": "Natural law",
-        "option_c": "Legal realism",
-        "option_d": "Marxist jurisprudence",
-        "correct": "B",
-        "explanation": "Natural law theory holds that an unjust law is not truly law.",
-        "difficulty": "easy",
-        "topic": "Natural Law",
-    },
-    {
-        "text": "The realist school of jurisprudence is best associated with which idea?",
-        "option_a": "Law is what the courts actually do",
-        "option_b": "Law is a closed logical system",
-        "option_c": "Law derives from morality alone",
-        "option_d": "Law is the command of God",
-        "correct": "A",
-        "explanation": "American realists such as Holmes focused on judicial behaviour over abstract doctrine.",
-        "difficulty": "medium",
-        "topic": "Realism",
-    },
-]
+# Course codes that used to ship with the platform. They are retired: the
+# seeder removes them (courses, banks, exams and everything hanging off them)
+# from any database that still holds them.
+RETIRED_COURSE_CODES = ("LAW 411", "LAW 421", "LAW 431")
+
 
 PRIZES = [
     {"title": "₦50,000 Arena Champion Cash Prize", "description": "Season winner takes the grand cash prize plus the Arena Champion trophy.", "tier": "platinum", "kind": "rank", "min_rank": 1, "max_rank": 1, "icon": "crown", "sort_order": 1},
@@ -140,9 +58,9 @@ PRIZES = [
 NOTICES = [
     {
         "title": "Arena Season is LIVE",
-        "message": "Constitutional Law Arena Exam is open now — 70 questions, 25 minutes, server-side timer. Climb the leaderboard and grab the ₦50,000 champion prize.",
+        "message": "Use of English Arena Exam is open now — 40 questions drawn at random, 25 minutes, server-side timer. Climb the leaderboard and grab the ₦50,000 champion prize.",
         "kind": "exam",
-        "target_course": "LAW 411",
+        "target_course": "ENG 101",
         "is_pinned": True,
     },
     {
@@ -195,11 +113,38 @@ def seed_admin(db: Session) -> None:
     db.flush()
 
 
+def retire_legacy_courses(db: Session) -> int:
+    """Delete the retired law catalogue from any database that still holds it.
+
+    Idempotent and safe on a fresh database (there is nothing to delete). The
+    delete is a plain ORM delete: SQLite runs with ``PRAGMA foreign_keys=ON``,
+    so the database itself removes each course's quizzes, question banks,
+    questions and attempts, and detaches anything that merely points at the
+    course (duels, rooms, materials, events, AI artefacts...).
+
+    Because the database cascades first, the ORM's own deletes can match zero
+    rows; the resulting SAWarning is expected here, so it is suppressed for the
+    flush instead of being logged on every boot.
+    """
+    legacy = list(db.scalars(select(Course).where(Course.code.in_(RETIRED_COURSE_CODES))).all())
+    if not legacy:
+        return 0
+    for course in legacy:
+        db.delete(course)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"DELETE statement on table .* expected to delete \d+ row\(s\); 0 were matched",
+            category=sqlalchemy_exc.SAWarning,
+        )
+        db.flush()
+    return len(legacy)
+
+
 def seed_courses(db: Session) -> dict[str, Course]:
     wanted = [
-        ("LAW 411", "Nigerian Constitutional Law", "Supremacy of the Constitution, fundamental rights, federalism and the structure of the Nigerian state.", "violet"),
-        ("LAW 421", "Jurisprudence & Legal Theory", "Schools of legal thought: natural law, positivism, realism, historical and Marxist theories.", "blue"),
-        ("LAW 431", "Commercial Law & Sale of Goods", "Formation of commercial contracts, sale of goods, agency and negotiable instruments.", "red"),
+        ("ENG 101", "Use of English", "Grammar and concord, lexis and structure, comprehension, phonology, registers, summary writing and letter/essay technique.", "violet"),
+        ("MTH 101", "Elementary Mathematics", "Indices and logarithms, quadratic and simultaneous equations, sequences, sets, geometry, trigonometry, statistics and an introduction to calculus.", "blue"),
     ]
     courses: dict[str, Course] = {}
     for code, title, description, accent in wanted:
@@ -241,10 +186,10 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
     now = utcnow()
     specs = [
         {
-            "key": "constitutional",
-            "title": "Constitutional Law Arena Exam",
-            "course": "LAW 411",
-            "instructions": "40 objective questions drawn at random from the LAW 411 bank • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
+            "key": "english",
+            "title": "Use of English Arena Exam",
+            "course": "ENG 101",
+            "instructions": "40 objective questions drawn at random from the ENG 101 bank • 25 minutes • the server owns the clock.\nAnswers autosave after every tap, so a refresh never costs you progress.\nPoints, XP and coins land the moment you submit.",
             "duration_minutes": 25,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
@@ -255,9 +200,9 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "draw_count": 40,
         },
         {
-            "key": "speed",
-            "title": "Constitutional Speed Round",
-            "course": "LAW 411",
+            "key": "english_speed",
+            "title": "English Speed Round",
+            "course": "ENG 101",
             "instructions": "15 questions in 6 minutes. Built for duels and rapid-fire practice.",
             "duration_minutes": 6,
             "status": "active",
@@ -269,30 +214,33 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
             "draw_count": 15,
         },
         {
-            "key": "jurisprudence",
-            "title": "Jurisprudence Blitz",
-            "course": "LAW 421",
-            "instructions": "8 questions on the schools of legal thought. Perfect warm-up duel material.",
-            "duration_minutes": 10,
+            "key": "maths",
+            "title": "Mathematics Arena Exam",
+            "course": "MTH 101",
+            "instructions": "40 objective questions drawn at random from the MTH 101 bank • 25 minutes • work them out, no calculator needed.\nAnswers autosave after every tap, so a refresh never costs you progress.",
+            "duration_minutes": 25,
             "status": "active",
             "scheduled_at": now - timedelta(minutes=5),
             "end_at": now + timedelta(days=14),
             "shuffle_questions": True,
             "allow_duel": True,
             "question_source": "course_random",
-            "draw_count": 8,
+            "draw_count": 40,
+            "calculator": False,
         },
         {
-            "key": "commercial",
-            "title": "Commercial Law Challenge",
-            "course": "LAW 431",
-            "instructions": "Opens next week. Bank XP on the other arenas until then.",
-            "duration_minutes": 20,
-            "status": "scheduled",
-            "scheduled_at": now + timedelta(days=7),
-            "end_at": now + timedelta(days=7, minutes=20),
+            "key": "maths_speed",
+            "title": "Mathematics Speed Round",
+            "course": "MTH 101",
+            "instructions": "15 questions in 8 minutes. Quick-fire arithmetic, algebra and geometry for duels.",
+            "duration_minutes": 8,
+            "status": "active",
+            "scheduled_at": now - timedelta(minutes=5),
+            "end_at": now + timedelta(days=14),
             "shuffle_questions": True,
-            "allow_duel": False,
+            "allow_duel": True,
+            "question_source": "course_random",
+            "draw_count": 15,
         },
     ]
 
@@ -310,34 +258,9 @@ def seed_quizzes(db: Session, courses: dict[str, Course]) -> dict[str, Quiz]:
     promote_legacy_exam_questions(db)
     # Fresh databases: questions are seeded into the COURSE BANK; the exams
     # above draw from it at random, per player.
-    seed_questions(db, ensure_bank_quiz(db, courses["LAW 411"]), QUESTIONS)
-    seed_questions(db, ensure_bank_quiz(db, courses["LAW 421"]), JURISPRUDENCE_QUESTIONS)
+    seed_questions(db, ensure_bank_quiz(db, courses["ENG 101"]), ENGLISH_QUESTIONS)
+    seed_questions(db, ensure_bank_quiz(db, courses["MTH 101"]), MATHEMATICS_QUESTIONS)
     return quizzes
-
-
-def seed_students(db: Session) -> list[Student]:
-    existing = set(db.scalars(select(Student.phone)).all())
-    created: list[Student] = []
-    for index, row in enumerate(ROSTER):
-        if row["phone"] in existing:
-            continue
-        student = Student(
-            phone=row["phone"],
-            name=row["name"],
-            reg_no=row.get("reg_no"),
-            faculty=row.get("faculty", "Faculty of Law"),
-            campus=row.get("campus", "UNEC (Enugu Campus)"),
-            class_name=row.get("class_name", "030 Law Class"),
-            level=row.get("level", "400 Level"),
-            avatar_hue=_hue(row["name"]),
-            week_key=game.week_key(),
-            player_code=game.make_player_code(db),
-        )
-        db.add(student)
-        db.flush()  # keep player-code collision checks honest
-        created.append(student)
-    db.flush()
-    return created
 
 
 def seed_badges(db: Session) -> None:
@@ -365,16 +288,16 @@ def seed_all(db: Session) -> dict[str, int]:
     config = seed_config(db)
     seed_admin(db)
     seed_badges(db)
+    retired = retire_legacy_courses(db)  # the law catalogue no longer ships
     courses = seed_courses(db)
     quizzes = seed_quizzes(db, courses)
-    created: list[Student] = []  # no seeded class roster — only real registrations play
     seed_prizes(db)
     seed_notifications(db)
     db.commit()
     return {
-        "students_created": len(created),
         "students_total": db.scalar(select(func.count(Student.id))) or 0,
         "courses": len(courses),
+        "courses_retired": retired,
         "quizzes": len(quizzes),
         "questions": db.scalar(select(func.count(Question.id))) or 0,
         "badges": db.scalar(select(func.count(Badge.id))) or 0,

@@ -71,7 +71,7 @@ def get_my_profile(ctx: ToolContext, args: dict) -> dict:
     }
 
 
-@tool("list_my_courses", description="Courses available on the platform with ids, codes, topic counts and practice-question counts. Call this first to resolve a course name like 'Biology' or 'LAW 411' to an id.", roles=ANY | STAFF_ROLES, label="Looking up courses")
+@tool("list_my_courses", description="Courses available on the platform with ids, codes, topic counts and practice-question counts. Call this first to resolve a course name like 'English' or 'MTH 101' to an id.", roles=ANY | STAFF_ROLES, label="Looking up courses")
 def list_my_courses(ctx: ToolContext, args: dict) -> dict:
     db = ctx.db
     courses = db.execute(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).scalars().all()

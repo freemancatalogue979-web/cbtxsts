@@ -164,10 +164,11 @@ def _startup_db() -> dict:
 async def lifespan(app: FastAPI):
     summary = await asyncio.to_thread(_startup_db)
     logger.info(
-        "database ready | %s students, %s questions across %s quizzes",
+        "database ready | %s students, %s questions across %s quizzes%s",
         summary["students_total"],
         summary["questions"],
         summary["quizzes"],
+        f", {summary['courses_retired']} retired law courses removed" if summary.get("courses_retired") else "",
     )
     ticker = asyncio.create_task(game_ticker())
     ranked = asyncio.create_task(ranked_ticker())

@@ -776,7 +776,7 @@ export default function FlashcardsPanel() {
         <div className="grid gap-3">
           <label className="grid gap-1.5">
             <span className="text-[0.76rem] font-bold text-mist-400">Deck name</span>
-            <TextInput value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Contract law — offer & acceptance" />
+            <TextInput value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Concord — subject & verb agreement" />
           </label>
           <label className="grid gap-1.5">
             <span className="text-[0.76rem] font-bold text-mist-400">Topic (optional)</span>

@@ -803,7 +803,7 @@ export default function QuestionManager({
                 </Select>
               </Field>
               <Field label="Topic">
-                <TextInput value={editing.topic} onChange={(event) => setEditing({...editing, topic: event.target.value})} placeholder="e.g. Constitutional Law" />
+                <TextInput value={editing.topic} onChange={(event) => setEditing({...editing, topic: event.target.value})} placeholder="e.g. Trigonometry" />
               </Field>
               <Field label="Subtopic">
                 <TextInput value={editing.subtopic} onChange={(event) => setEditing({...editing, subtopic: event.target.value})} />

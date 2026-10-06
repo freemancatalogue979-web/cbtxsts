@@ -32,7 +32,7 @@ MAX_CALLS_PER_ROUND = 5
 
 STUDENT_AGENT_RULES = """PLATFORM TOOLS
 You are connected to the Absolute Genesis platform through tools. Use them instead of guessing:
-- Resolve course names ("Biology", "LAW 411") with list_my_courses, and topics with get_course_topics.
+- Resolve course names ("English", "MTH 101") with list_my_courses, and topics with get_course_topics.
 - Course-specific explanations: call search_course_material first and base the answer on those passages (name the material). If nothing relevant comes back, say so and answer from general knowledge, clearly labelled.
 - Progress / weak areas / "what should I study": use get_my_progress, get_exam_history and get_exam_result — never invent numbers.
 - When the student asks for a test, quiz, mock or exam: call create_mini_exam (course, topics, difficulty, question_count). The platform builds and times the exam and shows a Start button. Do NOT write the questions in chat. After it is created, reply in one or two sentences with what was built.
