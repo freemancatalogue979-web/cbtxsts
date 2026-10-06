@@ -57,7 +57,6 @@ SUBJECTS: dict[str, list[str]] = {
     "Chemistry": ["Organic Chemistry", "Inorganic Chemistry", "Physical Chemistry", "Stoichiometry", "Chemical Bonding", "Electrochemistry", "Analytical Chemistry"],
     "Biology": ["Cell Biology", "Genetics", "Ecology", "Human Physiology", "Evolution", "Microbiology", "Botany", "Zoology"],
     "English": ["Grammar", "Essay Writing", "Comprehension", "Literature", "Oral English", "Vocabulary"],
-    "Law": ["Constitutional Law", "Criminal Law", "Contract Law", "Law of Torts", "Jurisprudence", "Land Law", "Equity and Trusts", "Evidence", "Commercial Law", "Legal Research"],
     "Economics": ["Microeconomics", "Macroeconomics", "Development Economics", "Econometrics", "Public Finance"],
     "Computer Science": ["Programming", "Data Structures", "Algorithms", "Databases", "Web Development", "Computer Networks"],
     "Accounting": ["Financial Accounting", "Cost Accounting", "Management Accounting", "Auditing", "Taxation"],

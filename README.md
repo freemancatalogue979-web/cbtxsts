@@ -71,7 +71,8 @@ Open **http://localhost:5173**.
   draw from those banks, **16 badges**, **9 prizes** and a few announcements. **No students are
   seeded** — every account is a real registration. On every boot the seeder also deletes the retired
   law catalogue (`LAW 411`, `LAW 421`, `LAW 431`) — courses, banks, exams and attempts — from any
-  database that still holds it.
+  database that still holds it, and re-points any leftover law-faculty defaults (config faculty/campus,
+  player faculty/campus/class/level) at **General Studies · Main Campus · 100 Level**.
 * The front face is a branded landing page (animated picture reel of the uploaded game splash art, live
   stats, current top five) wearing the **Absolute Genesis crest** everywhere the brand appears —
   header, sign-in, favicon — with a game-HUD look (glossy coin/gem pills, gold XP bars, violet washes)

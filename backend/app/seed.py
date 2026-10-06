@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy import update as sqlalchemy_update
 from sqlalchemy.orm import Session
 
 from . import game
@@ -41,6 +42,17 @@ from .seed_data.maths_questions import MATHEMATICS_QUESTIONS
 # seeder removes them (courses, banks, exams and everything hanging off them)
 # from any database that still holds them.
 RETIRED_COURSE_CODES = ("LAW 411", "LAW 421", "LAW 431")
+
+# Branding strings the seeder used to write into the config row and into every
+# new player. Anything still holding one of these is stale — the owner's own
+# wording (or a student's own faculty) is never touched.
+RETIRED_BRANDING = {
+    "Faculty of Law",
+    "030 Law Class",
+    "400 Level",
+    "UNEC (Enugu Campus)",
+    "Enugu Campus (UNEC)",
+}
 
 
 PRIZES = [
@@ -139,6 +151,35 @@ def retire_legacy_courses(db: Session) -> int:
         )
         db.flush()
     return len(legacy)
+
+
+def refresh_default_branding(db: Session, config: Config) -> int:
+    """Clear leftover law-faculty defaults from the config row and from players.
+
+    Idempotent, and deliberately narrow: only rows still carrying one of the
+    strings the old seeder wrote are moved onto the current defaults
+    (``Config.faculty``/``campus``, ``Student.faculty``/``campus``/
+    ``class_name``/``level``). Anything the owner or a player typed themselves
+    is left exactly as it is.
+    """
+    updated = 0
+    if config.faculty in RETIRED_BRANDING:
+        config.faculty = "General Studies"
+        updated += 1
+    if config.campus in RETIRED_BRANDING:
+        config.campus = "Main Campus"
+        updated += 1
+    for field, fresh in (
+        (Student.faculty, "General Studies"),
+        (Student.campus, "Main Campus"),
+        (Student.class_name, "100 Level Class"),
+        (Student.level, "100 Level"),
+    ):
+        result = db.execute(sqlalchemy_update(Student).where(field.in_(RETIRED_BRANDING)).values({field.key: fresh}))
+        updated += int(result.rowcount or 0)
+    if updated:
+        db.flush()
+    return updated
 
 
 def seed_courses(db: Session) -> dict[str, Course]:
@@ -289,6 +330,7 @@ def seed_all(db: Session) -> dict[str, int]:
     seed_admin(db)
     seed_badges(db)
     retired = retire_legacy_courses(db)  # the law catalogue no longer ships
+    rebranded = refresh_default_branding(db, config)
     courses = seed_courses(db)
     quizzes = seed_quizzes(db, courses)
     seed_prizes(db)
@@ -298,6 +340,7 @@ def seed_all(db: Session) -> dict[str, int]:
         "students_total": db.scalar(select(func.count(Student.id))) or 0,
         "courses": len(courses),
         "courses_retired": retired,
+        "branding_refreshed": rebranded,
         "quizzes": len(quizzes),
         "questions": db.scalar(select(func.count(Question.id))) or 0,
         "badges": db.scalar(select(func.count(Badge.id))) or 0,

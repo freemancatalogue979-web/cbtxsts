@@ -58,21 +58,21 @@ def _w_para(text: str, style: str = "", num: int = 0) -> str:
 
 def make_docx(paragraphs: list[str] | None = None) -> bytes:
     body = paragraphs or [
-        _w_para("Constitutional Law I — Federalism", "Title"),
+        _w_para("Use of English I — Concord", "Title"),
         _w_para("Introduction", "Heading1"),
-        _w_para("Federalism divides power between a central authority and the states. " * 4),
-        _w_para("Sources of power", "Heading1"),
-        _w_para("The main sources are:"),
-        _w_para("The Constitution", num=1),
-        _w_para("Acts of the National Assembly", num=1),
-        _w_para("Key cases", "Heading2"),
-        _w_para("AG Ogun v AG Federation", num=2),
-        _w_para("AG Lagos v AG Federation", num=2),
-        "<w:tbl><w:tr><w:tc>" + _w_para("List") + "</w:tc><w:tc>" + _w_para("Examples") + "</w:tc></w:tr>"
-        "<w:tr><w:tc>" + _w_para("Exclusive") + "</w:tc><w:tc>" + _w_para("Defence") + "</w:tc></w:tr></w:tbl>",
+        _w_para("Concord is the agreement between a subject and its verb in number and person. " * 4),
+        _w_para("Rules of concord", "Heading1"),
+        _w_para("The main rules are:"),
+        _w_para("Proximity concord", num=1),
+        _w_para("Notional concord", num=1),
+        _w_para("Worked examples", "Heading2"),
+        _w_para("Neither the lecturer nor the students were present", num=2),
+        _w_para("Every one of the contestants has been paid", num=2),
+        "<w:tbl><w:tr><w:tc>" + _w_para("Rule") + "</w:tc><w:tc>" + _w_para("Example") + "</w:tc></w:tr>"
+        "<w:tr><w:tc>" + _w_para("Proximity") + "</w:tc><w:tc>" + _w_para("Neither he nor they were") + "</w:tc></w:tr></w:tbl>",
         _w_para("Body text with outline level nine", "") .replace("<w:p>", '<w:p><w:pPr><w:outlineLvl w:val="9"/></w:pPr>', 1),
         _w_para("Conclusion", "Heading1"),
-        _w_para("Federalism balances unity and diversity."),
+        _w_para("Concord keeps formal writing accurate and easy to follow."),
     ]
     styles = (
         f'<w:styles {W_NS}>'
@@ -149,9 +149,9 @@ def make_pptx() -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         # slide10 before slide2 in the archive: order must be numeric, not alphabetical
-        archive.writestr("ppt/slides/slide10.xml", slide("Remedies", ["Damages", "Injunction"]))
-        archive.writestr("ppt/slides/slide1.xml", slide("Torts overview", ["Negligence", "Nuisance", "Defamation"]))
-        archive.writestr("ppt/slides/slide2.xml", slide("Negligence", ["Duty of care", "Breach", "Damage"]))
+        archive.writestr("ppt/slides/slide10.xml", slide("Applications", ["Angles of elevation", "Bearings"]))
+        archive.writestr("ppt/slides/slide1.xml", slide("Trigonometry overview", ["Sine", "Cosine", "Tangent"]))
+        archive.writestr("ppt/slides/slide2.xml", slide("Right-angled triangles", ["SOH", "CAH", "TOA"]))
     return buffer.getvalue()
 
 
@@ -159,10 +159,10 @@ def make_odt() -> bytes:
     content = (
         '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
         'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text>'
-        '<text:h text:outline-level="1">Equity maxims</text:h><text:p>Equity follows the law.</text:p>'
-        "<text:list><text:list-item><text:p>Delay defeats equity</text:p></text:list-item>"
-        "<text:list-item><text:p>Equity acts in personam</text:p></text:list-item></text:list>"
-        '<text:h text:outline-level="1">Trusts</text:h><text:p>A trust is an equitable obligation binding a trustee.</text:p>'
+        '<text:h text:outline-level="1">Set notation</text:h><text:p>A set is a well-defined collection of distinct objects.</text:p>'
+        "<text:list><text:list-item><text:p>Union joins every member of both sets</text:p></text:list-item>"
+        "<text:list-item><text:p>Intersection keeps only the shared members</text:p></text:list-item></text:list>"
+        '<text:h text:outline-level="1">Venn diagrams</text:h><text:p>A Venn diagram shows how sets overlap inside a universal set.</text:p>'
         "</office:text></office:body></office:document-content>"
     )
     buffer = io.BytesIO()
@@ -172,54 +172,54 @@ def make_odt() -> bytes:
 
 
 PDF = make_pdf([
-    ["LAW OF CONTRACT", "", "An offer is a definite promise to be bound on specific terms.", "Acceptance must mirror the offer.",
-     "CONSIDERATION", "Consideration must be sufficient but need not be adequate."],
-    ["PRIVITY", "Only parties to a contract can sue or be sued on it."],
+    ["INDICES AND LOGARITHMS", "", "An index shows how many times a base is multiplied by itself.", "Logarithms are the inverse of indices.",
+     "LAWS OF INDICES", "When multiplying powers with the same base, add the indices."],
+    ["STANDARD FORM", "Standard form writes a number as A x 10^n, where 1 <= A < 10."],
 ])
 FILES: dict[str, bytes] = {
-    "federalism_notes.docx": make_docx(),
-    "contract-law.pdf": PDF,
-    "torts_slides.pptx": make_pptx(),
-    "equity.odt": make_odt(),
-    "jurisprudence.txt": b"NATURAL LAW\n\nNatural law theory holds that law\nis derived from morality.\n\nPOSITIVISM\n\nLaw and morals are separate.\n- Austin: command theory\n- Hart: rule of recognition\n",
-    "evidence.md": b"# Law of Evidence\n\n## Relevance\n\nEvidence must be **relevant**.\n\n1. Direct evidence\n2. Circumstantial evidence\n\n## Hearsay\n\nHearsay is generally inadmissible.\n",
-    "land-law.html": b"<html><head><script>alert(1)</script></head><body><h1>Land Use Act</h1><p>The Act vests land in the Governor.</p>"
-    b"<h2>Certificate of occupancy</h2><ul><li>Statutory right</li><li>Customary right</li></ul>"
-    b"<table><tr><th>Right</th><th>Granted by</th></tr><tr><td>Statutory</td><td>Governor</td></tr></table></body></html>",
-    "ethics.rtf": rb"{\rtf1\ansi{\fonttbl{\f0 Arial;}}\f0 LEGAL ETHICS\par\par A lawyer owes a duty to the court and to the client.\par}",
+    "concord_notes.docx": make_docx(),
+    "indices-logarithms.pdf": PDF,
+    "trigonometry_slides.pptx": make_pptx(),
+    "set-notation.odt": make_odt(),
+    "number_bases.txt": b"NUMBER BASES\n\nA number base counts in groups\nof that size.\n\nBINARY\n\nBinary uses only the digits 0 and 1.\n- 1101 in base two is 13\n- Base ten converts by repeated division\n",
+    "statistics.md": b"# Statistics\n\n## Measures of central tendency\n\nThe mean is the **average** of a data set.\n\n1. Add every value\n2. Divide by how many values there are\n\n## Dispersion\n\nRange, variance and standard deviation spread the data out.\n",
+    "probability.html": b"<html><head><script>alert(1)</script></head><body><h1>Probability</h1><p>Probability measures how likely an outcome is.</p>"
+    b"<h2>Sample space</h2><ul><li>Equally likely outcomes</li><li>Mutually exclusive events</li></ul>"
+    b"<table><tr><th>Throw</th><th>Outcomes</th></tr><tr><td>One die</td><td>Six</td></tr></table></body></html>",
+    "study_skills.rtf": rb"{\rtf1\ansi{\fonttbl{\f0 Arial;}}\f0 STUDY SKILLS\par\par A student owes a duty to the timetable and to the syllabus.\par}",
 }
 
 
 # ---------------------------------------------------------------- reader tests
 def reader_tests() -> None:
     print("== reader ==")
-    doc = read_document("federalism_notes.docx", FILES["federalism_notes.docx"])
+    doc = read_document("concord_notes.docx", FILES["concord_notes.docx"])
     types = [block["type"] for section in doc["sections"] for block in section["blocks"]]
-    check("Word: title comes from the Title style", doc["title"] == "Constitutional Law I — Federalism", doc["title"])
-    check("Word: Heading 1 becomes sections", [s["title"] for s in doc["sections"]] == ["Introduction", "Sources of power", "Conclusion"], [s["title"] for s in doc["sections"]])
+    check("Word: title comes from the Title style", doc["title"] == "Use of English I — Concord", doc["title"])
+    check("Word: Heading 1 becomes sections", [s["title"] for s in doc["sections"]] == ["Introduction", "Rules of concord", "Conclusion"], [s["title"] for s in doc["sections"]])
     check("Word: bullets, numbered list, table and sub-heading kept", {"list", "numbers", "table", "heading"} <= set(types), types)
     check("Word: outline level 9 stays body text", any(b.get("text") == "Body text with outline level nine" and b["type"] == "paragraph" for s in doc["sections"] for b in s["blocks"]))
 
-    pdf = read_document("contract-law.pdf", FILES["contract-law.pdf"])
-    check("PDF: pages read and ALL-CAPS headings become sections", pdf["pages"] == 2 and [s["title"] for s in pdf["sections"]] == ["Law of Contract", "Consideration", "Privity"], [s["title"] for s in pdf["sections"]])
+    pdf = read_document("indices-logarithms.pdf", FILES["indices-logarithms.pdf"])
+    check("PDF: pages read and ALL-CAPS headings become sections", pdf["pages"] == 2 and [s["title"] for s in pdf["sections"]] == ["Indices and Logarithms", "Laws of Indices", "Standard Form"], [s["title"] for s in pdf["sections"]])
 
-    slides = read_document("torts_slides.pptx", FILES["torts_slides.pptx"])
-    check("PowerPoint: one section per slide, in numeric order", [s["title"] for s in slides["sections"]] == ["Torts overview", "Negligence", "Remedies"], [s["title"] for s in slides["sections"]])
+    slides = read_document("trigonometry_slides.pptx", FILES["trigonometry_slides.pptx"])
+    check("PowerPoint: one section per slide, in numeric order", [s["title"] for s in slides["sections"]] == ["Trigonometry overview", "Right-angled triangles", "Applications"], [s["title"] for s in slides["sections"]])
 
-    for name, sections in {"equity.odt": ["Equity maxims", "Trusts"], "jurisprudence.txt": ["Natural Law", "Positivism"], "evidence.md": ["Relevance", "Hearsay"]}.items():
+    for name, sections in {"set-notation.odt": ["Set notation", "Venn diagrams"], "number_bases.txt": ["Number Bases", "Binary"], "statistics.md": ["Measures of central tendency", "Dispersion"]}.items():
         got = [s["title"] for s in read_document(name, FILES[name])["sections"]]
         check(f"{name}: sections {sections}", got == sections, got)
-    html = read_document("land-law.html", FILES["land-law.html"])
+    html = read_document("probability.html", FILES["probability.html"])
     html_text = json.dumps(html["sections"])
     check("HTML: scripts dropped, list + table kept", "alert" not in html_text and '"list"' in html_text and '"table"' in html_text, html_text[:200])
-    rtf = read_document("ethics.rtf", FILES["ethics.rtf"])
-    check("RTF: control words stripped", "duty to the court" in json.dumps(rtf["sections"]) and "fonttbl" not in json.dumps(rtf["sections"]))
+    rtf = read_document("study_skills.rtf", FILES["study_skills.rtf"])
+    check("RTF: control words stripped", "duty to the timetable" in json.dumps(rtf["sections"]) and "fonttbl" not in json.dumps(rtf["sections"]))
 
-    big_body = [_w_para(f"Paragraph {i}. " + "The court held that the doctrine applies strictly. " * 6) for i in range(700)]
+    big_body = [_w_para(f"Paragraph {i}. " + "The rule applies to every sentence in the passage. " * 6) for i in range(700)]
     big_body.append(_w_para("Giant " + "word " * 3000))
     big_body += [_w_para(f"Item {i}", num=1) for i in range(95)]
     big = read_document("big.docx", make_docx(big_body))
-    sentence = "The court held that the doctrine applies strictly. "
+    sentence = "The rule applies to every sentence in the passage. "
     words_in = 700 * (2 + 6 * len(sentence.split())) + 3001 + 95 * 2  # "Paragraph N." + sentences, giant, items
     altered = sum(1 for s in big["sections"] for a, b in zip(s["blocks"], sanitise_blocks(s["blocks"])) if a != b)
     check(f"long document split into {len(big['sections'])} sections without losing words", big["words"] == words_in and len(big["sections"]) > 10, (big["words"], words_in))
@@ -282,8 +282,8 @@ def api_tests() -> None:
     total = lambda cid, kind="": call("GET", f"/admin/materials?course_id={cid}&limit=1" + (f"&kind={kind}" if kind else ""), token=token)[1]["total"]  # noqa: E731
 
     before = total(c1)
-    status, preview = call("POST", "/admin/materials/import/preview", token=token, file=("federalism_notes.docx", FILES["federalism_notes.docx"]))
-    check("preview reads the Word file", status == 200 and preview["title"] == "Constitutional Law I — Federalism" and len(preview["sections"]) == 3, preview)
+    status, preview = call("POST", "/admin/materials/import/preview", token=token, file=("concord_notes.docx", FILES["concord_notes.docx"]))
+    check("preview reads the Word file", status == 200 and preview["title"] == "Use of English I — Concord" and len(preview["sections"]) == 3, preview)
     check("preview saves nothing", total(c1) == before)
 
     created = {}
@@ -295,15 +295,15 @@ def api_tests() -> None:
             created[name] = material
     check("course total grew by every import", total(c1) == before + len(created), (total(c1), before, len(created)))
 
-    word = created.get("federalism_notes.docx")
+    word = created.get("concord_notes.docx")
     if word:
         status, original = call("GET", word["link_url"].removeprefix("/api"), raw=True)
-        check("original file downloadable byte-for-byte", status == 200 and original == FILES["federalism_notes.docx"], status)
+        check("original file downloadable byte-for-byte", status == 200 and original == FILES["concord_notes.docx"], status)
 
     status, note = call(
         "POST", "/admin/materials/import",
         {"course_id": c2, "title": "My custom name", "kind": "note", "status": "draft", "keep_file": "false"},
-        token=token, file=("evidence.md", FILES["evidence.md"]),
+        token=token, file=("statistics.md", FILES["statistics.md"]),
     )
     check("custom name, note, draft, no stored file", status == 201 and note["title"] == "My custom name" and note["kind"] == "note" and note["status"] == "draft" and not note["link_url"], note)
     c1_ids = {row["id"] for row in call("GET", f"/admin/materials?course_id={c1}&limit=200", token=token)[1]["items"]}
@@ -313,8 +313,8 @@ def api_tests() -> None:
     suffix = uuid.uuid4().hex[:6]
     status, reg = call("POST", "/auth/register", {"username": f"imp{suffix}", "password": "secret123", "phone": f"080{uuid.uuid4().int % 10**8:08d}", "full_name": "Import Tester"})
     student = reg.get("token") if isinstance(reg, dict) else None
-    if student and "contract-law.pdf" in created:
-        status, read = call("GET", f"/materials/{created['contract-law.pdf']['id']}", token=student)
+    if student and "indices-logarithms.pdf" in created:
+        status, read = call("GET", f"/materials/{created['indices-logarithms.pdf']['id']}", token=student)
         check("player reads the imported PDF with its original link", status == 200 and len(read.get("sections", [])) == 3 and read.get("link_url"), (status, str(read)[:160]))
         status, _ = call("POST", "/admin/materials/import/preview", token=student, file=("a.txt", b"Some real words here."))
         check("players cannot import", status in (401, 403), status)

@@ -590,10 +590,10 @@ class StudentIn(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     phone: str = Field(min_length=7, max_length=20)
     reg_no: str | None = None
-    level: str = "400 Level"
-    faculty: str = "Faculty of Law"
-    campus: str = "UNEC (Enugu Campus)"
-    class_name: str = "030 Law Class"
+    level: str = "100 Level"
+    faculty: str = "General Studies"
+    campus: str = "Main Campus"
+    class_name: str = "100 Level Class"
 
     @field_validator("phone")
     @classmethod

@@ -320,7 +320,7 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
         {/* ------------------------------------------------------- footer */}
         <footer className="mt-10 border-t border-white/6 pt-5 pb-2 text-center sm:mt-14">
           <p className="text-[0.72rem] font-bold text-mist-500">
-            {config?.institution || 'University of Nigeria'} · {config?.faculty || 'Faculty of Law'}
+            {config?.institution || 'Your institution'} · {config?.faculty || 'General Studies'}
           </p>
           <p className="mt-1 text-[0.66rem] font-semibold text-mist-600">
             {config?.campus || 'Enugu, Nigeria'} · Powered by the Absolute Genesis engine
