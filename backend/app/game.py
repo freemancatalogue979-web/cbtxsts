@@ -21,7 +21,7 @@ TITLES = [
     (2, "Contender"),
     (3, "Tactician"),
     (4, "Scholar"),
-    (5, "Barrister"),
+    (5, "Virtuoso"),
     (6, "Champion"),
     (7, "Grandmaster"),
     (8, "Legend"),
@@ -146,7 +146,7 @@ BADGE_DEFINITIONS: list[dict] = [
     {"key": "streak_3", "name": "Warming Up", "description": "3-day activity streak", "icon": "flame", "tier": "bronze", "xp_reward": 40, "coin_reward": 20},
     {"key": "streak_7", "name": "On Fire", "description": "7-day activity streak", "icon": "flame", "tier": "silver", "xp_reward": 140, "coin_reward": 70},
     {"key": "streak_30", "name": "Unstoppable", "description": "30-day activity streak", "icon": "flame", "tier": "platinum", "xp_reward": 600, "coin_reward": 400},
-    {"key": "level_5", "name": "Barrister", "description": "Reach level 5", "icon": "scale", "tier": "silver", "xp_reward": 0, "coin_reward": 100},
+    {"key": "level_5", "name": "Rising Star", "description": "Reach level 5", "icon": "star", "tier": "silver", "xp_reward": 0, "coin_reward": 100},
     {"key": "level_10", "name": "Legend", "description": "Reach level 10", "icon": "crown", "tier": "platinum", "xp_reward": 0, "coin_reward": 500},
     {"key": "banker", "name": "Banker", "description": "Hold 1,000 arena coins", "icon": "coins", "tier": "gold", "xp_reward": 80, "coin_reward": 0},
     {"key": "socialite", "name": "Socialite", "description": "Add your first friend on the arena", "icon": "users", "tier": "bronze", "xp_reward": 30, "coin_reward": 15},
@@ -174,10 +174,13 @@ BADGE_RULES = {
 
 def ensure_badges(db: Session) -> None:
     """Create any missing badge rows (idempotent)."""
-    existing = {row.key for row in db.scalars(select(Badge)).all()}
+    existing = {row.key: row for row in db.scalars(select(Badge)).all()}
     for definition in BADGE_DEFINITIONS:
-        if definition["key"] not in existing:
+        row = existing.get(definition["key"])
+        if row is None:
             db.add(Badge(**definition))
+        elif row.name == "Barrister":  # old Law-era name → general wording
+            row.name, row.icon = definition["name"], definition["icon"]
     db.flush()
 
 

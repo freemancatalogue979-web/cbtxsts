@@ -359,7 +359,7 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
                     </span>
                   </span>
                   <span className="tabular text-mist-300 normal-case">
-                    <b className="text-mist-50">{formatNumber(progress.into_level)}</b> / {formatNumber(progress.needed)} XP
+                    <b className="text-mist-50">{formatNumber(progress.into_level)}</b> / {formatNumber(progress.level_ceiling - progress.level_floor)} XP
                   </span>
                 </div>
                 <div className="ag-xp" role="progressbar" aria-valuenow={Math.round(progress.percent)} aria-valuemin={0} aria-valuemax={100} aria-label="XP to next level">

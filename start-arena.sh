@@ -7,6 +7,7 @@
 #   ./start-arena.sh logs         # follow API + web logs
 #   ./start-arena.sh restart      # restart both
 #   ./start-arena.sh stop         # stop both
+#   ./start-arena.sh demo         # fill the running app with the demo world (US/UK accounts, groups, teachers…)
 #
 # Local development (attached to this terminal):
 #   ./start-arena.sh foreground
@@ -217,6 +218,12 @@ case "$TARGET" in
     ;;
   status)
     show_status
+    ;;
+  demo)
+    # Fill the running app with the presentation demo world (safe to re-run).
+    setup_backend
+    log "Building the demo world against http://127.0.0.1:${API_PORT} …"
+    cd "$ROOT/backend" && ./.venv/bin/python scripts/demo_world.py --url "http://127.0.0.1:${API_PORT}"
     ;;
   logs)
     mkdir -p "$RUN_DIR"

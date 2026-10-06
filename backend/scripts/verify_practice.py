@@ -162,12 +162,12 @@ def check_catalog(admin: str, student: str) -> dict:
     check("catalog loads", status == 200, (status, catalog))
     courses = catalog["courses"]
     check("at least one course offers practice", len(courses) >= 1, courses)
-    juris = next((row for row in courses if "Jurisprudence" in row["title"]), None)
-    check("Jurisprudence course listed", juris is not None, [row["title"] for row in courses])
+    juris = next((row for row in courses if "Computer Science" in row["title"]), None)
+    check("Computer Science course listed", juris is not None, [row["title"] for row in courses])
     topics = {row["topic"]: row for row in (juris["topics"] if juris else [])}
     check(
-        "Historical School topic present with its count",
-        topics.get("Historical School", {}).get("count", 0) >= 1,
+        "Algorithms topic present with its count",
+        topics.get("Algorithms", {}).get("count", 0) >= 1,
         topics,
     )
     check("course availability equals the sum of its topics", juris["available"] == sum(row["count"] for row in juris["topics"]), juris)
@@ -176,7 +176,7 @@ def check_catalog(admin: str, student: str) -> dict:
     status, payload = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Historical School", "size": 20, "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": juris["id"], "topic": "Algorithms", "size": 20, "time_limit_seconds": 600},
         token=student,
     )
     check("requesting more than the bank holds is refused", status == 409, (status, payload))
@@ -186,7 +186,7 @@ def check_catalog(admin: str, student: str) -> dict:
     announced = _re.search(r"Only (\d+) questions? are available", refused)
     check(
         "the refusal says exactly how many exist",
-        bool(announced) and int(announced.group(1)) == topics["Historical School"]["count"] and "available" in refused,
+        bool(announced) and int(announced.group(1)) == topics["Algorithms"]["count"] and "available" in refused,
         refused,
     )
 
@@ -359,11 +359,11 @@ def check_full_run(admin: str, student: str, juris: dict) -> None:
 # ---------------------------------------------------------------------------
 def check_server_clock(student: str, juris: dict) -> None:
     print("\n[6] the timer belongs to the server")
-    positivism = next((row["count"] for row in juris["topics"] if row["topic"] == "Positivism"), 0)
+    positivism = next((row["count"] for row in juris["topics"] if row["topic"] == "Number Systems"), 0)
     status, run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Positivism", "size": min(3, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": juris["id"], "topic": "Number Systems", "size": min(3, positivism), "time_limit_seconds": 600},
         token=student,
     )
     check("timed run starts", status == 200, (status, run))
@@ -386,7 +386,7 @@ def check_server_clock(student: str, juris: dict) -> None:
     status, fresh = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Positivism", "size": min(2, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": juris["id"], "topic": "Number Systems", "size": min(2, positivism), "time_limit_seconds": 600},
         token=student,
     )
     token = fresh["token"]

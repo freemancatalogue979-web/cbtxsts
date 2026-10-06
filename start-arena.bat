@@ -2,9 +2,17 @@
 REM Absolute Genesis - Windows launcher. Starts the API (:3000) and the web app (:5173).
 REM   start-arena.bat         both servers
 REM   start-arena.bat share   both servers + a public https link for installing on phones
+REM   start-arena.bat demo    fill the RUNNING app with the demo world (run in a second window)
 REM First run creates backend\.venv, installs both dependency sets and seeds the DB.
 setlocal EnableExtensions
 cd /d "%~dp0"
+
+if /i "%~1"=="demo" (
+  echo [*] Building the demo world against http://127.0.0.1:3000 ...
+  backend\.venv\Scripts\python.exe backend\scripts\demo_world.py --url http://127.0.0.1:3000
+  pause
+  exit /b 0
+)
 
 where py >nul 2>nul && (set "PYTHON=py -3") || (set "PYTHON=python")
 where node >nul 2>nul || (

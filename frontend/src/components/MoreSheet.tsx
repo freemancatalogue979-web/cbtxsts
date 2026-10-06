@@ -387,7 +387,7 @@ export default function MoreSheet({
                         />
                       </div>
                       <span className="shrink-0 text-mist-500">
-                        {formatNumber(progress.into_level)}/{formatNumber(progress.needed)} XP
+                        {formatNumber(progress.into_level)}/{formatNumber(progress.level_ceiling - progress.level_floor)} XP
                       </span>
                     </div>
                   )}

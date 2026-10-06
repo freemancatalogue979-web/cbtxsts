@@ -301,6 +301,8 @@ def make_friends(api: Api, tokens: dict, ids: dict) -> int:
 
 
 def chat(api: Api, tokens: dict, ids: dict, lines: list[tuple[str, str, str]]) -> None:
+    for pair in {tuple(sorted((a, b))) for a, b, _ in lines}:
+        api.call("POST", "/friends", {"student_id": ids[pair[1]]}, tokens[pair[0]])
     for sender, receiver, body in lines:
         api.call("POST", "/chat", {"to": ids[receiver], "body": body, "kind": "text"}, tokens[sender])
 
@@ -390,7 +392,7 @@ def build_groups(api: Api, tokens: dict, ids: dict, course_ids: dict) -> list[in
             if status == 200 and isinstance(msg, dict):
                 last = msg.get("id")
                 if rng.random() < 0.5:
-                    api.call("POST", f"/groups/{gid}/messages/{last}/react", {"emoji": rng.choice(["🔥", "👏", "💯", "😂", "🙌"])}, tokens[rng.choice(plan["members"])])
+                    api.call("POST", f"/groups/{gid}/messages/{last}/react", {"emoji": rng.choice(["🔥", "👍", "🎉", "😂", "✅"])}, tokens[rng.choice(plan["members"])])
         title, body, priority = plan["announcement"]
         api.call("POST", f"/groups/{gid}/announcements", {"title": title, "body": body, "priority": priority, "pinned": priority == "high"}, owner)
         qtitle, qbody, qtopic, answerer, answer = plan["question"]
