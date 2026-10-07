@@ -5,6 +5,7 @@ import type { DraftPlan, Hero, Meta, User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, Spinner } from "../components/ui";
 import { DraftBoard } from "../components/DraftBoard";
+import { HeroImg } from "../components/HeroImg";
 
 const STATUS_TONE: Record<string, string> = {
   idea: "text-sky border-sky/40 bg-sky/10",
@@ -36,10 +37,13 @@ function DraftEditor({ meta, heroes, initial, onSaved, onBack }: {
 
   function HeroSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     return (
-      <select className="input !px-2 !py-1.5" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">—</option>
-        {heroes.map((h) => <option key={h.id} value={h.name}>{h.name}</option>)}
-      </select>
+      <div className="flex items-center gap-2 min-w-0">
+        <HeroImg name={value || "?"} size={28} className="rounded-md shrink-0" />
+        <select className="input !px-2 !py-1.5 min-w-0" value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">—</option>
+          {heroes.map((h) => <option key={h.id} value={h.name}>{h.name}</option>)}
+        </select>
+      </div>
     );
   }
 

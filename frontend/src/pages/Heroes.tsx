@@ -7,12 +7,16 @@ import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Tabs } from "../com
 import { HeroImg } from "../components/HeroImg";
 
 const TIER_TONE: Record<string, string> = {
-  S: "text-crim border-crim/50", A: "text-amber border-amber/40",
+  "S+": "text-crim border-crim/70 bg-crim/10", S: "text-crim border-crim/50", A: "text-amber border-amber/40",
   B: "text-sky border-sky/40", C: "text-mute border-edge-2", D: "text-faint border-edge",
 };
-const TIER_DOT: Record<string, string> = {
-  S: "bg-crim", A: "bg-amber", B: "bg-sky", C: "bg-mute", D: "bg-raised",
-};
+
+const SORTS = [
+  { id: "rating", label: "9C rating", key: (h: Hero) => h.clover_rating },
+  { id: "win", label: "Win rate", key: (h: Hero) => h.win_rate },
+  { id: "pick", label: "Pick rate", key: (h: Hero) => h.pick_rate },
+  { id: "ban", label: "Ban rate", key: (h: Hero) => h.ban_rate },
+] as const;
 
 function HeroForm({ meta, initial, onSaved, onClose }: {
   meta: Meta; initial: Partial<Hero>; onSaved: () => void; onClose: () => void;
@@ -113,6 +117,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
   const canAnnotate = ["admin", "coach"].includes(me.role);
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
+  const [sort, setSort] = useState<(typeof SORTS)[number]["id"]>("rating");
   const [heroes, setHeroes] = useState<Hero[] | null>(null);
   const [detail, setDetail] = useState<Hero | null>(null);
   const [form, setForm] = useState<null | Partial<Hero>>(null);
@@ -126,9 +131,11 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
   const grouped = useMemo(() => {
     const g: Record<string, Hero[]> = {};
+    const s = SORTS.find((x) => x.id === sort) ?? SORTS[0];
     for (const h of heroes ?? []) (g[h.role] ??= []).push(h);
+    for (const list of Object.values(g)) list.sort((a, b) => s.key(b) - s.key(a) || a.name.localeCompare(b.name));
     return g;
-  }, [heroes]);
+  }, [heroes, sort]);
 
   if (id) {
     if (!detail) return <Spinner />;
@@ -215,13 +222,19 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
   return (
     <div className="space-y-8">
-      <PageTitle title="Hero Database" sub={`Patch ${meta.season_patch} meta, internal ratings and counter notes.`}
+      <PageTitle title="Hero Database" sub={`Patch ${meta.season_patch} meta. Win/pick/ban rates: MLBBDex public stats (Oct 2026, CC BY-SA, Mobile Legends Wiki).`}
         right={canAdd && <button className="btn-primary" onClick={() => setForm({})}><Plus size={15} /> Add hero</button>} />
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
           <input className="input !w-56 !pl-8" placeholder="Search hero…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <label className="flex items-center gap-2 ml-auto">
+          <span className="label">Sort</span>
+          <select className="input !w-36 !py-1.5" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+            {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
       </div>
       <Tabs value={role} onChange={setRole} tabs={[{ id: "", label: "All" }, ...meta.lanes.map((l) => ({ id: l, label: l }))]} />
       {!heroes && <Spinner />}
@@ -241,14 +254,13 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                     <span className={`absolute top-1.5 right-1.5 w-5 h-5 rounded flex items-center justify-center text-[10px] font-extrabold bg-black/70 backdrop-blur-sm border ${TIER_TONE[h.tier] ?? "border-edge-2"}`}>
                       {h.tier}
                     </span>
-                    <span className={`absolute bottom-1.5 left-1.5 w-1.5 h-1.5 rounded-full ${TIER_DOT[h.tier] ?? ""} hidden`} />
                     <span className={`absolute bottom-0 inset-x-0 h-0.5 ${h.meta_status === "META" ? "bg-crim/80" : h.meta_status === "STRONG" ? "bg-leaf/70" : "bg-transparent"}`} />
                   </div>
                   <div className="mt-2 flex items-baseline justify-between gap-1.5">
                     <div className="text-[12px] font-extrabold leading-tight truncate">{h.name}</div>
                     <span className="text-[11px] font-extrabold text-crim tabular-nums shrink-0">{h.clover_rating.toFixed(1)}</span>
                   </div>
-                  <div className="text-[10px] text-faint truncate">{h.hero_class}</div>
+                  <div className="text-[10px] text-faint truncate">{h.hero_class} · {h.win_rate.toFixed(1)}% WR · {h.pick_rate.toFixed(1)}% PK</div>
                 </button>
               ))}
             </div>

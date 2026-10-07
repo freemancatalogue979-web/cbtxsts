@@ -246,8 +246,71 @@ def seed_heroes(db: Session) -> dict[str, Hero]:
         )
         db.add(h)
         heroes[name] = h
+
+    # Live meta overlay — real win/pick/ban rates + tier from the MLBBDex
+    # snapshot (hero_stats.py), so every hero shows current-public numbers.
+    # Internal notes and ratings for tuned/curated heroes stay untouched.
+    from .hero_stats import lookup, rating_from_score, TIER_TO_STATUS
+    tuned = set(TUNING)
+    for h in heroes.values():
+        st = lookup(h.name)
+        if not st:
+            # Not on live rankings (upcoming release) — keep honest placeholders
+            h.win_rate, h.pick_rate, h.ban_rate = 50.0, 0.3, 0.3
+            continue
+        _, tier, win, ban, pick, score, low = st
+        h.win_rate = win
+        h.pick_rate = pick
+        h.ban_rate = ban
+        h.tier = tier
+        h.meta_status = TIER_TO_STATUS.get(tier, h.meta_status)
+        if h.name not in tuned and not any(r[0] == h.name for r in HEROES):
+            h.clover_rating = rating_from_score(score, low)
     db.flush()
     return heroes
+
+
+def apply_live_stats(db: Session) -> tuple[int, int]:
+    """Idempotent refresh for a running database (no reseed): update rates,
+    tier and status from hero_stats.py for every known hero and insert any
+    hero missing from the DB (new releases). Internal ratings/notes kept."""
+    from .hero_stats import lookup, rating_from_score, TIER_TO_STATUS, SITE_STATS
+    from .hero_roster import ROSTER, TUNING
+
+    updated = inserted = 0
+    existing = {h.name: h for h in db.query(Hero).all()}
+    for h in existing.values():
+        st = lookup(h.name)
+        if not st:
+            continue
+        _, tier, win, ban, pick, _, _ = st
+        if (h.win_rate, h.pick_rate, h.ban_rate, h.tier, h.meta_status) != (
+            win, pick, ban, tier, TIER_TO_STATUS.get(tier, h.meta_status)):
+            h.win_rate = win
+            h.pick_rate = pick
+            h.ban_rate = ban
+            h.tier = tier
+            h.meta_status = TIER_TO_STATUS.get(tier, h.meta_status)
+            updated += 1
+    roster_by_name = {r[0]: r for r in ROSTER}
+    for slug, st in SITE_STATS.items():
+        _, tier, win, ban, pick, score, low = st
+        name = st[0]
+        if name in existing:
+            continue
+        lane, klass, diff = roster_by_name.get(name, ("EXP", "Fighter", 5))[1:]
+        t = TUNING.get(name)
+        db.add(Hero(
+            name=name, role=lane, hero_class=klass, difficulty=diff,
+            meta_status=TIER_TO_STATUS.get(tier, "VIABLE"), tier=tier, patch=CURRENT_PATCH,
+            win_rate=win, pick_rate=pick, ban_rate=ban,
+            clover_rating=t[2] if t else rating_from_score(score, low),
+            notes=t[3] if t else "",
+            strong_against=dumps([]), weak_against=dumps([]), synergy=dumps([]),
+        ))
+        inserted += 1
+    db.commit()
+    return updated, inserted
 
 
 def seed_pools(db: Session, users: dict[str, User], heroes: dict[str, Hero]) -> None:

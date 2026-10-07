@@ -10,7 +10,7 @@ from ..security import LANES, ROLE_LABELS
 router = APIRouter(prefix="/meta", tags=["meta"])
 
 HERO_STATUSES = ["META", "STRONG", "VIABLE", "SITUATIONAL", "WEAK", "BANNED/RESTRICTED"]
-HERO_TIERS = ["S", "A", "B", "C", "D"]
+HERO_TIERS = ["S+", "S", "A", "B", "C", "D"]
 POOL_CATEGORIES = ["comfort", "meta", "pocket", "emergency"]
 REVIEW_STATUSES = ["open", "in_progress", "resolved"]
 SCRIM_FORMATS = ["BO1", "BO3", "BO5"]

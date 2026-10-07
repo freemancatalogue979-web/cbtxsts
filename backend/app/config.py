@@ -60,4 +60,4 @@ DEFAULT_ADMIN_IGN = os.getenv("CLOVER_ADMIN_IGN", "DRE")
 # ---------------------------------------------------------------------------
 TEAM_NAME = os.getenv("CLOVER_TEAM_NAME", "9 CLOVER")
 TEAM_TAGLINE = os.getenv("CLOVER_TEAM_TAGLINE", "PLAY. REVIEW. ADAPT. DOMINATE.")
-CURRENT_PATCH = os.getenv("CLOVER_PATCH", "1.9.47")
+CURRENT_PATCH = os.getenv("CLOVER_PATCH", "2.2.16")

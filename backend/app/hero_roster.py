@@ -42,9 +42,11 @@ ROSTER: list[tuple[str, str, str, int]] = [
     ("Uranus", "EXP", "Tank", 3),
     ("X.Borg", "EXP", "Fighter", 5),
     ("Yin", "EXP", "Fighter/Assassin", 5),
+    ("Sora", "EXP", "Fighter/Assassin", 5),
     ("Yu Zhong", "EXP", "Fighter", 6),
     ("Zilong", "EXP", "Fighter", 3),
     # ----------------------------- JUNGLE ----------------------------------
+    ("Hirara", "JUNGLE", "Assassin", 7),
     ("Aamon", "JUNGLE", "Assassin", 6),
     ("Akai", "JUNGLE", "Tank", 4),
     ("Alucard", "JUNGLE", "Fighter", 3),
@@ -99,6 +101,7 @@ ROSTER: list[tuple[str, str, str, int]] = [
     ("Zhask", "MID", "Mage", 4),
     ("Zhuxin", "MID", "Mage", 4),
     # ----------------------------- GOLD -------------------------------------
+    ("Obsidia", "GOLD", "Marksman", 5),
     ("Beatrix", "GOLD", "Marksman", 5),
     ("Brody", "GOLD", "Marksman", 4),
     ("Bruno", "GOLD", "Marksman", 4),
@@ -121,6 +124,7 @@ ROSTER: list[tuple[str, str, str, int]] = [
     ("Wanwan", "GOLD", "Marksman", 7),
     ("Yi Sun-shin", "GOLD", "Marksman/Assassin", 5),
     # ----------------------------- ROAM -------------------------------------
+    ("Marcel", "ROAM", "Support", 3),
     ("Angela", "ROAM", "Support", 4),
     ("Atlas", "ROAM", "Tank", 6),
     ("Baxia", "ROAM", "Tank", 4),
@@ -155,7 +159,11 @@ TUNING: dict[str, tuple[str, str, float, str]] = {
     # keep pace with the curated rows in seed.py — these extend, not replace
     "Zetian": ("STRONG", "A", 7.5, "New-wave mage: global pressure + teamfight lockdown. Scout her in scrims."),
     "Kalea": ("STRONG", "A", 7.0, "Ripple heals swing long fights. Pair with sustain comps."),
-    "Wasp": ("VIABLE", "B", 6.0, "Newest release — limited scrim data, track before rating higher."),
+    "Wasp": ("VIABLE", "B", 6.0, "Announced for an upcoming patch — not on live rankings yet. Track reveals, no scrim data."),
+    "Hirara": ("META", "S+", 9.0, "Fallen Scarlet (Jun 2026). Most-banned hero in the game — combo assassin, scrims treat as red-line ban."),
+    "Marcel": ("META", "S+", 8.6, "Soul Photographer (Mar 2026). Time-freeze support; setup-heavy, ratings unstable on thin samples."),
+    "Sora": ("VIABLE", "A", 7.2, "Shifting Cloud (Dec 2025). Form-swapping EXP: Thunder burst / Torrent frontline."),
+    "Obsidia": ("META", "S+", 8.4, "New gold-lane power pick. Highest pick rate among S+ heroes; scout hard."),
     "Granger": ("STRONG", "A", 7.0, "Jungle-flex burst;punish his reload windows in trades."),
     "Brody": ("VIABLE", "A", 6.5, "Stack-hugger. Deny his passive in lane and he limps."),
     "Kimmy": ("VIABLE", "B", 5.5, "Hybrid poke; joins only with a dedicated plan."),

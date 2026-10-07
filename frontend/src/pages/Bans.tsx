@@ -50,14 +50,17 @@ function BanForm({ heroes, meta, initial, onSaved, onClose }: {
           </Field>
         </div>
         <Field label="Hero">
-          <select className="input" value={String(f.hero_id)} onChange={(e) => {
-            const hero = heroes.find((h) => h.id === Number(e.target.value));
-            set("hero_id", e.target.value);
-            if (hero) set("hero_name", hero.name);
-          }}>
-            <option value="">Custom / not in database…</option>
-            {heroes.map((h) => <option key={h.id} value={h.id}>{h.name} ({h.role})</option>)}
-          </select>
+          <div className="flex items-center gap-3">
+            <HeroImg name={String(f.hero_name || "?")} size={44} className="rounded-lg shrink-0" />
+            <select className="input" value={String(f.hero_id)} onChange={(e) => {
+              const hero = heroes.find((h) => h.id === Number(e.target.value));
+              set("hero_id", e.target.value);
+              if (hero) set("hero_name", hero.name);
+            }}>
+              <option value="">Custom / not in database…</option>
+              {heroes.map((h) => <option key={h.id} value={h.id}>{h.name} ({h.role})</option>)}
+            </select>
+          </div>
         </Field>
         {!f.hero_id && (
           <Field label="Hero name"><input className="input" required value={String(f.hero_name)} onChange={(e) => set("hero_name", e.target.value)} /></Field>
