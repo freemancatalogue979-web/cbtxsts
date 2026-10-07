@@ -1,5 +1,5 @@
-import { AlertTriangle, Link2, Plus, ShieldAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, FileText, Film, ImageIcon, Link2, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, qs } from "../lib/api";
 import type { Meta, Scrim, ScrimSummary, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge } from "../lib/util";
@@ -242,41 +242,115 @@ function GameForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => vo
   );
 }
 
+const FILE_KIND_TO_EVIDENCE: Record<string, string> = {
+  image: "screenshot", video: "video", pdf: "stats", file: "stats",
+};
+
 function AttachmentForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => void; onClose: () => void }) {
-  const [kind, setKind] = useState("screenshot");
+  const [staged, setStaged] = useState<{ kind: string; label: string; url: string }[]>([]);
+  const [kind, setKind] = useState("stream");
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onPick(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
     setErr(null);
     try {
-      await api.patch(`/scrims/${scrim.id}`, {
-        attachments: [...scrim.attachments, { kind, label: label || kind, url }],
-      });
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const saved = await api.upload<{ label: string; url: string; kind: string }>("/files", form);
+        setStaged((p) => [...p, { kind: FILE_KIND_TO_EVIDENCE[saved.kind] ?? "stats", label: saved.label, url: saved.url }]);
+      }
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (staged.length === 0) { setErr("Pick a file or add a link first"); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.patch(`/scrims/${scrim.id}`, { attachments: [...scrim.attachments, ...staged] });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
+    } finally {
+      setBusy(false);
     }
   }
+
+  const EVID_ICON: Record<string, typeof Link2> = { screenshot: ImageIcon, video: Film, stats: FileText };
+
   return (
     <Modal title="Attach evidence" onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Type">
-            <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
-              {["screenshot", "replay", "stats", "video", "stream"].map((k) => <option key={k}>{k}</option>)}
-            </select>
-          </Field>
-          <Field label="Label"><input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="End-game stats" /></Field>
+        <input ref={fileRef} type="file" multiple className="hidden"
+          accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.txt,.md,.csv,.zip"
+          onChange={(e) => onPick(e.target.files)} />
+        <button type="button" className="btn-ghost w-full !py-3" disabled={uploading} onClick={() => fileRef.current?.click()}>
+          <Upload size={15} /> {uploading ? "Uploading…" : "Upload from device (screenshots, clips, stat sheets)"}
+        </button>
+
+        {staged.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="label">Ready to attach ({staged.length})</div>
+            {staged.map((a, i) => {
+              const Icon = EVID_ICON[a.kind] ?? Link2;
+              return (
+                <div key={i} className="flex items-center gap-2 rounded-lg border border-edge bg-raised/50 px-2.5 py-1.5">
+                  <Icon size={13} className="text-crim shrink-0" />
+                  <span className="text-[12px] font-semibold truncate flex-1">{a.label}</span>
+                  <span className="text-faint text-[9px] uppercase shrink-0">{a.kind}</span>
+                  <button type="button" className="text-faint hover:text-crim shrink-0" title="Remove"
+                    onClick={() => setStaged((p) => p.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="card !bg-raised/40 p-3 space-y-3">
+          <div className="label !mb-0">…or a web link (stream / replay / drive)</div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Type">
+              <select className="input !py-1.5 text-[12px]" value={kind} onChange={(e) => setKind(e.target.value)}>
+                {["screenshot", "replay", "stats", "video", "stream"].map((k) => <option key={k}>{k}</option>)}
+              </select>
+            </Field>
+            <Field label="Label">
+              <input className="input !py-1.5 text-[12px]" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="VOD link" />
+            </Field>
+          </div>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <input className="input !py-1.5 text-[12px]" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
+            </div>
+            <button type="button" className="btn-ghost !py-1.5 !px-3 shrink-0"
+              onClick={() => {
+                if (!url.trim()) return;
+                setStaged((p) => [...p, { kind, label: label.trim() || `${kind} link`, url: url.trim() }]);
+                setUrl(""); setLabel("");
+              }}>Add link</button>
+          </div>
         </div>
-        <Field label="URL" hint="Drive / replay link / clip URL — anything the squad can open">
-          <input className="input" required type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
-        </Field>
+
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary">Attach</button>
+          <button className="btn-primary" disabled={busy || uploading || staged.length === 0}>
+            Attach {staged.length > 0 ? `(${staged.length})` : ""}
+          </button>
         </div>
       </form>
     </Modal>
@@ -364,12 +438,29 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           </div>
           <div className="card p-3.5">
             <div className="label mb-2">Evidence</div>
-            <div className="space-y-1.5">
-              {s.attachments.map((a, i) => (
-                <a key={i} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-sky hover:underline">
-                  <Link2 size={12} /> {a.label || a.kind} <span className="text-faint text-[10px] uppercase">{a.kind}</span>
-                </a>
+            <div className="space-y-2">
+              {s.attachments.filter((a) => a.kind === "screenshot" && (a.url ?? "").startsWith("/api/files/")).length > 0 && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {s.attachments.filter((a) => a.kind === "screenshot" && (a.url ?? "").startsWith("/api/files/")).map((a, i) => (
+                    <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.label}>
+                      <img src={a.url} alt={a.label} className="rounded-lg border border-edge object-cover w-full aspect-video hover:border-crim/50 transition" />
+                    </a>
+                  ))}
+                </div>
+              )}
+              {s.attachments.filter((a) => a.kind === "video" && (a.url ?? "").startsWith("/api/files/")).map((a, i) => (
+                <video key={i} src={a.url} controls preload="metadata" className="rounded-lg border border-edge w-full max-h-64" />
               ))}
+              <div className="space-y-1.5">
+                {s.attachments.filter((a) => !(a.url ?? "").startsWith("/api/files/") || (a.kind !== "screenshot" && a.kind !== "video")).map((a, i) => {
+                  const Icon = a.kind === "screenshot" ? ImageIcon : a.kind === "video" ? Film : a.kind === "stats" ? FileText : Link2;
+                  return (
+                    <a key={i} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-sky hover:underline">
+                      <Icon size={12} /> {a.label || a.kind} <span className="text-faint text-[10px] uppercase">{a.kind}</span>
+                    </a>
+                  );
+                })}
+              </div>
               {s.attachments.length === 0 && <div className="text-[12px] text-faint">No screenshots, replays or VODs attached.</div>}
             </div>
             {canUpload && <button className="btn-ghost w-full mt-3 !text-[12px]" onClick={() => setShowAttach(true)}><Plus size={13} /> Attach</button>}
