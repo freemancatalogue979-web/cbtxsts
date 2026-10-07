@@ -14,7 +14,7 @@ Permission map (from the 9 CLOVER plan):
 """
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from .db import get_db
@@ -27,6 +27,8 @@ from .security import (
     ROLE_PLAYER,
     verify_token,
 )
+
+SESSION_COOKIE = "clover_session"
 
 __all__ = [
     "get_db",
@@ -43,11 +45,18 @@ __all__ = [
 
 def get_current_user(
     authorization: str | None = Header(default=None),
+    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE),
     db: Session = Depends(get_db),
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    # Bearer token (app fetch calls) or browser cookie (img/video/link loads)
+    raw: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        raw = authorization.split(None, 1)[1].strip()
+    elif session_cookie:
+        raw = session_cookie
+    if not raw:
         raise HTTPException(status_code=401, detail="Sign in required")
-    payload = verify_token(authorization.split(None, 1)[1].strip())
+    payload = verify_token(raw)
     if payload is None:
         raise HTTPException(status_code=401, detail="Session expired — sign in again")
     user = db.get(User, payload.subject)

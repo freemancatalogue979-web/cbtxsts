@@ -117,7 +117,7 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onUserUpdate={setUser} onLogout={() => { setToken(null); setUser(null); window.location.hash = "/login"; }}>
+    <Layout user={user} onUserUpdate={setUser} onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
       {page}
     </Layout>
   );
