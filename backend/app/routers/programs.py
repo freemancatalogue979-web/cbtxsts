@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
-from ..models import ProgramWeek, TrainingProgram, User, WeekProgress, dumps, loads, utcnow
+from ..models import ProgramWeek, TrainingProgram, TrainingWeek, User, WeekProgress, dumps, loads, utcnow
 from ..serializers import ROLE_LABELS, avatar_url
 from .notifications import notify
 
@@ -36,12 +36,19 @@ def _user_refs(db: Session, ids: list[int]) -> list[dict]:
 
 
 def _week_out(w: ProgramWeek) -> dict:
+    tw = w.scheduled_week
     return {
         "id": w.id,
         "number": w.number,
-        "title": w.title,
+        "title": w.title or (tw.focus if tw else ""),
         "description": w.description,
         "attachments": loads(w.attachments),
+        "scheduled": None if tw is None else {
+            "id": tw.id, "number": tw.number, "focus": tw.focus, "objective": tw.objective,
+            "start_date": tw.start_date.isoformat() if tw.start_date else None,
+            "end_date": tw.end_date.isoformat() if tw.end_date else None,
+            "status": tw.status,
+        },
     }
 
 
@@ -79,6 +86,7 @@ def program_detail(db: Session, p: TrainingProgram) -> dict:
                 "status": r.status if r else "pending",
                 "completed_at": r.completed_at.isoformat() if r and r.completed_at else None,
                 "notes": r.notes if r else "",
+                "attachments": loads(r.attachments) if r else [],
                 "marked_by": r.marked_by if r else None,
             }
         matrix[str(w.id)] = row
@@ -113,9 +121,8 @@ class ProgramPatch(BaseModel):
 
 
 class WeekIn(BaseModel):
-    number: int | None = None
-    title: str = Field(min_length=1, max_length=160)
-    description: str = ""
+    training_week_id: int      # grab a week from the schedule
+    description: str = ""      # extra program-specific note
     attachments: list[dict] = []
 
 
@@ -129,7 +136,8 @@ class WeekPatch(BaseModel):
 class ProgressIn(BaseModel):
     user_id: int | None = None   # staff may set anyone; players set themselves
     status: str = Field(pattern="^(pending|done)$")
-    notes: str = ""
+    notes: str | None = None
+    attachments: list[dict] | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -201,14 +209,19 @@ def add_week(program_id: int, payload: WeekIn, db: Session = Depends(get_db),
              user=Depends(get_current_user)):
     require(can.manage_training(user), "add weeks")
     p = _get(db, program_id)
-    number = payload.number or (max((w.number for w in p.weeks), default=0) + 1)
-    w = ProgramWeek(program_id=p.id, number=number, title=payload.title.strip(),
-                    description=payload.description, attachments=dumps(payload.attachments))
+    tw = db.get(TrainingWeek, payload.training_week_id)
+    if tw is None:
+        raise HTTPException(status_code=404, detail="Scheduled week not found")
+    if any(w.training_week_id == tw.id for w in p.weeks):
+        raise HTTPException(status_code=422, detail="That week is already attached to this program")
+    w = ProgramWeek(program_id=p.id, training_week_id=tw.id, number=tw.number,
+                    title=tw.focus, description=payload.description,
+                    attachments=dumps(payload.attachments))
     db.add(w)
     db.commit()
     notify(db, user, loads(p.enrolled_ids), "reminder",
-           f"New task: {p.name} · Week {number}",
-           f"{payload.title.strip()}. Open Training Center when you have done it.",
+           f"New week: {p.name} · Week {tw.number}",
+           f"{tw.focus}. Open Training Center when you have done your part.",
            f"#/training/programs/{p.id}")
     db.commit()
     db.refresh(w)
@@ -260,7 +273,10 @@ def set_progress(week_id: int, payload: ProgressIn, db: Session = Depends(get_db
         row = WeekProgress(week_id=week_id, user_id=target_id)
         db.add(row)
     row.status = payload.status
-    row.notes = payload.notes
+    if payload.notes is not None:
+        row.notes = payload.notes
+    if payload.attachments is not None:
+        row.attachments = dumps(payload.attachments)
     row.marked_by = user.id
     row.completed_at = utcnow() if payload.status == "done" else None
     db.commit()

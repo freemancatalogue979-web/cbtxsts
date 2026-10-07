@@ -1,7 +1,7 @@
 import { Check, ClipboardCheck, FileText, Film, ImageIcon, Link2, Pencil, Plus, Trash2, Upload, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, qs } from "../lib/api";
-import type { Activity, Meta, Program, User, Week } from "../lib/types";
+import type { Activity, Meta, Program, ProgressCell, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
@@ -351,25 +351,19 @@ function ProgramForm({ users, program, onSaved, onClose }: {
   );
 }
 
+type Att = { label: string; url: string; kind: string };
+
 const ATT_ICON: Record<string, typeof Link2> = {
   image: ImageIcon, video: Film, pdf: FileText, file: FileText, link: Link2,
 };
 
-function ProgramWeekForm({ program, week, onSaved, onClose }: {
-  program: Program; week: Program["weeks"][number] | null; onSaved: () => void; onClose: () => void;
-}) {
-  const [f, setF] = useState<Record<string, unknown>>({
-    title: week?.title ?? "",
-    description: week?.description ?? "",
-  });
-  const [att, setAtt] = useState<{ label: string; url: string; kind: string }[]>(week?.attachments ?? []);
+/** Shared device-file picker + removable attachment list + optional web link. */
+function FilePick({ items, onChange, hint }: { items: Att[]; onChange: (a: Att[]) => void; hint?: string }) {
   const [linkLabel, setLinkLabel] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
 
   async function onPick(files: FileList | null) {
     if (!files?.length) return;
@@ -379,8 +373,8 @@ function ProgramWeekForm({ program, week, onSaved, onClose }: {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        const saved = await api.upload<{ label: string; url: string; kind: string }>("/files", form);
-        setAtt((p) => [...p, saved]);
+        const saved = await api.upload<Att>("/files", form);
+        onChange([...items, saved]);
       }
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Upload failed");
@@ -390,14 +384,129 @@ function ProgramWeekForm({ program, week, onSaved, onClose }: {
     }
   }
 
+  return (
+    <div className="space-y-2">
+      <input ref={fileRef} type="file" multiple className="hidden"
+        accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.txt,.md,.csv,.zip"
+        onChange={(e) => onPick(e.target.files)} />
+      {items.map((a, i) => {
+        const Icon = ATT_ICON[a.kind] ?? Link2;
+        return (
+          <div key={i} className="flex items-center gap-2 rounded-lg border border-edge bg-raised/50 px-2.5 py-1.5">
+            <Icon size={13} className="text-crim shrink-0" />
+            {a.kind === "image" && <img src={a.url} alt="" className="h-7 w-10 rounded object-cover border border-edge shrink-0" />}
+            <span className="text-[12px] font-semibold truncate flex-1">{a.label}</span>
+            <button type="button" className="text-faint hover:text-crim shrink-0"
+              onClick={() => onChange(items.filter((_, j) => j !== i))} title="Remove"><Trash2 size={12} /></button>
+          </div>
+        );
+      })}
+      <button type="button" className="btn-ghost w-full" disabled={uploading} onClick={() => fileRef.current?.click()}>
+        <Upload size={14} /> {uploading ? "Uploading…" : "Pick files from device"}
+      </button>
+      {hint && <div className="text-[10.5px] text-faint leading-snug">{hint}</div>}
+      <div className="flex gap-2 items-center">
+        <input className="input !py-1.5 flex-1 text-[12px]" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Link label (optional)" />
+        <input className="input !py-1.5 flex-[1.4] text-[12px]" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
+        <button type="button" className="btn-ghost !py-1.5 !px-3 shrink-0"
+          onClick={() => {
+            if (!linkUrl.trim()) return;
+            onChange([...items, { label: linkLabel.trim() || linkUrl.trim(), url: linkUrl.trim(), kind: "link" }]);
+            setLinkLabel(""); setLinkUrl("");
+          }}>Add link</button>
+      </div>
+      <ErrorNote error={err} />
+    </div>
+  );
+}
+
+/** Attach a week from the training schedule to a program. */
+function ProgramWeekForm({ program, week, weeks, onSaved, onClose }: {
+  program: Program; week: Program["weeks"][number] | null; weeks: Week[]; onSaved: () => void; onClose: () => void;
+}) {
+  const edit = Boolean(week);
+  const attached = new Set(program.weeks.map((w) => w.scheduled?.id).filter((x): x is number => x != null));
+  const choices = weeks.filter((w) => (edit ? w.id === week?.scheduled?.id : !attached.has(w.id)));
+  const [twId, setTwId] = useState<number | "">(week?.scheduled?.id ?? "");
+  const [desc, setDesc] = useState(week?.description ?? "");
+  const [att, setAtt] = useState<Att[]>(week?.attachments ?? []);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
     try {
-      const body = { title: f.title, description: f.description, attachments: att };
-      if (week) await api.patch(`/programs/weeks/${week.id}`, body);
-      else await api.post(`/programs/${program.id}/weeks`, body);
+      if (edit && week) {
+        await api.patch(`/programs/weeks/${week.id}`, { description: desc, attachments: att });
+      } else {
+        if (twId === "") { setErr("Pick a scheduled week"); setBusy(false); return; }
+        await api.post(`/programs/${program.id}/weeks`, { training_week_id: Number(twId), description: desc, attachments: att });
+      }
+      onSaved();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const chosen = weeks.find((w) => w.id === Number(twId));
+  return (
+    <Modal title={edit ? `Program week W${String(week?.number ?? 0).padStart(2, "0")}` : `Attach schedule week to ${program.name}`} onClose={onClose}>
+      <form onSubmit={save} className="space-y-4">
+        <Field label="Week from schedule">
+          <select className="input" required disabled={edit} value={String(twId)} onChange={(e) => setTwId(Number(e.target.value))}>
+            <option value="">— pick a scheduled week —</option>
+            {choices.map((w) => (
+              <option key={w.id} value={w.id}>W{String(w.number).padStart(2, "0")} — {w.focus}{w.start_date ? ` (${dayLabel(w.start_date)})` : ""}</option>
+            ))}
+          </select>
+        </Field>
+        {chosen && (
+          <div className="card !bg-raised/40 p-3">
+            <div className="flex items-center gap-2">
+              <Badge cls={chosen.status === "active" ? "text-crim border-crim/50" : chosen.status === "completed" ? "text-leaf border-leaf/40" : "text-mute"}>{chosen.status}</Badge>
+              <span className="text-[10px] font-extrabold text-crim uppercase tracking-wide">{dayLabel(chosen.start_date)} → {dayLabel(chosen.end_date)}</span>
+            </div>
+            {chosen.objective && <p className="text-[12px] text-mute leading-relaxed mt-1.5 line-clamp-3">{chosen.objective}</p>}
+          </div>
+        )}
+        {!edit && choices.length === 0 && (
+          <div className="text-[12px] text-amber font-semibold">All scheduled weeks are already attached — create more under the Schedule tab.</div>
+        )}
+        <Field label="Program note for this week (optional)">
+          <textarea className="input min-h-16" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="What this program expects during that week" />
+        </Field>
+        <Field label={`Attachments (${att.length})`}>
+          <FilePick items={att} onChange={setAtt} />
+        </Field>
+        <ErrorNote error={err} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-primary" disabled={busy || (!edit && twId === "")}>{edit ? "Save changes" : "Attach week"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Player marks a week done — with optional note + completion evidence. */
+function ClaimDoneModal({ program, week, cell, onSaved, onClose }: {
+  program: Program; week: Program["weeks"][number]; cell: ProgressCell | undefined; onSaved: () => void; onClose: () => void;
+}) {
+  const [notes, setNotes] = useState(cell?.notes ?? "");
+  const [att, setAtt] = useState<Att[]>(cell?.attachments ?? []);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.post(`/programs/weeks/${week.id}/progress`, { status: "done", notes, attachments: att });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
@@ -407,51 +516,22 @@ function ProgramWeekForm({ program, week, onSaved, onClose }: {
   }
 
   return (
-    <Modal title={week ? `Edit week ${week.number}` : `New task for ${program.name}`} onClose={onClose}>
+    <Modal title={`I've done it — W${String(week.number).padStart(2, "0")} · ${week.title}`} onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
-        <Field label="Task title">
-          <input className="input" required value={String(f.title)} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Buff camp timings" />
+        <p className="text-[12px] text-mute leading-relaxed">
+          Marking this week done on <span className="text-text font-semibold">{program.name}</span>.
+          Upload proof (replay screenshots, result screens, VOD clips) — optional, but staff may ask for evidence.
+        </p>
+        <Field label="Evidence">
+          <FilePick items={att} onChange={setAtt} hint="Screenshots of the reps, stats or the match result work best." />
         </Field>
-        <Field label="Brief">
-          <textarea className="input min-h-20" value={String(f.description)} onChange={(e) => set("description", e.target.value)} />
-        </Field>
-
-        <Field label={`Attachments (${att.length})`}>
-          <input ref={fileRef} type="file" multiple className="hidden"
-            accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.txt,.md,.csv,.zip"
-            onChange={(e) => onPick(e.target.files)} />
-          <div className="space-y-2">
-            {att.map((a, i) => {
-              const Icon = ATT_ICON[a.kind] ?? Link2;
-              return (
-                <div key={i} className="flex items-center gap-2 rounded-lg border border-edge bg-raised/50 px-2.5 py-1.5">
-                  <Icon size={13} className="text-crim shrink-0" />
-                  <span className="text-[12px] font-semibold truncate flex-1">{a.label}</span>
-                  <button type="button" className="text-faint hover:text-crim shrink-0"
-                    onClick={() => setAtt((p) => p.filter((_, j) => j !== i))}
-                    title="Remove"><Trash2 size={12} /></button>
-                </div>
-              );
-            })}
-            <button type="button" className="btn-ghost w-full" disabled={uploading} onClick={() => fileRef.current?.click()}>
-              <Upload size={14} /> {uploading ? "Uploading…" : "Pick files from device"}
-            </button>
-            <div className="flex gap-2 items-center">
-              <input className="input !py-1.5 flex-1 text-[12px]" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Link label (optional)" />
-              <input className="input !py-1.5 flex-[1.4] text-[12px]" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
-              <button type="button" className="btn-ghost !py-1.5 !px-3 shrink-0"
-                onClick={() => {
-                  if (!linkUrl.trim()) return;
-                  setAtt((p) => [...p, { label: linkLabel.trim() || linkUrl.trim(), url: linkUrl.trim(), kind: "link" }]);
-                  setLinkLabel(""); setLinkUrl("");
-                }}>Add link</button>
-            </div>
-          </div>
+        <Field label="Note (optional)">
+          <textarea className="input min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="How it went, any blockers" />
         </Field>
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy || uploading}>{week ? "Save changes" : "Add task"}</button>
+          <button className="btn-leaf" disabled={busy}><Check size={15} /> Mark week done</button>
         </div>
       </form>
     </Modal>
@@ -500,6 +580,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
   const [program, setProgram] = useState<Program | null>(null);
   const [showProgramForm, setShowProgramForm] = useState<null | { program: Program | null }>(null);
   const [showTaskForm, setShowTaskForm] = useState<null | { week: Program["weeks"][number] | null }>(null);
+  const [showClaim, setShowClaim] = useState<null | Program["weeks"][number]>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [filterCat, setFilterCat] = useState<string>("");
   const [showActivityForm, setShowActivityForm] = useState<null | Partial<Activity>>(null);
@@ -544,6 +625,16 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
     }
     const memberDone = (uid: number) =>
       p.weeks.filter((w) => matrix[String(w.id)]?.[String(uid)]?.status === "done").length;
+    function onCellClick(w: Program["weeks"][number], u: (typeof enrolled)[number]) {
+      const cell = matrix[String(w.id)]?.[String(u.id)];
+      const done = cell?.status === "done";
+      if (u.id === me.id) {
+        if (done) { if (confirm("Revert this week to pending? (your note and evidence stay)")) void toggle(w.id, u.id, "done"); }
+        else setShowClaim(w);
+      } else if (canManage) {
+        void toggle(w.id, u.id, cell?.status ?? "pending");
+      }
+    }
     return (
       <div className="space-y-5">
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training programs</button>
@@ -551,7 +642,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
           right={canManage && (
             <div className="flex gap-2">
               <button className="btn-ghost" onClick={() => setShowProgramForm({ program: p })}>Edit</button>
-              <button className="btn-primary" onClick={() => setShowTaskForm({ week: null })}><Plus size={15} /> Task</button>
+              <button className="btn-primary" onClick={() => setShowTaskForm({ week: null })}><Plus size={15} /> Week</button>
             </div>
           )} />
         {p.description && <p className="text-sm text-text/80 leading-relaxed max-w-3xl">{p.description}</p>}
@@ -586,7 +677,13 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                       <td className="px-4 py-3 sticky left-0 bg-panel z-10 max-w-56">
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-extrabold text-crim shrink-0">W{String(w.number).padStart(2, "0")}</span>
-                          <span className="text-[13px] font-bold truncate">{w.title}</span>
+                          {w.scheduled ? (
+                            <button className="text-[13px] font-bold truncate hover:text-crim transition text-left"
+                              title={`Open schedule week W${String(w.scheduled.number).padStart(2, "0")}`}
+                              onClick={() => navigate("training", "weeks", w.scheduled!.id)}>{w.title}</button>
+                          ) : (
+                            <span className="text-[13px] font-bold truncate">{w.title}</span>
+                          )}
                           {canManage && (
                             <span className="flex gap-1 shrink-0">
                               <button className="text-faint hover:text-crim" onClick={() => setShowTaskForm({ week: w })} title="Edit task"><Pencil size={12} /></button>
@@ -601,15 +698,22 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                         const cell = matrix[String(w.id)]?.[String(u.id)];
                         const done = cell?.status === "done";
                         const clickable = canManage || u.id === me.id;
+                        const evCount = cell?.attachments?.length ?? 0;
                         return (
                           <td key={u.id} className="px-2 py-3 text-center">
-                            <button disabled={!clickable} onClick={() => toggle(w.id, u.id, cell?.status ?? "pending")}
-                              title={done ? `Done${cell?.completed_at ? ` · ${dayLabel(cell.completed_at.split("T")[0])}` : ""}` : "Pending"}
-                              className={`mx-auto flex h-7 w-7 items-center justify-center rounded-lg border-2 transition ${
+                            <button disabled={!clickable} onClick={() => onCellClick(w, u)}
+                              title={done ? `Done${cell?.completed_at ? ` · ${dayLabel(cell.completed_at.split("T")[0])}` : ""}${evCount ? ` · ${evCount} evidence` : ""}`
+                                : u.id === me.id ? "Mark this week done (add evidence)" : "Pending"}
+                              className={`relative mx-auto flex h-7 w-7 items-center justify-center rounded-lg border-2 transition ${
                                 done ? "border-leaf bg-leaf-dim/50 text-leaf"
                                   : clickable ? "border-edge-2 text-faint hover:border-crim/60 hover:text-crim"
                                   : "border-edge text-edge-2 cursor-not-allowed"}`}>
                               {done ? <Check size={14} strokeWidth={3} /> : <span className="text-[10px] font-bold">·</span>}
+                              {evCount > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-crim px-0.5 text-[8px] font-extrabold text-white">
+                                  {evCount}
+                                </span>
+                              )}
                             </button>
                           </td>
                         );
@@ -638,10 +742,22 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
           <div className="grid sm:grid-cols-2 gap-3">
             {p.weeks.map((w) => (
               <div key={w.id} className="card p-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-extrabold text-crim">W{String(w.number).padStart(2, "0")}</span>
-                  <span className="text-sm font-bold">{w.title}</span>
+                  {w.scheduled ? (
+                    <button className="text-sm font-bold hover:text-crim transition"
+                      onClick={() => navigate("training", "weeks", w.scheduled!.id)}>{w.title}</button>
+                  ) : (
+                    <span className="text-sm font-bold">{w.title}</span>
+                  )}
+                  {w.scheduled && (
+                    <span className="flex items-center gap-1.5 ml-auto">
+                      <Badge cls={w.scheduled.status === "active" ? "text-crim border-crim/50" : w.scheduled.status === "completed" ? "text-leaf border-leaf/40" : "text-mute"}>{w.scheduled.status}</Badge>
+                      <span className="text-[10px] text-faint font-bold">{dayLabel(w.scheduled.start_date)} → {dayLabel(w.scheduled.end_date)}</span>
+                    </span>
+                  )}
                 </div>
+                {w.scheduled?.objective && <p className="text-[12px] text-text/70 mt-1.5 leading-relaxed line-clamp-3">{w.scheduled.objective}</p>}
                 {w.description && <p className="text-[12.5px] text-mute mt-1.5 leading-relaxed whitespace-pre-wrap">{w.description}</p>}
                 {w.attachments.length > 0 && (
                   <div className="space-y-2 mt-2.5">
@@ -669,6 +785,44 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                     </div>
                   </div>
                 )}
+                {/* completion evidence from members */}
+                {(() => {
+                  const evs = enrolled
+                    .map((u) => ({ u, c: matrix[String(w.id)]?.[String(u.id)] }))
+                    .filter((x) => (x.c?.attachments?.length ?? 0) > 0 || (x.c?.notes ?? "") !== "");
+                  if (!evs.length) return null;
+                  return (
+                    <div className="mt-3 border-t border-edge pt-2.5">
+                      <div className="label !text-[9px] mb-2">Completion evidence</div>
+                      <div className="space-y-2.5">
+                        {evs.map(({ u, c }) => (
+                          <div key={u.id} className="flex items-start gap-2">
+                            <AvatarImg user={u} size={20} />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[10px] font-extrabold text-mute uppercase">
+                                {u.ign}
+                                {c?.status === "done" && <span className="text-leaf"> ✓</span>}
+                                {c?.completed_at && <span className="text-faint normal-case font-semibold"> · {dayLabel(c.completed_at.split("T")[0])}</span>}
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(c?.attachments ?? []).map((a, i) => a.kind === "image" ? (
+                                  <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.label}>
+                                    <img src={a.url} alt={a.label} className="h-10 w-14 rounded border border-edge object-cover hover:border-crim/50 transition" />
+                                  </a>
+                                ) : (
+                                  <a key={i} href={a.url} target="_blank" rel="noreferrer" className="chip !py-0.5 !text-[9px] text-sky border-sky/40 hover:bg-sky/10" title={a.label}>
+                                    {a.kind === "video" ? <Film size={10} /> : a.kind === "link" ? <Link2 size={10} /> : <FileText size={10} />} {a.label.length > 24 ? a.label.slice(0, 22) + "…" : a.label}
+                                  </a>
+                                ))}
+                              </div>
+                              {c?.notes && <div className="text-[11px] text-faint italic mt-1">“{c.notes}”</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -681,8 +835,11 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
         )}
         {showProgramForm && <ProgramForm users={users} program={showProgramForm.program}
           onClose={() => setShowProgramForm(null)} onSaved={() => { setShowProgramForm(null); load(); }} />}
-        {showTaskForm && <ProgramWeekForm program={p} week={showTaskForm.week}
+        {showTaskForm && <ProgramWeekForm program={p} week={showTaskForm.week} weeks={weeks ?? []}
           onClose={() => setShowTaskForm(null)} onSaved={() => { setShowTaskForm(null); load(); }} />}
+        {showClaim && <ClaimDoneModal program={p} week={showClaim} cell={matrix[String(showClaim.id)]?.[String(me.id)]}
+          onClose={() => setShowClaim(null)}
+          onSaved={() => { setShowClaim(null); load(); window.dispatchEvent(new Event("clover:notifications-changed")); }} />}
       </div>
     );
   }

@@ -208,6 +208,7 @@ class ProgramWeek(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id", ondelete="CASCADE"), index=True)
+    training_week_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("training_weeks.id", ondelete="SET NULL"), nullable=True, index=True)
     number: Mapped[int] = mapped_column(Integer, default=1)
     title: Mapped[str] = mapped_column(String(160))
     description: Mapped[str] = mapped_column(Text, default="")
@@ -215,6 +216,7 @@ class ProgramWeek(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     program: Mapped[TrainingProgram] = relationship(back_populates="weeks")
+    scheduled_week = relationship("TrainingWeek", lazy="joined")
     progress_rows: Mapped[list["WeekProgress"]] = relationship(back_populates="week",
         cascade="all, delete-orphan")
 
@@ -229,6 +231,7 @@ class WeekProgress(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | done
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    attachments: Mapped[str] = mapped_column(Text, default="[]")  # JSON evidence [{label,url,kind}]
     marked_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     week: Mapped[ProgramWeek] = relationship(back_populates="progress_rows")

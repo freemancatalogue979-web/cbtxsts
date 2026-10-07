@@ -389,12 +389,15 @@ export interface ProgramWeekT {
   title: string;
   description: string;
   attachments: { label: string; url: string; kind: string }[];
+  scheduled: { id: number; number: number; focus: string; objective: string;
+    start_date: string | null; end_date: string | null; status: string } | null;
 }
 
 export interface ProgressCell {
   status: "pending" | "done";
   completed_at: string | null;
   notes: string;
+  attachments: { label: string; url: string; kind: string }[];
   marked_by: number | null;
 }
 

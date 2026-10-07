@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..config import UPLOAD_DIR
-from ..deps import can, get_current_user, get_db, require
+from ..deps import get_current_user, get_db
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -36,7 +36,7 @@ def _safe_name(filename: str) -> tuple[str, str]:
 
 @router.post("", status_code=201)
 async def upload_file(file: UploadFile, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    require(can.manage_training(user), "upload files")
+    # any squad member may upload (players attach completion evidence)
     stored, ext = _safe_name(file.filename or "")
     raw = await file.read()
     if not raw:
