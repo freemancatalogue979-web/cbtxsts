@@ -59,4 +59,4 @@ def startup() -> None:
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         if seed_if_empty(db):
-            logger.info("Database seeded: roster, heroes, training block, scrims, reviews.")
+            logger.info("Database seeded: accounts, heroes, settings (demo data skipped unless CLOVER_DEMO_DATA=1).")

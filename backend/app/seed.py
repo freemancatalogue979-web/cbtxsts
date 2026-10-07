@@ -5,6 +5,7 @@ living dashboard (next activity countdown, upcoming events, recent results).
 """
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
@@ -885,19 +886,24 @@ def seed_settings(db: Session) -> None:
 
 # ---------------------------------------------------------------------------
 def seed_if_empty(db: Session) -> bool:
-    """Seed everything when the database has no users. Returns True if seeded."""
+    """Seed the essentials (accounts, heroes, settings) when the DB has no users.
+
+    Demo/scrim content (pools, training block, scrims, bans, strategy, drafts,
+    events, development entries) is only seeded when CLOVER_DEMO_DATA=1 so new
+    environments start clean by default. Returns True if seeded."""
     if db.scalar(select(func.count()).select_from(User)):
         return False
     users = seed_users(db)
     heroes = seed_heroes(db)
-    seed_pools(db, users, heroes)
-    seed_training(db, users)
-    seed_scrims(db, users)
-    seed_bans(db, heroes)
-    seed_strategy(db, users)
-    seed_drafts(db, users)
-    seed_events(db, users)
-    seed_development(db, users)
     seed_settings(db)
+    if os.getenv("CLOVER_DEMO_DATA"):
+        seed_pools(db, users, heroes)
+        seed_training(db, users)
+        seed_scrims(db, users)
+        seed_bans(db, heroes)
+        seed_strategy(db, users)
+        seed_drafts(db, users)
+        seed_events(db, users)
+        seed_development(db, users)
     db.commit()
     return True
