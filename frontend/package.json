@@ -5,9 +5,9 @@
   "type": "module",
   "description": "9 CLOVER — competitive training & analysis hub (React + Vite + Tailwind v4)",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5173",
+    "dev": "vite --host 0.0.0.0 --port 9009",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 5173",
+    "preview": "vite preview --host 0.0.0.0 --port 9009",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

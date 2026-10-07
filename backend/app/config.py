@@ -31,7 +31,7 @@ _load_dotenv(BACKEND_ROOT / ".env")
 # Server
 # ---------------------------------------------------------------------------
 HOST = os.getenv("CLOVER_HOST", "0.0.0.0")
-PORT = int(os.getenv("CLOVER_PORT", "3000"))
+PORT = int(os.getenv("CLOVER_PORT", "9000"))
 
 EXTRA_CORS_ORIGINS = [o.strip() for o in os.getenv("CLOVER_CORS_ORIGINS", "").split(",") if o.strip()]
 CORS_ALLOW_ORIGIN_REGEX = os.getenv(

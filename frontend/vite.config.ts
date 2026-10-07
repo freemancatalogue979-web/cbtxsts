@@ -4,11 +4,11 @@ import react from '@vitejs/plugin-react';
 import {defineConfig} from 'vite';
 
 /**
- * The FastAPI backend listens on localhost:3000. The dev server proxies REST
+ * The FastAPI backend listens on localhost:9000. The dev server proxies REST
  * and websocket traffic to it, so the browser only ever talks to one origin
  * (which keeps the sandboxed preview working without CORS gymnastics).
  */
-const API_TARGET = process.env.VITE_API_TARGET || 'http://127.0.0.1:3000';
+const API_TARGET = process.env.VITE_API_TARGET || 'http://127.0.0.1:9000';
 
 const proxy = {
   '/api': {target: API_TARGET, changeOrigin: true},
@@ -25,7 +25,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 9009,
     // Preview tunnels (https://<port>-<sandbox>.e2b.app) must be accepted.
     allowedHosts: true,
     // Vite's live-reload socket force-RELOADS the page whenever it reconnects
@@ -37,7 +37,7 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 9009,
     allowedHosts: true,
     proxy,
   },

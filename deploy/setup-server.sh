@@ -5,7 +5,7 @@
 #
 # Re-running it is safe: it pulls the latest code, rebuilds and restarts.
 # Result: nginx on port 80 serves the built app and proxies /api, /live, /ws
-# to uvicorn (systemd service "clover", 127.0.0.1:3000). Data lives in
+# to uvicorn (systemd service "clover", 127.0.0.1:9000). Data lives in
 # $APP_DIR/backend/data and is never touched by updates.
 set -euo pipefail
 
@@ -48,7 +48,7 @@ if [ ! -f .env ]; then
   cat > .env <<EOF
 CBT_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')
 CBT_HOST=127.0.0.1
-CBT_PORT=3000
+CBT_PORT=9000
 # DEEPSEEK_API_KEY=
 # GEMINI_API_KEY=
 # CBT_ADMIN_PASSWORD=change-me
@@ -71,7 +71,7 @@ After=network.target
 User=$RUN_USER
 WorkingDirectory=$APP_DIR/backend
 EnvironmentFile=$APP_DIR/backend/.env
-ExecStart=$APP_DIR/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 3000 --workers 1 --proxy-headers
+ExecStart=$APP_DIR/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 9000 --workers 1 --proxy-headers
 Restart=always
 RestartSec=3
 
@@ -94,7 +94,7 @@ server {
     client_max_body_size 60m;
 
     location ~ ^/(api|live)/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:9000;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -105,7 +105,7 @@ server {
         proxy_send_timeout 600s;
     }
     location /ws/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:9000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -132,7 +132,7 @@ if [ "$DOMAIN" != "_" ]; then
 fi
 
 log "Waiting for the API"
-for i in $(seq 1 60); do curl -fs http://127.0.0.1/api/health >/dev/null 2>&1 && break; curl -fs http://127.0.0.1:3000/ >/dev/null 2>&1 && break; sleep 2; done
+for i in $(seq 1 60); do curl -fs http://127.0.0.1/api/health >/dev/null 2>&1 && break; curl -fs http://127.0.0.1:9000/ >/dev/null 2>&1 && break; sleep 2; done
 IP="$(curl -s -m5 ifconfig.me || hostname -I | awk '{print $1}')"
 printf '\n\033[1;32m✔ 9 CLOVER Competitive Operations is live at http://%s\033[0m\n' "${DOMAIN/#_/$IP}"
 echo "  Logs:    sudo journalctl -u clover -f"

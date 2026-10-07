@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 9 CLOVER — Competitive Operations launcher.
 #
-# Starts the FastAPI API (:3000) and the React web app (:5173).
+# Starts the FastAPI API (:9000) and the React web app (:9009).
 #
 # VPS (persistent; survives SSH/terminal logout):
 #   ./start-arena.sh              # install/update dependencies and start both
@@ -17,8 +17,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${1:-all}"
-API_PORT="${API_PORT:-3000}"
-WEB_PORT="${WEB_PORT:-5173}"
+API_PORT="${API_PORT:-9000}"
+WEB_PORT="${WEB_PORT:-9009}"
 RUN_DIR="$ROOT/.arena-run"
 API_PID_FILE="$RUN_DIR/api.pid"
 WEB_PID_FILE="$RUN_DIR/web.pid"
