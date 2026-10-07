@@ -45,3 +45,5 @@ npm-debug.log*
 frontend/test-results/
 backend/data/ai_keys.json
 backend/data/ai_keys.tmp
+
+image-search/

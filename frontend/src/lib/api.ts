@@ -45,11 +45,27 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return payload as T;
 }
 
+async function uploadForm<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`/api${path}`, { method: "POST", headers, body: form });
+  const text = await res.text();
+  let payload: unknown;
+  try { payload = text ? JSON.parse(text) : undefined; } catch { payload = text; }
+  if (!res.ok) {
+    if (res.status === 401) { setToken(null); window.dispatchEvent(new Event("clover:unauthorized")); }
+    throw new ApiError(res.status, payload);
+  }
+  return payload as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
+  upload: <T>(path: string, form: FormData) => uploadForm<T>(path, form),
 };
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {

@@ -283,6 +283,27 @@ class StrategyNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class MapBoard(Base):
+    """Tactical Land-of-Dawn board: draggable hero tokens + freehand drawing.
+
+    data JSON: {"tokens":[{"id","hero","side","x","y"}],
+                "paths":[{"color","points":[[x,y],...],}], "text":[{"x","y","t"}]}
+    """
+
+    __tablename__ = "map_boards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    kind: Mapped[str] = mapped_column(String(20), default="strategy", index=True)  # draft|strategy|scrim-review
+    opponent: Mapped[str] = mapped_column(String(120), default="", index=True)
+    draft_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data: Mapped[str] = mapped_column(Text, default="{}")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    author_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 STRATEGY_CATEGORIES = [
     "COMPOSITION",
     "MACRO",

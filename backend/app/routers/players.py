@@ -179,3 +179,73 @@ def delete_development(entry_id: int, db: Session = Depends(get_db), user=Depend
     db.delete(entry)
     db.commit()
     return None
+
+
+@router.get("/{user_id}/progress")
+def player_progress(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Progress timeline: scrim win-rate by week (12), dev rating trend, pool growth stats."""
+    import datetime as _dt
+
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    # --- scrim trend: ISO week buckets for the last 12 weeks that had games
+    played = db.scalars(
+        select(Scrim).where(Scrim.status == "played").order_by(Scrim.scrim_date.asc(), Scrim.number.asc())
+    ).all()
+    weekly: dict[str, dict] = {}
+    for s in played:
+        if not s.scrim_date:
+            continue
+        ids = list(loads(s.lineup, {}).values()) + loads(s.substitutes)
+        if user_id not in ids:
+            continue
+        year, week, _ = s.scrim_date.isocalendar()
+        key = f"{year}-W{week:02d}"
+        b = weekly.setdefault(key, {"week": key, "games": 0, "wins": 0})
+        b["games"] += 1
+        b["wins"] += 1 if s.result == "WIN" else 0
+    trend = [
+        {**b, "win_rate": round(100 * b["wins"] / b["games"], 1)}
+        for b in weekly.values()
+    ][-12:]
+
+    # --- dev rating trend (coach + self), chronological
+    devs = db.scalars(
+        select(DevelopmentEntry).where(DevelopmentEntry.user_id == user_id, DevelopmentEntry.rating.is_not(None))
+        .order_by(DevelopmentEntry.entry_date.asc(), DevelopmentEntry.id.asc())
+    ).all()
+    ratings = [{"date": d.entry_date.isoformat(), "rating": d.rating, "source": d.source, "category": d.category} for d in devs][-20:]
+
+    # --- pool breadth: heroes by category + avg confidence + recorded WR
+    pool = db.scalars(select(HeroPoolEntry).where(HeroPoolEntry.user_id == user_id)).all()
+    by_cat = {}
+    for e in pool:
+        by_cat[e.category] = by_cat.get(e.category, 0) + 1
+    g = sum(e.games for e in pool)
+    w = sum(e.wins for e in pool)
+    pool_stats = {
+        "breadth": len(pool),
+        "by_category": by_cat,
+        "avg_confidence": round(sum(e.confidence for e in pool) / len(pool), 1) if pool else 0,
+        "recorded_games": g,
+        "recorded_win_rate": round(100 * w / g, 1) if g else None,
+    }
+
+    # --- readiness snapshot: pool META heroes that are also META meta_status right now
+    meta_status = {h.name: h.meta_status for h in db.scalars(select(Hero)).all()}
+    ready = 0
+    for e in pool:
+        h = e.hero
+        if h and meta_status.get(h.name) in ("META", "STRONG"):
+            ready += 1
+
+    return {
+        "user": user_out(target),
+        "scrim_trend": trend,
+        "rating_trend": ratings,
+        "pool": pool_stats,
+        "meta_ready_picks": ready,
+        "overall": _scrim_form(db, user_id),
+    }

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date as _date
 
+from .config import AVATAR_DIR
 from .models import (
     BanEntry,
     DevelopmentEntry,
@@ -10,6 +11,7 @@ from .models import (
     Event,
     Hero,
     HeroPoolEntry,
+    MapBoard,
     MatchReview,
     Scrim,
     ScrimGame,
@@ -35,6 +37,7 @@ def user_out(u: User) -> dict:
         "bio": u.bio,
         "active": u.active,
         "roster": u.roster,
+        "avatar": avatar_url(u.id),
     }
 
 
@@ -287,4 +290,26 @@ def settings_out(s: TeamSettings) -> dict:
         "weakness_category": s.weakness_category,
         "weakness_drills_target": s.weakness_drills_target,
         "season_name": s.season_name,
+    }
+
+
+def avatar_url(user_id: int) -> str | None:
+    p = AVATAR_DIR / f"{user_id}.png"
+    if p.exists():
+        return f"/api/users/{user_id}/avatar?v={int(p.stat().st_mtime)}"
+    return None
+
+
+def board_out(b: MapBoard) -> dict:
+    return {
+        "id": b.id,
+        "name": b.name,
+        "kind": b.kind,
+        "opponent": b.opponent,
+        "draft_id": b.draft_id,
+        "data": loads(b.data),
+        "notes": b.notes,
+        "author_id": b.author_id,
+        "created_at": b.created_at.isoformat() if b.created_at else None,
+        "updated_at": b.updated_at.isoformat() if b.updated_at else None,
     }

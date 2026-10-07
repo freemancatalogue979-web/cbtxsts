@@ -334,3 +334,28 @@ class SettingsPatch(BaseModel):
     weakness_category: str | None = None
     weakness_drills_target: int | None = None
     season_name: str | None = None
+
+
+class UserSelfPatch(BaseModel):
+    name: str | None = None
+    ign: str | None = None
+    main_role: str | None = None
+    bio: str | None = None
+
+
+class MapBoardIn(BaseModel):
+    name: str
+    kind: Literal["draft", "strategy", "scrim-review"] = "strategy"
+    opponent: str = ""
+    draft_id: int | None = None
+    data: dict[str, Any] | None = None
+    notes: str = ""
+
+
+class MapBoardPatch(BaseModel):
+    name: str | None = None
+    kind: Literal["draft", "strategy", "scrim-review"] | None = None
+    opponent: str | None = None
+    data: dict[str, Any] | None = None
+    notes: str | None = None
+    draft_id: int | None = None

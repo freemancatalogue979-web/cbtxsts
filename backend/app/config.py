@@ -8,6 +8,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
 DATA_DIR = BACKEND_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+AVATAR_DIR = DATA_DIR / "avatars"
+AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load_dotenv(path: Path) -> None:

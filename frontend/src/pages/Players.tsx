@@ -1,9 +1,10 @@
 import { Plus, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User } from "../lib/types";
+import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgress } from "../lib/types";
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
-import { Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
+import { Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Spinner, StatTile } from "../components/ui";
+import { AvatarImg } from "../components/Avatar";
 import { HeroImg } from "../components/HeroImg";
 
 const POOL_LABEL: Record<string, string> = { comfort: "Comfort picks", meta: "Meta picks", pocket: "Pocket picks", emergency: "Emergency picks" };
@@ -145,9 +146,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         <button className="label !text-crim" onClick={() => navigate("players")}>← Roster</button>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded bg-crim-dim border border-crim/40 flex items-center justify-center text-xl font-extrabold text-crim">
-              {p.ign.slice(0, 2).toUpperCase()}
-            </div>
+            <AvatarImg user={p} size={56} />
             <div>
               <div className="text-xl font-extrabold">{p.ign}</div>
               <div className="text-[13px] text-mute">{p.name} · {p.main_role || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
@@ -172,6 +171,8 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             </div>
           </div>
         </div>
+
+        <ProgressPanel userId={p.id} ign={p.ign} />
 
         {/* Hero pool */}
         <section>
@@ -255,9 +256,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         {(roster ?? []).map((p) => (
           <button key={p.id} onClick={() => navigate("players", p.id)} className="card card-hover p-4 text-left">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded bg-crim-dim border border-crim/40 flex items-center justify-center font-extrabold text-crim">
-                {p.ign.slice(0, 2).toUpperCase()}
-              </div>
+              <AvatarImg user={p} size={44} />
               <div className="flex-1 min-w-0">
                 <div className="font-extrabold truncate">{p.ign}
                   {p.role === "captain" && <span className="text-amber text-[10px] font-bold"> · C</span>}
@@ -274,5 +273,86 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         {roster && roster.length === 0 && <Empty title="No roster members yet" />}
       </div>
     </div>
+  );
+}
+
+function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
+  const [prog, setProg] = useState<PlayerProgress | null>(null);
+  useEffect(() => {
+    api.get<PlayerProgress>(`/players/${userId}/progress`).then(setProg).catch(() => setProg(null));
+  }, [userId]);
+  if (!prog) return null;
+
+  const weeks = prog.scrim_trend;
+  const maxGames = Math.max(1, ...weeks.map((w) => w.games));
+  const ratings = prog.rating_trend.filter((r) => r.rating != null).slice(-20);
+  const rMin = ratings.length ? Math.min(...ratings.map((r) => r.rating)) : 0;
+  const rMax = ratings.length ? Math.max(...ratings.map((r) => r.rating)) : 10;
+  const span = Math.max(1, rMax - rMin);
+  const spark = ratings.map((r, i) => `${(i / Math.max(1, ratings.length - 1)) * 100},${22 - ((r.rating - rMin) / span) * 20}`).join(" ");
+
+  return (
+    <section>
+      <SectionTitle>Progress · {ign.toUpperCase()}</SectionTitle>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="card p-4 col-span-1 sm:col-span-2">
+          <div className="flex items-baseline justify-between mb-2.5">
+            <span className="label !mb-0">Scrim win rate · last 12 weeks</span>
+            <span className="text-[10px] text-faint">{weeks.reduce((a, w) => a + w.games, 0)} games</span>
+          </div>
+          <div className="flex items-end gap-1 h-16">
+            {weeks.length === 0 && <span className="text-faint text-sm self-center">No scrims recorded yet</span>}
+            {weeks.map((w, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5"
+                title={`W${w.week}: ${w.wins}/${w.games} won (${w.win_rate}%)`}>
+                <div className="text-[8px] font-bold tabular-nums text-faint">{w.games ? `${w.win_rate}%` : ""}</div>
+                <div
+                  className={`w-full rounded-sm ${!w.games ? "bg-edge/50" : w.win_rate >= 60 ? "bg-leaf/80" : w.win_rate >= 45 ? "bg-amber/70" : "bg-crim/80"}`}
+                  style={{ height: `${Math.max(6, (w.games / maxGames) * 42)}px` }}
+                />
+                <div className="text-[7.5px] text-faint">{w.games ? w.week.slice(1) : ""}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-4">
+          <div className="label !mb-2">Dev rating trend</div>
+          {ratings.length < 2 ? (
+            <div className="text-faint text-sm pt-4 text-center">{ratings.length ? "1 entry so far" : "No ratings yet"}</div>
+          ) : (
+            <>
+              <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="w-full h-14">
+                <polyline points={spark} fill="none" stroke="#e11d48" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              </svg>
+              <div className="flex justify-between text-[10px] text-faint">
+                <span>{ratings[0].date.slice(5)}</span>
+                <span className="text-amber font-extrabold">{ratings[ratings.length - 1].rating}/10 latest</span>
+                <span>{ratings[ratings.length - 1].date.slice(5)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="card p-4">
+          <div className="label !mb-2">Meta readiness</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-leaf tabular-nums">{prog.meta_ready_picks}</span>
+            <span className="text-[11px] text-mute">heroes meta-ready</span>
+          </div>
+          <div className="text-[11px] text-faint mt-2 leading-relaxed">
+            Pool breadth {prog.pool.breadth} · avg confidence {prog.pool.avg_confidence ?? "—"}
+          </div>
+          {prog.pool.recorded_win_rate != null && (
+            <div className="mt-1.5">
+              <Progress value={prog.pool.recorded_win_rate} tone="leaf" />
+              <div className="text-[10px] text-faint mt-1">
+                {prog.pool.recorded_win_rate}% WR across {prog.pool.recorded_games} ranked/scrim games
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

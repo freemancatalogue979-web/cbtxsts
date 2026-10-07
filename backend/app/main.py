@@ -16,12 +16,14 @@ from .routers import (
     drafts,
     events,
     heroes,
+    maps,
     meta,
     players,
     reviews,
     scrims,
     strategy,
     training,
+    users,
 )
 from .seed import seed_if_empty
 
@@ -41,7 +43,7 @@ app.add_middleware(
 
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
-               bans, events, strategy, drafts, admin):
+               bans, events, strategy, drafts, admin, maps, users):
     api.include_router(module.router)
 app.include_router(api)
 

@@ -11,6 +11,7 @@ export interface User {
   bio: string;
   active: boolean;
   roster: boolean;
+  avatar?: string | null;
 }
 
 export interface Meta {
@@ -323,4 +324,28 @@ export interface Settings {
   weakness_category: string;
   weakness_drills_target: number;
   season_name: string;
+}
+
+export interface MapBoard {
+  id: number;
+  name: string;
+  kind: "draft" | "strategy" | "scrim-review";
+  opponent: string;
+  draft_id: number | null;
+  data: { tokens?: { id: string; hero: string; side: string; x: number; y: number }[]; paths?: { color: string; points: number[][] }[] };
+  notes: string;
+  author_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  token_count?: number;
+}
+
+export interface PlayerProgress {
+  user: User;
+  scrim_trend: { week: string; games: number; wins: number; win_rate: number }[];
+  rating_trend: { date: string; rating: number; source: string; category: string }[];
+  pool: { breadth: number; by_category: Record<string, number>; avg_confidence: number; recorded_games: number; recorded_win_rate: number | null };
+  meta_ready_picks: number;
+  overall: { series_played: number; series_won: number; series_lost: number; win_rate: number | null; form: string[];
+    recent: { scrim_id: number; number: number; opponent: string; result: string; score_us: number; score_them: number; date: string | null }[] };
 }

@@ -1,4 +1,4 @@
-import { Layers as LayersIcon, Plus } from "lucide-react";
+import { Layers as LayersIcon, Map, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DraftPlan, Hero, Meta, User } from "../lib/types";
@@ -166,6 +166,14 @@ export function DraftsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
               <Badge cls={STATUS_TONE[d.status] ?? "text-mute"}>{d.status}</Badge>
               {d.opponent && <Badge cls="text-crim border-crim/30">vs {d.opponent}</Badge>}
               <span className="text-[11px] text-faint ml-auto">{d.patch}</span>
+              <button className="text-[11px] text-faint hover:text-leaf flex items-center gap-1"
+                title="Open as a tactical map board"
+                onClick={async () => {
+                  await api.post("/maps", { kind: "draft", name: `Map · ${d.name}`, opponent: d.opponent, draft_id: d.id });
+                  navigate("maps");
+                }}>
+                <Map size={11} /> Map
+              </button>
               {canManage && <button className="text-[11px] text-faint hover:text-text" onClick={() => setEditing(d)}>Edit</button>}
             </div>
             <DraftBoard draft={d.draft} theirsLabel={(d.opponent || "Enemy").toUpperCase()} />

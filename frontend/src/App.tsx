@@ -13,6 +13,7 @@ import { HeroesPage } from "./pages/Heroes";
 import { PlayersPage } from "./pages/Players";
 import { BansPage } from "./pages/Bans";
 import { DraftsPage } from "./pages/Drafts";
+import { MapsPage } from "./pages/Maps";
 import { StrategyPage } from "./pages/Strategy";
 import { EventsPage } from "./pages/Events";
 import { AdminPage } from "./pages/Admin";
@@ -95,6 +96,9 @@ export default function App() {
     case "drafts":
       page = <DraftsPage me={user} meta={meta} parts={rest} />;
       break;
+    case "maps":
+      page = <MapsPage me={user} parts={rest} />;
+      break;
     case "strategy":
       page = <StrategyPage me={user} meta={meta} />;
       break;
@@ -109,7 +113,7 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onLogout={() => { setToken(null); setUser(null); window.location.hash = "/login"; }}>
+    <Layout user={user} onUserUpdate={setUser} onLogout={() => { setToken(null); setUser(null); window.location.hash = "/login"; }}>
       {page}
     </Layout>
   );
