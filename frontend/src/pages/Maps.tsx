@@ -16,6 +16,7 @@ const SIDE_RING: Record<Side, string> = {
   theirs: "ring-crim/90 bg-crim/10",
   neutral: "ring-amber/80 bg-amber/10",
 };
+const GAME_SRC = "/map/game-map.jpg"; // official battlefield render (user-provided), 735×490 → ratio 1.5
 const PEN_COLORS = [
   { id: "#34d399", label: "Ours" },
   { id: "#e11d48", label: "Enemy" },
@@ -23,8 +24,8 @@ const PEN_COLORS = [
   { id: "#7db5f5", label: "Info" },
 ];
 const LANE_SPOTS: Record<Side, Record<string, [number, number]>> = {
-  ours: { EXP: [13, 38], JUNGLE: [30, 55], MID: [42, 58], GOLD: [60, 84], ROAM: [50, 45] },
-  theirs: { EXP: [38, 13], JUNGLE: [55, 30], MID: [58, 42], GOLD: [84, 40], ROAM: [50, 55] },
+  ours: { EXP: [32, 14], JUNGLE: [36, 42], MID: [47, 52], GOLD: [66, 84], ROAM: [52, 44] },
+  theirs: { EXP: [68, 86], JUNGLE: [64, 58], MID: [53, 48], GOLD: [34, 16], ROAM: [48, 56] },
   neutral: {},
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -39,7 +40,7 @@ function BoardEditor({ id }: { id: number }) {
   const [stroke, setStroke] = useState<number[][] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [mapStyle, setMapStyle] = useState<"clover" | "game" | "diagram">("clover");
+  const [mapStyle, setMapStyle] = useState<"game" | "diagram">("game");
   const [gameMapFailed, setGameMapFailed] = useState(false);
   const [isFs, setIsFs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -262,11 +263,11 @@ function BoardEditor({ id }: { id: number }) {
             )}
             <span className="mx-1.5 w-px h-5 bg-edge" />
             <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
-              {(["clover", "game", "diagram"] as const).map((m) => (
+              {(["game", "diagram"] as const).map((m) => (
                 <button key={m} type="button"
                   className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
                   onClick={() => setMapStyle(m)}>
-                  {m === "clover" ? "9C" : m === "game" ? "Game map" : "Diagram"}
+                  {m === "game" ? "Game map" : "Diagram"}
                 </button>
               ))}
             </div>
@@ -291,30 +292,24 @@ function BoardEditor({ id }: { id: number }) {
           <div className={isFs ? "flex-1 min-h-0 grid place-items-center p-2" : "p-2 sm:p-3"}>
             <div
               ref={area}
-              className={`relative aspect-square rounded-lg overflow-hidden border border-edge select-none touch-none ${isFs ? "" : "w-full"}`}
-              style={isFs ? { width: "min(100%, calc(100dvh - 120px))" } : undefined}
+              className="relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none"
+              style={{
+                aspectRatio: mapStyle === "game" && !gameMapFailed ? "735 / 490" : "1 / 1",
+                ...(isFs
+                  ? { width: `min(100%, calc((100dvh - 120px) * ${mapStyle === "game" && !gameMapFailed ? "1.5" : "1"}))` }
+                  : {}),
+              }}
               onPointerDown={onAreaDown}
               onPointerMove={onAreaMove}
               onPointerUp={onAreaUp}
               onPointerLeave={onAreaUp}
             >
-              {mapStyle === "clover" ? (
-                <>
-                  <img
-                    src="/brand/tribal-clover.jpg"
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none opacity-60"
-                  />
-                  <div className="absolute inset-0 bg-ink/40 pointer-events-none" />
-                  <BattlefieldMap className="absolute inset-0" translucent />
-                </>
-              ) : mapStyle === "game" && !gameMapFailed ? (
+              {mapStyle === "game" && !gameMapFailed ? (
                 <img
-                  src="https://mlbbhub.com/images/strategy-map-1400.webp"
+                  src={GAME_SRC}
                   alt="Land of Dawn battlefield"
                   draggable={false}
-                  onError={() => { setGameMapFailed(true); setMapStyle("clover"); }}
+                  onError={() => { setGameMapFailed(true); setMapStyle("diagram"); }}
                   className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
                 />
               ) : (
