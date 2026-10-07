@@ -1,2096 +1,313 @@
-/** Shapes returned by the FastAPI backend (snake_case, exactly as served). */
+export type Role = "admin" | "captain" | "coach" | "player" | "analyst";
 
-export type OptionKey = 'A' | 'B' | 'C' | 'D';
-export type QuizStatus = 'draft' | 'scheduled' | 'active' | 'completed';
-export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum';
-
-export interface LevelProgress {
-  level: number;
-  title: string;
-  current_xp: number;
-  level_floor: number;
-  level_ceiling: number;
-  into_level: number;
-  needed: number;
-  percent: number;
-}
-
-export interface PlayerSummary {
+export interface User {
   id: number;
+  email: string;
   name: string;
-  initials: string;
-  phone: string;
-  avatar_hue: number;
-  has_photo?: boolean;
-  bio?: string;
-  status_text?: string;
-  flair?: string;
-  level: number;
-  title: string;
-  tier: Tier;
-  xp: number;
-  coins: number;
-  diamonds?: number;
-  cosmetics?: CosmeticsRef;
-  streak: number;
-  duels_won: number;
-  duels_played: number;
-  exams_taken: number;
-  best_percentage: number;
-  online?: boolean;
-  friendship_status?: string;
-  direction?: string;
-  friendship_id?: number;
-  country?: string;
-  flag?: string;
-  is_friend?: boolean;
-}
-
-export interface BadgeItem {
-  key: string;
-  name: string;
-  description: string;
-  icon: string;
-  tier: Tier;
-  xp_reward: number;
-  coin_reward: number;
-  awarded_at?: string;
-  owned?: boolean;
-}
-
-export interface Profile {
-  id: number;
-  name: string;
-  initials: string;
-  username: string;
-  /** Prestige currency: milestone-only, never bought, never converted from coins. */
-  diamonds?: number;
-  /** Equipped cosmetics — the avatar, aura, frame, title, theme and chat look. */
-  cosmetics?: CosmeticsRef;
-  phone: string;
-  reg_no: string | null;
-  faculty: string;
-  campus: string;
-  country?: string;
-  flag?: string;
-  class_name: string;
-  level_name: string;
-  avatar_hue: number;
-  has_photo: boolean;
+  ign: string;
+  role: Role;
+  role_label: string;
+  main_role: string;
   bio: string;
-  status_text: string;
-  player_code: string;
-  flair: string;
-  helper_points: number;
-  streak_freezes: number;
-  xp_boosted: boolean;
-  xp: number;
-  coins: number;
-  weekly_xp: number;
-  week_key: string;
-  streak: number;
-  best_streak: number;
-  last_active: string | null;
-  progress: LevelProgress;
-  tier: Tier;
-  stats: {
-    exams_taken: number;
-    exams_won: number;
-    best_percentage: number;
-    duels_played: number;
-    duels_won: number;
-    duels_lost: number;
-    duel_win_rate: number;
-    correct_answers: number;
-    questions_answered: number;
-    accuracy: number;
-    best_run: number;
-  };
-  badges: BadgeItem[];
-  /** The season badge this player is wearing right now (resets monthly). */
-  season?: SeasonBadgeBlock;
-  created_at: string;
-  is_new?: boolean;
-  online?: boolean;
+  active: boolean;
+  roster: boolean;
 }
 
-export type SeasonRankKey =
-  | 'bronze'
-  | 'silver'
-  | 'gold'
-  | 'platinum'
-  | 'diamond'
-  | 'master'
-  | 'grandmaster'
-  | 'elite'
-  | 'champion'
-  | 'legend'
-  | 'mythic'
-  | 'celestial';
-
-export interface SeasonRank {
-  key: SeasonRankKey;
-  label: string;
-  glyph: 'medal' | 'shield' | 'gem' | 'star' | 'crown' | 'flame' | 'trophy' | 'sparkles' | 'zap' | 'sun';
-  blurb: string;
-  level_from: number;
-  level_to: number;
-  xp_from: number;
-  xp_to: number;
-  deep: string;
-  bright: string;
+export interface Meta {
+  team_name: string;
+  team_tagline: string;
+  season_patch: string;
+  lanes: string[];
+  roles: Record<string, string>;
+  activity_categories: string[];
+  activity_statuses: string[];
+  hero_statuses: string[];
+  hero_tiers: string[];
+  pool_categories: string[];
+  review_statuses: string[];
+  scrim_formats: string[];
+  draft_statuses: string[];
+  strategy_categories: string[];
+  event_kinds: string[];
+  dev_categories: string[];
 }
 
-export interface SeasonBadgeBlock {
-  season_key: string;
-  number?: number;
-  label: string;
-  days_left: number;
-  days_total?: number;
-  xp: number;
-  level: number;
-  rank: SeasonRank;
-  next_rank: SeasonRank | null;
-  progress: {level: number; xp: number; level_floor: number; level_ceiling: number; into_level: number; needed: number; percent: number};
-  board_rank: number;
-  /** How the month before this one ended — used to greet a new season. */
-  previous?: {season_key: string | null; label: string | null; xp: number; level: number; rank: SeasonRank | null};
-}
-
-export interface Session {
-  token: string;
-  role: 'student' | 'admin';
-  profile: Profile & {email?: string};
-}
-
-export interface Course {
+export interface Week {
   id: number;
-  code: string;
-  title: string;
-  description: string;
-  credit_units: number;
-  semester: string;
-  lecturer: string;
-  accent: string;
-  is_active: boolean;
-  quiz_count?: number;
-  question_count?: number;
-  topic_count?: number;
-  material_count?: number;
-  created_at?: string;
-}
-
-export interface CosmeticsRef {
-  avatar?: string;
-  aura?: string;
-  frame?: string;
-  title?: string;
-  theme?: string;
-  chat?: string;
-  duel?: string;
-  answer?: string;
-}
-
-export interface RarityMeta {
-  key: string;
-  label: string;
-  order: number;
-  ink: string;
-  deep: string;
-  bright: string;
-}
-
-export interface ShopItem {
-  key: string;
-  name: string;
-  slot: string;
-  slot_label: string;
-  rarity: string;
-  price_coins: number;
-  price_diamonds: number;
-  base_coins: number;
-  deal_off: number;
-  glyph: string;
-  blurb: string;
-  source: string;
-  released: string;
-  event?: string;
-  requirement?: string | null;
-  unlocked: boolean;
-  available: boolean;
-  owned: boolean;
-  serial?: number | null;
-  owners: number;
-  rarity_meta: RarityMeta;
-}
-
-export interface ShopChestDef {
-  key: string;
-  name: string;
-  glyph: string;
-  rarity: string;
-  blurb: string;
-  loot: {coins: number[]; xp: number[]; diamonds: number[]};
-  items: string;
-}
-
-export interface ShopState {
-  balance: {coins: number; diamonds: number; xp: number};
-  equipped: CosmeticsRef;
-  items: ShopItem[];
-  owned: string[];
-  serials: Record<string, number>;
-  chests: Record<string, number>;
-  chest_defs: ShopChestDef[];
-  featured: string[];
-  deals: {key: string; off: number; price_coins: number; base_coins: number}[];
-  deal_keys: string[];
-  event: {key: string; name: string; glyph: string; blurb: string; color: string; closes_at: string; seconds_left: number} | null;
-  next_event: {key: string; name: string; glyph: string; blurb: string; opens_at: string; seconds_until: number} | null;
-  event_items: string[];
-  vault: string[];
-  slots: Record<string, string>;
-  rarities: RarityMeta[];
-  achievements: Record<string, string>;
-  collection: {owned_count: number; total: number; diamond_items: number};
-}
-
-export interface ShopPlaque {
-  key: string;
-  name: string;
-  rarity: string;
-  rarity_meta: RarityMeta;
-  released: string;
-  owners: number;
-  obtained_from: string;
-  mine: {serial: number; acquired_at: string; source: string} | null;
-}
-
-export interface ChestReward {
-  kind: string;
-  name: string;
-  glyph: string;
-  type?: 'item' | 'xp' | 'coins';
-  amount?: number;
-  item?: string;
-  item_name?: string;
-  rarity?: string;
-  diamonds?: number;
-}
-
-export interface QuestionPublic {
-  id: number;
-  position: number;
-  text: string;
-  options: Record<string, string>;
-  points: number;
-  difficulty: string;
-  drawn?: boolean;
-  /** Written for one exam only — never part of the course bank. */
-  exam_only?: boolean;
-  /** An exam-specific question that was also copied into the course bank. */
-  in_bank?: boolean;
-  correct?: OptionKey;
-  /** Display letter of the answer for this attempt (option shuffle aware). */
-  correct_label?: OptionKey | null;
-  /** Canonical keys in the order the options are displayed. */
-  display_order?: string[];
-  /** Per-question countdown (seconds), only when the exam sets a budget. */
-  seconds_left?: number;
-  explanation?: string;
-  order?: number;
-  answered_by_you?: boolean;
-  my_selection?: OptionKey | null;
-  my_points?: number;
-  /* --- wave-2 authorship fields (all optional so old payloads still type) --- */
-  question_type?: string;
-  topic?: string;
-  subtopic?: string;
-  objective?: string;
-  tags?: string[];
-  source?: string;
-  reference?: string;
-  author?: string;
-  hint?: string;
-  admin_notes?: string;
-  media?: Record<string, string>;
-  content?: Record<string, unknown>;
-  status?: 'draft' | 'approved' | 'rejected' | 'archived' | string;
-  visible?: boolean;
-  flag_reason?: string;
-  order_locked?: boolean;
-  flashcard_enabled?: boolean;
-  duel_enabled?: boolean;
-  practice_enabled?: boolean;
-  time_limit_seconds?: number;
-  version?: number;
-  quiz_id?: number;
-  course_id?: number | null;
-  usage_count?: number;
-  correct_count?: number;
-  wrong_count?: number;
-  accuracy?: number;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
-
-export interface MyDuelAnswer {
-  question_id: number;
-  selected: OptionKey;
-  is_correct: boolean;
-  points: number;
-  elapsed_ms: number;
-}
-
-export interface AttemptSummary {
-  id: number;
-  quiz_id: number;
-  status: 'in_progress' | 'submitted' | 'expired';
-  started_at: string;
-  deadline_at: string;
-  submitted_at: string | null;
-  score: number;
-  percentage: number;
-  grade: string;
-  correct_count: number;
-  wrong_count: number;
-  unanswered_count: number;
-  submission_type: string;
-  xp_awarded: number;
-  coins_awarded: number;
-  passed?: boolean;
-  pass_score?: number;
-}
-
-
-export interface Quiz {
-  id: number;
-  title: string;
-  /** True for the hidden holding quiz of a course's question bank — never an exam. */
-  is_bank?: boolean;
-  instructions: string;
-  duration_minutes: number;
-  status: QuizStatus;
-  scheduled_at: string | null;
-  end_at: string | null;
-  shuffle_questions: boolean;
-  allow_duel: boolean;
-  question_count: number;
-  created_at: string;
-  course: Course | null;
-  submission_count?: number;
-  my_attempt?: AttemptSummary | null;
-  questions?: QuestionPublic[];
-  /* --- exam builder settings --- */
-  rules?: string;
-  version_label?: string;
-  shuffle_options?: boolean;
-  per_question_seconds?: number;
-  grace_seconds?: number;
-  auto_submit?: boolean;
-  calculator?: boolean;
-  review_before_submit?: boolean;
-  max_attempts?: number;
-  practice_mode?: boolean;
-  pass_score?: number;
-  draw_topics?: string[];
-  /* --- where questions come from (see backend services/course_bank.py) --- */
-  /** "course_random": each player gets `draw_count` random bank questions; "exam_specific": the exam's own set. */
-  question_source?: QuestionSource;
-  /** Questions served to each player (random exams), or a subset size of the exam set (0 = all). */
-  draw_count?: number;
-  draw_difficulty?: Partial<Record<'easy' | 'medium' | 'hard', number>>;
-  /** Questions the exam owns itself (exam-specific set). */
-  exam_question_count?: number;
-  /** Size of the course question bank (random exams only). */
-  bank_size?: number;
-  /** Approved + visible bank questions that match the exam's topic filter. */
-  bank_eligible?: number;
-}
-
-export type QuestionSource = 'course_random' | 'exam_specific';
-
-export interface CourseBankStats {
-  course_id: number;
-  code: string;
-  bank: number;
-  eligible: number;
-  drawn_copies: number;
-  exam_specific: number;
-}
-
-export interface CourseTopicRow {
-  id: number | null;
-  name: string;
-  description: string;
-  position: number;
-  curated: boolean;
-  questions: number;
-  notes: number;
-  materials: number;
-}
-
-export interface CourseOverview {
-  course: {id: number; code: string; title: string; description: string; lecturer: string; semester: string; accent: string; is_active: boolean};
-  bank: {total: number; ready: number; by_difficulty: Record<string, number>};
-  exam_specific_questions: number;
-  exams: {id: number; title: string; status: string; question_source: QuestionSource; draw_count: number}[];
-  submissions: number;
-  notes: number;
-  materials: number;
-  discussion_posts: number;
-  topics: number;
-}
-
-export interface CourseDiscussionPost {
-  id: number;
-  material_id: number;
-  material_title: string;
-  material_kind: 'material' | 'note';
-  topic: string;
-  name: string;
-  kind: string;
-  body: string;
-  parent_id: number | null;
-  created_at: string | null;
-}
-
-export interface ReviewRow {
-  question_id: number;
-  text: string;
-  options: Record<string, string>;
-  correct: OptionKey;
-  explanation: string;
-  selected: OptionKey | null;
-  is_correct: boolean;
-  /** Letter the answer sits on for *this* attempt after option shuffling. */
-  correct_label?: OptionKey | null;
-  selected_label?: OptionKey | null;
-  display_order?: string[];
-}
-
-export interface AttemptState extends AttemptSummary {
-  time_remaining: number;
-  rank: number | null;
-  rank_label: string | null;
-  quiz: Quiz;
-  questions: QuestionPublic[];
-  answers: {question_id: number; selected: OptionKey | null; flagged: boolean; seconds_spent: number; is_correct?: boolean}[];
-  review: ReviewRow[];
-  leaderboard?: QuizLeaderRow[];
-  rewards?: unknown[];
-}
-
-export interface QuizLeaderRow {
-  rank: number;
-  rank_label: string;
-  student: PlayerSummary;
-  result: AttemptSummary;
-}
-
-export interface ResultRow extends AttemptSummary {
-  rank: number;
-  rank_label: string;
-  quiz: {id: number; title: string; course: string; course_title: string; total_questions: number};
-}
-
-export interface LeaderboardRow {
-  rank: number;
-  rank_label: string;
-  id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo?: boolean;
-  cosmetics?: CosmeticsRef;
-  level: number;
-  title: string;
-  tier: Tier;
-  value: number;
-  xp: number;
-  coins: number;
-  streak: number;
-  duels_won: number;
-  best_percentage: number;
-}
-
-export interface Leaderboard {
-  scope: string;
-  rows: LeaderboardRow[];
-  me: LeaderboardRow;
-  total_players: number;
-  online: number;
-}
-
-export interface DuelPlayer {
-  student_id: number;
-  seat: 'challenger' | 'opponent';
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo?: boolean;
-  level: number;
-  score: number;
-  correct_count: number;
-  answered_count: number;
-  best_run: number;
-  forfeited: boolean;
-  finished_at: string | null;
-  is_you: boolean;
-  xp?: number;
-  duels_won?: number;
-}
-
-export interface Duel {
-  id: number;
-  code: string;
-  topic: string;
-  quiz_id: number | null;
-  course_id?: number | null;
-  status: 'invited' | 'starting' | 'live' | 'finished' | 'cancelled' | 'expired';
-  visibility?: 'public' | 'private';
-  question_count: number;
-  stake_coins: number;
-  time_limit_seconds: number;
-  /* Server-paced round clock — the arena tells us which question is on the
-     wire and when it runs out; the client only ever displays it. */
-  round_index?: number;
-  round_deadline?: string | null;
-  round_opened?: string | null;
-  server_now?: string;
-  winner_id: number | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  expires_at: string | null;
-  participants: DuelPlayer[];
-  is_yours: boolean;
-  questions?: QuestionPublic[];
-  my_answers?: MyDuelAnswer[];
-  draw?: boolean;
-  reason?: string;
-  challenger_name?: string;
-  deadline?: string;
-}
-
-export interface DuelList {
-  active: Duel[];
-  history: Duel[];
-  /** Public duels anyone can join — the open arena. */
-  open?: Duel[];
-  online: number;
-  online_ids: number[];
-  stake_default: number;
-  question_count_default: number;
-  question_count_max?: number;
-}
-
-export interface Prize {
-  id: number;
-  title: string;
-  description: string;
-  tier: Tier;
-  kind: 'rank' | 'coins';
-  min_rank: number;
-  max_rank: number;
-  cost_coins: number;
-  icon: string;
-  stock: number;
-  is_active: boolean;
-  sort_order: number;
-  eligible: boolean;
-  claimed: boolean;
-  claims: number;
-}
-
-export interface PrizeVault {
-  prizes: Prize[];
-  my_rank: number;
-  rank_label: string;
-  coins: number;
-  prize_pool_note: string;
-  season: string;
-}
-
-export interface Notice {
-  id: number;
-  title: string;
-  message: string;
-  kind: string;
-  target_course: string;
-  author: string;
-  is_pinned: boolean;
-  created_at: string;
-}
-
-export interface ActivityItem {
-  id: number;
-  kind: string;
-  title: string;
-  detail: string;
-  amount: number;
-  created_at: string;
-  student?: PlayerSummary | null;
-  reactions?: number;
-  reacted?: boolean;
-}
-
-export interface MatchCard {
-  card: string;
-  pair: number;
-  side: 'prompt' | 'answer';
-  text: string;
-}
-
-export interface MatchSet {
-  issued_at: string;
-  pairs: number;
-  cards: MatchCard[];
-}
-
-export interface MatchResult {
-  ok: boolean;
-  score: number;
-  matched: number;
-  pairs: number;
-  perfect: boolean;
-  best: number;
-  rewards: RewardEvent[];
-  profile: Profile;
-}
-
-export interface InboxNote {
-  id: number;
-  kind: string;
-  title: string;
-  message: string;
-  meta: Record<string, unknown>;
-  read: boolean;
-  created_at: string;
-}
-
-export interface StudyCard extends QuestionPublic {
-  quiz_title: string;
-}
-
-export interface RushSet {
-  mode: 'blitz' | 'sudden';
-  issued_at: string;
-  seconds: number;
-  questions: QuestionPublic[];
-}
-
-export interface RushResult {
-  ok: boolean;
-  score: number;
-  total: number;
-  best: number;
-  rewards: RewardEvent[];
-  profile: Profile;
-}
-
-export interface DailyChallenge {
-  day: string;
-  questions: QuestionPublic[];
-  done: boolean;
-  result: {score: number; correct: number} | null;
-  players_today: number;
-}
-
-export interface HelpRow {
-  id: number;
-  status: 'pending' | 'answered';
-  prompt: string;
-  options: Record<string, string>;
-  created_at: string;
-  answered_at: string | null;
-  other: PlayerSummary | null;
-  helper_answer?: string;
-  was_correct?: boolean;
-  explanation?: string;
-}
-
-export interface MissionRow {
-  key: string;
-  title: string;
-  detail: string;
-  goal: number;
-  xp: number;
-  coins: number;
+  number: number;
+  focus: string;
+  objective: string;
+  performance_target: string;
+  notes: string;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  weakness_text: string;
+  weakness_drills_target: number;
   progress: number;
-  claimed: boolean;
+  activity_counts: { total: number; done: number; scheduled: number };
+  activities?: Activity[];
 }
 
-export interface ShopItem {
-  sku: string;
-  name: string;
-  cost: number;
-  icon: string;
-  blurb: string;
-}
-
-export interface Analytics {
-  accuracy: number;
-  predicted_grade: {grade: string; label: string};
-  questions_answered: number;
-  correct_answers: number;
-  study_minutes: number;
-  courses: {title: string; answers: number; accuracy: number}[];
-  weakest: {title: string; answers: number; accuracy: number} | null;
-  rush_best: Record<string, number>;
-  daily_best: number;
-  help: {asked: number; answered: number; correct: number; points: number};
-  best_percentage: number;
-}
-
-export interface Config {
-  institution: string;
-  campus: string;
-  faculty: string;
-  season_name: string;
-  prize_pool_note: string;
-  grading_scale: {grade: string; min_percent: number; label: string}[];
-  duels_enabled: boolean;
-  exams_enabled: boolean;
-  online: number;
-  admin_email?: string;
-  updated_at?: string | null;
-}
-
-export interface ChatMessage {
-  id: number;
-  sender_id: number;
-  recipient_id: number;
-  /** file / material / tquiz come from the Teacher Network. */
-  kind: 'text' | 'duel' | 'quiz' | 'file' | 'material' | 'tquiz';
-  body: string;
-  meta: Record<string, unknown>;
-  created_at: string;
-  read: boolean;
-  sender_name?: string;
-  /** Set when the sender edited the text; the original is kept server-side. */
-  edited_at?: string | null;
-  /** Tombstone: the sender deleted it, the thread keeps its place. */
-  deleted?: boolean;
-  /** emoji → how many people tapped it. */
-  reactions?: Record<string, number>;
-  /** Only your own taps, so the chips can show what you picked. */
-  my_reactions?: string[];
-}
-
-/** Pre-flight answer for the sign-in card: does this number own a profile? */
-export type PhoneLookup = {
-  exists: boolean;
-  phone?: string;
-  first_name?: string;
-  initials?: string;
-  avatar_hue?: number;
-  level?: number;
-  title?: string;
-  xp?: number;
-  percent?: number;
-  coins?: number;
-  streak?: number;
-  exams_taken?: number;
-  duels_played?: number;
-  badges?: number;
-  banned?: boolean;
-};
-
-export interface Bootstrap {
-  config: Config;
-  quizzes: Quiz[];
-  notifications: Notice[];
-  leaderboard: LeaderboardRow[];
-  online: number;
-  players: number;
-  duels_today: number;
-}
-
-export interface AdminOverview {
-  players: number;
-  online: number;
-  courses: number;
-  quizzes: number;
-  active_quizzes: number;
-  questions: number;
-  submissions: number;
-  in_progress: number;
-  duels: number;
-  duels_live: number;
-  duels_today: number;
-  prize_claims_pending: number;
-  badges_awarded: number;
-  xp_awarded: number;
-  coins_in_circulation: number;
-  top_players: PlayerSummary[];
-  recent_activity: ActivityItem[];
-}
-
-export interface PrizeClaim {
-  id: number;
-  prize: Prize;
-  student: PlayerSummary;
-  status: 'pending' | 'approved' | 'delivered' | 'rejected';
-  note: string;
-  created_at: string;
-}
-
-/* ---------------------------------------------------------- live events --- */
-export type RewardEvent =
-  | {type: 'xp'; amount: number; reason?: string}
-  | {type: 'coins'; amount: number; reason?: string}
-  | {type: 'streak'; days: number}
-  | {type: 'level_up'; level: number; title: string; tier: Tier}
-  | {type: 'badge'; badge: BadgeItem}
-  | {
-      /* Sent with the grant that pushed the player up the seasonal ladder. */
-      type: 'season_level';
-      season_key: string;
-      label: string;
-      xp: number;
-      level: number;
-      levels_gained: number;
-      rank: SeasonRank;
-      promoted: boolean;
-      previous_rank: SeasonRank;
-      next_rank: SeasonRank | null;
-      levels_to_next_rank: number;
-      progress: SeasonBadgeBlock['progress'];
-    };
-
-export interface DuelProgressEvent {
-  duel_id: number;
-  student_id: number;
-  question_order: number;
-  correct: boolean;
-  points: number;
-  score: number;
-  answered: number;
-  total: number;
-  run: number;
-  elapsed_ms: number;
-}
-
-export interface ExamResultEvent {
-  attempt_id: number;
-  quiz_id: number;
-  score: number;
-  total: number;
-  percentage: number;
-  grade: string;
-  rank: number;
-  rank_label: string;
-  xp: number;
-  coins: number;
-  rewards: RewardEvent[];
-}
-
-
-/* -------------------------------------------------------------- rooms */
-export interface RoomMember {
-  student_id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  is_host: boolean;
-  score: number;
-  correct_count: number;
-}
-
-export interface RoomState {
-  id: number;
-  code: string;
-  title: string;
-  status: 'lobby' | 'live' | 'finished';
-  host_id: number;
-  course_id: number | null;
-  question_count: number;
-  per_question_seconds: number;
-  round_index: number;
-  questions_total: number;
-  capacity: number;
-  is_host: boolean;
-  created_at: string;
-  members: RoomMember[];
-}
-
-export interface RoomMessage {
-  id: number;
-  sender_id: number;
-  sender_name: string;
-  sender_initials: string;
-  sender_hue: number;
-  sender_has_photo: boolean;
-  body: string;
-  created_at: string;
-}
-
-export interface RoomQuestionPayload {
-  index: number;
-  total: number;
-  seconds: number;
-  deadline: string;
-  question: QuestionPublic;
-}
-
-export interface RoomRevealPayload {
-  index: number;
-  question_id: number;
-  correct: string;
-  explanation: string;
-  correct_ids: number[];
-  answered: number;
-  standings: RoomMember[];
-}
-
-export interface RoomFinishPayload {
-  standings: RoomMember[];
-  rewards: {student_id: number; xp: number; coins: number}[];
-}
-
-
-/* ------------------------------------------------------ wave-2 arena types */
-export type DuelMode = 'casual' | 'ranked' | 'friendly' | 'tournament';
-
-export interface FlashcardCardPayload {
-  id: number;
-  deck_id: number;
-  question_id: number;
-  front: string;
-  back: string;
-  options?: Record<string, string>;
-  correct?: string | null;
-  explanation?: string;
-  topic?: string;
-  difficulty?: string;
-  state?: string;
-  due_on?: string | null;
-  notes?: string;
-  bookmarked?: boolean;
-}
-
-export interface PracticeRunPayload {
-  token: string;
-  mode: string;
-  label: string;
-  lives: number;
-  seconds: number;
-  xp_rate?: number;
-  target_score?: number;
-  questions: QuestionPublic[];
-  powerups?: Record<string, number>;
-}
-
-export interface BossPayload {
-  run_id: number;
-  token: string;
-  boss: {key: string; name: string; hp_max: number; lives: number; blurb?: string};
-  questions: QuestionPublic[];
-}
-
-export interface LeaderboardScopeRow {
-  rank: number;
-  name: string;
-  is_you?: boolean;
-  value?: number;
-  [key: string]: unknown;
-}
-
-/* ==========================================================================
- * Materials (reading + study progression) and the Game Arena
- * ========================================================================== */
-
-/** One typed block inside a material section. HTML is stripped server-side. */
-export interface MaterialBlock {
-  type:
-    | 'heading'
-    | 'subheading'
-    | 'paragraph'
-    | 'list'
-    | 'numbers'
-    | 'table'
-    | 'image'
-    | 'note'
-    | 'example'
-    | 'definition'
-    | 'keyterm'
-    | 'tip'
-    | 'summary'
-    | 'reference'
-    | 'quote'
-    | 'video'
-    | 'divider'
-    | 'attachment';
-  text?: string;
-  title?: string;
-  items?: string[];
-  /** Numbered lists: the notes' own numbering — 1. / a. / A. / i. / I. … */
-  style?: 'decimal' | 'lower-alpha' | 'upper-alpha' | 'lower-roman' | 'upper-roman';
-  /** "dot" 1.  ·  "paren" (1)  ·  "rparen" 1) */
-  wrap?: 'dot' | 'paren' | 'rparen';
-  /** First number when a list continues after other text (e.g. starts at "(c)"). */
-  start?: number;
-  /** Nesting: 0 top level, 1 sub-list, 2 sub-sub-list. */
-  level?: number;
-  head?: string[];
-  rows?: string[][];
+export interface Attachment {
+  label?: string;
   url?: string;
-  caption?: string;
-  term?: string;
-  meaning?: string;
+  kind?: string;
 }
 
-export interface MaterialSection {
+export interface Activity {
   id: number;
-  material_id?: number;
-  position: number;
-  title: string;
-  estimated_minutes?: number;
-  check_enabled?: boolean;
-  updated_at?: string | null;
-  blocks?: MaterialBlock[];
-  words?: number;
-  percent?: number;
-}
-
-export interface MaterialProgress {
-  status: 'not_started' | 'reading' | 'completed' | string;
-  percent: number;
-  visited: number[];
-  sections_done: number;
-  total_sections: number;
-  last_section_id?: number | null;
-  last_section_position?: number | null;
-  seconds_spent: number;
-  completed_at?: string | null;
-}
-
-export interface MaterialCard {
-  id: number;
-  title: string;
-  /** "material" = sectioned reading, "note" = a short course note. */
-  kind?: 'material' | 'note';
-  /** Notes only: the material this note belongs to (its Notes tab). */
-  parent_id?: number | null;
-  parent_title?: string;
-  /** Materials only (admin list): how many notes it holds. */
-  note_count?: number;
-  /** Optional external file / link (PDF, slides, video…). */
-  link_url?: string;
-  course_id?: number | null;
-  quiz_id?: number | null;
-  topic: string;
-  subtopic: string;
-  description: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  estimated_minutes: number;
-  tags: string[];
-  summary: string[];
-  author: string;
-  status: 'draft' | 'published' | 'archived';
-  version: number;
-  icon: string;
-  accent: string;
-  allow_discussion: boolean;
-  section_count: number;
-  sections?: MaterialSection[];
-  views: number;
-  starts: number;
-  completions: number;
-  created_at?: string | null;
-  updated_at?: string | null;
-  published_at?: string | null;
-  progress?: MaterialProgress;
-  course_title?: string;
-}
-
-export interface MaterialHighlight {
-  id: number;
-  section_id: number | null;
-  text: string;
-  colour: 'yellow' | 'blue' | 'green' | 'red' | string;
-  note?: string;
-}
-
-/** Writing help: one spelling / typo fix staff can accept. */
-export interface SpellingChange {
-  id: number;
-  path: string;
-  from: string;
-  to: string;
-  reason: string;
-  confidence: 'sure' | 'maybe';
-  before: string;
-  after: string;
-}
-
-export interface SpellingDoc {
+  week_id: number | null;
+  week_number: number | null;
   title: string;
   description: string;
-  summary: string[];
-  topic?: string;
-  course_id?: number | null;
-  sections: {title: string; blocks: MaterialBlock[]}[];
-}
-
-/** Writing help: one section rewritten by the AI, for review. */
-export interface RewriteSection {
-  index: number;
-  title: string;
-  blocks: MaterialBlock[];
-  warnings: string[];
-  changed: boolean;
-}
-
-/** A background rewrite (see api.materials.startRewriteJob). `sections` holds only results newer than `after`. */
-export interface RewriteJob {
-  id: string;
-  status: 'running' | 'done' | 'failed' | 'cancelled';
-  style: string;
-  total: number;
-  done: number;
-  current: number[];
-  waiting: number;
-  failed: number[];
-  model: string;
-  error: string;
-  seq: number;
-  sections: RewriteSection[];
-}
-
-/** A player's own note on a material (the reader's Notes tab). */
-export interface MaterialNote {
-  id: number;
-  section_id: number | null;
-  title?: string;
-  body: string;
-  quote?: string;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
-
-export interface MaterialBookmark {
-  id: number;
-  section_id: number | null;
-  label: string;
-  snippet?: string;
-  position?: string;
-}
-
-export interface MaterialPost {
-  id: number;
-  student_id?: number;
-  name?: string;
-  body: string;
-  kind: 'question' | 'answer' | 'tip' | string;
-  section_id?: number | null;
-  parent_id?: number | null;
-  created_at?: string;
-  mine?: boolean;
-  resolved?: boolean;
-  replies?: MaterialPost[];
-}
-
-export interface MaterialDetail extends MaterialCard {
-  sections: MaterialSection[];
-  progress: MaterialProgress;
-  highlights: MaterialHighlight[];
-  notes: MaterialNote[];
-  bookmarks: MaterialBookmark[];
-  questions: {linked: number; hard: number; average_accuracy: number};
-  streak?: {current: number; best: number; seconds_today: number};
-  course_title?: string;
-  linked_question_ids?: number[];
-  stats?: Record<string, unknown>;
-  focus_section?: number;
-}
-
-export interface MaterialLibrary {
-  items: MaterialCard[];
-  total: number;
-  limit: number;
-  offset: number;
-  topics: {topic: string; count: number}[];
-}
-
-export interface MyLearning {
-  continue_reading: (Omit<MaterialCard, 'sections'> & {material_id: number})[];
-  completed: (Omit<MaterialCard, 'sections'> & {material_id: number; progress: MaterialProgress})[];
-  bookmarks: {id: number; material_id: number; title: string; label: string; section_id: number | null; snippet?: string}[];
-  notes: {id: number; material_id: number; title: string; body: string; section_id: number | null}[];
-  confusions: {id: number; material_id: number; title: string; question: string; status: string; section_id: number | null}[];
-  topics: {topic: string; count: number; percent: number}[];
-  summary: {reading: number; completed: number; bookmarks: number; notes: number; minutes: number; percent: number};
-}
-
-export interface MaterialProgressResult {
-  progress: MaterialProgress;
-  rewards: {amount?: number; reason?: string; awarded?: number; playtime_unlocked?: number[]}[];
-  playtime: PlaytimeBank;
-  streak: {current: number; best: number; seconds_today: number; day?: string | null};
-  section_reward?: {awarded: number; reason: string} | null;
-}
-
-export interface MaterialExamPrep {
-  material_id: number;
-  topic: string;
-  questions: QuestionPublic[];
-  related: {id: number; title: string; topic: string; difficulty: string; estimated_minutes: number}[];
-  tips: string[];
-}
-
-export interface MaterialAnalytics {
-  material: {id: number; title: string; status: string; version: number};
-  views: number;
-  starts: number;
-  completions: number;
-  completion_rate?: number;
-  average_seconds?: number;
-  drop_off?: {section_id: number; title: string; readers: number; percent: number}[];
-  confusions?: {section_id: number; count: number}[];
-  feedback?: {yes?: number; somewhat?: number; no?: number};
-  questions?: {linked: number; hardest?: {question_id: number; text: string; success_rate: number}[]};
-  readers?: number;
-  [key: string]: unknown;
-}
-
-export interface PlaytimeBank {
-  day: string | null;
-  earned_seconds: number;
-  used_seconds: number;
-  remaining_seconds: number;
-  study_xp_today: number;
-  cap_seconds: number;
-  thresholds: number[];
-  seconds_per_threshold: number;
-}
-
-export interface GameProfileState {
-  best_score: number;
-  best_survival_seconds: number;
-  best_combo: number;
-  runs: number;
-  total_seconds: number;
-  character: string;
-  trail: string;
-  achievements: string[];
-  characters: string[];
-  trails: string[];
-}
-
-export interface GameChallengeRow {
-  id: number;
-  from: string;
-  to: string;
-  mode: string;
-  target_score: number;
-  target_seconds: number;
-  status: 'open' | 'beaten' | 'lost' | string;
-  mine: boolean;
-  opponent_id: number;
-}
-
-export interface GameHub {
-  playtime: PlaytimeBank;
-  locked: boolean;
-  profile: GameProfileState;
-  characters: {id: string; name: string; blurb: string; unlock_xp: number}[];
-  trails: {id: string; name: string; unlock_xp: number}[];
-  achievements: {key: string; name: string; blurb: string; earned: boolean}[];
-  daily_challenge: {title: string; target_seconds: number; done: boolean; board: {student_id: number; name: string; score: number; you: boolean}[]};
-  friends: {student_id: number; name: string; best_score: number; you: boolean}[];
-  challenges: GameChallengeRow[];
-  today_played_seconds: number;
-  streak: {current: number; best: number; seconds_today: number; day?: string | null};
-  study: {xp_today: number; next_threshold: number | null};
-}
-
-export interface GameRunResult {
-  session: {id: number; score: number; seconds: number; combo: number; wave: number; collected: number; xp: number; coins: number};
-  best_score: number;
-  best_survival_seconds: number;
-  achievements: {key: string; name: string; blurb: string}[];
-  /** XP plus the season climb it caused — the run's own reward payload. */
-  rewards?: RewardEvent[];
-  challenges_resolved: {id: number; beaten: boolean; target_score: number}[];
-  playtime: PlaytimeBank;
-  study: {xp_today: number};
-}
-
-export interface GameBoardRow {
-  student_id?: number;
-  id?: number;
-  name?: string;
-  score: number;
-  seconds?: number;
-  mode?: string;
-  day?: string | null;
-  you: boolean;
-}
-
-/* ==========================================================================
- * World map — courses as worlds, topics as locations, exams as bosses
- * ========================================================================== */
-
-export interface WorldTheme {
-  key: string;
-  label: string;
-  emoji: string;
-  sky?: string;
-  ground?: string;
-}
-
-export interface MapMaterial {
-  id: number;
-  title: string;
-  minutes: number;
-  percent: number;
+  category: string;
+  date: string | null;
+  time: string;
+  duration_min: number;
+  coach_name: string;
+  assigned_player_ids: number[];
+  required: boolean;
   status: string;
+  notes: string;
+  attachments: Attachment[];
+  result: string;
+  score: string;
+  lessons: string;
+  scrim_id: number | null;
 }
 
-export interface MapNode {
-  topic: string;
-  questions: number;
-  answered: number;
-  correct: number;
-  mastery: number;
-  state: 'mastered' | 'learning' | 'available' | 'locked';
-  materials: MapMaterial[];
-  practice: {runs: number; best: number; accuracy: number};
-}
-
-export interface MapBoss {
-  quiz_id: number;
-  title: string;
-  status: string;
-  question_count: number;
-  scheduled_at?: string | null;
-  best_percentage: number | null;
-  best_score: number | null;
-  attempts: number;
-}
-
-export interface WorldRow {
-  course_id: number;
-  code: string;
-  title: string;
-  description: string;
-  accent: string;
-  theme: WorldTheme;
-  mastery: number;
-  answered: number;
-  correct: number;
-  percent: number;
-  materials: number;
-  boss: MapBoss | null;
-  nodes: MapNode[];
-}
-
-export interface QuestRow {
-  key: string;
-  kind: 'daily' | 'weekly';
-  label: string;
-  detail: string;
-  icon: string;
-  target: number;
-  reward: {xp: number; coins: number};
-  progress: number;
-  complete: boolean;
-  claimed: boolean;
-  unit?: string;
-}
-
-export interface WorldMap {
-  generated_at: string;
-  player: {level: number; title: string; xp: number; streak: number; coins: number};
-  totals: {worlds: number; nodes: number; mastered: number; reachable: number; materials: number; bosses: number; path_percent: number};
-  quests: QuestRow[];
-  worlds: WorldRow[];
-}
-
-/* ------------------------------------------------- ranked + events types */
-export interface RankedTier {
-  key: string;
-  name: string;
-  min: number;
-  max: number | null;
-  /** Metal family the division belongs to (drives match rules). */
-  metal: string;
-  /** Badge art: deep + bright stops of the shield gradient. */
-  deep: string;
-  bright: string;
-  color: string;
-  icon: string;
-}
-
-export interface RankedMeta {
-  tiers: RankedTier[];
-  match_size: number;
-  min_players: number;
-  question_count: number;
-  question_seconds: number;
-  base_points: number;
-  speed_bonus: number;
-  streak_bonus: number;
-  /** Patience ladder: after `wait` seconds queued, `players` are enough to start. */
-  queue_ladder?: {wait: number; players: number}[];
-  /** Match shape per tier: how many questions and seconds each tier plays. */
-  tier_rules?: Record<string, {questions: number; seconds: number}>;
-}
-
-export interface RankedPlayer {
-  student_id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  rating: number;
-  tier: string;
-  tier_name: string;
-  level: number;
-  score: number;
-  correct: number;
-  wrong: number;
-  answered: number;
-  streak: number;
-  best_streak: number;
-  questions_total: number;
-  position: number | null;
-  connected: boolean;
-  ready: boolean;
-}
-
-export interface RankedQuestionWindow {
-  index: number;
-  total: number;
-  seconds: number;
-  deadline: string;
-  server_now: string;
-  question: QuestionPublic;
-}
-
-export interface RankedReveal {
-  index: number;
-  question_id: number;
-  correct: string;
-  explanation: string;
-  correct_ids: number[];
-  answered: number;
-  standings: RankedPlayer[];
-  server_now: string;
-}
-
-export interface RankedMatchState {
+export interface ScrimGame {
   id: number;
-  status: 'lobby' | 'live' | 'finished';
-  course_id: number | null;
-  course_title: string;
-  question_count: number;
-  per_question_seconds: number;
-  round_index: number;
-  questions_total: number;
-  lobby_at: string;
-  /** Length of the lobby countdown in seconds (server-owned). */
-  lobby_seconds?: number;
-  server_now: string;
-  participants: RankedPlayer[];
-  question: QuestionPublic | null;
-  reveal: RankedReveal | null;
-  me: {answered: boolean; selected: string | null; correct: boolean | null; points: number | null} | null;
-  activity: {text: string; at: string}[];
+  scrim_id: number;
+  game_no: number;
+  result: string;
+  duration_min: number;
+  stats: Record<string, number | string | boolean | null>;
+  draft: Draft;
 }
 
-/** A player standing in a ranked course queue (shown while you wait). */
-export interface RankedQueuePlayer {
-  student_id: number;
+export interface Draft {
+  our_bans?: (string | null)[];
+  enemy_bans?: (string | null)[];
+  our_picks?: Record<string, string>;
+  enemy_picks?: Record<string, string>;
+}
+
+export interface Scrim {
+  id: number;
+  number: number;
+  opponent: string;
+  date: string | null;
+  time: string;
+  format: string;
+  server: string;
+  tournament_prep: boolean;
+  lineup: Record<string, number | null>;
+  substitutes: number[];
+  notes: string;
+  expected_strategy: string;
+  status: string;
+  result: string | null;
+  score_us: number;
+  score_them: number;
+  attachments: Attachment[];
+  has_review: boolean;
+  review_status: string | null;
+  needs_review: boolean;
+  games: ScrimGame[];
+  created_by: number | null;
+}
+
+export interface Review {
+  id: number;
+  scrim_id: number | null;
+  scrim_number: number | null;
+  opponent: string;
+  date: string | null;
+  duration_min: number;
+  result: string;
+  player_ids: number[];
+  stats: Record<string, number | string>;
+  draft: Draft;
+  biggest_mistakes: string[];
+  why_happened: string;
+  should_have_done: string;
+  who_involved: string;
+  what_change: string;
+  lesson: string;
+  action_item: string;
+  action_assignee_id: number | null;
+  action_deadline: string | null;
+  status: string;
+  mandatory: boolean;
+  created_by: number | null;
+}
+
+export interface Hero {
+  id: number;
   name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  rating: number;
+  role: string;
+  hero_class: string;
+  difficulty: number;
+  meta_status: string;
   tier: string;
-  tier_name: string;
-  level: number;
-  joined_at: string;
+  patch: string;
+  win_rate: number;
+  pick_rate: number;
+  ban_rate: number;
+  clover_rating: number;
+  notes: string;
+  strong_against: string[];
+  weak_against: string[];
+  synergy: string[];
+  specialists?: {
+    user_id: number; name: string; ign: string; main_role: string;
+    category: string; confidence: number; games: number; win_rate: number | null;
+  }[];
+  on_ban_board?: { scope: string; priority: number | null; opponent: string; patch: string; reason: string }[];
 }
 
-export interface RankedStatus {
-  rating: number;
-  tier: string;
-  tier_name: string;
-  played: number;
-  won: number;
-  in_queue: boolean;
-  queue_course_id: number | null;
-  waiting: number;
-  /** How many players would start a match right now (falls as you wait). */
-  players_needed?: number | null;
-  queue_joined_at: string | null;
-  /** Who else is queued on your course right now (oldest first). */
-  queue_players?: RankedQueuePlayer[];
-  server_now: string;
-  match_id: number | null;
-  match: RankedMatchState | null;
-}
-
-export interface RankedChatLine {
-  key: string;
-  student_id: number;
-  name: string;
-  body: string;
-  mine: boolean;
-}
-
-export interface RankedRatingRow {
-  student_id: number;
-  name: string;
-  position: number;
-  before: number;
-  after: number;
-  delta: number;
-  xp?: number;
-  speed_xp?: number;
-}
-
-export interface RankedFinishPayload {
-  match_id: number;
-  standings: RankedPlayer[];
-  ratings: RankedRatingRow[];
-  server_now: string;
-}
-
-export interface RankedHistoryRow {
-  match_id: number;
-  course_title: string;
-  played_at: string;
-  position: number;
-  players: number;
-  score: number;
-  correct: number;
-  rating_before: number;
-  rating_after: number | null;
-}
-
-/** Per-course ranked telemetry shown on the arena cards (server-computed). */
-export interface RankedCourseStat {
-  in_queue: number;
-  matches_7d: number;
-  played: number;
+export interface PoolEntry {
+  id: number;
+  user_id: number;
+  hero_id: number;
+  hero_name: string;
+  hero_role: string;
+  hero_status: string;
+  category: string;
+  confidence: number;
+  last_played: string | null;
+  games: number;
   wins: number;
-  best: number | null;
+  losses: number;
+  win_rate: number | null;
+  coach_notes: string;
 }
 
-export interface RankedLadderRow {
-  position: number;
-  student_id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  rating: number;
-  tier: string;
-  tier_name: string;
-  level: number;
-  played: number;
-  won: number;
-}
-
-export interface RankedLadder {
-  top: RankedLadderRow[];
-  mine: number;
-  nearby: RankedLadderRow[];
-}
-
-export interface ReviewItem {
-  index: number;
-  question: QuestionPublic;
-  selected: string | null;
-  correct: boolean;
-  points: number;
-}
-
-export interface ArenaEventSummary {
+export interface DevEntry {
   id: number;
-  name: string;
-  description: string;
-  course_id: number | null;
-  course_title: string;
-  topics: string[];
-  starts_at: string;
-  ends_at: string;
-  question_count: number;
-  time_mode: 'untimed' | 'fixed' | 'per_question';
-  duration_minutes: number;
-  per_question_seconds: number;
-  entry_xp: number;
-  visibility: string;
-  rewards: Record<string, unknown>;
-  prize_pool: string;
-  banner: string;
-  scoring_note: string;
-  allow_join_during: boolean;
-  allow_leave: boolean;
-  leaderboard_visible: boolean;
-  featured?: boolean;
-  status: 'scheduled' | 'live' | 'finished' | 'cancelled';
-  participants: number;
-  joined: boolean;
-  me: EventMe | null;
-  server_now: string;
+  user_id: number;
+  date: string | null;
+  source: string;
+  category: string;
+  rating: number | null;
+  notes: string;
+  created_by: number | null;
+  created_by_name: string | null;
 }
 
-export interface EventMe {
-  student_id: number;
-  name: string;
-  score: number;
-  correct: number;
-  wrong: number;
-  answered: number;
-  questions_total: number;
-  streak: number;
-  best_streak: number;
-  finished: boolean;
-  position: number | null;
-  rewards: Record<string, unknown>;
-  connected: boolean;
-}
-
-export interface EventQuestionWindow {
-  done: boolean;
-  index: number;
-  total: number;
-  question: QuestionPublic;
-  answered: number;
-  me: {answered: boolean; selected: string | null};
-  server_now: string;
-}
-
-export interface EventLeaderboardRow {
-  student_id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  level: number;
-  score: number;
-  correct: number;
-  wrong: number;
-  answered: number;
-  questions_total: number;
-  streak: number;
-  best_streak: number;
-  finished: boolean;
-  position: number | null;
-  connected: boolean;
-}
-
-export interface EventLeaderboard {
-  top: EventLeaderboardRow[];
-  mine: EventLeaderboardRow | null;
-  nearby: EventLeaderboardRow[];
-  total: number;
-  active: number;
-}
-
-export interface EventsListing {
-  upcoming: ArenaEventSummary[];
-  live: ArenaEventSummary[];
-  past: ArenaEventSummary[];
-  ending_soon?: ArenaEventSummary[];
-  featured?: ArenaEventSummary[];
-  mine?: ArenaEventSummary[];
-  server_now: string;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Study groups — the community workspace                                      */
-/* -------------------------------------------------------------------------- */
-export type GroupRole = 'owner' | 'moderator' | 'member';
-export type GroupSection =
-  | 'overview'
-  | 'chat'
-  | 'quizzes'
-  | 'duels'
-  | 'questions'
-  | 'members'
-  | 'announcements'
-  | 'activity';
-export type PresenceStatus = 'online' | 'away' | 'offline';
-
-export interface GroupPermissions {
-  [action: string]: boolean;
-}
-
-export interface StudyGroupSummary {
-  id: number;
-  code: string;
-  name: string;
-  description: string;
-  goal: string;
-  owner_id: number;
-  owner_name: string;
-  course_id: number | null;
-  course_title: string;
-  member_count: number;
-  is_member: boolean;
-  is_owner: boolean;
-  my_role: GroupRole | null;
-  permissions: GroupPermissions;
-  created_at: string | null;
-  online?: number;
-  unread_notifications?: number;
-}
-
-export interface StudentChip {
-  id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  level?: number;
-  title?: string;
-  xp?: number;
-  duels_won?: number;
-  duels_played?: number;
-}
-
-export interface PageMeta {
-  page: number;
-  size: number;
-  total: number;
-  pages: number;
-}
-
-export interface GroupMessageReplyRef {
-  id: number;
-  student_id: number;
-  name: string;
-  body: string;
-  deleted: boolean;
-}
-
-export interface GroupChatMessage {
-  id: number;
-  group_id: number;
-  student_id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  kind: string;
-  body: string;
-  deleted: boolean;
-  created_at: string | null;
-  edited_at: string | null;
-  reactions: Record<string, number>;
-  my_reactions: string[];
-  reply_to: GroupMessageReplyRef | null;
-  /** Client-only delivery state. */
-  pending?: boolean;
-  failed?: boolean;
-}
-
-export interface GroupAnnouncement {
-  id: number;
-  title: string;
-  body: string;
-  image: string;
-  priority: 'normal' | 'high';
-  pinned: boolean;
-  scheduled_at: string | null;
-  created_at: string | null;
-  author: StudentChip;
-}
-
-export interface GroupQuizParticipation {
-  id: number;
-  attempt_no: number;
-  status: 'in_progress' | 'submitted' | 'expired';
-  answered: number;
-  correct_count: number;
-  score: number;
-  percentage: number;
-  passed: boolean;
-  position: number | null;
-  current_index: number;
-  deadline_at: string | null;
-  started_at: string | null;
-  submitted_at: string | null;
-}
-
-export interface GroupQuiz {
-  id: number;
-  title: string;
-  description: string;
-  course_id: number | null;
-  course_title: string;
-  topic: string;
-  question_count: number;
-  per_question_seconds: number;
-  duration_minutes: number;
-  starts_at: string | null;
-  ends_at: string | null;
-  max_attempts: number;
-  randomize: boolean;
-  visibility: string;
-  reward_xp: number;
-  reward_coins: number;
-  pass_score: number;
-  status: 'scheduled' | 'live' | 'closed';
-  participants: number;
-  submitted: number;
-  created_at: string | null;
-  created_by: StudentChip;
-  my_participation: GroupQuizParticipation | null;
-}
-
-export interface GroupQuizLeaderRow {
-  rank: number;
-  student: StudentChip;
-  score: number;
-  correct: number;
-  total: number;
-  percentage: number;
-  passed: boolean;
-  submitted_at: string | null;
-}
-
-export interface GroupQuestionItem {
-  id: number;
-  title: string;
-  body: string;
-  attachment: string;
-  topic: string;
-  course_id: number | null;
-  course_title: string;
-  status: 'open' | 'answered' | 'closed';
-  answers_count: number;
-  best_answer_id: number | null;
-  resolved: boolean;
-  created_at: string | null;
-  asker: StudentChip;
-  is_mine: boolean;
-  replies?: GroupQuestionReply[];
-}
-
-export interface GroupQuestionReply {
-  id: number;
-  question_id: number;
-  parent_id: number | null;
-  body: string;
-  is_best: boolean;
-  useful_count: number;
-  marked_useful: boolean;
-  created_at: string | null;
-  author: StudentChip;
-}
-
-export interface GroupMemberRow {
-  student_id: number;
-  role: GroupRole;
-  joined_at: string | null;
-  week_xp: number;
-  id: number;
-  name: string;
-  initials: string;
-  avatar_hue: number;
-  has_photo: boolean;
-  level?: number;
-  title?: string;
-  xp?: number;
-  status?: PresenceStatus;
-}
-
-export interface GroupActivityRow {
-  id: number;
-  kind: string;
-  text: string;
-  meta: Record<string, unknown>;
-  created_at: string | null;
-  actor: StudentChip | null;
-}
-
-export interface GroupNotificationRow {
-  id: number;
-  group_id: number;
-  kind: string;
-  title: string;
-  message: string;
-  meta: Record<string, unknown>;
-  read: boolean;
-  created_at: string | null;
-}
-
-export interface GroupDuelRow {
-  id: number;
-  code: string;
-  status: string;
-  topic: string;
-  public: boolean;
-  question_count: number;
-  stake_coins: number;
-  message: string;
-  players: {id: number; name: string}[];
-  winner: {id: number; name: string} | null;
-  i_am_in: boolean;
-  created_at: string | null;
-  finished_at: string | null;
-}
-
-export interface GroupOverview {
-  group: StudyGroupSummary;
-  owner: StudentChip | null;
-  course_title: string;
-  member_count: number;
-  online: number;
-  online_ids: number[];
-  studying_now: (StudentChip & {status: PresenceStatus})[];
-  upcoming_quizzes: GroupQuiz[];
-  active_duels: {id: number; code: string; status: string; topic: string; public: boolean; names: string[]; i_am_in: boolean}[];
-  pinned_announcements: GroupAnnouncement[];
-  recent_announcements: GroupAnnouncement[];
-  recent_questions: GroupQuestionItem[];
-  recent_activity: GroupActivityRow[];
-  stats: {
-    quizzes: number;
-    average_score: number;
-    messages_week: number;
-    questions: number;
-    open_questions: number;
-    duels: number;
+export interface PlayerDetail extends User {
+  scrim_stats: {
+    series_played: number;
+    series_won: number;
+    series_lost: number;
+    win_rate: number | null;
+    form: string[];
+    recent: { scrim_id: number; number: number; opponent: string; result: string; score_us: number; score_them: number; date: string | null }[];
   };
-  unread_notifications: number;
-}
-
-export interface GroupMemberProfile {
-  student: PlayerSummary;
-  role: GroupRole;
-  joined_at: string | null;
-  week_xp: number;
-  status: PresenceStatus;
-  contribution: {messages: number; answers: number; week_xp: number};
-  quizzes: {taken: number; submitted: number; best_percentage: number; average_percentage: number};
-  duels: {played: number; wins: number; losses: number};
-  recent_activity: GroupActivityRow[];
-  friendship: {status: string; i_initiated: boolean} | null;
+  pool: Record<string, PoolEntry[]>;
+  development: DevEntry[];
+  avg_rating: number | null;
+  can_rate: boolean;
   is_self: boolean;
 }
 
-export interface GroupQuizWindow {
-  index: number;
-  total: number;
-  per_question_seconds: number;
-  deadline_at: string | null;
-  answered_count: number;
-  answered_ids: number[];
-  already_answered?: boolean;
-  question: QuestionPublic | null;
+export interface Ban {
+  id: number;
+  scope: string;
+  priority: number | null;
+  opponent: string;
+  patch: string;
+  hero_id: number | null;
+  hero_name: string;
+  reason: string;
+  active: boolean;
 }
 
-export interface GroupQuizAnswerResult {
-  correct: boolean;
-  points: number;
-  answer: string | null;
-  explanation: string;
-  question: QuestionPublic;
-  score: number;
-  answered: number;
-  total: number;
+export interface EventItem {
+  id: number | string;
+  title: string;
+  kind: string;
+  date: string | null;
+  time: string;
+  end_time?: string;
+  location?: string;
+  description?: string;
+  link?: string;
+  scrim_id?: number | null;
+  source?: string;
+  category?: string;
 }
 
-export interface GroupQuizSummary {
-  participant_id: number;
-  status: string;
-  score: number;
-  correct: number;
-  wrong: number;
-  total: number;
-  percentage: number;
-  passed: boolean;
-  pass_score: number;
-  position: number | null;
-  xp_awarded: number;
-  coins_awarded: number;
-  submitted_at: string | null;
-  rewards?: RewardEvent[];
-  auto?: boolean;
+export interface StrategyNote {
+  id: number;
+  title: string;
+  category: string;
+  body: string;
+  tags: string[];
+  opponent: string;
+  patch: string;
+  pinned: boolean;
+  author_id: number | null;
+  updated_at: string | null;
 }
 
-/** Staff console: one row in the cross-group moderation list (`GET /admin/groups`). */
-export interface AdminGroupRow {
+export interface DraftPlan {
   id: number;
   name: string;
-  code: string;
-  goal: string;
-  description: string;
-  owner: {id: number; name: string};
-  course_title: string | null;
-  member_count: number;
-  message_count: number;
-  created_at: string | null;
-}
-
-/** What the server read from an uploaded document (nothing saved yet). */
-export interface MaterialImportPreview {
-  filename: string;
-  format: string;
-  bytes: number;
-  pages: number | null;
-  title: string;
-  description: string;
-  words: number;
-  estimated_minutes: number;
-  sections: {title: string; words: number; blocks: number; excerpt: string}[];
-  notes: string[];
-}
-
-/* ------------------------------------------------------ exam insights (staff) */
-export interface IntegritySummary {
-  level: 'clean' | 'review' | 'high';
-  reasons: string[];
-  focus_lost: number;
-  away_seconds: number;
-  offline_spells: number;
-  offline_seconds: number;
-  device_switches: number;
-  clipboard: number;
-  fullscreen_exits: number;
-}
-
-export interface IntegrityDetail {
-  attempt_id: number;
-  quiz: {id: number; title: string};
-  student: {id: number; name: string; phone: string};
+  opponent: string;
+  patch: string;
+  notes: string;
+  draft: Draft;
   status: string;
-  started_at: string | null;
-  submitted_at: string | null;
-  submission_type: string;
-  summary: IntegritySummary;
-  events: {type: string; at: string; seconds?: number; question?: number; from?: string; to?: string}[];
+  created_by: number | null;
+  updated_at: string | null;
 }
 
-export interface ItemAnalysisRow {
-  id: number;
-  text: string;
-  topic: string;
-  difficulty: string;
-  correct: string;
-  options: Record<string, string>;
-  seen: number;
-  answered: number;
-  blank: number;
-  correct_rate: number;
-  picks: Record<string, number>;
-  discrimination: number | null;
-  avg_seconds: number | null;
-  flags: string[];
+export interface Dashboard {
+  team: { name: string; tagline: string };
+  current_week: Week | null;
+  next_activity: Activity | null;
+  next_scrim: Scrim | null;
+  upcoming_events: EventItem[];
+  recent_results: Scrim[];
+  performance: {
+    games_analyzed: number;
+    win_rate?: number;
+    objective_control?: number;
+    first_turtle_rate?: number;
+    lord_conversion?: number | null;
+    teamfight_success?: number;
+    avg_game_time_min?: number;
+    gold_diff_10?: number;
+    kills_10?: number;
+    deaths_10?: number;
+    record?: { series_won: number; series_lost: number; games_won: number; games_lost: number };
+  };
+  weakness: {
+    current_weakness: string;
+    weakness_category: string;
+    weakness_drills_target: number;
+    season_name: string;
+    drills_done: number;
+    drills_remaining: number;
+  } | null;
+  mandatory_reviews: Scrim[];
+  open_action_items: number;
 }
 
-export interface ItemAnalysis {
-  scope: 'quiz' | 'course';
-  attempts: number;
-  questions: ItemAnalysisRow[];
-  summary: {questions: number; flagged: number; check_key: number};
+export interface ScrimSummary {
+  series: { total: number; wins: number; losses: number; win_rate: number | null };
+  games: { total: number; wins: number; losses: number; win_rate: number | null };
+  averages: { duration_min: number | null; kills: number | null; deaths: number | null; objectives: number | null };
+  opponents: { opponent: string; played: number; won: number; lost: number }[];
+  blocking_losses: Scrim[];
+}
+
+export interface Settings {
+  current_weakness: string;
+  weakness_category: string;
+  weakness_drills_target: number;
+  season_name: string;
 }

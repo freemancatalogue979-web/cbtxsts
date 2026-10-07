@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Absolute Genesis server launcher.
+# 9 CLOVER — Competitive Operations launcher.
+#
+# Starts the FastAPI API (:3000) and the React web app (:5173).
 #
 # VPS (persistent; survives SSH/terminal logout):
 #   ./start-arena.sh              # install/update dependencies and start both
@@ -7,7 +9,6 @@
 #   ./start-arena.sh logs         # follow API + web logs
 #   ./start-arena.sh restart      # restart both
 #   ./start-arena.sh stop         # stop both
-#   ./start-arena.sh demo         # fill the running app with the demo world (US/UK accounts, groups, teachers…)
 #
 # Local development (attached to this terminal):
 #   ./start-arena.sh foreground
@@ -36,34 +37,6 @@ setup_backend() {
   log "Installing backend dependencies…"
   ./.venv/bin/pip install --quiet --upgrade pip
   ./.venv/bin/pip install --quiet -r requirements.txt
-}
-
-# AI key for "Make it easy to read" (Gemini or DeepSeek). Asked once and
-# stored in backend/.env, which is ignored by Git.
-ensure_gemini_key() {
-  local env_file="$ROOT/backend/.env"
-  if [ -n "${GEMINI_API_KEY:-}${DEEPSEEK_API_KEY:-}" ]; then return; fi
-  if [ -f "$env_file" ] && grep -Eq '^(GEMINI|DEEPSEEK)_API_KEY=.+' "$env_file"; then return; fi
-  if [ ! -t 0 ]; then
-    log "No AI key yet — AI rewrite stays off (add a key to backend/.env)."
-    return
-  fi
-  log "Paste your Gemini or DeepSeek API key (typing is hidden; Enter skips):"
-  local key=""
-  read -rs key || true
-  echo
-  if [ -z "$key" ]; then
-    log "Skipped — add GEMINI_API_KEY=... or DEEPSEEK_API_KEY=... later."
-    return
-  fi
-  ( umask 077; touch "$env_file" )
-  local name="GEMINI_API_KEY"
-  case "$key" in sk-*) name="DEEPSEEK_API_KEY" ;; esac
-  grep -v "^$name=" "$env_file" > "$env_file.tmp" 2>/dev/null || true
-  printf '%s=%s\n' "$name" "$key" >> "$env_file.tmp"
-  mv "$env_file.tmp" "$env_file"
-  chmod 600 "$env_file"
-  log "Saved as $name in backend/.env."
 }
 
 setup_frontend() {
@@ -172,7 +145,6 @@ show_status() {
 
 start_foreground() {
   setup_backend
-  ensure_gemini_key
   setup_frontend
   ( cd "$ROOT/backend" && exec ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir app ) &
   local api_pid=$!
@@ -187,7 +159,6 @@ start_foreground() {
 case "$TARGET" in
   all|start)
     setup_backend
-    ensure_gemini_key
     setup_frontend
     start_api_daemon
     start_web_daemon
@@ -197,7 +168,6 @@ case "$TARGET" in
     ;;
   api)
     setup_backend
-    ensure_gemini_key
     start_api_daemon
     ;;
   web)
@@ -210,7 +180,6 @@ case "$TARGET" in
   restart)
     stop_all
     setup_backend
-    ensure_gemini_key
     setup_frontend
     start_api_daemon
     start_web_daemon
@@ -218,12 +187,6 @@ case "$TARGET" in
     ;;
   status)
     show_status
-    ;;
-  demo)
-    # Fill the running app with the presentation demo world (safe to re-run).
-    setup_backend
-    log "Building the demo world against http://127.0.0.1:${API_PORT} …"
-    cd "$ROOT/backend" && ./.venv/bin/python scripts/demo_world.py --url "http://127.0.0.1:${API_PORT}"
     ;;
   logs)
     mkdir -p "$RUN_DIR"
@@ -238,7 +201,6 @@ case "$TARGET" in
     # A quick tunnel remains attached because its public URL only exists while
     # cloudflared is connected. The normal API/web services still survive SSH.
     setup_backend
-    ensure_gemini_key
     setup_frontend
     start_api_daemon
     start_web_daemon
