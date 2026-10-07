@@ -118,6 +118,7 @@ WIPEABLE: dict[str, str] = {
     "draft_plans": "Draft Lab boards",
     "ban_entries": "Ban board entries",
     "events": "Calendar events",
+    "notifications": "Notifications + announcements",
 }
 PROTECTED = "accounts (users), heroes, map guide"
 

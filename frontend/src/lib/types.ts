@@ -56,6 +56,14 @@ export interface Attachment {
   kind?: string;
 }
 
+export interface AssignedRef {
+  id: number;
+  ign: string;
+  name: string;
+  main_role: string;
+  avatar?: string | null;
+}
+
 export interface Activity {
   id: number;
   week_id: number | null;
@@ -68,6 +76,7 @@ export interface Activity {
   duration_min: number;
   coach_name: string;
   assigned_player_ids: number[];
+  assigned?: AssignedRef[];
   required: boolean;
   status: string;
   notes: string;
@@ -358,4 +367,15 @@ export interface MapGuide {
   pins: MapGuidePin[];
   rotations: { role: string; steps: string[]; links: string[] }[];
   sources: string[]; note: string;
+}
+
+export interface NoticeItem {
+  id: number;
+  kind: "announcement" | "reminder" | string;
+  title: string;
+  body: string;
+  link: string;
+  from: string;
+  read: boolean;
+  created_at: string | null;
 }

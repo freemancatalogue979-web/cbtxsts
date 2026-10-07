@@ -1,4 +1,5 @@
 import {
+  Bell,
   BookOpenText,
   CalendarDays,
   ClipboardList,
@@ -34,6 +35,7 @@ const NAV = [
   { id: "maps", label: "Map Lab", icon: Map },
   { id: "strategy", label: "Strategy", icon: BookOpenText },
   { id: "events", label: "Calendar", icon: CalendarDays },
+  { id: "notifications", label: "Notifications", icon: Bell },
 ];
 
 const ROLE_TONE: Record<string, string> = {
@@ -44,7 +46,7 @@ const ROLE_TONE: Record<string, string> = {
   player: "text-mute border-edge-2",
 };
 
-function NavList({ current, onNavigate, user }: { current: string; onNavigate?: () => void; user: User }) {
+function NavList({ current, onNavigate, user, unread = 0 }: { current: string; onNavigate?: () => void; user: User; unread?: number }) {
   const items = user.role === "admin" ? [...NAV, { id: "admin", label: "Team Admin", icon: Menu }] : NAV;
   return (
     <nav className="flex-1 overflow-y-auto py-2">
@@ -59,8 +61,13 @@ function NavList({ current, onNavigate, user }: { current: string; onNavigate?: 
               active ? "text-text bg-raised nav-active" : "text-mute hover:text-text hover:bg-raised/60"
             }`}
           >
-            <Icon size={16} className={active ? "text-crim" : "text-faint"} />
+            <Icon size={16} className={active ? "text-crim" : "text-faint"} style={item.id === "notifications" && unread > 0 ? { color: "#e11d48" } : undefined} />
             {item.label}
+            {item.id === "notifications" && unread > 0 && (
+              <span className="ml-auto text-[10px] font-extrabold bg-crim text-white rounded-full min-w-5 h-5 px-1 inline-flex items-center justify-center">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
           </button>
         );
       })}
@@ -171,11 +178,21 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
 }) {
   const [route, setRoute] = useState<string[]>(hashRoute());
   const [mobileNav, setMobileNav] = useState(false);
+  const [unread, setUnread] = useState(0);
   useEffect(() => {
     const onHash = () => setRoute(hashRoute());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  useEffect(() => {
+    let alive = true;
+    const fetchCount = () => api.get<{ count: number }>("/notifications/unread-count")
+      .then((r) => { if (alive) setUnread(r.count); }).catch(() => {});
+    fetchCount();
+    const t = setInterval(fetchCount, 45000);
+    window.addEventListener("clover:notifications-changed", fetchCount);
+    return () => { alive = false; clearInterval(t); window.removeEventListener("clover:notifications-changed", fetchCount); };
+  }, [user.id]);
   const current = route[0] || "dashboard";
 
   return (
@@ -185,7 +202,7 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
         <div className="px-4 pt-4 pb-3 border-b border-edge">
           <Wordmark />
         </div>
-        <NavList current={current} user={user} />
+        <NavList current={current} user={user} unread={unread} />
         <UserCard user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />
       </aside>
 
@@ -213,7 +230,7 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
                 <X size={18} />
               </button>
             </div>
-            <NavList current={current} user={user} onNavigate={() => setMobileNav(false)} />
+            <NavList current={current} user={user} unread={unread} onNavigate={() => setMobileNav(false)} />
             <UserCard user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />
           </div>
         </div>

@@ -8,11 +8,38 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
-from ..models import TrainingActivity, TrainingWeek, dumps
+from ..models import TrainingActivity, TrainingWeek, User, dumps
 from ..schemas import ActivityIn, ActivityPatch, WeekIn, WeekPatch
-from ..serializers import activity_out, week_out
+from ..serializers import activity_out, avatar_url, week_out
+from .notifications import notify
 
 router = APIRouter(prefix="/training", tags=["training"])
+
+
+def _attach_assigned(db: Session, rows):
+    """Enrich activity dicts with assigned player refs (name/IGN/role/avatar)."""
+    items = rows if isinstance(rows, list) else [rows]
+    ids = {i for o in items for i in o.get("assigned_player_ids", [])}
+    users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
+    for o in items:
+        o["assigned"] = [
+            {"id": u.id, "ign": u.ign, "name": u.name, "main_role": u.main_role, "avatar": avatar_url(u.id)}
+            for uid in o.get("assigned_player_ids", [])
+            if (u := users.get(uid)) is not None
+        ]
+    return rows
+
+
+def _remind_new_assignments(db: Session, actor, activity: TrainingActivity, prev_ids: list[int], new_ids: list[int]) -> None:
+    added = [i for i in new_ids if i not in prev_ids]
+    if not added:
+        return
+    when = f"{activity.activity_date.isoformat() if activity.activity_date else 'TBD'} {activity.start_time}".strip()
+    notify(db, actor, added, "reminder",
+           f"Assigned: {activity.title}",
+           f"{when} · {activity.duration_min} min · {activity.category.replace('-', ' ').title()}.".strip(),
+           "#/training")
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +131,7 @@ def list_activities(
     out = [activity_out(a) for a in activities]
     if assigned_to is not None:
         out = [a for a in out if assigned_to in a["assigned_player_ids"]]
-    return out
+    return _attach_assigned(db, out)
 
 
 @router.post("/activities", status_code=201)
@@ -121,7 +148,8 @@ def create_activity(payload: ActivityIn, db: Session = Depends(get_db), user=Dep
     db.add(activity)
     db.commit()
     db.refresh(activity)
-    return activity_out(activity)
+    _remind_new_assignments(db, user, activity, [], payload.assigned_player_ids or [])
+    return _attach_assigned(db, activity_out(activity))
 
 
 @router.get("/activities/{activity_id}")
@@ -129,7 +157,7 @@ def get_activity(activity_id: int, db: Session = Depends(get_db), user=Depends(g
     activity = db.get(TrainingActivity, activity_id)
     if activity is None:
         raise HTTPException(status_code=404, detail="Activity not found")
-    return activity_out(activity)
+    return _attach_assigned(db, activity_out(activity))
 
 
 @router.patch("/activities/{activity_id}")
@@ -157,6 +185,10 @@ def update_activity(activity_id: int, payload: ActivityPatch, db: Session = Depe
         data["activity_date"] = data.pop("date")
     if "time" in data:
         data["start_time"] = data.pop("time")
+    from ..models import loads as _loads
+
+    prev_ids = _loads(activity.assigned_player_ids)
+    new_ids = data.get("assigned_player_ids")
     if "assigned_player_ids" in data and data["assigned_player_ids"] is not None:
         data["assigned_player_ids"] = dumps(data["assigned_player_ids"])
     if "attachments" in data and data["attachments"] is not None:
@@ -165,7 +197,9 @@ def update_activity(activity_id: int, payload: ActivityPatch, db: Session = Depe
         setattr(activity, key, value)
     db.commit()
     db.refresh(activity)
-    return activity_out(activity)
+    if new_ids is not None and can.manage_training(user):
+        _remind_new_assignments(db, user, activity, prev_ids, new_ids)
+    return _attach_assigned(db, activity_out(activity))
 
 
 @router.delete("/activities/{activity_id}", status_code=204)

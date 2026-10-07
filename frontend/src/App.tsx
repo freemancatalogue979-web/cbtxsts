@@ -14,6 +14,7 @@ import { PlayersPage } from "./pages/Players";
 import { BansPage } from "./pages/Bans";
 import { DraftsPage } from "./pages/Drafts";
 import { MapsPage } from "./pages/Maps";
+import { NotificationsPage } from "./pages/Notifications";
 import { StrategyPage } from "./pages/Strategy";
 import { EventsPage } from "./pages/Events";
 import { AdminPage } from "./pages/Admin";
@@ -104,6 +105,9 @@ export default function App() {
       break;
     case "events":
       page = <EventsPage me={user} meta={meta} />;
+      break;
+    case "notifications":
+      page = <NotificationsPage me={user} />;
       break;
     case "admin":
       page = <AdminPage me={user} meta={meta} />;

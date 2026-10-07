@@ -4,6 +4,7 @@ import { api, qs } from "../lib/api";
 import type { Activity, Meta, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner } from "../components/ui";
+import { AvatarImg } from "../components/Avatar";
 
 const SECTIONS: { id: string; label: string; category: string | null; desc: string }[] = [
   { id: "A", label: "Weekly Training", category: "WEEKS", desc: "Training blocks & focus weeks" },
@@ -41,8 +42,16 @@ function ActivityRow({ a, me, onOpen }: { a: Activity; me: User; onOpen: () => v
         <div className="text-[11px] text-faint mt-0.5">
           {a.category} · {dayLabel(a.date)} {fmtTime(a.time)}
           {a.week_number ? ` · Week ${String(a.week_number).padStart(2, "0")}` : ""}
-          {a.assigned_player_ids.length > 0 && ` · ${a.assigned_player_ids.length} assigned`}
         </div>
+        {(a.assigned ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {(a.assigned ?? []).map((u) => (
+              <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
+                {u.ign}{u.main_role ? ` · ${u.main_role}` : ""}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       {a.status === "done" && <Check size={15} className="text-leaf shrink-0" />}
     </button>
@@ -310,7 +319,19 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
           <div><span className="label">Coach</span><div className="text-sm font-semibold mt-0.5">{a.coach_name || "—"}</div></div>
           <div><span className="label">Status</span><div className="mt-1"><span className={`chip ${STATUS_STYLE[a.status] || ""} uppercase !text-[10px]`}>{a.status}</span></div></div>
           <div><span className="label">Assigned</span>
-            <div className="text-sm font-semibold mt-0.5 flex items-center gap-1.5"><Users2 size={13} className="text-faint" /> {a.assigned_player_ids.length || "Whole squad"}</div></div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {(a.assigned ?? []).length === 0 && (
+                <span className="text-sm font-semibold flex items-center gap-1.5"><Users2 size={13} className="text-faint" /> Whole squad</span>
+              )}
+              {(a.assigned ?? []).map((u) => (
+                <span key={u.id} className="flex items-center gap-1.5 chip !py-1 text-mute border-edge-2" title={u.name}>
+                  <AvatarImg user={u} size={18} />
+                  <span className="font-bold text-text">{u.ign}</span>
+                  {u.main_role && <span className="text-crim font-bold !text-[9px] uppercase">{u.main_role}</span>}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
         {a.description && <div className="card p-4"><div className="label mb-2">Brief</div><p className="text-sm text-text/85 leading-relaxed whitespace-pre-wrap">{a.description}</p></div>}
         {(a.result || a.lessons) && (
