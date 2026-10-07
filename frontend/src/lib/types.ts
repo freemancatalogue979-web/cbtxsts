@@ -349,3 +349,13 @@ export interface PlayerProgress {
   overall: { series_played: number; series_won: number; series_lost: number; win_rate: number | null; form: string[];
     recent: { scrim_id: number; number: number; opponent: string; result: string; score_us: number; score_them: number; date: string | null }[] };
 }
+
+export interface MapGuidePin {
+  id: string; name: string; category: string; side: "ours" | "enemy" | "shared" | "river" | string;
+  x: number; y: number; blurb: string; facts: [string, string][]; tips: string[];
+}
+export interface MapGuide {
+  pins: MapGuidePin[];
+  rotations: { role: string; steps: string[]; links: string[] }[];
+  sources: string[]; note: string;
+}
