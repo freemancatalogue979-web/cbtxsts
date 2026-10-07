@@ -183,7 +183,9 @@ function BoardEditor({ id }: { id: number }) {
 
   const filteredHeroes = useMemo(() => {
     const q = heroQ.trim().toLowerCase();
-    const list = heroes;
+    const rank: Record<string, number> = { META: 0, STRONG: 1, VIABLE: 2, SITUATIONAL: 3, WEAK: 4 };
+    const list = [...heroes].sort((a, b) =>
+      (rank[a.meta_status] ?? 9) - (rank[b.meta_status] ?? 9) || b.clover_rating - a.clover_rating);
     return (q ? list.filter((h) => h.name.toLowerCase().includes(q)) : list).slice(0, 60);
   }, [heroes, heroQ]);
 
@@ -331,8 +333,13 @@ function BoardEditor({ id }: { id: number }) {
             {filteredHeroes.map((h) => (
               <button key={h.id} onClick={() => addToken(h.name)}
                 className="flex flex-col items-center gap-1 p-1 rounded-md hover:bg-raised transition-colors"
-                title={`${h.name} — add as ${newSide}`}>
-                <HeroImg name={h.name} size={36} className="rounded-md" />
+                title={`${h.name} · ${h.meta_status} · WR ${h.win_rate}% — add as ${newSide}`}>
+                <span className="relative">
+                  <HeroImg name={h.name} size={36} className="rounded-md" />
+                  {(h.meta_status === "META" || h.meta_status === "STRONG") && (
+                    <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-ink ${h.meta_status === "META" ? "bg-crim" : "bg-leaf"}`} />
+                  )}
+                </span>
                 <span className="text-[8.5px] font-semibold leading-tight text-center w-full truncate">{h.name}</span>
               </button>
             ))}
