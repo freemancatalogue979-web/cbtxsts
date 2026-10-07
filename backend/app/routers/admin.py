@@ -119,6 +119,9 @@ WIPEABLE: dict[str, str] = {
     "ban_entries": "Ban board entries",
     "events": "Calendar events",
     "notifications": "Notifications + announcements",
+    "training_programs": "Training programs",
+    "program_weeks": "Program weeks/tasks",
+    "week_progress": "Program week progress",
 }
 PROTECTED = "accounts (users), heroes, map guide"
 

@@ -19,6 +19,7 @@ from .routers import (
     map_guide,
     maps,
     notifications,
+    programs,
     meta,
     players,
     reviews,
@@ -45,7 +46,7 @@ app.add_middleware(
 
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
-               bans, events, strategy, drafts, admin, maps, users, map_guide, notifications):
+               bans, events, strategy, drafts, admin, maps, users, map_guide, notifications, programs):
     api.include_router(module.router)
 app.include_router(api)
 

@@ -379,3 +379,36 @@ export interface NoticeItem {
   read: boolean;
   created_at: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Training programs (activity → own weeks/tasks → per-member progress)
+// ---------------------------------------------------------------------------
+export interface ProgramWeekT {
+  id: number;
+  number: number;
+  title: string;
+  description: string;
+  attachments: { label: string; url: string; kind: string }[];
+}
+
+export interface ProgressCell {
+  status: "pending" | "done";
+  completed_at: string | null;
+  notes: string;
+  marked_by: number | null;
+}
+
+export interface Program {
+  id: number;
+  name: string;
+  focus: string;
+  description: string;
+  status: "active" | "archived" | string;
+  enrolled_ids: number[];
+  enrolled: AssignedRef[];
+  weeks: ProgramWeekT[];
+  week_count: number;
+  completion: number;
+  created_at: string | null;
+  matrix?: Record<string, Record<string, ProgressCell>>; // week_id -> user_id -> cell
+}

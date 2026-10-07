@@ -185,6 +185,56 @@ class TrainingActivity(Base):
 
 
 # ---------------------------------------------------------------------------
+# Training programs: activity (program) → weeks/tasks → per-player progress
+# ---------------------------------------------------------------------------
+class TrainingProgram(Base):
+    __tablename__ = "training_programs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160))
+    focus: Mapped[str] = mapped_column(String(60), default="")      # e.g. EXP fundamentals, Macro, Team fight
+    description: Mapped[str] = mapped_column(Text, default="")
+    enrolled_ids: Mapped[str] = mapped_column(Text, default="[]")   # JSON [user ids]
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)  # active | archived
+    created_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    weeks: Mapped[list["ProgramWeek"]] = relationship(back_populates="program",
+        cascade="all, delete-orphan", order_by="ProgramWeek.number")
+
+
+class ProgramWeek(Base):
+    __tablename__ = "program_weeks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    program_id: Mapped[int] = mapped_column(Integer, ForeignKey("training_programs.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer, default=1)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    attachments: Mapped[str] = mapped_column(Text, default="[]")  # JSON [{label,url,kind}]
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    program: Mapped[TrainingProgram] = relationship(back_populates="weeks")
+    progress_rows: Mapped[list["WeekProgress"]] = relationship(back_populates="week",
+        cascade="all, delete-orphan")
+
+
+class WeekProgress(Base):
+    __tablename__ = "week_progress"
+    __table_args__ = (UniqueConstraint("week_id", "user_id", name="uq_week_progress"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    week_id: Mapped[int] = mapped_column(Integer, ForeignKey("program_weeks.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | done
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    marked_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    week: Mapped[ProgramWeek] = relationship(back_populates="progress_rows")
+
+
+# ---------------------------------------------------------------------------
 # Scrims & reviews
 # ---------------------------------------------------------------------------
 class Scrim(Base):
