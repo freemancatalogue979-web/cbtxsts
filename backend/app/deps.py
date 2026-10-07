@@ -1,59 +1,113 @@
-"""FastAPI dependencies: authentication + role guards."""
+"""FastAPI dependencies: auth + role-based permissions.
+
+Permission map (from the 9 CLOVER plan):
+
+- ADMIN    full access: players, events, training, heroes, drafts, scrims,
+           strategies, all analytics.
+- CAPTAIN  manage training sessions, create scrims, upload results, create
+           reviews, manage strategy notes, manage draft plans.
+- COACH    create drills, review games, tactical notes, rate players,
+           create training plans, manage strategy.
+- PLAYER   view training, submit self-review, view assigned drills, team
+           strategies, personal performance, upload required info.
+- ANALYST  view all analytics, build match reviews and stat sheets.
+"""
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from .db import get_db
-from .models import Admin, Student
-from .security import ROLE_ADMIN, ROLE_STUDENT, Principal, decode_token, extract_token
+from .models import User
+from .security import (
+    ROLE_ADMIN,
+    ROLE_ANALYST,
+    ROLE_CAPTAIN,
+    ROLE_COACH,
+    ROLE_PLAYER,
+    verify_token,
+)
+
+__all__ = [
+    "get_db",
+    "get_current_user",
+    "can",
+    "require",
+    "ROLE_ADMIN",
+    "ROLE_CAPTAIN",
+    "ROLE_COACH",
+    "ROLE_PLAYER",
+    "ROLE_ANALYST",
+]
 
 
-def current_principal(
+def get_current_user(
     authorization: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-) -> Principal | None:
-    return decode_token(extract_token(authorization, token))
-
-
-def require_principal(
-    principal: Principal | None = Depends(current_principal),
-) -> Principal:
-    if principal is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to continue.")
-    return principal
-
-
-def require_student(
-    principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
-) -> Student:
-    if principal.role != ROLE_STUDENT:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Player access required.")
-    student = db.get(Student, int(principal.subject))
-    if student is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session no longer valid. Sign in again.")
-    if student.is_banned:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "This account has been suspended.")
-    return student
+) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Sign in required")
+    payload = verify_token(authorization.split(None, 1)[1].strip())
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Session expired — sign in again")
+    user = db.get(User, payload.subject)
+    if user is None or not user.active:
+        raise HTTPException(status_code=401, detail="Account unavailable")
+    return user
 
 
-def require_institution_staff(
-    principal: Principal = Depends(require_principal),
-    db: Session = Depends(get_db),
-) -> Admin:
-    """Any authenticated staff identity, including organization teachers."""
-    if principal.role != ROLE_ADMIN:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Staff access required.")
-    admin = db.scalar(select(Admin).where(Admin.id == int(principal.subject)))
-    if admin is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Staff session expired.")
-    return admin
+class can:  # noqa: N801 - reads like a permission table
+    """Capability checks keyed on the signed-in user's role."""
+
+    @staticmethod
+    def manage_training(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_scrims(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN}
+
+    @staticmethod
+    def upload_results(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN}
+
+    @staticmethod
+    def create_review(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH, ROLE_ANALYST}
+
+    @staticmethod
+    def rate_players(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_strategy(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_drafts(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_heroes(user: User) -> bool:
+        return user.role == ROLE_ADMIN
+
+    @staticmethod
+    def annotate_heroes(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_bans(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH}
+
+    @staticmethod
+    def manage_events(user: User) -> bool:
+        return user.role in {ROLE_ADMIN, ROLE_CAPTAIN}
+
+    @staticmethod
+    def manage_users(user: User) -> bool:
+        return user.role == ROLE_ADMIN
 
 
-def require_admin(admin: Admin = Depends(require_institution_staff)) -> Admin:
-    """Platform management only; teachers are restricted to institution APIs."""
-    if admin.role not in {"owner", "staff"}:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Platform management access required.")
-    return admin
+def require(check: bool, what: str = "do that") -> None:
+    if not check:
+        raise HTTPException(status_code=403, detail=f"Your role is not allowed to {what}.")

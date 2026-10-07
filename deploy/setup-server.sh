@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Absolute Genesis — one-shot production setup for a fresh Ubuntu server.
+# 9 CLOVER Competitive Operations — one-shot production setup for a fresh Ubuntu server.
 #
-#   curl -fsSL https://raw.githubusercontent.com/freemancatalogue979-web/cbtxsts/arena/01a0d963-cbtxsts/deploy/setup-server.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/freemancatalogue979-web/cbtxsts/main/deploy/setup-server.sh | bash
 #
 # Re-running it is safe: it pulls the latest code, rebuilds and restarts.
 # Result: nginx on port 80 serves the built app and proxies /api, /live, /ws
-# to uvicorn (systemd service "genesis", 127.0.0.1:3000). Data lives in
+# to uvicorn (systemd service "clover", 127.0.0.1:3000). Data lives in
 # $APP_DIR/backend/data and is never touched by updates.
 set -euo pipefail
 
 REPO="${REPO:-https://github.com/freemancatalogue979-web/cbtxsts.git}"
-BRANCH="${BRANCH:-arena/01a0d963-cbtxsts}"
-APP_DIR="${APP_DIR:-/opt/genesis}"
+BRANCH="${BRANCH:-main}"
+APP_DIR="${APP_DIR:-/opt/clover}"
 DOMAIN="${DOMAIN:-_}"            # set DOMAIN=example.com to get HTTPS via certbot
 RUN_USER="$(id -un)"
 
@@ -62,9 +62,9 @@ npm ci --no-audit --no-fund --loglevel=error
 npx vite build
 
 log "systemd service"
-sudo tee /etc/systemd/system/genesis.service >/dev/null <<EOF
+sudo tee /etc/systemd/system/clover.service >/dev/null <<EOF
 [Unit]
-Description=Absolute Genesis API
+Description=9 CLOVER Competitive Operations API
 After=network.target
 
 [Service]
@@ -79,11 +79,11 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload
-sudo systemctl enable -q genesis
-sudo systemctl restart genesis
+sudo systemctl enable -q clover
+sudo systemctl restart clover
 
 log "nginx"
-sudo tee /etc/nginx/sites-available/genesis >/dev/null <<EOF
+sudo tee /etc/nginx/sites-available/clover >/dev/null <<EOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -117,7 +117,7 @@ server {
     location / { try_files \$uri \$uri/ /index.html; }
 }
 EOF
-sudo ln -sf /etc/nginx/sites-available/genesis /etc/nginx/sites-enabled/genesis
+sudo ln -sf /etc/nginx/sites-available/clover /etc/nginx/sites-enabled/clover
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t -q && sudo systemctl reload nginx
 
@@ -134,7 +134,7 @@ fi
 log "Waiting for the API"
 for i in $(seq 1 60); do curl -fs http://127.0.0.1/api/health >/dev/null 2>&1 && break; curl -fs http://127.0.0.1:3000/ >/dev/null 2>&1 && break; sleep 2; done
 IP="$(curl -s -m5 ifconfig.me || hostname -I | awk '{print $1}')"
-printf '\n\033[1;32m✔ Absolute Genesis is live at http://%s\033[0m\n' "${DOMAIN/#_/$IP}"
-echo "  Logs:    sudo journalctl -u genesis -f"
+printf '\n\033[1;32m✔ 9 CLOVER Competitive Operations is live at http://%s\033[0m\n' "${DOMAIN/#_/$IP}"
+echo "  Logs:    sudo journalctl -u clover -f"
 echo "  Update:  re-run this script"
-echo "  Config:  $APP_DIR/backend/.env  (then: sudo systemctl restart genesis)"
+echo "  Config:  $APP_DIR/backend/.env  (then: sudo systemctl restart clover)"

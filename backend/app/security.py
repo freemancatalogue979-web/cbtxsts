@@ -5,69 +5,35 @@ import base64
 import hashlib
 import hmac
 import json
-import re
 import secrets
 import time
 from dataclasses import dataclass
 
 from .config import PBKDF2_ITERATIONS, SECRET_KEY, TOKEN_TTL_HOURS
 
-ROLE_STUDENT = "student"
+# Roles -----------------------------------------------------------------
 ROLE_ADMIN = "admin"
+ROLE_CAPTAIN = "captain"
+ROLE_COACH = "coach"
+ROLE_PLAYER = "player"
+ROLE_ANALYST = "analyst"
 
-_NON_DIGITS = re.compile(r"\D+")
+ROLES = {ROLE_ADMIN, ROLE_CAPTAIN, ROLE_COACH, ROLE_PLAYER, ROLE_ANALYST}
 
+ROLE_LABELS = {
+    ROLE_ADMIN: "Admin",
+    ROLE_CAPTAIN: "Captain",
+    ROLE_COACH: "Coach",
+    ROLE_PLAYER: "Player",
+    ROLE_ANALYST: "Analyst",
+}
 
-# ---------------------------------------------------------------------------
-# Phone numbers
-# ---------------------------------------------------------------------------
-def normalize_phone(raw: str) -> str:
-    """Accept 0803..., +234803..., 234-803-... and return a canonical local form.
-
-    Nigerian numbers are stored as 11 local digits (``08031234567``). Foreign
-    style ``+234`` prefixes are folded back to the leading zero.
-    """
-    digits = _NON_DIGITS.sub("", raw or "")
-    if not digits:
-        return ""
-    stripped = (raw or "").strip()
-    # International numbers outside Nigeria keep an explicit +<country code>:
-    #   +1 201 555 0123 -> +12015550123, 0044 7400 123456 -> +447400123456
-    if stripped.startswith("+") and not digits.startswith("234"):
-        return "+" + digits
-    if digits.startswith("00") and not digits.startswith("00234"):
-        return "+" + digits[2:]
-    # International forms fold back to the 11-digit local number:
-    #   +234 803 123 4567 -> 234 + 10 digits -> 08031234567
-    #   00234 803 123 4567 -> 00234 + 10 digits -> 08031234567
-    if digits.startswith("00234"):
-        digits = "0" + digits[5:]
-    elif digits.startswith("234") and len(digits) >= 13:
-        digits = "0" + digits[-10:]
-    elif len(digits) == 10 and digits[0] in "789":
-        # Bare local form without the trunk zero (7034548639).
-        digits = "0" + digits
-    return digits
-
-
-def format_phone(phone: str) -> str:
-    """Pretty ``0803 123 4567`` grouping for display."""
-    digits = normalize_phone(phone)
-    if len(digits) == 11:
-        return f"{digits[:4]} {digits[4:7]} {digits[7:]}"
-    return digits
-
-
-def is_valid_phone(raw: str) -> bool:
-    digits = normalize_phone(raw)
-    if digits.startswith("+"):
-        # E.164: country code + subscriber number, 8–15 digits in total.
-        return 8 <= len(digits) - 1 <= 15 and digits[1] != "0"
-    return len(digits) == 11 and digits.startswith("0") and digits[1] in "789"
+# In-game lanes.
+LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"]
 
 
 # ---------------------------------------------------------------------------
-# Passwords (admin accounts)
+# Passwords
 # ---------------------------------------------------------------------------
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -91,23 +57,14 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Tokens
+# Tokens (stateless HMAC-signed JSON)
 # ---------------------------------------------------------------------------
 @dataclass(slots=True)
-class Principal:
-    """Who is making the request."""
-
-    subject: str  # student id or admin id, as a string
-    role: str     # ROLE_STUDENT | ROLE_ADMIN
-    name: str = ""
-
-    @property
-    def student_id(self) -> int | None:
-        return int(self.subject) if self.role == ROLE_STUDENT else None
-
-    @property
-    def admin_id(self) -> int | None:
-        return int(self.subject) if self.role == ROLE_ADMIN else None
+class TokenPayload:
+    subject: int
+    role: str
+    name: str
+    exp: int
 
 
 def _b64encode(raw: bytes) -> str:
@@ -118,37 +75,41 @@ def _b64decode(raw: str) -> bytes:
     return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
 
 
-def create_token(subject: str | int, role: str, name: str = "", ttl_hours: int | None = None) -> str:
-    payload = {
-        "sub": str(subject),
-        "role": role,
-        "name": name,
-        "iat": int(time.time()),
-        "exp": int(time.time()) + (ttl_hours or TOKEN_TTL_HOURS) * 3600,
-    }
-    body = _b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-    signature = hmac.new(SECRET_KEY.encode(), body.encode(), hashlib.sha256).hexdigest()[:40]
-    return f"{body}.{signature}"
+def _signature(body: str) -> str:
+    return _b64encode(hmac.new(SECRET_KEY.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest())
 
 
-def decode_token(token: str | None) -> Principal | None:
-    if not token or "." not in token:
+def issue_token(user_id: int, role: str, name: str) -> str:
+    body = _b64encode(
+        json.dumps(
+            {
+                "sub": user_id,
+                "role": role,
+                "name": name,
+                "exp": int(time.time()) + TOKEN_TTL_HOURS * 3600,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    return f"{body}.{_signature(body)}"
+
+
+def verify_token(token: str) -> TokenPayload | None:
+    try:
+        body, sig = token.split(".", 1)
+    except ValueError:
         return None
-    body, _, signature = token.partition(".")
-    expected = hmac.new(SECRET_KEY.encode(), body.encode(), hashlib.sha256).hexdigest()[:40]
-    if not hmac.compare_digest(expected, signature):
+    if not hmac.compare_digest(sig, _signature(body)):
         return None
     try:
-        payload = json.loads(_b64decode(body))
-    except (ValueError, json.JSONDecodeError):
+        data = json.loads(_b64decode(body))
+        payload = TokenPayload(
+            subject=int(data["sub"]), role=str(data["role"]), name=str(data.get("name", "")), exp=int(data["exp"])
+        )
+    except (KeyError, ValueError, TypeError, json.JSONDecodeError):
         return None
-    if int(payload.get("exp", 0)) < int(time.time()):
+    if payload.exp < int(time.time()):
         return None
-    return Principal(subject=payload.get("sub", ""), role=payload.get("role", ""), name=payload.get("name", ""))
-
-
-def extract_token(authorization: str | None, token_param: str | None) -> str | None:
-    """Bearer header wins, then ``?token=`` (needed for WebSocket handshakes)."""
-    if authorization and authorization.lower().startswith("bearer "):
-        return authorization.split(" ", 1)[1].strip()
-    return token_param.strip() if token_param else None
+    if payload.role not in ROLES:
+        return None
+    return payload
