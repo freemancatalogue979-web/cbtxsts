@@ -67,7 +67,7 @@ function AskForm({onDone, onCancel}: {onDone: () => void; onCancel: () => void})
   };
 
   return (
-    <div className="grid gap-3 p-3 sm:p-4">
+    <div className="grid min-w-0 max-w-full gap-3 overflow-x-hidden p-3 sm:p-4">
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={onCancel} icon={<ArrowLeft className="size-4" />} label="Back" />
         <h2 className="text-[1rem] font-extrabold text-mist-50">Ask the group</h2>
@@ -339,11 +339,11 @@ export default function Questions() {
           {items.map((row) => (
             <li key={row.id}>
               <button type="button" onClick={() => { setDetailId(row.id); setView('detail'); }} className="w-full text-left">
-                <Card className="flex items-start gap-3 p-3.5 transition-colors hover:border-nova-400/40">
+                <Card className="flex w-full min-w-0 max-w-full items-start gap-3 overflow-hidden p-3.5 transition-colors hover:border-nova-400/40">
                   <MemberAvatar member={row.asker} size={34} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="min-w-0 flex-1 truncate text-[0.88rem] font-extrabold text-mist-50">{row.title}</h3>
+                      <h3 className="min-w-0 flex-1 break-words text-[0.88rem] font-extrabold leading-snug text-mist-50">{row.title}</h3>
                       {row.status === 'open' ? (
                         <Chip tone="gold" className="shrink-0">Open</Chip>
                       ) : (

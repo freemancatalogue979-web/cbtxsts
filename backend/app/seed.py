@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import or_, func, select
 from sqlalchemy.orm import Session
 
 from . import game
@@ -333,8 +333,88 @@ def seed_notifications(db: Session) -> None:
     db.flush()
 
 
+
+LEGACY_LAW_CODES = ("LAW 411", "LAW 421", "LAW 431")
+
+
+def purge_legacy_law_courses(db: Session) -> int:
+    """Delete Nigerian Law demo courses every boot so they cannot return after pull/seed.
+
+    Removes courses, quizzes, questions, materials and related attempts for
+    LAW 411 / 421 / 431. Idempotent.
+    """
+    from .models import Attempt, CourseTopic, Material
+
+    removed = 0
+    for code in LEGACY_LAW_CODES:
+        course = db.scalar(select(Course).where(Course.code == code))
+        if course is None:
+            # also match by classic titles if code was renamed
+            continue
+        quizzes = list(db.scalars(select(Quiz).where(Quiz.course_id == course.id)).all())
+        quiz_ids = [q.id for q in quizzes]
+        # attempts on those quizzes
+        if quiz_ids:
+            for att in db.scalars(select(Attempt).where(Attempt.quiz_id.in_(quiz_ids))).all():
+                db.delete(att)
+        q_filter = [Question.course_id == course.id]
+        if quiz_ids:
+            q_filter.append(Question.quiz_id.in_(quiz_ids))
+        for question in db.scalars(select(Question).where(or_(*q_filter))).all():
+            db.delete(question)
+        for material in db.scalars(select(Material).where(Material.course_id == course.id)).all():
+            db.delete(material)
+        for topic in db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id)).all():
+            db.delete(topic)
+        db.flush()
+        for quiz in quizzes:
+            db.delete(quiz)
+        db.flush()
+        db.delete(course)
+        removed += 1
+    # title-based catch-all (in case codes differ)
+    for course in list(db.scalars(select(Course)).all()):
+        title = (course.title or "").lower()
+        code = (course.code or "").upper()
+        if code.startswith("LAW ") or "constitutional law" in title or "jurisprudence" in title or "sale of goo" in title:
+            if course.code in LEGACY_LAW_CODES:
+                continue  # already handled
+            if not code.startswith("LAW "):
+                continue
+            quizzes = list(db.scalars(select(Quiz).where(Quiz.course_id == course.id)).all())
+            quiz_ids = [q.id for q in quizzes]
+            if quiz_ids:
+                for att in db.scalars(select(Attempt).where(Attempt.quiz_id.in_(quiz_ids))).all():
+                    db.delete(att)
+            for question in db.scalars(
+                select(Question).where(
+                    or_(Question.course_id == course.id, Question.quiz_id.in_(quiz_ids or [-1]))
+                )
+            ).all():
+                db.delete(question)
+            for material in db.scalars(select(Material).where(Material.course_id == course.id)).all():
+                db.delete(material)
+            for topic in db.scalars(select(CourseTopic).where(CourseTopic.course_id == course.id)).all():
+                db.delete(topic)
+            db.flush()
+            for quiz in quizzes:
+                db.delete(quiz)
+            db.flush()
+            db.delete(course)
+            removed += 1
+    if removed:
+        db.flush()
+    return removed
+
+
 def seed_all(db: Session) -> dict[str, int]:
     """Idempotent bootstrap. Safe to call on every startup."""
+    try:
+        n = purge_legacy_law_courses(db)
+        if n:
+            db.commit()
+    except Exception:
+        db.rollback()
     config = seed_config(db)
     seed_admin(db)
     seed_badges(db)

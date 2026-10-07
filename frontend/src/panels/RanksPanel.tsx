@@ -102,10 +102,10 @@ function RankRow({row, unit, me}: {row: LeaderboardRow; unit: string; me?: boole
       >
         {row.rank}
       </span>
-      <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={face} photo={{id: row.id, has: row.has_photo}} cosmetics={row.cosmetics} />
+      <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ag:player", {detail: {id: row.id}}))} className="shrink-0" aria-label={`Open ${row.name}`}><Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={face} photo={{id: row.id, has: row.has_photo}} cosmetics={row.cosmetics} /></button>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.82rem] font-extrabold text-mist-100 sm:text-[0.86rem]">
- {row.name} {me && <span className="ml-1 text-[0.66rem] font-black tracking-wider text-nova-300">You</span>}
+ {row.flag || '🌍'} {row.name} {me && <span className="ml-1 text-[0.66rem] font-black tracking-wider text-nova-300">You</span>}
         </p>
         <p className="flex items-center gap-1.5 truncate text-[0.68rem] font-semibold text-mist-500 sm:gap-2 sm:text-[0.72rem]">
           <span>Lv {row.level}</span>

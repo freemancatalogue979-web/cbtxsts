@@ -42,7 +42,7 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
   const dragRef = useRef<HTMLDivElement | null>(null);
   const hintLeftRef = useRef<HTMLSpanElement | null>(null);
   const hintRightRef = useRef<HTMLSpanElement | null>(null);
-  const gesture = useRef<{x: number; y: number; engaged: boolean; ticking: boolean} | null>(null);
+  const gesture = useRef<{x: number; y: number; engaged: boolean; ticking: boolean; t0: number} | null>(null);
 
   const paint = (dx: number) => {
     const node = dragRef.current;
@@ -85,7 +85,7 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
         className="min-w-0 touch-pan-y"
         onPointerDown={(event) => {
           if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
-          gesture.current = {x: event.clientX, y: event.clientY, engaged: false, ticking: false};
+          gesture.current = {x: event.clientX, y: event.clientY, engaged: false, ticking: false, t0: performance.now()};
         }}
         onPointerMove={(event) => {
           const g = gesture.current;
@@ -93,6 +93,9 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
           const dx = event.clientX - g.x;
           const dy = event.clientY - g.y;
           if (!g.engaged) {
+            // Give Holdable ~320ms to win a press-and-hold before swipe engages.
+            const age = performance.now() - g.t0;
+            if (age < 320 && Math.abs(dx) < 28) return;
             if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
               gesture.current = null; // vertical intent — this is a scroll, not a swipe
               return;
@@ -145,6 +148,8 @@ function HoldMessage({
   onReact,
   onReport,
   children,
+  highlight = false,
+  peerName = '',
 }: {
   message: ChatMessage;
   mine: boolean;
@@ -154,6 +159,8 @@ function HoldMessage({
   onReact: (message: ChatMessage, emoji: string) => void;
   onReport: (message: ChatMessage) => void;
   children: React.ReactNode;
+  highlight?: boolean;
+  peerName?: string;
 }) {
   const gone = Boolean(message.deleted);
   const quick = ['👍', '🔥', '😂', '💯'];
@@ -232,8 +239,21 @@ function HoldMessage({
   );
 
   return (
-    <div className={`flex min-w-0 ${mine ? 'justify-end' : 'justify-start'}`}>
-      {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
+    <div
+      data-mid={message.id}
+      id={`fm-${message.id}`}
+      className={`flex min-w-0 items-start gap-2 rounded-xl px-0.5 py-1 transition-colors ${highlight ? 'bg-nova-500/20 ring-1 ring-nova-400/40' : ''}`}
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/8 text-[0.62rem] font-black text-mist-200">
+        {mine ? 'You' : (peerName || '·').slice(0, 2).toUpperCase()}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : peerName || 'Friend'}</span>
+          <span className="ml-auto shrink-0 text-[0.62rem] font-semibold text-mist-600">{formatRelative(message.created_at)}</span>
+        </div>
+        {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
+      </div>
     </div>
   );
 }
@@ -287,19 +307,35 @@ function Tombstone({mine}: {mine: boolean}) {
  * Rendered inside the sender's bubble, which stays a saturated gradient in both
  * skins, so the white type below is correct on paper too. theme-ok
  */
-function QuoteBlock({meta, mine}: {meta: Record<string, unknown>; mine: boolean}) {
-  const reply = (meta?.reply_to ?? null) as {name?: string; snippet?: string} | null;
+function QuoteBlock({
+  meta,
+  mine,
+  onJump,
+}: {
+  meta: Record<string, unknown>;
+  mine: boolean;
+  onJump?: (messageId: number) => void;
+}) {
+  const reply = (meta?.reply_to ?? null) as {id?: number; name?: string; snippet?: string} | null;
   if (!reply) return null;
-  return (
-    <span
-      className={`mb-1.5 block border-l-2 pl-2 text-[0.68rem] leading-snug font-semibold ${
-        mine ? 'border-white/60 text-white/85' : 'border-nova-400/60 text-mist-400'
-      }`}
-    >
+  const canJump = typeof reply.id === 'number' && typeof onJump === 'function';
+  const className = `mb-1.5 block w-full border-l-2 pl-2 text-left text-[0.68rem] leading-snug font-semibold ${
+    mine ? 'border-white/60 text-white/85' : 'border-nova-400/60 text-mist-400'
+  } ${canJump ? 'cursor-pointer active:opacity-80' : ''}`;
+  const body = (
+    <>
       <span className="font-black">{reply.name}</span>
       {reply.snippet ? `: ${reply.snippet}` : ''}
-    </span>
+    </>
   );
+  if (canJump) {
+    return (
+      <button type="button" className={className} onClick={() => onJump!(reply.id!)} aria-label="Jump to replied message">
+        {body}
+      </button>
+    );
+  }
+  return <span className={className}>{body}</span>;
 }
 
 export default function FriendsPanel({
@@ -334,6 +370,9 @@ export default function FriendsPanel({
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [planFor, setPlanFor] = useState<{quizId: number; when: string} | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const [reactFor, setReactFor] = useState<number | null>(null);
+  const highlightTimer = useRef<number | null>(null);
   const [pane, setPane] = useState<'friends' | 'groups'>('friends');
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -430,6 +469,20 @@ export default function FriendsPanel({
     setUnseen(0);
     atBottom.current = true;
   }, []);
+
+  const jumpToMessage = useCallback((messageId: number) => {
+    const node = scrollRef.current?.querySelector(`[data-mid="${messageId}"]`) as HTMLElement | null;
+    if (!node) {
+      toast('info', 'Message not loaded', 'Scroll up or open the chat again to find older messages.');
+      return;
+    }
+    node.scrollIntoView({behavior: 'smooth', block: 'center'});
+    setHighlight(messageId);
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1600);
+  }, [toast]);
+
+
 
   useEffect(() => {
     // Never yank a reader who is scrolled up: offer the jump pill instead.
@@ -787,7 +840,7 @@ export default function FriendsPanel({
                 <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 lg:hidden" />
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.86rem] font-extrabold text-mist-50">{selected.name}</span>
+                  <button type="button" className="block truncate text-left text-[0.86rem] font-extrabold text-mist-50" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: selected.id}}))}>{selected.flag || '🌍'} {selected.name}</button>
                   <span className="block text-[0.64rem] font-bold text-mist-500">
                     {selected.online ? 'Online now' : `Lv ${selected.level} ${selected.title}`}
                   </span>
@@ -822,7 +875,7 @@ export default function FriendsPanel({
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
                               message={message}
-                              mine={mine}
+                              mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
                               onReply={setReplyTo}
                               onDelete={dropMessage}
                               onEdit={startEdit}
@@ -834,7 +887,7 @@ export default function FriendsPanel({
  <p className="flex items-center gap-1.5 text-[0.72rem] font-black tracking-wider text-nova-300">
                                   <Swords className="size-3.5" /> Duel invite
                                 </p>
-                                <QuoteBlock meta={message.meta} mine={mine} />
+                                <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
                                 <p className="mt-1 text-[0.78rem] font-semibold text-mist-200">{message.body}</p>
                                 {!mine && (
                                   <Button
@@ -853,6 +906,15 @@ export default function FriendsPanel({
                                 )}
                               </div>
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
+                              {reactFor === message.id && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
+                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               </div>
                             </HoldMessage>
                           </motion.li>
@@ -866,7 +928,7 @@ export default function FriendsPanel({
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
                               message={message}
-                              mine={mine}
+                              mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
                               onReply={setReplyTo}
                               onDelete={dropMessage}
                               onEdit={startEdit}
@@ -878,7 +940,7 @@ export default function FriendsPanel({
  <p className="flex items-center gap-1.5 text-[0.72rem] font-black tracking-wider text-pulse-300">
                                   <CalendarPlus className="size-3.5" /> Quiz plan
                                 </p>
-                                <QuoteBlock meta={message.meta} mine={mine} />
+                                <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
                                 <p className="mt-1 text-[0.82rem] font-extrabold text-mist-100">
                                   {String(message.meta.title ?? 'Exam')}
                                 </p>
@@ -890,6 +952,15 @@ export default function FriendsPanel({
                                 )}
                               </div>
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
+                              {reactFor === message.id && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
+                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               </div>
                             </HoldMessage>
                           </motion.li>
@@ -899,7 +970,7 @@ export default function FriendsPanel({
                         <motion.li key={message.id} variants={staggerItem}>
                           <HoldMessage
                             message={message}
-                            mine={mine}
+                            mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
                             onReply={setReplyTo}
                             onDelete={dropMessage}
                             onEdit={startEdit}
@@ -912,14 +983,10 @@ export default function FriendsPanel({
                               ) : (
                                 <div
                                   className={`rounded-2xl px-3 py-2 ${
-                                    mine
-                                      ? myBubble
-                                        ? `${myBubble} text-white`
-                                        : 'brand-gradient text-white'
-                                      : 'border border-white/10 bg-white/[0.05] text-mist-100'
+                                    mine ? 'brand-gradient rounded-tl-md text-white' : 'rounded-tl-md bg-white/8 text-mist-100'
                                   }`}
                                 >
-                                  <QuoteBlock meta={message.meta} mine={mine} />
+                                  <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
                                   {(message.kind === 'file' || message.kind === 'material' || message.kind === 'tquiz') && (
                                     <button
                                       type="button"
@@ -941,6 +1008,15 @@ export default function FriendsPanel({
                                 </div>
                               )}
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
+                              {reactFor === message.id && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
+                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </HoldMessage>
                         </motion.li>

@@ -207,6 +207,9 @@ def update_me(
         student.bio = payload.bio.strip()[:240]
     if payload.status_text is not None:
         student.status_text = payload.status_text.strip()[:80]
+    if payload.country is not None:
+        code = payload.country.strip().upper()
+        student.country = code if len(code) == 2 and code.isalpha() else ""
     db.commit()
     return student_profile(db, student)
 

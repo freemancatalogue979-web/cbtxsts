@@ -9,6 +9,12 @@
  *   mouse press-and-hold is not an obvious gesture.
  * • The menu is portalled to the body so nothing clips it, closes on outside
  *   press / Escape / any action, and only one is open at a time.
+ *
+ * Mobile notes (why holds used to fail in chat):
+ * - Scroll parents fire pointercancel mid-hold → we keep the press intent and
+ *   still open if the finger barely moved.
+ * - setPointerCapture keeps move/up events on this node.
+ * - touch-action: manipulation reduces browser gesture fights.
  */
 import {MoreHorizontal} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
@@ -64,16 +70,27 @@ export function Holdable({
   const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
   const timer = useRef<number | null>(null);
   const origin = useRef<{x: number; y: number} | null>(null);
+  const lastPoint = useRef<{x: number; y: number} | null>(null);
   const pointerKind = useRef<'mouse' | 'touch' | 'pen'>('mouse');
   const suppressClick = useRef(false);
+  const opened = useRef(false);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const activePointer = useRef<number | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timer.current !== null) {
       window.clearTimeout(timer.current);
       timer.current = null;
     }
-    origin.current = null;
   }, []);
+
+  const resetPress = useCallback(() => {
+    clearTimer();
+    origin.current = null;
+    lastPoint.current = null;
+    activePointer.current = null;
+    opened.current = false;
+  }, [clearTimer]);
 
   const close = useCallback(() => setMenu(null), []);
 
@@ -81,9 +98,9 @@ export function Holdable({
     openMenus.add(close);
     return () => {
       openMenus.delete(close);
-      clearTimer();
+      resetPress();
     };
-  }, [close, clearTimer]);
+  }, [close, resetPress]);
 
   useEffect(() => {
     if (!menu) return undefined;
@@ -100,6 +117,8 @@ export function Holdable({
   }, [menu, close]);
 
   const open = (point: {x: number; y: number}) => {
+    if (opened.current) return;
+    opened.current = true;
     const size = menuSize(actions.length, menuWidth);
     const spot = menuPosition(point, size, {width: window.innerWidth, height: window.innerHeight});
     suppressClick.current = true;
@@ -107,52 +126,120 @@ export function Holdable({
     sfx.play('tick');
     closeOthers(close);
     setMenu(spot);
-    // Release the click-block once the finger is up.
     window.setTimeout(() => {
       suppressClick.current = false;
     }, 600);
   };
 
+  const toleranceFor = () =>
+    pointerKind.current === 'mouse' ? HOLD_TOLERANCE : HOLD_TOLERANCE * 3.5;
+
   const start = (event: React.PointerEvent) => {
     if (disabled || actions.length === 0) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
-    // Presses that begin on a real control inside the row keep working.
     if (!allowOnButton && (event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+
     const point = {x: event.clientX, y: event.clientY};
-    pointerKind.current = event.pointerType === 'touch' ? 'touch' : event.pointerType === 'pen' ? 'pen' : 'mouse';
+    pointerKind.current =
+      event.pointerType === 'touch' ? 'touch' : event.pointerType === 'pen' ? 'pen' : 'mouse';
     clearTimer();
+    opened.current = false;
     origin.current = point;
+    lastPoint.current = point;
+    activePointer.current = event.pointerId;
+
+    // Keep move/up/cancel on this element even if the finger drifts or a
+    // scroll parent tries to take over (main mobile chat failure mode).
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      /* older browsers */
+    }
+
+    const holdMs = pointerKind.current === 'touch' ? Math.min(HOLD_MS, 400) : HOLD_MS;
     timer.current = window.setTimeout(() => {
       timer.current = null;
-      open(point);
-    }, HOLD_MS);
+      const at = lastPoint.current || origin.current || point;
+      open(at);
+    }, holdMs);
+  };
+
+  const onMove = (event: React.PointerEvent) => {
+    if (!origin.current) return;
+    lastPoint.current = {x: event.clientX, y: event.clientY};
+    if (holdAbandoned(event.clientX - origin.current.x, event.clientY - origin.current.y, toleranceFor())) {
+      clearTimer();
+      origin.current = null;
+    }
+  };
+
+  const onUp = (event: React.PointerEvent) => {
+    try {
+      if (activePointer.current != null) {
+        (event.currentTarget as HTMLElement).releasePointerCapture(activePointer.current);
+      }
+    } catch {
+      /* ignore */
+    }
+    // If the hold already opened, keep menu; otherwise drop the press.
+    if (!opened.current) clearTimer();
+    origin.current = null;
+    lastPoint.current = null;
+    activePointer.current = null;
+  };
+
+  /**
+   * Scroll parents often fire pointercancel while the finger is still down.
+   * If movement stayed inside tolerance, treat it as a successful hold.
+   */
+  const onCancel = (event: React.PointerEvent) => {
+    const originPt = origin.current;
+    const last = lastPoint.current || originPt;
+    const wasHolding = originPt != null && timer.current !== null;
+    clearTimer();
+    if (wasHolding && originPt && last) {
+      const tol = toleranceFor();
+      if (!holdAbandoned(last.x - originPt.x, last.y - originPt.y, tol)) {
+        open(last);
+      }
+    }
+    origin.current = null;
+    lastPoint.current = null;
+    activePointer.current = null;
+    try {
+      (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
     <div className={`group/hold relative min-w-0 ${className}`}>
       <div
-        className={`min-w-0 select-none ${contentClassName}`}
-        style={{WebkitTouchCallout: 'none'} as React.CSSProperties}
+        ref={surfaceRef}
+        className={`min-w-0 select-none touch-manipulation ${contentClassName}`}
+        style={
+          {
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+            touchAction: 'manipulation',
+          } as React.CSSProperties
+        }
         onPointerDown={start}
-        onPointerMove={(event) => {
-          if (!origin.current) return;
-          // A fingertip drifts far more than a mouse while "staying still",
-          // so touch gets a roomier tolerance before we call it a scroll.
-          const tolerance = pointerKind.current === 'mouse' ? HOLD_TOLERANCE : HOLD_TOLERANCE * 2.5;
-          if (holdAbandoned(event.clientX - origin.current.x, event.clientY - origin.current.y, tolerance)) clearTimer();
-        }}
-        onPointerUp={clearTimer}
-        onPointerCancel={clearTimer}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onCancel}
         onPointerLeave={(event) => {
-          // Touch pointers implicitly stay captured to the pressed element; a
-          // "leave" there is just the finger sliding off a small bubble, which
-          // the movement tolerance already covers — don't kill the hold for it.
-          if (event.pointerType !== 'touch') clearTimer();
+          if (event.pointerType !== 'touch') {
+            if (!opened.current) clearTimer();
+            origin.current = null;
+          }
         }}
         onContextMenu={(event) => {
-          // Right-click / long-press context menu becomes our own menu.
           if (disabled || actions.length === 0) return;
           event.preventDefault();
+          event.stopPropagation();
           open({x: event.clientX, y: event.clientY});
         }}
         onClickCapture={(event) => {
@@ -188,15 +275,12 @@ export function Holdable({
               event.preventDefault();
               close();
             }}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              close();
-            }}
           >
             <div
               role="menu"
-              className="glass-strong absolute overflow-hidden rounded-2xl p-1 shadow-2xl shadow-black/60"
-              style={{left: menu.x, top: menu.y, width: menuSize(actions.length, menuWidth).width}}
+              aria-label={hint}
+              className="fixed z-[81] overflow-hidden rounded-2xl border border-white/12 bg-ink-900/95 p-1.5 shadow-2xl backdrop-blur-xl"
+              style={{left: menu.x, top: menu.y, width: menuWidth ?? undefined, minWidth: 168}}
               onPointerDown={(event) => event.stopPropagation()}
             >
               {actions.map((action) => (

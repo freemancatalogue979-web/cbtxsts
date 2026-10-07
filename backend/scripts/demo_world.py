@@ -211,11 +211,45 @@ def clean_content() -> None:
 
 # ------------------------------------------------------------- phase 1: people
 def ensure_account(api: Api, username: str, name: str, phone: str) -> str:
-    status, payload = api.call("POST", "/auth/register", {"username": username, "phone": phone, "password": PASSWORD, "display_name": name})
-    if status not in (200, 201):
-        status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
-        if status != 200:
+    """Register demo user, or sign in. If password drifted, reset to demo1234 via DB."""
+    status, payload = api.call(
+        "POST",
+        "/auth/register",
+        {"username": username, "phone": phone, "password": PASSWORD, "display_name": name},
+    )
+    if status in (200, 201):
+        return payload.get("token") or payload.get("access_token")
+
+    status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
+    if status == 200:
+        return payload.get("token") or payload.get("access_token")
+
+    # Account exists but password is not demo1234 (or phone mismatch left a
+    # stale row). Reset the demo password in-DB so re-runs are idempotent.
+    from app.security import hash_password
+
+    with SessionLocal() as db:
+        student = db.scalar(select(Student).where(Student.username == username.lower()))
+        if student is None and phone:
+            student = db.scalar(select(Student).where(Student.phone == phone))
+        if student is None:
             raise RuntimeError(f"cannot create or sign in {username}: {payload}")
+        student.password_hash = hash_password(PASSWORD)
+        student.username = username.lower()
+        if phone:
+            # Keep phone unique — only set if free or already ours
+            clash = db.scalar(
+                select(Student).where(Student.phone == phone, Student.id != student.id)
+            )
+            if clash is None:
+                student.phone = phone
+        if name and not (student.name or "").strip():
+            student.name = name
+        db.commit()
+
+    status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
+    if status != 200:
+        raise RuntimeError(f"cannot create or sign in {username} after password reset: {payload}")
     return payload.get("token") or payload.get("access_token")
 
 

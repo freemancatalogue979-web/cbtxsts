@@ -65,6 +65,7 @@ class Student(Base):
     reg_no: Mapped[str | None] = mapped_column(String(40), nullable=True)
     faculty: Mapped[str] = mapped_column(String(120), default="General Studies")
     campus: Mapped[str] = mapped_column(String(120), default="Online Campus")
+    country: Mapped[str] = mapped_column(String(2), default="")  # ISO 3166-1 alpha-2
     class_name: Mapped[str] = mapped_column(String(120), default="General Class")
     level: Mapped[str] = mapped_column(String(40), default="Year 1")
     avatar_hue: Mapped[int] = mapped_column(Integer, default=265)

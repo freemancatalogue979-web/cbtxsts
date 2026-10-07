@@ -77,21 +77,23 @@ function ModeCard({
   return (
     <motion.button
       variants={staggerItem}
-      whileTap={{scale: 0.97}}
+      whileTap={{scale: 0.98}}
       onClick={() => {
         sfx.play('tap');
         onClick();
       }}
-      className="card relative min-w-0 p-3.5 text-left transition-colors hover:border-white/20 sm:p-4"
+      className="study-mode relative flex min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-900/75 p-3.5 text-left transition-colors hover:border-white/22 sm:p-4"
     >
+      <div className={`pointer-events-none absolute -top-8 -right-6 size-24 rounded-full opacity-30 blur-2xl ${accent.replace('border-', 'bg-').split(' ')[0]}`} />
       {badge && (
-        <span className="absolute top-2.5 right-2.5 grid min-w-5 place-items-center rounded-full brand-gradient px-1.5 text-[0.6rem] leading-5 font-black text-white tabular">
+        <span className="absolute top-2.5 right-2.5 grid min-w-5 place-items-center rounded-full bg-gradient-to-br from-nova-400 to-pulse-600 px-1.5 text-[0.6rem] leading-5 font-black text-white tabular shadow-md">
           {badge}
         </span>
       )}
-      <span className={`grid size-9 shrink-0 place-items-center rounded-xl border sm:size-10 ${accent}`}>{icon}</span>
-      <p className="mt-2.5 text-[0.9rem] font-extrabold text-mist-50">{title}</p>
-      <p className="mt-1 break-words text-[0.74rem] font-medium leading-snug text-mist-500">{detail}</p>
+      <span className={`relative grid size-10 shrink-0 place-items-center rounded-xl border border-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] sm:size-11 ${accent}`}>{icon}</span>
+      <p className="relative mt-2.5 text-[0.92rem] font-extrabold text-mist-50">{title}</p>
+      <p className="relative mt-1 flex-1 break-words text-[0.74rem] font-medium leading-snug text-mist-400">{detail}</p>
+      <span className="relative mt-2.5 text-[0.66rem] font-black tracking-wide text-nova-300/90">Open →</span>
     </motion.button>
   );
 }
@@ -173,7 +175,6 @@ function DailyCard({onOpen}: {onOpen: () => void}) {
   );
 }
 
-/* ----------------------------------------------------------- flashcards */
 
 function Flashcards({onExit}: {onExit: () => void}) {
   const {toast, pushRewards, setProfile} = useSession();
@@ -365,48 +366,74 @@ function QuestionRunner({
   };
 
   if (!question) return null;
+  const progress = ((index + 1) / Math.max(1, questions.length)) * 100;
   return (
-    <div className="space-y-3.5">
+    <div className="study-cbt min-w-0 space-y-3">
       <BackHeader title={title} onExit={onExit} />
-      <div className="flex items-center gap-2.5">
-        <Character mood={wrongFlash ? 'sad' : 'idle'} size={38} tone="day" className="-my-2 hidden sm:block" label="Slime mascot" />
-        <ProgressBar value={(index / questions.length) * 100} className="flex-1" />
-        {timerSeconds > 0 && (
-          <Chip className={`tabular ${left <= 10 ? 'border-flare-500/40 bg-flare-500/14 text-flare-300' : ''}`} icon={<Timer className="size-3.5" />}>
-            0:{String(left).padStart(2, '0')}
-          </Chip>
-        )}
-        <Chip className="tabular">
-          {index + 1}/{questions.length}
-        </Chip>
-      </div>
-      <motion.div key={question.id} initial={{opacity: 0, x: 24}} animate={{opacity: 1, x: 0}}>
-        <QuestionCard
-          number={index + 1}
-          className={`min-w-0 ${wrongFlash ? 'ring-2 ring-flare-500/70' : ''}`}
-          chips={
-            <>
-              <DifficultyChip level={question.difficulty} />
-              <Chip>{question.points} pts</Chip>
-            </>
-          }
-          text={question.text}
-        >
-        {/* Blitz and Sudden Death use the same tiles as the exam, so the whole
-            arena answers questions with one consistent surface. */}
-        <div className="mt-3.5 grid gap-2">
-          {LETTERS.filter((key) => question.options[key]).map((key) => (
-            <AnswerTile
-              key={key}
-              letter={key}
-              text={question.options[key]}
-              disabled={wrongFlash}
-              state={stopOnWrong && wrongFlash && answers[question.id] === key ? 'wrong' : answers[question.id] === key ? 'picked' : 'idle'}
-              onPick={() => pick(key)}
+
+      {/* Match strip */}
+      <div className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-ink-900/60 px-3 py-2.5">
+        <Character mood={wrongFlash ? 'sad' : 'idle'} size={36} tone="day" className="-my-1 hidden sm:block" label="Slime mascot" />
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center justify-between gap-2 text-[0.64rem] font-black tracking-wide text-mist-400">
+            <span>
+              Q {index + 1}
+              <span className="text-mist-600"> / {questions.length}</span>
+            </span>
+            {timerSeconds > 0 && (
+              <span className={`inline-flex items-center gap-1 tabular ${left <= 10 ? 'text-flare-300' : 'text-mist-300'}`}>
+                <Timer className="size-3.5" />
+                0:{String(left).padStart(2, '0')}
+              </span>
+            )}
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full rounded-full transition-[width] duration-300 ${wrongFlash ? 'bg-flare-400' : 'bg-gradient-to-r from-nova-400 via-pulse-400 to-gold-400'}`}
+              style={{width: `${progress}%`}}
             />
-          ))}
+          </div>
         </div>
-        </QuestionCard>
+      </div>
+
+      <motion.div key={question.id} initial={{opacity: 0, y: 12}} animate={{opacity: 1, y: 0}} transition={{duration: 0.2}}>
+        <div className={`study-paper min-w-0 overflow-hidden rounded-2xl border ${wrongFlash ? 'border-flare-500/60' : 'border-white/12'} bg-ink-900/80`}>
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-white/8 px-3.5 py-2.5 sm:px-4">
+            <span className="rounded-md bg-white/8 px-2 py-0.5 text-[0.62rem] font-black tabular text-mist-300">
+              #{String(index + 1).padStart(2, '0')}
+            </span>
+            <DifficultyChip level={question.difficulty} />
+            <span className="rounded-md bg-nova-500/15 px-2 py-0.5 text-[0.62rem] font-black text-nova-200">
+              {question.points} pts
+            </span>
+          </div>
+
+          <div className="px-3.5 py-4 sm:px-4">
+            <p className="text-[0.62rem] font-black tracking-[0.16em] text-mist-500 uppercase">Objective</p>
+            <p className="mt-2 text-[1.02rem] leading-relaxed font-bold text-mist-50 [overflow-wrap:anywhere] sm:text-[1.08rem]">
+              {question.text}
+            </p>
+
+            <div className="mt-4 grid gap-2.5">
+              {LETTERS.filter((key) => question.options[key]).map((key) => (
+                <AnswerTile
+                  key={key}
+                  letter={key}
+                  text={question.options[key] || '—'}
+                  disabled={wrongFlash}
+                  state={
+                    stopOnWrong && wrongFlash && answers[question.id] === key
+                      ? 'wrong'
+                      : answers[question.id] === key
+                        ? 'picked'
+                        : 'idle'
+                  }
+                  onPick={() => pick(key)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       </motion.div>
     </div>
   );
@@ -1077,11 +1104,16 @@ function Shop({onExit}: {onExit: () => void}) {
 
 function BackHeader({title, onExit}: {title: string; onExit: () => void}) {
   return (
-    <div className="flex items-center gap-2">
-      <Button variant="ghost" size="sm" onClick={onExit} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 shrink-0">
-        Lab
-      </Button>
-      <p className="min-w-0 truncate text-[0.95rem] font-extrabold text-mist-100">{title}</p>
+    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-ink-900/70 px-2 py-2">
+      <button
+        type="button"
+        onClick={onExit}
+        className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/5 text-mist-200"
+        aria-label="Back to Study Lab"
+      >
+        <ArrowLeft className="size-4.5" />
+      </button>
+      <p className="min-w-0 flex-1 truncate text-[0.9rem] font-extrabold text-mist-50">{title}</p>
     </div>
   );
 }
@@ -1153,125 +1185,161 @@ export default function StudyPanel({onOpenAnalytics}: {onOpenAnalytics?: () => v
   if (mode === 'shop') return <div className="w-full"><Shop onExit={() => setMode('hub')} /></div>;
 
   return (
-    <div className="min-w-0 space-y-4 sm:space-y-6">
-      <SectionHeading
-        title="Study Lab"
-        subtitle="More ways to grind smarter — every run is graded by the server and pays real XP."
-        icon={<GraduationCap className="size-4" />}
-        action={
-          analytics ? (
-            <Chip tone="pulse" icon={<Brain className="size-3.5" />}>
-              {analytics.accuracy}% accuracy
-            </Chip>
-          ) : undefined
-        }
-      />
+    <div className="study-hub min-w-0 space-y-5 sm:space-y-6">
+      {/* Hero */}
+      <section className="study-hero relative overflow-hidden rounded-2xl border border-white/12">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-nova-600/25 via-transparent to-pulse-600/10" />
+        <div className="pointer-events-none absolute inset-0 opacity-40" style={{backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '24px 24px'}} />
+        <div className="relative p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-black/35 bg-gradient-to-br from-nova-400 to-pulse-700 text-white shadow-[inset_0_2px_0_rgba(255,255,255,0.3)]">
+              <GraduationCap className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.62rem] font-black tracking-[0.18em] text-nova-300 uppercase">Training ground</p>
+              <h1 className="text-[1.25rem] font-black tracking-tight text-mist-50">Study Lab</h1>
+              <p className="mt-0.5 text-[0.76rem] font-medium text-mist-400">
+                Every run is graded on the server and pays real XP.
+              </p>
+            </div>
+            {analytics && (
+              <span className="shrink-0 rounded-full border border-pulse-500/30 bg-pulse-500/15 px-2.5 py-1 text-[0.72rem] font-black text-pulse-200">
+                {analytics.accuracy}% acc
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
 
-      <ModeCard
-        icon={<Target className="size-4.5 text-nova-300" />}
-        accent="border-nova-500/28 bg-nova-500/12"
-        title="Learning path — weak topics"
-        detail="The Lab reads your real record, flags what's shaky and walks you from Understand to Mastered."
-        onClick={() => setMode('lab')}
-      />
-      <DailyCard onOpen={() => setMode('daily')} />
-      <SpinCard />
-
-      <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid min-w-0 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Featured */}
+      <section className="min-w-0 space-y-2.5">
+        <p className="px-0.5 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">FEATURED TODAY</p>
         <ModeCard
-          icon={<Zap className="size-4.5 text-gold-300" />}
-          accent="border-gold-500/28 bg-gold-500/12"
-          title="Blitz · 60 seconds"
-          detail="Ten questions, one minute. Answer everything you can before the buzzer."
-          onClick={() => {
-            setRushMode('blitz');
-            setMode('rush');
-          }}
-        />
-        <ModeCard
-          icon={<Skull className="size-4.5 text-flare-300" />}
-          accent="border-flare-500/28 bg-flare-500/12"
-          title="Sudden Death"
-          detail="No clock — but one wrong answer ends the run. How deep can you go?"
-          onClick={() => {
-            setRushMode('sudden');
-            setMode('rush');
-          }}
-        />
-        <ModeCard
-          icon={<Brain className="size-4.5 text-nova-300" />}
+          icon={<Target className="size-4.5 text-nova-300" />}
           accent="border-nova-500/28 bg-nova-500/12"
-          title="Flashcards"
-          detail="Flip, self-grade, repeat. The deck is pulled straight from the question bank."
-          onClick={() => setMode('flash')}
+          title="Learning path"
+          detail="Weak topics first — Understand → Practice → Mastered from your real record."
+          onClick={() => setMode('lab')}
         />
-        <ModeCard
-          icon={<Layers className="size-4.5 text-pulse-300" />}
-          accent="border-pulse-500/28 bg-pulse-500/12"
-          title="Spaced repetition"
-          detail="Swipe decks with smart intervals — due today, due tomorrow, mastered. Synced to your bank."
-          onClick={() => setMode('decks')}
-        />
-        <ModeCard
-          icon={<Target className="size-4.5 text-mint-300" />}
-          accent="border-mint-500/28 bg-mint-500/12"
-          title="Insights & mastery"
-          detail="Accuracy over time, mastery heatmap, achievements and what to study next."
-          onClick={() => setMode('insights')}
-        />
-        <ModeCard
-          icon={<Layers className="size-4.5 text-pulse-300" />}
-          accent="border-pulse-500/28 bg-pulse-500/12"
-          title="Mind Match"
-          detail="Mini game: flip the tiles, pair each question with its answer. Fewer flips, higher score."
-          onClick={() => setMode('match')}
-        />
-        <ModeCard
-          icon={<HandHelping className="size-4.5 text-mint-300" />}
-          accent="border-mint-500/28 bg-mint-500/12"
-          title="Ask a friend"
-          detail="Send a question to a friend. Correct help pays them tutor points — everyone wins."
-          badge={pendingHelp > 0 ? String(pendingHelp) : undefined}
-          onClick={() => setMode('help')}
-        />
-        <ModeCard
-          icon={<ListChecks className="size-4.5 text-pulse-300" />}
-          accent="border-pulse-500/28 bg-pulse-500/12"
-          title="Weekly missions"
-          detail="Six goals that reset every Monday. Real progress, claimable rewards."
-          onClick={() => setMode('missions')}
-        />
-        <ModeCard
-          icon={<ShoppingBag className="size-4.5 text-mist-200" />}
-          accent="border-white/14 bg-white/6"
-          title="Coin shop"
-          detail="Streak freezes, 24h double XP and avatar flairs — bought with coins you earned."
-          onClick={() => setMode('shop')}
-        />
-      </motion.div>
+        <DailyCard onOpen={() => setMode('daily')} />
+        <SpinCard />
+      </section>
+
+      {/* Timed */}
+      <section className="min-w-0 space-y-2.5">
+        <p className="px-0.5 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">TIMED RUNS</p>
+        <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+          <ModeCard
+            icon={<Zap className="size-4.5 text-gold-300" />}
+            accent="border-gold-500/28 bg-gold-500/12"
+            title="Blitz · 60 seconds"
+            detail="Ten questions, one minute. Answer everything before the buzzer."
+            onClick={() => {
+              setRushMode('blitz');
+              setMode('rush');
+            }}
+          />
+          <ModeCard
+            icon={<Skull className="size-4.5 text-flare-300" />}
+            accent="border-flare-500/28 bg-flare-500/12"
+            title="Sudden Death"
+            detail="No clock — one wrong answer ends the run. How deep can you go?"
+            onClick={() => {
+              setRushMode('sudden');
+              setMode('rush');
+            }}
+          />
+        </motion.div>
+      </section>
+
+      {/* Practice */}
+      <section className="min-w-0 space-y-2.5">
+        <p className="px-0.5 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">PRACTICE</p>
+        <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+          <ModeCard
+            icon={<Brain className="size-4.5 text-nova-300" />}
+            accent="border-nova-500/28 bg-nova-500/12"
+            title="Flashcards"
+            detail="Flip, self-grade, repeat. Deck pulled from the question bank."
+            onClick={() => setMode('flash')}
+          />
+          <ModeCard
+            icon={<Layers className="size-4.5 text-pulse-300" />}
+            accent="border-pulse-500/28 bg-pulse-500/12"
+            title="Card decks"
+            detail="Build and drill custom decks for any course or topic."
+            onClick={() => setMode('decks')}
+          />
+          <ModeCard
+            icon={<Sparkles className="size-4.5 text-gold-300" />}
+            accent="border-gold-500/28 bg-gold-500/12"
+            title="Match pairs"
+            detail="Match each question with its answer. Fewer flips, higher score."
+            onClick={() => setMode('match')}
+          />
+          <ModeCard
+            icon={<Trophy className="size-4.5 text-mint-300" />}
+            accent="border-mint-500/28 bg-mint-500/12"
+            title="Insights"
+            detail="Accuracy, predicted grade, weak areas — your study radar."
+            onClick={() => setMode('insights')}
+          />
+        </motion.div>
+      </section>
+
+      {/* Social & rewards */}
+      <section className="min-w-0 space-y-2.5">
+        <p className="px-0.5 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">SOCIAL & REWARDS</p>
+        <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid min-w-0 gap-2.5 sm:grid-cols-2">
+          <ModeCard
+            icon={<HandHelping className="size-4.5 text-mint-300" />}
+            accent="border-mint-500/28 bg-mint-500/12"
+            title="Ask a friend"
+            detail="Send a question to a friend. Correct help pays them tutor points."
+            badge={pendingHelp > 0 ? String(pendingHelp) : undefined}
+            onClick={() => setMode('help')}
+          />
+          <ModeCard
+            icon={<ListChecks className="size-4.5 text-pulse-300" />}
+            accent="border-pulse-500/28 bg-pulse-500/12"
+            title="Weekly missions"
+            detail="Six goals that reset every Monday. Claimable rewards."
+            onClick={() => setMode('missions')}
+          />
+          <ModeCard
+            icon={<ShoppingBag className="size-4.5 text-mist-200" />}
+            accent="border-white/14 bg-white/6"
+            title="Coin shop"
+            detail="Streak freezes, double XP, flairs — bought with coins you earned."
+            onClick={() => setMode('shop')}
+          />
+        </motion.div>
+      </section>
 
       {analytics && (analytics.questions_answered > 0 || analytics.help.answered > 0) && (
-        <Card className="min-w-0 p-3.5 sm:p-4">
- <p className="text-[0.68rem] font-black tracking-[0.18em] text-mist-500">Your study numbers</p>
-          <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              {label: 'Accuracy', value: `${analytics.accuracy}%`},
-              {label: 'Predicted grade', value: analytics.predicted_grade.grade},
-              {label: 'Study minutes', value: String(analytics.study_minutes)},
-              {label: 'Tutor points', value: String(analytics.help.points)},
-            ].map((stat) => (
-              <div key={stat.label} className="min-w-0 rounded-xl bg-white/[0.04] px-3 py-2">
-                <p className="truncate text-[0.95rem] font-black tabular text-mist-50">{stat.value}</p>
- <p className="truncate text-[0.6rem] font-bold tracking-wide text-mist-600">{stat.label}</p>
-              </div>
-            ))}
+        <section className="min-w-0 space-y-2">
+          <p className="px-0.5 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">YOUR NUMBERS</p>
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-ink-900/70 p-3.5 sm:p-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                {label: 'Accuracy', value: `${analytics.accuracy}%`},
+                {label: 'Predicted grade', value: analytics.predicted_grade.grade},
+                {label: 'Study minutes', value: String(analytics.study_minutes)},
+                {label: 'Tutor points', value: String(analytics.help.points)},
+              ].map((stat) => (
+                <div key={stat.label} className="min-w-0 rounded-xl border border-white/6 bg-white/[0.04] px-3 py-2.5">
+                  <p className="truncate text-[1rem] font-black tabular text-mist-50">{stat.value}</p>
+                  <p className="truncate text-[0.6rem] font-bold tracking-wide text-mist-500">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+            {analytics.weakest && (
+              <p className="mt-3 break-words text-[0.74rem] font-semibold text-mist-400">
+                Weakest: <span className="text-flare-300">{analytics.weakest.title}</span> at {analytics.weakest.accuracy}% — hit flashcards on it.
+              </p>
+            )}
           </div>
-          {analytics.weakest && (
-            <p className="mt-2.5 break-words text-[0.74rem] font-semibold text-mist-500">
-              🎯 Weakest area: <span className="text-flare-300">{analytics.weakest.title}</span> at {analytics.weakest.accuracy}% — run flashcards on it.
-            </p>
-          )}
-        </Card>
+        </section>
       )}
     </div>
   );

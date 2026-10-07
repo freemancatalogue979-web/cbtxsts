@@ -43,6 +43,7 @@ import SeasonBadge from '../components/SeasonBadge';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
+import {COUNTRIES, countryFlag} from '../components/PlayerCard';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES, isValidPhone, normalizePhoneInput, TIER_STYLES} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -189,6 +190,7 @@ export default function ProfilePanel({
   const [hue, setHue] = useState(260);
   const [saving, setSaving] = useState(false);
   const [bio, setBio] = useState('');
+  const [country, setCountry] = useState('');
   const [statusText, setStatusText] = useState('');
   const [cardSaving, setCardSaving] = useState(false);
 
@@ -217,6 +219,7 @@ export default function ProfilePanel({
     setName(profile.name);
     setHue(profile.avatar_hue);
     setBio(profile.bio ?? '');
+    setCountry(profile.country ?? '');
     setStatusText(profile.status_text ?? '');
   }, [profile]);
 
@@ -236,6 +239,11 @@ export default function ProfilePanel({
     return () => window.clearTimeout(id);
   }, [friendPhone]);
 
+  /* useSize must run every render - never after a conditional return. */
+  const ringSize = useSize(92, 112);
+  const faceSize = useSize(70, 86);
+  const friendFace = useSize(34, 38);
+
   if (!profile) return <Skeleton className="h-96" />;
 
   const progress = profile.progress;
@@ -243,9 +251,6 @@ export default function ProfilePanel({
   /* Shop cosmetics worn on this screen: a title line and a profile theme. */
   const wornTitle = titleOf(profile.cosmetics);
   const profileTheme = themeOf(profile.cosmetics);
-  const ringSize = useSize(92, 112);
-  const faceSize = useSize(70, 86);
-  const friendFace = useSize(34, 38);
   const owned = new Set(profile.badges.map((badge) => badge.key));
   const badgeCatalogue = allBadges.length ? allBadges : (profile.badges as never);
 
@@ -266,7 +271,7 @@ export default function ProfilePanel({
   const saveCard = async () => {
     setCardSaving(true);
     try {
-      const updated = await api.updateMe({bio, status_text: statusText});
+      const updated = await api.updateMe({bio, status_text: statusText, country});
       setProfile(updated);
       toast('success', 'Arena card updated');
     } catch (error) {
@@ -469,6 +474,14 @@ export default function ProfilePanel({
             </Field>
             <Field label="Bio">
               <TextInput value={bio} onChange={(event) => setBio(event.target.value.slice(0, 240))} placeholder="Tell the arena who you are…" />
+            <label className="mt-2 block text-[0.68rem] font-black tracking-wider text-mist-500">Country flag</label>
+            <select value={country} onChange={(event) => setCountry(event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2 text-[0.84rem] font-bold text-mist-100">
+              <option value="">🌍 Not set</option>
+              {COUNTRIES.map((row) => (
+                <option key={row.code} value={row.code}>{row.flag} {row.name}</option>
+              ))}
+            </select>
+            {country && <p className="mt-1 text-[0.72rem] font-semibold text-mist-400">Showing as {countryFlag(country)}</p>}
             </Field>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">

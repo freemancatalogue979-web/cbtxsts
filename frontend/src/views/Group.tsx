@@ -219,7 +219,7 @@ function Workspace({
   };
 
   return (
-    <div className="aurora relative flex h-dvh flex-col overflow-hidden">
+    <div className="aurora relative flex h-dvh max-w-[100vw] flex-col overflow-hidden overflow-x-hidden">
       <div className="grid-lines pointer-events-none fixed inset-0 opacity-50" />
 
       {/* ------------------------------------------------------------ header */}
@@ -303,7 +303,7 @@ function Workspace({
         </div>
 
         {/* desktop tab rail (md–xl, above the dock) */}
-        <nav className="no-scrollbar hidden items-center gap-1 overflow-x-auto border-t border-white/6 px-3 py-1.5 md:flex xl:hidden">
+        <nav className="hidden flex-wrap items-center gap-1 border-t border-white/6 px-3 py-1.5 md:flex xl:hidden">
           {NAV.map((row) => {
             const active = row.id === section && memberId === null;
             const Icon = row.icon;
@@ -352,8 +352,8 @@ function Workspace({
         </aside>
 
         {/* centre */}
-        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{body()}</div>
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden overflow-x-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">{body()}</div>
         </main>
 
         {/* right rail (xl+) */}
@@ -410,9 +410,10 @@ function Workspace({
       </div>
 
       {/* ------------------------------------------------------ mobile dock */}
+      {/* Five primary tabs fit a phone width without horizontal scroll; the rest live under More. */}
       <nav className="print-hide safe-bottom relative z-20 shrink-0 border-t border-white/8 bg-ink-950/85 backdrop-blur md:hidden">
-        <div className="no-scrollbar flex items-center gap-1 overflow-x-auto px-2 py-1.5">
-          {NAV.map((row) => {
+        <div className="grid grid-cols-5 items-stretch gap-0.5 px-1.5 py-1.5">
+          {NAV.filter((row) => ['overview', 'chat', 'quizzes', 'duels', 'members'].includes(row.id)).map((row) => {
             const active = row.id === section && memberId === null;
             const Icon = row.icon;
             return (
@@ -420,9 +421,27 @@ function Workspace({
                 key={row.id}
                 type="button"
                 onClick={() => go(row.id)}
-                className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[0.62rem] font-bold transition-colors ${active ? 'bg-nova-500/18 text-white' : 'text-mist-500'}`}
+                className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 text-[0.58rem] font-bold transition-colors ${active ? 'bg-nova-500/18 text-white' : 'text-mist-500'}`}
               >
-                <Icon className={`size-5 ${active ? 'text-nova-300' : ''}`} />
+                <Icon className={`size-5 shrink-0 ${active ? 'text-nova-300' : ''}`} />
+                <span className="w-full truncate text-center">{row.short}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Secondary sections: Q&A, News, Activity — full width chips, wrap, no sideways scroll */}
+        <div className="flex flex-wrap items-center justify-center gap-1 border-t border-white/6 px-2 py-1">
+          {NAV.filter((row) => !['overview', 'chat', 'quizzes', 'duels', 'members'].includes(row.id)).map((row) => {
+            const active = row.id === section && memberId === null;
+            const Icon = row.icon;
+            return (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => go(row.id)}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.62rem] font-bold transition-colors ${active ? 'bg-nova-500/18 text-white' : 'text-mist-500 hover:bg-white/6'}`}
+              >
+                <Icon className={`size-3.5 ${active ? 'text-nova-300' : ''}`} />
                 {row.short}
               </button>
             );

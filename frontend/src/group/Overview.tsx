@@ -83,10 +83,10 @@ export default function Overview() {
   ].filter(Boolean) as {label: string; icon: ReactNode; onClick: () => void}[];
 
   return (
-    <div className="grid gap-3 p-3 sm:gap-4 sm:p-4">
+    <div className="grid min-w-0 gap-2.5 overflow-x-hidden p-2.5 sm:gap-3.5 sm:p-4">
       {/* Hero + quick actions */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-start gap-3">
+      <Card className="min-w-0 overflow-hidden p-3 sm:p-4">
+        <div className="flex min-w-0 flex-wrap items-start gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[1.05rem] font-black text-mist-50">{group.name}</h2>
@@ -110,17 +110,24 @@ export default function Overview() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
           {quickActions.map((action) => (
-            <Button key={action.label} size="sm" variant={action.label === 'Set quiz' ? 'primary' : 'outline'} icon={action.icon} onClick={action.onClick}>
-              {action.label}
+            <Button
+              key={action.label}
+              size="sm"
+              variant={action.label === 'Set quiz' ? 'primary' : 'outline'}
+              icon={action.icon}
+              onClick={action.onClick}
+              className="min-w-0 w-full sm:w-auto [&_.gbtn-face]:gap-1.5 [&_.gbtn-face]:px-2.5 [&_.gbtn-face]:text-[0.72rem] sm:[&_.gbtn-face]:text-[0.8rem]"
+            >
+              <span className="truncate">{action.label}</span>
             </Button>
           ))}
         </div>
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4">
         <StatTile label="Quizzes run" value={formatNumber(stats.quizzes)} icon={<Zap className="size-5" />} tone="nova" />
         <StatTile label="Avg score" value={`${stats.average_score}%`} icon={<TrendingUp className="size-5" />} tone="mint" />
         <StatTile label="Messages / wk" value={formatNumber(stats.messages_week)} icon={<Megaphone className="size-5" />} tone="pulse" />
@@ -129,7 +136,7 @@ export default function Overview() {
 
       {/* Studying now */}
       {studying_now.length > 0 && (
-        <Card className="p-3.5">
+        <Card className="min-w-0 overflow-hidden p-3 sm:p-3.5">
           <SectionHeading title="Studying now" subtitle={`${data.online} members online`} icon={<Radio className="size-4" />} />
           <div className="mt-2 flex flex-wrap gap-2">
             {studying_now.map((member) => (
@@ -142,9 +149,9 @@ export default function Overview() {
         </Card>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-2 sm:gap-4">
+      <div className="grid min-w-0 gap-2.5 lg:grid-cols-2 sm:gap-4">
         {/* Upcoming quizzes */}
-        <Card className="flex flex-col p-3.5">
+        <Card className="flex min-w-0 flex-col overflow-hidden p-3 sm:p-3.5">
           <SectionHeading
             title="Quizzes"
             subtitle="Upcoming and live group quizzes"
@@ -176,7 +183,7 @@ export default function Overview() {
         </Card>
 
         {/* Active duels */}
-        <Card className="flex flex-col p-3.5">
+        <Card className="flex min-w-0 flex-col overflow-hidden p-3 sm:p-3.5">
           <SectionHeading
             title="Duels"
             subtitle="Challenges in this group"
@@ -211,7 +218,7 @@ export default function Overview() {
         </Card>
 
         {/* Announcements */}
-        <Card className="flex flex-col p-3.5">
+        <Card className="flex min-w-0 flex-col overflow-hidden p-3 sm:p-3.5">
           <SectionHeading
             title="Announcements"
             icon={<Megaphone className="size-4" />}
@@ -237,7 +244,7 @@ export default function Overview() {
         </Card>
 
         {/* Recent questions */}
-        <Card className="flex flex-col p-3.5">
+        <Card className="flex min-w-0 flex-col overflow-hidden p-3 sm:p-3.5">
           <SectionHeading
             title="Recent questions"
             icon={<MessageCircleQuestion className="size-4" />}
@@ -271,8 +278,8 @@ export default function Overview() {
       </div>
 
       {/* Activity + progress */}
-      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr] sm:gap-4">
-        <Card className="p-3.5">
+      <div className="grid min-w-0 gap-2.5 lg:grid-cols-[1.4fr_1fr] sm:gap-4">
+        <Card className="min-w-0 overflow-hidden p-3 sm:p-3.5">
           <SectionHeading
             title="Recent activity"
             icon={<ActivityIcon className="size-4" />}
@@ -293,7 +300,7 @@ export default function Overview() {
           </ul>
         </Card>
 
-        <Card className="p-3.5">
+        <Card className="min-w-0 overflow-hidden p-3 sm:p-3.5">
           <SectionHeading title="Group progress" subtitle="Toward a strong average" icon={<TrendingUp className="size-4" />} />
           <div className="mt-2 grid gap-3">
             <div>

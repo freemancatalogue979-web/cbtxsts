@@ -693,6 +693,7 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
           <div className="relative mt-4 flex items-center justify-center gap-3 sm:mt-6 sm:gap-4">
             {finished.participants.map((player) => (
               <div key={player.student_id} className="flex min-w-0 max-w-[9rem] flex-col items-center gap-1.5 sm:gap-2">
+                <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: player.student_id}}))} aria-label={`Open ${player.name}`}>
                 <Avatar
                   name={player.name}
                   hue={player.avatar_hue}
@@ -701,6 +702,7 @@ export default function DuelArena({duelId, onExit, onOpenDuels}: {duelId: number
                   ring={player.student_id === finished.winner_id}
                   photo={{id: player.student_id, has: player.has_photo}}
                 />
+                </button>
                 <p className="w-full truncate text-center text-[0.78rem] font-extrabold text-mist-100 sm:text-[0.82rem]">
                   {player.is_you ? 'You' : player.name}
                 </p>

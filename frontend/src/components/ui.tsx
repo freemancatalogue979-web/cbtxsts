@@ -1580,7 +1580,7 @@ export function Segmented<T extends string>({
   // Four or five icon tabs: on phones stack icon over label so none scroll away.
   const stacked = options.length >= 4 && options.length <= 5 && options.some((option) => option.icon);
   return (
-    <div className={`no-scrollbar flex gap-1 ${stacked ? '' : 'overflow-x-auto'} rounded-xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${className}`}>
+    <div className={`flex w-full min-w-0 flex-wrap gap-1 rounded-xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${className}`}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -1590,10 +1590,8 @@ export function Segmented<T extends string>({
               uiClick('select');
               onChange(option.value);
             }}
-            className={`relative isolate flex flex-1 items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors ${
-              stacked
-                ? 'min-w-0 flex-col gap-0.5 px-1.5 py-1.5 text-[0.7rem] sm:flex-row sm:gap-1.5 sm:px-3 sm:py-2 sm:text-[0.8rem]'
-                : 'min-w-max gap-1.5 px-3 py-2 text-[0.8rem]'
+            className={`relative isolate flex min-w-0 flex-1 basis-[46%] items-center justify-center rounded-lg px-2 py-2 text-center text-[0.72rem] font-semibold leading-tight break-words whitespace-normal transition-colors sm:basis-0 sm:text-[0.8rem] ${
+              stacked ? 'flex-col gap-0.5 sm:flex-row sm:gap-1.5' : 'gap-1.5'
             } ${
               active ? 'text-white' : 'text-mist-400 hover:bg-white/[0.04] hover:text-mist-100'
             }`}

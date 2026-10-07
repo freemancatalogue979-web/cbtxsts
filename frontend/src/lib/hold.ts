@@ -8,9 +8,9 @@
  */
 
 /** Press duration before the action menu opens (ms). */
-export const HOLD_MS = 460;
+export const HOLD_MS = 420;
 /** Movement that means "they were scrolling, not holding" (px). */
-export const HOLD_TOLERANCE = 12;
+export const HOLD_TOLERANCE = 14;
 /** Menu size used for placement (px). */
 export const MENU_WIDTH = 184;
 export const MENU_ITEM_HEIGHT = 44;

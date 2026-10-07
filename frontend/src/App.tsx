@@ -20,6 +20,7 @@ import Dashboard from './views/Dashboard';
 import Exam from './views/Exam';
 import Welcome from './views/Welcome';
 import {useSession} from './store/session';
+import PlayerCard from './components/PlayerCard';
 import {lazyScreen, prefetchWhenIdle} from './lib/lazy';
 import {LIKELY_TABS} from './views/Dashboard';
 
@@ -190,6 +191,7 @@ function FocusShell({children, onBack, backLabel}: {children: React.ReactNode; o
 }
 
 export default function App() {
+  const [playerId, setPlayerId] = useState<number | null>(null);
   const {ready, role, profile, signOut, on, toast, pushRewards, pushCelebration, refreshProfile, switchTo, beginSwitch, cancelSwitch, switchTarget} = useSession();
   const {pro} = useExperience();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
@@ -374,6 +376,17 @@ export default function App() {
     [on],
   );
 
+  /* Always register player-card listener before any early return so hook
+     order stays stable when role/profile flips between renders. */
+  useEffect(() => {
+    const onPlayer = (event: Event) => {
+      const id = Number((event as CustomEvent).detail?.id);
+      if (id) setPlayerId(id);
+    };
+    window.addEventListener('ag:player', onPlayer);
+    return () => window.removeEventListener('ag:player', onPlayer);
+  }, []);
+
   if (!started || !ready) return <Splash />;
 
   /* Admin ⇄ Player: the stored slot for the other role switches instantly;
@@ -436,6 +449,7 @@ export default function App() {
   const openRoom = (roomId: number) => navigate({view: 'room', roomId});
   const openGroup = (groupId: number, section: GroupSection = 'overview') => navigate({view: 'group', groupId, section});
   const backToDashboard = (tab: Tab = 'play') => navigate({view: 'dashboard', tab});
+
 
   return (
     <>
@@ -581,6 +595,7 @@ export default function App() {
       </AnimatePresence>
       </Suspense>
       </ErrorBoundary>
+      {playerId ? <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} /> : null}
 
       <Toasts />
       <CelebrationLayer />

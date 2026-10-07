@@ -729,6 +729,7 @@ class ProfileUpdateIn(BaseModel):
     avatar_hue: int | None = Field(default=None, ge=0, le=360)
     bio: str | None = Field(default=None, max_length=240)
     status_text: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=2)
 
 
 class RushItem(BaseModel):

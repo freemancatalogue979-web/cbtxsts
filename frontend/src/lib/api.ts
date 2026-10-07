@@ -442,7 +442,7 @@ export const api = {
     request<{ok: boolean; report_id: number; status: string}>(`/api/chat/${id}/report`, {method: 'POST', body: {reason}}),
   chatUnread: () => request<{total: number; per_friend: Record<number, number>}>('/api/chat/unread'),
   me: () => request<Profile>('/api/me'),
-  updateMe: (body: {name?: string; avatar_hue?: number; bio?: string; status_text?: string}) =>
+  updateMe: (body: {name?: string; avatar_hue?: number; bio?: string; status_text?: string; country?: string}) =>
     request<Profile>('/api/me', {method: 'PATCH', body}),
   uploadPhoto: (image: string) => request<Profile>('/api/me/photo', {method: 'POST', body: {image}}),
   removePhoto: () => request<Profile>('/api/me/photo', {method: 'DELETE'}),

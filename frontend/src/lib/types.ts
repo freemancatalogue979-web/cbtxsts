@@ -41,6 +41,8 @@ export interface PlayerSummary {
   friendship_status?: string;
   direction?: string;
   friendship_id?: number;
+  country?: string;
+  flag?: string;
   is_friend?: boolean;
 }
 
@@ -69,6 +71,8 @@ export interface Profile {
   reg_no: string | null;
   faculty: string;
   campus: string;
+  country?: string;
+  flag?: string;
   class_name: string;
   level_name: string;
   avatar_hue: number;

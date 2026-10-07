@@ -57,6 +57,13 @@ def initials(name: str) -> str:
 # ---------------------------------------------------------------------------
 # People
 # ---------------------------------------------------------------------------
+def flag_emoji(code: str) -> str:
+    code = (code or "").strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return "🌍"
+    return chr(0x1F1E6 + ord(code[0]) - 65) + chr(0x1F1E6 + ord(code[1]) - 65)
+
+
 def student_public(student: Student, *, viewer_id: int | None = None, mask: bool = True) -> dict[str, Any]:
     is_self = viewer_id is not None and viewer_id == student.id
     progress = level_progress(student.xp)
@@ -81,6 +88,8 @@ def student_public(student: Student, *, viewer_id: int | None = None, mask: bool
         "duels_played": student.duels_played,
         "exams_taken": student.exams_taken,
         "best_percentage": round(student.best_percentage, 2),
+        "country": (getattr(student, "country", "") or "").upper(),
+        "flag": flag_emoji(getattr(student, "country", "") or ""),
     }
 
 
@@ -118,6 +127,8 @@ def student_profile(db: Session, student: Student) -> dict[str, Any]:
         "reg_no": student.reg_no,
         "faculty": student.faculty,
         "campus": student.campus,
+        "country": (getattr(student, "country", "") or "").upper(),
+        "flag": flag_emoji(getattr(student, "country", "") or ""),
         "class_name": student.class_name,
         "level_name": student.level,
         "avatar_hue": student.avatar_hue,

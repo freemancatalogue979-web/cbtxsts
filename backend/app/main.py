@@ -19,6 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import APP_NAME, APP_TAGLINE, CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_ORIGINS, HOST, PORT
 from .db import async_engine, init_db, session_scope
+from .routers import challenges  # type: ignore
 from .routers import (
     teachers,
     teachers_admin,
@@ -249,6 +250,7 @@ app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(social.router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
 app.include_router(study.router, prefix=API_PREFIX)
+app.include_router(challenges.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(studio.router, prefix=API_PREFIX)
 app.include_router(course_workspace.router, prefix=API_PREFIX)

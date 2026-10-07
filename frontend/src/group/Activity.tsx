@@ -84,7 +84,7 @@ export default function Activity() {
   return (
     <div className="grid gap-3 p-3 sm:p-4">
       <SectionHeading title="Activity" subtitle="What has been happening in the group" icon={<ActivityIcon className="size-4" />} />
-      <div className="overflow-x-auto">
+      <div className="min-w-0">
         <Segmented
           value={filter}
           onChange={(value) => {

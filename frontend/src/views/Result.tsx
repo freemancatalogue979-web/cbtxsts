@@ -11,6 +11,7 @@ import {
   Medal,
   Printer,
   ScrollText,
+  Share2,
   Sparkles,
   Target,
   Trophy,
@@ -48,6 +49,26 @@ export default function Result({
   const [openQuestion, setOpenQuestion] = useState<number | null>(null);
   const [celebrated, setCelebrated] = useState(false);
   const ringSize = useSize(104, 132);
+  const shareResult = async () => {
+    if (!state) return;
+    const pct = state.percentage;
+    const title = state.quiz?.title || state.course?.title || 'Absolute Genesis';
+    const text = `I scored ${pct}% on ${title} on Absolute Genesis. Can you beat me?`;
+    const url = window.location.origin;
+    try {
+      if (navigator.share) await navigator.share({title: 'Absolute Genesis', text, url});
+      else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        toast('success', 'Copied', 'Share text is on your clipboard.');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        toast('success', 'Copied', 'Share text is on your clipboard.');
+      } catch { /* ignore */ }
+    }
+  };
+
 
   useEffect(() => {
     let alive = true;
@@ -115,6 +136,7 @@ export default function Result({
           <span className="sm:hidden">Ranks</span>
           <span className="hidden sm:inline">Leaderboard</span>
         </Button>
+            <Button variant="outline" className="gap-1.5" onClick={() => void shareResult()}><Share2 className="size-4" /> Share result</Button>
         <Button variant="outline" size="sm" className="px-2 sm:ml-auto sm:px-3.5" onClick={() => window.print()} icon={<Printer className="size-4" />}>
           <span className="sm:hidden">Print</span>
           <span className="hidden sm:inline">Print slip</span>
