@@ -96,3 +96,57 @@ def update_settings(payload: SettingsPatch, db: Session = Depends(get_db), user=
     db.commit()
     db.refresh(settings)
     return settings_out(settings)
+
+
+# ---------------------------------------------------------------------------
+# Data management: admin can wipe table groups. Accounts, heroes and the
+# battlefield map guide are never wipeable from here.
+# ---------------------------------------------------------------------------
+from pydantic import BaseModel  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+
+WIPEABLE: dict[str, str] = {
+    "development_entries": "Player development + coach ratings",
+    "hero_pool": "Player hero pools",
+    "training_weeks": "Training weeks",
+    "training_activities": "Training activities",
+    "scrims": "Scrims (series)",
+    "scrim_games": "Scrim games",
+    "match_reviews": "Match reviews",
+    "strategy_notes": "Strategy notes",
+    "map_boards": "Map Lab boards",
+    "draft_plans": "Draft Lab boards",
+    "ban_entries": "Ban board entries",
+    "events": "Calendar events",
+}
+PROTECTED = "accounts (users), heroes, map guide"
+
+
+class DataWipeIn(BaseModel):
+    tables: list[str]
+    confirm: bool = False
+
+
+@router.get("/data-summary")
+def data_summary(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require(can.manage_users(user), "see data summary")
+    return [
+        {"table": t, "label": label, "rows": db.execute(text(f"SELECT COUNT(*) FROM {t}")).scalar()}
+        for t, label in WIPEABLE.items()
+    ]
+
+
+@router.post("/data-wipe")
+def data_wipe(payload: DataWipeIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require(can.manage_users(user), "wipe data")
+    if not payload.confirm:
+        raise HTTPException(status_code=422, detail="Confirmation required.")
+    unknown = [t for t in payload.tables if t not in WIPEABLE]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown tables: {', '.join(unknown)}")
+    deleted: dict[str, int] = {}
+    for table in payload.tables:
+        n = db.execute(text(f"DELETE FROM {table}")).rowcount  # noqa: S608 - allowlisted names
+        deleted[table] = int(n or 0)
+    db.commit()
+    return {"deleted": deleted, "protected": PROTECTED}

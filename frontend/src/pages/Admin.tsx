@@ -1,4 +1,4 @@
-import { Plus, UserCog } from "lucide-react";
+import { Plus, Trash2, UserCog } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Meta, Settings, User } from "../lib/types";
@@ -155,6 +155,104 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
       )}
 
       {form && <UserForm meta={meta} initial={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
+
+      <DataWipePanel isAdmin={me.role === "admin"} />
     </div>
+  );
+}
+
+interface DataRow { table: string; label: string; rows: number }
+
+function DataWipePanel({ isAdmin }: { isAdmin: boolean }) {
+  const [rows, setRows] = useState<DataRow[] | null>(null);
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    api.get<DataRow[]>("/admin/data-summary").then((r) => {
+      setRows(r);
+      setSelected(new Set(r.map((x) => x.table)));
+    }).catch(() => setRows([]));
+  }, []);
+  useEffect(load, [load]);
+
+  if (!isAdmin) return null;
+  const chosen = rows?.filter((r) => selected?.has(r.table)) ?? [];
+  const chosenRows = chosen.reduce((a, r) => a + r.rows, 0);
+
+  function toggle(t: string) {
+    setSelected((s) => {
+      const n = new Set(s ?? []);
+      n.has(t) ? n.delete(t) : n.add(t);
+      return n;
+    });
+  }
+
+  async function wipe() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await api.post<{ deleted: Record<string, number> }>("/admin/data-wipe",
+        { tables: chosen.map((r) => r.table), confirm: true });
+      const total = Object.values(res.deleted).reduce((a, n) => a + n, 0);
+      setResult(`Wiped ${total} rows across ${chosen.length} table${chosen.length === 1 ? "" : "s"}. Accounts, heroes and the map guide were not touched.`);
+      setConfirming(false);
+      load();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Wipe failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <SectionTitle>Data management · danger zone</SectionTitle>
+      <div className="card p-4 border-crim/30">
+        <p className="text-[12.5px] text-mute leading-relaxed mb-3">
+          Wipe operational data for a fresh start. <b className="text-text">Accounts, the hero database and the
+          battlefield map guide are always kept</b> — everything else below can be cleared, including player data
+          (pools, development, progress history).
+        </p>
+        {!rows && <Spinner />}
+        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+          {(rows ?? []).map((r) => (
+            <label key={r.table} className="flex items-center gap-2.5 py-1 cursor-pointer select-none">
+              <input type="checkbox" className="accent-crim w-3.5 h-3.5" checked={selected?.has(r.table) ?? false} onChange={() => toggle(r.table)} />
+              <span className="text-[12.5px] text-text/90 flex-1">{r.label}</span>
+              <span className={`text-[11px] font-bold tabular-nums ${r.rows ? "text-amber" : "text-faint"}`}>{r.rows}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-edge/70">
+          <button className="btn-ghost !py-1.5 !text-[11.5px]" onClick={() => setSelected(new Set(rows?.map((r) => r.table) ?? []))}>Select all</button>
+          <button className="btn-ghost !py-1.5 !text-[11.5px]" onClick={() => setSelected(new Set())}>Select none</button>
+          <span className="text-[11.5px] text-faint">{chosen.length} selected · {chosenRows} rows</span>
+          <button className="btn-primary !py-1.5 !text-[12px] ml-auto" disabled={!chosen.length || chosenRows === 0} onClick={() => setConfirming(true)}>
+            <Trash2 size={13} /> Wipe selected data
+          </button>
+        </div>
+        {result && <div className="text-leaf text-[12.5px] mt-3 font-semibold">{result}</div>}
+        <ErrorNote error={err} />
+      </div>
+
+      {confirming && (
+        <Modal title="Confirm data wipe" onClose={() => !busy && setConfirming(false)}>
+          <div className="space-y-4">
+            <p className="text-[13px] text-mute leading-relaxed">
+              This permanently deletes <b className="text-crim">{chosenRows} rows</b> across{" "}
+              <b className="text-crim">{chosen.length} tables</b>: {chosen.map((c) => c.label).join(", ")}.
+              <br /><b className="text-leaf">Kept: accounts, heroes, map guide and team settings.</b>
+            </p>
+            <ErrorNote error={err} />
+            <div className="flex justify-end gap-2">
+              <button className="btn-ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>
+              <button className="btn-primary !bg-crim" disabled={busy} onClick={wipe}>{busy ? "Wiping…" : "Yes — wipe it"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }
