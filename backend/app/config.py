@@ -10,6 +10,8 @@ DATA_DIR = BACKEND_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 AVATAR_DIR = DATA_DIR / "avatars"
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = DATA_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load_dotenv(path: Path) -> None:

@@ -1,5 +1,5 @@
-import { Check, ClipboardCheck, Link2, Pencil, Plus, Trash2, Users2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, ClipboardCheck, FileText, Film, ImageIcon, Link2, Pencil, Plus, Trash2, Upload, Users2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { Activity, Meta, Program, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
@@ -351,12 +351,9 @@ function ProgramForm({ users, program, onSaved, onClose }: {
   );
 }
 
-function progAttachments(text: string): { label: string; url: string; kind: string }[] {
-  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
-    const [label, url] = l.split("|").map((x) => x.trim());
-    return { label: label || (url ?? "Link"), url: url ?? label, kind: "link" };
-  });
-}
+const ATT_ICON: Record<string, typeof Link2> = {
+  image: ImageIcon, video: Film, pdf: FileText, file: FileText, link: Link2,
+};
 
 function ProgramWeekForm({ program, week, onSaved, onClose }: {
   program: Program; week: Program["weeks"][number] | null; onSaved: () => void; onClose: () => void;
@@ -364,18 +361,41 @@ function ProgramWeekForm({ program, week, onSaved, onClose }: {
   const [f, setF] = useState<Record<string, unknown>>({
     title: week?.title ?? "",
     description: week?.description ?? "",
-    links: (week?.attachments ?? []).map((a) => `${a.label} | ${a.url}`).join("\n"),
   });
+  const [att, setAtt] = useState<{ label: string; url: string; kind: string }[]>(week?.attachments ?? []);
+  const [linkLabel, setLinkLabel] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
+
+  async function onPick(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("file", file);
+        const saved = await api.upload<{ label: string; url: string; kind: string }>("/files", form);
+        setAtt((p) => [...p, saved]);
+      }
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
     try {
-      const body = { title: f.title, description: f.description, attachments: progAttachments(String(f.links)) };
+      const body = { title: f.title, description: f.description, attachments: att };
       if (week) await api.patch(`/programs/weeks/${week.id}`, body);
       else await api.post(`/programs/${program.id}/weeks`, body);
       onSaved();
@@ -395,13 +415,43 @@ function ProgramWeekForm({ program, week, onSaved, onClose }: {
         <Field label="Brief">
           <textarea className="input min-h-20" value={String(f.description)} onChange={(e) => set("description", e.target.value)} />
         </Field>
-        <Field label="Links (one per line: label | url)">
-          <textarea className="input min-h-16 text-[12px]" value={String(f.links)} onChange={(e) => set("links", e.target.value)} placeholder={"Drill video | https://…"} />
+
+        <Field label={`Attachments (${att.length})`}>
+          <input ref={fileRef} type="file" multiple className="hidden"
+            accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.txt,.md,.csv,.zip"
+            onChange={(e) => onPick(e.target.files)} />
+          <div className="space-y-2">
+            {att.map((a, i) => {
+              const Icon = ATT_ICON[a.kind] ?? Link2;
+              return (
+                <div key={i} className="flex items-center gap-2 rounded-lg border border-edge bg-raised/50 px-2.5 py-1.5">
+                  <Icon size={13} className="text-crim shrink-0" />
+                  <span className="text-[12px] font-semibold truncate flex-1">{a.label}</span>
+                  <button type="button" className="text-faint hover:text-crim shrink-0"
+                    onClick={() => setAtt((p) => p.filter((_, j) => j !== i))}
+                    title="Remove"><Trash2 size={12} /></button>
+                </div>
+              );
+            })}
+            <button type="button" className="btn-ghost w-full" disabled={uploading} onClick={() => fileRef.current?.click()}>
+              <Upload size={14} /> {uploading ? "Uploading…" : "Pick files from device"}
+            </button>
+            <div className="flex gap-2 items-center">
+              <input className="input !py-1.5 flex-1 text-[12px]" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Link label (optional)" />
+              <input className="input !py-1.5 flex-[1.4] text-[12px]" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…" />
+              <button type="button" className="btn-ghost !py-1.5 !px-3 shrink-0"
+                onClick={() => {
+                  if (!linkUrl.trim()) return;
+                  setAtt((p) => [...p, { label: linkLabel.trim() || linkUrl.trim(), url: linkUrl.trim(), kind: "link" }]);
+                  setLinkLabel(""); setLinkUrl("");
+                }}>Add link</button>
+            </div>
+          </div>
         </Field>
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy}>{week ? "Save changes" : "Add task"}</button>
+          <button className="btn-primary" disabled={busy || uploading}>{week ? "Save changes" : "Add task"}</button>
         </div>
       </form>
     </Modal>
@@ -594,12 +644,29 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                 </div>
                 {w.description && <p className="text-[12.5px] text-mute mt-1.5 leading-relaxed whitespace-pre-wrap">{w.description}</p>}
                 {w.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {w.attachments.map((a, i) => (
-                      <a key={i} href={a.url} target="_blank" rel="noreferrer" className="chip text-sky border-sky/40 hover:bg-sky/10">
-                        <Link2 size={11} /> {a.label}
-                      </a>
+                  <div className="space-y-2 mt-2.5">
+                    {w.attachments.some((a) => a.kind === "image") && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {w.attachments.filter((a) => a.kind === "image").map((a, i) => (
+                          <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.label}>
+                            <img src={a.url} alt={a.label} className="rounded-lg border border-edge object-cover w-full aspect-video hover:border-crim/50 transition" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {w.attachments.filter((a) => a.kind === "video").map((a, i) => (
+                      <video key={i} src={a.url} controls preload="metadata" className="rounded-lg border border-edge w-full max-h-64" />
                     ))}
+                    <div className="flex flex-wrap gap-1.5">
+                      {w.attachments.filter((a) => a.kind !== "image" && a.kind !== "video").map((a, i) => {
+                        const Icon = ATT_ICON[a.kind] ?? Link2;
+                        return (
+                          <a key={i} href={a.url} target="_blank" rel="noreferrer" className="chip text-sky border-sky/40 hover:bg-sky/10" download={a.kind !== "link" ? a.label : undefined}>
+                            <Icon size={11} /> {a.label}
+                          </a>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
