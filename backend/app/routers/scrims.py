@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -234,6 +235,52 @@ def add_game(scrim_id: int, payload: GameIn, db: Session = Depends(get_db),
     return game_out(game)
 
 
+def _rescore(scrim: Scrim) -> None:
+    """Recompute series score/result from the (remaining) games."""
+    us = sum(1 for g in scrim.games if g.result == "WIN")
+    them = sum(1 for g in scrim.games if g.result == "LOSS")
+    scrim.score_us, scrim.score_them = us, them
+    if us or them:
+        scrim.result = "WIN" if us > them else "LOSS"
+        scrim.status = "played"
+
+
+class GamePatch(BaseModel):
+    game_no: int | None = None
+    result: str | None = None
+    duration_min: float | None = None
+    stats: dict | None = None
+    draft: dict | None = None
+
+
+@router.patch("/{scrim_id}/games/{game_id}")
+def update_game(scrim_id: int, game_id: int, payload: GamePatch, db: Session = Depends(get_db),
+                user=Depends(get_current_user)):
+    require(can.upload_results(user) or can.manage_scrims(user), "edit scrim games")
+    scrim = db.get(Scrim, scrim_id)
+    game = db.get(ScrimGame, game_id)
+    if scrim is None or game is None or game.scrim_id != scrim_id:
+        raise HTTPException(status_code=404, detail="Game not found")
+    data = payload.model_dump(exclude_unset=True)
+    if (rs := data.pop("result", None)) is not None:
+        r = rs.upper()
+        if r not in {"WIN", "LOSS", ""}:
+            raise HTTPException(status_code=422, detail="result must be WIN or LOSS")
+        game.result = r
+    if (st := data.pop("stats", None)) is not None:
+        game.stats = dumps(st)
+    if (dr := data.pop("draft", None)) is not None:
+        game.draft = dumps(dr)
+    for k, v in data.items():
+        setattr(game, k, v)
+    db.flush()
+    db.refresh(scrim)
+    _rescore(scrim)
+    db.commit()
+    db.refresh(game)
+    return game_out(game)
+
+
 @router.delete("/{scrim_id}/games/{game_id}", status_code=204)
 def delete_game(scrim_id: int, game_id: int, db: Session = Depends(get_db),
                 user=Depends(get_current_user)):
@@ -241,7 +288,11 @@ def delete_game(scrim_id: int, game_id: int, db: Session = Depends(get_db),
     game = db.get(ScrimGame, game_id)
     if game is None or game.scrim_id != scrim_id:
         raise HTTPException(status_code=404, detail="Game not found")
+    scrim = game.scrim
     db.delete(game)
+    db.flush()
+    db.refresh(scrim)
+    _rescore(scrim)
     db.commit()
     scrim = db.get(Scrim, scrim_id)
     if scrim:

@@ -791,7 +791,15 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
       <div className="max-w-3xl space-y-5">
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training center</button>
         <PageTitle title={a.title} sub={`${a.category}${a.week_number ? ` · Week ${String(a.week_number).padStart(2, "0")}` : ""}`}
-          right={canManage && <button className="btn-ghost" onClick={() => setShowActivityForm(a)}>Edit</button>} />
+          right={canManage && (
+            <div className="flex gap-2">
+              <button className="btn-ghost" onClick={() => setShowActivityForm(a)}>Edit</button>
+              <button className="btn-ghost !text-crim" title="Delete activity"
+                onClick={async () => { if (confirm(`Delete activity "${a.title}"?`)) { await api.del(`/training/activities/${a.id}`); navigate("training", "schedule"); } }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )} />
         <div className="card p-4 grid sm:grid-cols-2 gap-x-6 gap-y-2">
           <div><span className="label">When</span><div className="text-sm font-semibold mt-0.5">{dayLabel(a.date)} · {fmtTime(a.time)} · {a.duration_min} min</div></div>
           <div><span className="label">Coach</span><div className="text-sm font-semibold mt-0.5">{a.coach_name || "—"}</div></div>
@@ -838,7 +846,15 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training center</button>
         <PageTitle title={`Week ${String(w.number).padStart(2, "0")} — ${w.focus}`}
           sub={w.objective}
-          right={canManage && <button className="btn-ghost" onClick={() => setShowWeekForm(w)}>Edit week</button>} />
+          right={canManage && (
+            <div className="flex gap-2">
+              <button className="btn-ghost" onClick={() => setShowWeekForm(w)}>Edit week</button>
+              <button className="btn-ghost !text-crim" title="Delete week"
+                onClick={async () => { if (confirm(`Delete W${String(w.number).padStart(2, "0")} "${w.focus}"? Activities keep their records.`)) { await api.del(`/training/weeks/${w.id}`); navigate("training", "schedule"); } }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )} />
         <div className="grid sm:grid-cols-3 gap-4">
           <div className="card p-4">
             <div className="label mb-2">Progress</div>

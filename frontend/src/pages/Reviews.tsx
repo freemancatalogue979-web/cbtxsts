@@ -1,4 +1,4 @@
-import { AlertTriangle, FileText, Plus, Trophy } from "lucide-react";
+import { AlertTriangle, FileText, Plus, Trophy, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
@@ -200,9 +200,9 @@ function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
   );
 }
 
-function ReviewDetail({ review, users, canEdit, onEdit, onStatus }: {
+function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
   review: Review; users: User[]; canEdit: boolean; onEdit: () => void;
-  onStatus: (s: string) => void;
+  onStatus: (s: string) => void; onDelete: () => void;
 }) {
   const st = REVIEW_STATUS_STYLE[review.status] ?? REVIEW_STATUS_STYLE.open;
   const userName = (uid: number | null | undefined) => users.find((u) => u.id === uid)?.ign ?? "—";
@@ -288,7 +288,13 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus }: {
         </div>
       </section>
 
-      {canEdit && <button className="btn-primary" onClick={onEdit}><FileText size={15} /> Edit review</button>}
+      {canEdit && (
+        <div className="flex gap-2">
+          <button className="btn-primary" onClick={onEdit}><FileText size={15} /> Edit review</button>
+          <button className="btn-ghost !text-crim" title="Delete review"
+            onClick={onDelete}><Trash2 size={13} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -395,7 +401,13 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
     }
     return <ReviewDetail review={review} users={users} canEdit={canEdit}
       onEdit={() => setEditing(true)}
-      onStatus={async (status) => { await api.patch(`/reviews/${review.id}`, { status }); load(); }} />;
+      onStatus={async (status) => { await api.patch(`/reviews/${review.id}`, { status }); load(); }} onDelete={async () => {
+        if (confirm("Delete this review? If the scrim stays unreviewed, the NO-REVIEW rule may block new bookings.")) {
+          await api.del(`/reviews/${review.id}`);
+          load();
+          navigate("reviews");
+        }
+      }} />;
   }
 
   // -------- list --------

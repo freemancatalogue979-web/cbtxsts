@@ -1,4 +1,4 @@
-import { Pin, Plus, Search } from "lucide-react";
+import { Pin, Plus, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { Meta, StrategyNote, User } from "../lib/types";
@@ -112,7 +112,12 @@ export function StrategyPage({ me, meta }: { me: User; meta: Meta }) {
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     {n.tags.map((t) => <span key={t} className="chip !text-[10px] text-mute">#{t}</span>)}
                     {canManage && (
-                      <button className="btn-ghost !py-1 !px-2.5 !text-[11px] ml-auto" onClick={() => setForm(n)}>Edit</button>
+                      <span className="ml-auto flex gap-1.5">
+                        <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setForm(n)}>Edit</button>
+                        <button className="btn-ghost !py-1 !px-2 !text-[11px] !text-crim" title="Delete note"
+                          onClick={async () => { if (confirm(`Delete "${n.title}"?`)) { await api.del(`/strategy/${n.id}`); load(); } }}>
+                          <Trash2 size={11} /></button>
+                      </span>
                     )}
                   </div>
                 </div>

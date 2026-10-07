@@ -227,6 +227,13 @@ function BoardEditor({ id }: { id: number }) {
               <Layers size={13} /> Place draft lineup
             </button>
           )}
+          <button className="btn-ghost !py-1.5 !text-[12px] !text-crim" title="Delete board"
+            onClick={async () => {
+              if (confirm(`Delete board "${board.name}"? This can't be undone.`)) {
+                await api.del(`/maps/${board.id}`);
+                navigate("maps");
+              }
+            }}><Trash2 size={13} /></button>
           <button className="btn-primary !py-1.5 !text-[12.5px]" disabled={!dirty || saving} onClick={save}>
             <Save size={13} /> {saving ? "Saving…" : dirty ? "Save board" : "Saved"}
           </button>

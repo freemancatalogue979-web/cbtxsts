@@ -77,10 +77,15 @@ function TournamentForm({ initial, onSaved, onClose }: {
   );
 }
 
-function AddMatchForm({ tournament, onSaved, onClose }: {
-  tournament: Tournament; onSaved: () => void; onClose: () => void;
+function AddMatchForm({ tournament, initial, onSaved, onClose }: {
+  tournament: Tournament; initial?: TournamentMatchT | null; onSaved: () => void; onClose: () => void;
 }) {
-  const [f, setF] = useState<Record<string, unknown>>({
+  const edit = Boolean(initial?.id);
+  const [f, setF] = useState<Record<string, unknown>>(initial ? {
+    stage: initial.stage, scheduled_date: initial.scheduled_date ?? "",
+    start_time: initial.start_time, opponent: initial.opponent,
+    format: initial.format, review_queued: initial.review_queued, notes: initial.notes,
+  } : {
     stage: tournament.stages[tournament.stages.length - 1] ?? "Day 1",
     scheduled_date: tournament.start_date ?? "",
     start_time: "",
@@ -97,7 +102,9 @@ function AddMatchForm({ tournament, onSaved, onClose }: {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
-      await api.post(`/tournaments/${tournament.id}/matches`, { ...f, scheduled_date: f.scheduled_date || null });
+      const body = { ...f, scheduled_date: f.scheduled_date || null };
+      if (edit) await api.patch(`/tournaments/matches/${initial!.id}`, body);
+      else await api.post(`/tournaments/${tournament.id}/matches`, body);
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
@@ -105,7 +112,7 @@ function AddMatchForm({ tournament, onSaved, onClose }: {
   }
 
   return (
-    <Modal title={`Schedule match — ${tournament.name}`} onClose={onClose}>
+    <Modal title={edit ? `Edit match ${initial!.match_no} — ${tournament.name}` : `Schedule match — ${tournament.name}`} onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
         <Field label="Stage / match day" hint="e.g. Day 1, Groups, Semifinal, Finals">
           <input className="input" list="t-stages" required value={String(f.stage)} onChange={(e) => set("stage", e.target.value)} placeholder="Day 1" />
@@ -132,7 +139,7 @@ function AddMatchForm({ tournament, onSaved, onClose }: {
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy}>Add match</button>
+          <button className="btn-primary" disabled={busy}>{edit ? "Save changes" : "Add match"}</button>
         </div>
       </form>
     </Modal>
@@ -319,6 +326,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [showT, setShowT] = useState<null | Partial<Tournament>>(null);
   const [showMatch, setShowMatch] = useState(false);
+  const [editMatch, setEditMatch] = useState<null | TournamentMatchT>(null);
   const [showResult, setShowResult] = useState<null | TournamentMatchT>(null);
   const [showDraft, setShowDraft] = useState<null | TournamentMatchT>(null);
   const [showEvidence, setShowEvidence] = useState<null | TournamentMatchT>(null);
@@ -468,6 +476,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                         <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setShowResult(m)}>
                           {m.status === "played" ? "Edit result" : "Record result"}
                         </button>
+                        <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setEditMatch(m)}>Edit match</button>
                         <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setShowDraft(m)}>
                           {(m.draft?.our_picks && Object.values(m.draft.our_picks).some(Boolean)) || (m.draft?.our_bans ?? []).some(Boolean) ? "Edit draft" : "+ Draft"}
                         </button>
@@ -514,6 +523,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
 
         {showT && <TournamentForm initial={showT} onClose={() => setShowT(null)} onSaved={() => { setShowT(null); load(); }} />}
         {showMatch && <AddMatchForm tournament={t} onClose={() => setShowMatch(false)} onSaved={() => { setShowMatch(false); load(); }} />}
+        {editMatch && <AddMatchForm tournament={t} initial={editMatch} onClose={() => setEditMatch(null)} onSaved={() => { setEditMatch(null); load(); }} />}
         {showResult && <ResultForm match={showResult} onClose={() => setShowResult(null)} onSaved={() => { setShowResult(null); load(); }} />}
         {showDraft && <DraftForm tournament={t} match={showDraft} heroes={heroes} onClose={() => setShowDraft(null)} onSaved={() => { setShowDraft(null); load(); }} />}
         {showEvidence && <EvidenceForm match={showEvidence} onClose={() => setShowEvidence(null)} onSaved={() => { setShowEvidence(null); load(); }} />}

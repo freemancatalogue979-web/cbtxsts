@@ -1,4 +1,4 @@
-import { Layers as LayersIcon, Map, Plus } from "lucide-react";
+import { Layers as LayersIcon, Map, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DraftPlan, Hero, Meta, User } from "../lib/types";
@@ -208,7 +208,14 @@ export function DraftsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                 }}>
                 <Map size={11} /> Map
               </button>
-              {canManage && <button className="text-[11px] text-faint hover:text-text" onClick={() => setEditing(d)}>Edit</button>}
+              {canManage && (
+                <span className="flex gap-2">
+                  <button className="text-[11px] text-faint hover:text-text" onClick={() => setEditing(d)}>Edit</button>
+                  <button className="text-[11px] text-faint hover:text-crim" title="Delete board"
+                    onClick={async () => { if (confirm(`Delete draft board "${d.name}"?`)) { await api.del(`/drafts/${d.id}`); load(); } }}>
+                    <Trash2 size={12} /></button>
+                </span>
+              )}
             </div>
             <DraftBoard draft={d.draft} theirsLabel={(d.opponent || "Enemy").toUpperCase()} />
             {d.notes && <div className="text-[12px] text-mute px-1 leading-relaxed">{d.notes}</div>}

@@ -1,4 +1,4 @@
-import { Plus, Star, Trash2 } from "lucide-react";
+import { Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgress } from "../lib/types";
@@ -20,31 +20,38 @@ function Confidence({ value }: { value: number }) {
   );
 }
 
-function PoolForm({ playerId, heroes, meta, onSaved, onClose }: {
-  playerId: number; heroes: Hero[]; meta: Meta; onSaved: () => void; onClose: () => void;
+function PoolForm({ playerId, heroes, meta, initial, onSaved, onClose }: {
+  playerId: number; heroes: Hero[]; meta: Meta; initial?: PoolEntry | null; onSaved: () => void; onClose: () => void;
 }) {
-  const [f, setF] = useState<Record<string, string>>({ hero_id: "", category: "comfort", confidence: "7", games: "", wins: "", losses: "", coach_notes: "" });
+  const edit = Boolean(initial?.id);
+  const [f, setF] = useState<Record<string, string>>(initial ? {
+    hero_id: String(initial.hero_id), category: initial.category, confidence: String(initial.confidence),
+    games: String(initial.games || ""), wins: String(initial.wins || ""), losses: String(initial.losses || ""),
+    coach_notes: initial.coach_notes,
+  } : { hero_id: "", category: "comfort", confidence: "7", games: "", wins: "", losses: "", coach_notes: "" });
   const [err, setErr] = useState<string | null>(null);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     try {
-      await api.post(`/players/${playerId}/pool`, {
-        hero_id: Number(f.hero_id), category: f.category, confidence: Number(f.confidence),
+      const body = {
+        category: f.category, confidence: Number(f.confidence),
         games: Number(f.games) || 0, wins: Number(f.wins) || 0, losses: Number(f.losses) || 0,
         coach_notes: f.coach_notes,
-      });
+      };
+      if (edit) await api.patch(`/players/pool/${initial!.id}`, body);
+      else await api.post(`/players/${playerId}/pool`, { ...body, hero_id: Number(f.hero_id) });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
     }
   }
   return (
-    <Modal title="Add hero to pool" onClose={onClose}>
+    <Modal title={edit ? `Edit pool entry — ${initial!.hero_name}` : "Add hero to pool"} onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
         <Field label="Hero">
-          <select className="input" required value={f.hero_id} onChange={(e) => set("hero_id", e.target.value)}>
+          <select className="input" required disabled={edit} value={f.hero_id} onChange={(e) => set("hero_id", e.target.value)}>
             <option value="">Pick a hero…</option>
             {heroes.map((h) => <option key={h.id} value={h.id}>{h.name} ({h.role})</option>)}
           </select>
@@ -66,35 +73,38 @@ function PoolForm({ playerId, heroes, meta, onSaved, onClose }: {
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary">Add to pool</button>
+          <button className="btn-primary">{edit ? "Save changes" : "Add to pool"}</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function DevForm({ player, me, meta, onSaved, onClose }: {
-  player: PlayerDetail; me: User; meta: Meta; onSaved: () => void; onClose: () => void;
+function DevForm({ player, me, meta, initial, onSaved, onClose }: {
+  player: PlayerDetail; me: User; meta: Meta; initial?: DevEntry | null; onSaved: () => void; onClose: () => void;
 }) {
+  const edit = Boolean(initial?.id);
   const isSelf = me.id === player.id;
-  const source = isSelf && !["coach", "admin"].includes(me.role) ? "self" : "coach";
-  const [f, setF] = useState<Record<string, string>>({ category: "GENERAL", rating: "7", notes: "" });
+  const source = initial?.source ?? (isSelf && !["coach", "admin"].includes(me.role) ? "self" : "coach");
+  const [f, setF] = useState<Record<string, string>>(initial
+    ? { category: initial.category, rating: initial.rating != null ? String(initial.rating) : "", notes: initial.notes }
+    : { category: "GENERAL", rating: "7", notes: "" });
   const [err, setErr] = useState<string | null>(null);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     try {
-      await api.post(`/players/${player.id}/development`, {
-        source, category: f.category, rating: f.rating === "" ? null : Number(f.rating), notes: f.notes,
-      });
+      const body = { category: f.category, rating: f.rating === "" ? null : Number(f.rating), notes: f.notes };
+      if (edit) await api.patch(`/players/development/${initial!.id}`, body);
+      else await api.post(`/players/${player.id}/development`, { ...body, source });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
     }
   }
   return (
-    <Modal title={source === "self" ? "Submit self-review" : `Rate ${player.ign}`} onClose={onClose}>
+    <Modal title={edit ? "Edit entry" : source === "self" ? "Submit self-review" : `Rate ${player.ign}`} onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Category">
@@ -113,7 +123,7 @@ function DevForm({ player, me, meta, onSaved, onClose }: {
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary">Submit</button>
+          <button className="btn-primary">{edit ? "Save changes" : "Submit"}</button>
         </div>
       </form>
     </Modal>
@@ -127,6 +137,8 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [showPool, setShowPool] = useState(false);
   const [showDev, setShowDev] = useState(false);
+  const [editPool, setEditPool] = useState<null | PoolEntry>(null);
+  const [editDev, setEditDev] = useState<null | DevEntry>(null);
   const id = parts[0] ? Number(parts[0]) : null;
 
   const load = useCallback(() => {
@@ -200,9 +212,12 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                       {e.coach_notes && <div className="text-[10.5px] text-amber/90 mt-1.5 italic">{e.coach_notes}</div>}
                       {e.last_played && <div className="text-[9.5px] text-faint mt-1">last played {dayLabel(e.last_played)}</div>}
                       {canEditPool && (
-                        <button className="text-faint hover:text-crim mt-1" onClick={async () => { if (confirm(`Remove ${e.hero_name} from ${cat}?`)) { await api.del(`/players/pool/${e.id}`); load(); } }}>
-                          <Trash2 size={12} />
-                        </button>
+                        <div className="flex gap-2 mt-1">
+                          <button className="text-faint hover:text-crim" title="Edit entry" onClick={() => setEditPool(e)}><Pencil size={12} /></button>
+                          <button className="text-faint hover:text-crim" title="Remove" onClick={async () => { if (confirm(`Remove ${e.hero_name} from ${cat}?`)) { await api.del(`/players/pool/${e.id}`); load(); } }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -237,13 +252,24 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                     <div className="label !text-[8.5px]">/ 10</div>
                   </div>
                 )}
+                {(p.can_rate || (d.source === "self" && d.created_by === me.id)) && (
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button className="text-faint hover:text-crim" title="Edit" onClick={() => setEditDev(d)}><Pencil size={13} /></button>
+                    <button className="text-faint hover:text-crim" title="Delete"
+                      onClick={async () => { if (confirm("Delete this entry?")) { await api.del(`/players/development/${d.id}`); load(); } }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </section>
 
         {showPool && <PoolForm playerId={p.id} heroes={heroes} meta={meta} onClose={() => setShowPool(false)} onSaved={() => { setShowPool(false); load(); }} />}
+        {editPool && <PoolForm playerId={p.id} heroes={heroes} meta={meta} initial={editPool} onClose={() => setEditPool(null)} onSaved={() => { setEditPool(null); load(); }} />}
         {showDev && <DevForm player={p} me={me} meta={meta} onClose={() => setShowDev(false)} onSaved={() => { setShowDev(false); load(); }} />}
+        {editDev && <DevForm player={p} me={me} meta={meta} initial={editDev} onClose={() => setEditDev(null)} onSaved={() => { setEditDev(null); load(); }} />}
       </div>
     );
   }

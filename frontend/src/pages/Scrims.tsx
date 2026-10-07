@@ -1,4 +1,4 @@
-import { AlertTriangle, FileText, Film, ImageIcon, Link2, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, FileText, Film, ImageIcon, Link2, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, qs } from "../lib/api";
 import type { Meta, Scrim, ScrimSummary, User } from "../lib/types";
@@ -31,10 +31,17 @@ function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
   );
 }
 
-function NewScrimForm({ meta, users, onSaved, onClose }: {
-  meta: Meta; users: User[]; onSaved: (id: number) => void; onClose: () => void;
+function NewScrimForm({ meta, users, initial, onSaved, onClose }: {
+  meta: Meta; users: User[]; initial?: Scrim | null; onSaved: (id: number) => void; onClose: () => void;
 }) {
-  const [f, setF] = useState<Record<string, unknown>>({
+  const edit = Boolean(initial?.id);
+  const [f, setF] = useState<Record<string, unknown>>(initial ? {
+    opponent: initial.opponent, date: initial.date ?? "", time: initial.time, format: initial.format,
+    server: initial.server, tournament_prep: initial.tournament_prep, notes: initial.notes,
+    expected_strategy: initial.expected_strategy,
+    lineup: Object.fromEntries(Object.entries(initial.lineup).map(([k, v]) => [k, v ?? ""]) as [string, number | ""][]),
+    substitutes: initial.substitutes,
+  } : {
     opponent: "", date: "", time: "22:00", format: "BO3", server: "Custom lobby",
     tournament_prep: false, notes: "", expected_strategy: "",
     lineup: {} as Record<string, number | "">, substitutes: [] as number[],
@@ -46,6 +53,7 @@ function NewScrimForm({ meta, users, onSaved, onClose }: {
 
   // pre-fill default lineup by main role
   useEffect(() => {
+    if (edit) return;
     const lineup: Record<string, number | ""> = {};
     for (const lane of meta.lanes) {
       const m = roster.find((u) => u.main_role === lane && u.role === "captain") ?? roster.find((u) => u.main_role === lane);
@@ -66,7 +74,9 @@ function NewScrimForm({ meta, users, onSaved, onClose }: {
         lineup: Object.fromEntries(Object.entries(f.lineup as Record<string, number | "">).map(([k, v]) => [k, v === "" ? null : Number(v)])),
         substitutes: f.substitutes,
       };
-      const scrim = await api.post<Scrim>("/scrims", body);
+      const scrim = edit
+        ? await api.patch<Scrim>(`/scrims/${initial!.id}`, body)
+        : await api.post<Scrim>("/scrims", body);
       onSaved(scrim.id);
     } catch (e2) {
       if (e2 instanceof ApiError && e2.status === 409) {
@@ -77,7 +87,7 @@ function NewScrimForm({ meta, users, onSaved, onClose }: {
   }
 
   return (
-    <Modal title="Book a scrim" onClose={onClose} wide>
+    <Modal title={edit ? `Edit scrim #${initial!.number}` : "Book a scrim"} onClose={onClose} wide>
       {blocked && (
         <div className="rounded border border-amber/50 bg-amber/10 p-3.5 mb-4">
           <div className="flex items-center gap-2 text-amber font-bold text-sm">
@@ -156,21 +166,26 @@ function NewScrimForm({ meta, users, onSaved, onClose }: {
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary">Book scrim</button>
+          <button className="btn-primary">{edit ? "Save changes" : "Book scrim"}</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function GameForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => void; onClose: () => void }) {
-  const [f, setF] = useState<Record<string, string>>({
-    game_no: String((scrim.games.length || 0) + 1),
-    result: "WIN", duration_min: "15",
-    kills: "", deaths: "", gold: "", turrets: "", turtles: "", lords: "",
-    teamfights_won: "", teamfights_total: "", gold_diff_10: "", kills_10: "", deaths_10: "",
-    enemy_kills: "", enemy_deaths: "", enemy_turrets: "", enemy_turtles: "", enemy_lords: "",
-  });
+function GameForm({ scrim, initial, onSaved, onClose }: {
+  scrim: Scrim; initial?: Scrim["games"][number] | null; onSaved: () => void; onClose: () => void;
+}) {
+  const edit = Boolean(initial?.id);
+  const st = initial?.stats ?? {};
+  const numKeys = ["kills", "deaths", "gold", "turrets", "turtles", "lords", "teamfights_won", "teamfights_total",
+    "gold_diff_10", "kills_10", "deaths_10", "enemy_kills", "enemy_deaths", "enemy_turrets", "enemy_turtles", "enemy_lords"];
+  const [f, setF] = useState<Record<string, string>>(() => ({
+    game_no: String(initial?.game_no ?? (scrim.games.length || 0) + 1),
+    result: initial?.result || "WIN",
+    duration_min: String(initial?.duration_min ?? "15"),
+    ...Object.fromEntries(numKeys.map((k) => [k, st && (st as Record<string, number>)[k] !== undefined ? String((st as Record<string, number>)[k]) : ""])),
+  }));
   const [err, setErr] = useState<string | null>(null);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
@@ -183,9 +198,9 @@ function GameForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => vo
       if (v !== "") stats[k] = Number(v);
     }
     try {
-      await api.post(`/scrims/${scrim.id}/games`, {
-        game_no: Number(f.game_no), result: f.result, duration_min: Number(f.duration_min) || 0, stats,
-      });
+      const body = { game_no: Number(f.game_no), result: f.result, duration_min: Number(f.duration_min) || 0, stats };
+      if (edit) await api.patch(`/scrims/${scrim.id}/games/${initial!.id}`, body);
+      else await api.post(`/scrims/${scrim.id}/games`, body);
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
@@ -200,7 +215,7 @@ function GameForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => vo
   );
 
   return (
-    <Modal title={`Record game ${f.game_no} — Scrim #${scrim.number}`} onClose={onClose} wide>
+    <Modal title={edit ? `Edit game ${f.game_no} — Scrim #${scrim.number}` : `Record game ${f.game_no} — Scrim #${scrim.number}`} onClose={onClose} wide>
       <form onSubmit={save} className="space-y-4">
         <div className="grid grid-cols-3 gap-4">
           <Field label="Game #"><input className="input" value={f.game_no} onChange={(e) => set("game_no", e.target.value)} /></Field>
@@ -235,7 +250,7 @@ function GameForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: () => vo
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary">Save game</button>
+          <button className="btn-primary">{edit ? "Save changes" : "Save game"}</button>
         </div>
       </form>
     </Modal>
@@ -367,7 +382,9 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
   const [detail, setDetail] = useState<Scrim | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [showNew, setShowNew] = useState(false);
+  const [editScrim, setEditScrim] = useState(false);
   const [showGame, setShowGame] = useState(false);
+  const [editGame, setEditGame] = useState<null | Scrim["games"][number]>(null);
   const [showAttach, setShowAttach] = useState(false);
   const [filters, setFilters] = useState<{ opponent: string; result: string }>({ opponent: "", result: "" });
 
@@ -386,6 +403,12 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
     return u ? u.ign : "—";
   };
 
+  async function removeAttachment(sc: Scrim, att: Scrim["attachments"][number]) {
+    if (!confirm(`Remove "${att.label || att.kind}"?`)) return;
+    await api.patch(`/scrims/${sc.id}`, { attachments: sc.attachments.filter((x) => x !== att) });
+    load();
+  }
+
   // ------------------ detail ------------------
   if (id) {
     if (!detail) return <Spinner />;
@@ -399,6 +422,18 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           sub={`${dayLabel(s.date)} · ${fmtTime(s.time)} · ${s.format}${s.tournament_prep ? " · tournament prep" : ""}${s.server ? ` · ${s.server}` : ""}`}
           right={
             <div className="flex items-center gap-2">
+              {canManage && (
+                <>
+                  <button className="btn-ghost !py-1.5 !px-2.5 !text-[11px]" onClick={() => setEditScrim(true)} title="Edit scrim">Edit</button>
+                  <button className="btn-ghost !py-1.5 !px-2.5 !text-[11px] !text-crim" title="Delete scrim"
+                    onClick={async () => {
+                      if (confirm(`Delete Scrim #${s.number} vs ${s.opponent} and all its games?`)) {
+                        await api.del(`/scrims/${s.id}`);
+                        navigate("scrims");
+                      }
+                    }}><Trash2 size={12} /></button>
+                </>
+              )}
               {played ? <div className="text-right">
                 <div className="text-2xl font-extrabold tabular-nums leading-none">{s.score_us} - {s.score_them}</div>
                 <ResultBadge result={s.result} />
@@ -442,9 +477,15 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
               {s.attachments.filter((a) => a.kind === "screenshot" && (a.url ?? "").startsWith("/api/files/")).length > 0 && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {s.attachments.filter((a) => a.kind === "screenshot" && (a.url ?? "").startsWith("/api/files/")).map((a, i) => (
-                    <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.label}>
-                      <img src={a.url} alt={a.label} className="rounded-lg border border-edge object-cover w-full aspect-video hover:border-crim/50 transition" />
-                    </a>
+                    <div key={i} className="relative">
+                      <a href={a.url} target="_blank" rel="noreferrer" title={a.label}>
+                        <img src={a.url} alt={a.label} className="rounded-lg border border-edge object-cover w-full aspect-video hover:border-crim/50 transition" />
+                      </a>
+                      {canManage && (
+                        <button className="absolute -top-1.5 -right-1.5 h-4.5 w-4.5 rounded-full bg-crim text-white text-[9px] font-extrabold flex items-center justify-center"
+                          title="Remove" onClick={() => void removeAttachment(s, a)}>✕</button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -455,9 +496,15 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                 {s.attachments.filter((a) => !(a.url ?? "").startsWith("/api/files/") || (a.kind !== "screenshot" && a.kind !== "video")).map((a, i) => {
                   const Icon = a.kind === "screenshot" ? ImageIcon : a.kind === "video" ? Film : a.kind === "stats" ? FileText : Link2;
                   return (
-                    <a key={i} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-sky hover:underline">
-                      <Icon size={12} /> {a.label || a.kind} <span className="text-faint text-[10px] uppercase">{a.kind}</span>
-                    </a>
+                    <span key={i} className="flex items-center gap-2">
+                      <a href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-sky hover:underline min-w-0">
+                        <Icon size={12} /> {a.label || a.kind} <span className="text-faint text-[10px] uppercase">{a.kind}</span>
+                      </a>
+                      {canManage && (
+                        <button className="text-faint hover:text-crim shrink-0" title="Remove"
+                          onClick={() => void removeAttachment(s, a)}><Trash2 size={11} /></button>
+                      )}
+                    </span>
                   );
                 })}
               </div>
@@ -483,6 +530,18 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                       <Badge>Game {g.game_no}</Badge>
                       <ResultBadge result={g.result} />
                       <span className="text-[12px] text-faint">{g.duration_min} min</span>
+                      {canUpload && (
+                        <span className="ml-auto flex gap-1">
+                          <button className="text-faint hover:text-crim" title="Edit game" onClick={() => setEditGame(g)}><Pencil size={12} /></button>
+                          <button className="text-faint hover:text-crim" title="Delete game"
+                            onClick={async () => {
+                              if (confirm(`Delete game ${g.game_no}? Series score is recomputed.`)) {
+                                await api.del(`/scrims/${s.id}/games/${g.id}`);
+                                load();
+                              }
+                            }}><Trash2 size={12} /></button>
+                        </span>
+                      )}
                     </div>
                     <div className="text-[12px] text-faint">
                       {st.kills ?? "—"}K / {st.deaths ?? "—"}D · {st.gold ? `${(st.gold / 1000).toFixed(1)}k gold` : ""}
@@ -519,7 +578,9 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           : played && s.result === "LOSS" && null}
 
         {showNew && <NewScrimForm meta={meta} users={users} onClose={() => setShowNew(false)} onSaved={(newId) => { setShowNew(false); navigate("scrims", newId); }} />}
+        {editScrim && <NewScrimForm meta={meta} users={users} initial={s} onClose={() => setEditScrim(false)} onSaved={() => { setEditScrim(false); load(); }} />}
         {showGame && <GameForm scrim={s} onClose={() => setShowGame(false)} onSaved={() => { setShowGame(false); load(); }} />}
+        {editGame && <GameForm scrim={s} initial={editGame} onClose={() => setEditGame(null)} onSaved={() => { setEditGame(null); load(); }} />}
         {showAttach && <AttachmentForm scrim={s} onClose={() => setShowAttach(false)} onSaved={() => { setShowAttach(false); load(); }} />}
       </div>
     );

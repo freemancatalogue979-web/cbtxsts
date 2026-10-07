@@ -6,8 +6,10 @@ reminders are fanned out here too (training router calls ``notify``).
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+import secrets
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -41,9 +43,10 @@ def notify(db: Session, actor: User | None, user_ids: list[int], kind: str,
     ids = [i for i in dict.fromkeys(user_ids) if i != actor_id]
     if not ids:
         return 0
+    batch = secrets.token_hex(8)
     existing = set(db.scalars(select(User.id).where(User.id.in_(ids), User.active.is_(True))))
     for uid in sorted(existing):
-        db.add(Notification(user_id=uid, actor_id=actor_id, kind=kind,
+        db.add(Notification(user_id=uid, actor_id=actor_id, kind=kind, batch=batch,
                             title=title[:160], body=body, link=link))
     return len(existing)
 
@@ -118,3 +121,59 @@ def send(payload: SendIn, db: Session = Depends(get_db), user=Depends(get_curren
     sent = notify(db, user, list(ids), "announcement", "Announcement", payload.body.strip())
     db.commit()
     return {"sent": sent}
+
+
+@router.delete("/{notification_id}", status_code=204)
+def delete_notification(notification_id: int, retract_all: bool = Query(default=False, alias="all"),
+                        db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Any member can clear notifications from their own inbox; staff may
+    remove anyone's copy, and ?all=1 retracts every copy of an announcement."""
+    row = db.get(Notification, notification_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    staff = user.role in STAFF_ROLES or user.role == "admin"
+    if row.user_id != user.id and not staff:
+        raise HTTPException(status_code=403, detail="Not your notification")
+    if retract_all and staff:
+        stmt = (select(Notification).where(Notification.batch == row.batch, Notification.batch != "")
+                if row.batch else
+                select(Notification).where(Notification.actor_id == row.actor_id,
+                                           Notification.title == row.title,
+                                           Notification.kind == row.kind))
+        for c in db.scalars(stmt).all():
+            db.delete(c)
+    else:
+        db.delete(row)
+    db.commit()
+
+
+class RetractIn(BaseModel):
+    title: str
+
+
+@router.post("/retract")
+def retract_announcement(payload: RetractIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Staff cancels an announcement for everyone (by exact title) — the sender
+    has no copy of their own broadcast, so this works from any staff seat."""
+    if user.role not in STAFF_ROLES and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Staff only")
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title required")
+    latest = db.scalar(select(Notification).where(
+        Notification.title == title, Notification.kind == "announcement",
+    ).order_by(Notification.created_at.desc()))
+    if latest is None:
+        return {"deleted": 0}
+    stmt = (select(Notification).where(Notification.batch == latest.batch, Notification.batch != "")
+            if latest.batch else
+            select(Notification).where(
+                Notification.actor_id == latest.actor_id,
+                Notification.title == latest.title,
+                Notification.created_at == latest.created_at,
+                Notification.kind == latest.kind))
+    rows = db.scalars(stmt).all()
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    return {"deleted": len(rows)}

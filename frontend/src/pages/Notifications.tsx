@@ -1,4 +1,4 @@
-import { BellRing, CheckCheck, Megaphone, Send } from "lucide-react";
+import { BellRing, CheckCheck, Megaphone, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { NoticeItem, User } from "../lib/types";
@@ -118,6 +118,17 @@ export function NotificationsPage({ me }: { me: User }) {
     finally { setMarking(false); }
   }
 
+  async function deleteItem(n: NoticeItem, retract: boolean) {
+    const msg = retract
+      ? `Retract "${n.title}" for EVERYONE it was sent to?`
+      : `Remove "${n.title}" from your inbox?`;
+    if (!confirm(msg)) return;
+    if (retract) await api.post("/notifications/retract", { title: n.title });
+    else await api.del(`/notifications/${n.id}`);
+    refreshBadge();
+    load();
+  }
+
   async function openItem(n: NoticeItem) {
     if (!n.read) {
       api.post(`/notifications/${n.id}/read`, {}).then(() => {
@@ -145,21 +156,31 @@ export function NotificationsPage({ me }: { me: User }) {
         {!items && <Spinner />}
         <div className="space-y-2">
           {(items ?? []).map((n) => (
-            <button key={n.id} onClick={() => openItem(n)}
-              className={`w-full text-left card p-4 flex items-start gap-3 transition-colors ${n.read ? "opacity-60" : "card-hover border-l-2 !border-l-crim"}`}>
-              <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.read ? "bg-edge-2" : "bg-crim animate-pulse"}`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`chip !text-[8.5px] uppercase ${n.kind === "reminder" ? "text-amber border-amber/40 bg-amber/10" : "text-sky border-sky/40 bg-sky/10"}`}>
-                    {n.kind}
-                  </span>
-                  <span className="text-[13px] font-extrabold">{n.title}</span>
-                  <span className="text-[10.5px] text-faint ml-auto">{when(n.created_at)}</span>
+            <div key={n.id} className="relative">
+              <button onClick={() => openItem(n)}
+                className={`w-full text-left card p-4 flex items-start gap-3 transition-colors ${n.read ? "opacity-60" : "card-hover border-l-2 !border-l-crim"}`}>
+                <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.read ? "bg-edge-2" : "bg-crim animate-pulse"}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`chip !text-[8.5px] uppercase ${n.kind === "reminder" ? "text-amber border-amber/40 bg-amber/10" : "text-sky border-sky/40 bg-sky/10"}`}>
+                      {n.kind}
+                    </span>
+                    <span className="text-[13px] font-extrabold">{n.title}</span>
+                    <span className="text-[10.5px] text-faint ml-auto">{when(n.created_at)}</span>
+                  </div>
+                  <p className="text-[12.5px] text-mute mt-1 leading-relaxed whitespace-pre-wrap">{n.body}</p>
+                  <div className="text-[10.5px] text-faint mt-1.5">from {n.from}{n.link ? " · tap to open" : ""}</div>
                 </div>
-                <p className="text-[12.5px] text-mute mt-1 leading-relaxed whitespace-pre-wrap">{n.body}</p>
-                <div className="text-[10.5px] text-faint mt-1.5">from {n.from}{n.link ? " · tap to open" : ""}</div>
+              </button>
+              <div className="absolute top-2.5 right-2.5 flex gap-1">
+                {canPost && n.kind === "announcement" && (
+                  <button className="chip !py-1 !px-2 !text-[9px] text-crim border-crim/40 hover:bg-crim/10"
+                    title="Retract for everyone" onClick={() => deleteItem(n, true)}>retract</button>
+                )}
+                <button className="text-faint hover:text-crim p-1" title="Remove from inbox"
+                  onClick={() => deleteItem(n, false)}><Trash2 size={13} /></button>
               </div>
-            </button>
+            </div>
           ))}
           {items && items.length === 0 && <Empty title="Nothing yet" hint="Announcements and assignment reminders land here." />}
         </div>

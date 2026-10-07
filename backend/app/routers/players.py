@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from datetime import date as dt_date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -167,6 +169,33 @@ def add_development(user_id: int, payload: DevIn, db: Session = Depends(get_db),
     db.commit()
     db.refresh(entry)
     return dev_out(entry, {user.id: user.ign or user.name})
+
+
+class DevPatch(BaseModel):
+    category: str | None = None
+    rating: float | None = None
+    notes: str | None = None
+    date: dt_date | None = None
+
+
+@router.patch("/development/{entry_id}")
+def update_development(entry_id: int, payload: DevPatch, db: Session = Depends(get_db),
+                       user=Depends(get_current_user)):
+    entry = db.get(DevelopmentEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    staff = can.rate_players(user)
+    require(staff or (entry.source == "self" and entry.created_by == user.id), "edit this entry")
+    data = payload.model_dump(exclude_unset=True)
+    if (cat := data.pop("category", None)) is not None:
+        entry.category = cat.upper()
+    if (dt := data.pop("date", None)) is not None:
+        entry.entry_date = dt
+    for k, v in data.items():
+        setattr(entry, k, v)
+    db.commit()
+    db.refresh(entry)
+    return dev_out(entry, {entry.created_by: (user.ign or user.name)})
 
 
 @router.delete("/development/{entry_id}", status_code=204)

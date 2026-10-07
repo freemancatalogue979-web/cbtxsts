@@ -394,6 +394,7 @@ class Notification(Base):
     link: Mapped[str] = mapped_column(String(200), default="")
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    batch: Mapped[str] = mapped_column(String(16), default="", index=True)  # fan-out group id (retraction)
 
 
 class MapBoard(Base):

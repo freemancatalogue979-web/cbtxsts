@@ -1,4 +1,4 @@
-import { Plus, ShieldBan } from "lucide-react";
+import { Plus, ShieldBan, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import type { Ban, Hero, Meta, User } from "../lib/types";
@@ -82,9 +82,9 @@ function BanForm({ heroes, meta, initial, onSaved, onClose }: {
   );
 }
 
-function BanCard({ ban, heroMap, canManage, onToggle, onEdit }: {
+function BanCard({ ban, heroMap, canManage, onToggle, onEdit, onDelete }: {
   ban: Ban; heroMap: Map<number, Hero>; canManage: boolean;
-  onToggle: () => void; onEdit: () => void;
+  onToggle: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const hero = ban.hero_id ? heroMap.get(ban.hero_id) : undefined;
   return (
@@ -106,6 +106,8 @@ function BanCard({ ban, heroMap, canManage, onToggle, onEdit }: {
         <div className="flex gap-2 mt-2.5">
           <button className="text-[11px] text-faint hover:text-text" onClick={onEdit}>Edit</button>
           <button className="text-[11px] text-faint hover:text-text" onClick={onToggle}>{ban.active ? "Deactivate" : "Reactivate"}</button>
+          <button className="text-[11px] text-faint hover:text-crim" title="Delete"
+            onClick={() => void onDelete()}><Trash2 size={12} /></button>
         </div>
       )}
     </div>
@@ -141,6 +143,7 @@ export function BansPage({ me, meta }: { me: User; meta: Meta }) {
     ban: b, heroMap, canManage,
     onToggle: async () => { await api.patch(`/bans/${b.id}`, { active: !b.active }); load(); },
     onEdit: () => setForm(b),
+    onDelete: async () => { if (confirm(`Delete ${b.hero_name} ban${b.opponent ? ` vs ${b.opponent}` : ""}?`)) { await api.del(`/bans/${b.id}`); load(); } },
   });
 
   return (
