@@ -39,6 +39,8 @@ function BoardEditor({ id }: { id: number }) {
   const [stroke, setStroke] = useState<number[][] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"game" | "diagram">("game");
+  const [gameMapFailed, setGameMapFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [heroQ, setHeroQ] = useState("");
@@ -243,6 +245,16 @@ function BoardEditor({ id }: { id: number }) {
               </span>
             )}
             <span className="mx-1.5 w-px h-5 bg-edge" />
+            <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
+              {(["game", "diagram"] as const).map((m) => (
+                <button key={m} type="button"
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
+                  onClick={() => setMapStyle(m)}>
+                  {m === "game" ? "Game map" : "Diagram"}
+                </button>
+              ))}
+            </div>
+            <span className="mx-1.5 w-px h-5 bg-edge" />
             <button className="btn-ghost !px-2 !py-1.5 !text-[11.5px]" onClick={undo} disabled={history.length === 0}>
               <RotateCcw size={13} /> Undo
             </button>
@@ -265,7 +277,17 @@ function BoardEditor({ id }: { id: number }) {
               onPointerUp={onAreaUp}
               onPointerLeave={onAreaUp}
             >
-              <BattlefieldMap className="absolute inset-0" />
+              {mapStyle === "game" && !gameMapFailed ? (
+                <img
+                  src="https://mlbbhub.com/images/strategy-map-1400.webp"
+                  alt="Land of Dawn battlefield"
+                  draggable={false}
+                  onError={() => { setGameMapFailed(true); setMapStyle("diagram"); }}
+                  className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+                />
+              ) : (
+                <BattlefieldMap className="absolute inset-0" />
+              )}
 
               {/* saved strokes + live stroke */}
               <svg viewBox="0 0 100 100" preserveAspectRatio="none"
