@@ -141,6 +141,7 @@ class GameIn(BaseModel):
 
 class ReviewIn(BaseModel):
     scrim_id: int | None = None
+    tournament_match_id: int | None = None
     opponent: str = ""
     date: dt_date | None = None
     duration_min: float = 0

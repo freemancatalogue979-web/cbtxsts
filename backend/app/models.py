@@ -283,6 +283,50 @@ class ScrimGame(Base):
     scrim: Mapped[Scrim] = relationship(back_populates="games")
 
 
+class Tournament(Base):
+    """Named competitions (MPL Snapshot Cup): schedule → matches → drafts/results."""
+    __tablename__ = "tournaments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="upcoming", index=True)  # upcoming|ongoing|finished
+    review_queued: Mapped[bool] = mapped_column(Boolean, default=False)  # set for review
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    matches: Mapped[list["TournamentMatch"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan", order_by="TournamentMatch.match_no"
+    )
+
+
+class TournamentMatch(Base):
+    __tablename__ = "tournament_matches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournaments.id", ondelete="CASCADE"), index=True)
+    match_no: Mapped[int] = mapped_column(Integer, default=1)
+    stage: Mapped[str] = mapped_column(String(80), default="", index=True)  # e.g. Day 1 · Groups · Finals
+    scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    start_time: Mapped[str] = mapped_column(String(8), default="")
+    opponent: Mapped[str] = mapped_column(String(120), default="")
+    format: Mapped[str] = mapped_column(String(8), default="BO3")
+    status: Mapped[str] = mapped_column(String(20), default="scheduled", index=True)  # scheduled|played|cancelled
+    result: Mapped[str] = mapped_column(String(8), default="", index=True)  # WIN|LOSS|DRAW|""
+    score_us: Mapped[int] = mapped_column(Integer, default=0)
+    score_them: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    draft: Mapped[str] = mapped_column(Text, default="{}")  # JSON bans/picks
+    attachments: Mapped[str] = mapped_column(Text, default="[]")  # JSON evidence [{kind,label,url}]
+    review_queued: Mapped[bool] = mapped_column(Boolean, default=False)  # enters review flow
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    tournament: Mapped[Tournament] = relationship(back_populates="matches")
+    review: Mapped["MatchReview | None"] = relationship(back_populates="tournament_match", uselist=False)
+
+
 class MatchReview(Base):
     """Mandatory after every lost competitive game: NO REVIEW, NO NEXT SCRIM."""
 
@@ -290,6 +334,7 @@ class MatchReview(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     scrim_id: Mapped[int | None] = mapped_column(ForeignKey("scrims.id", ondelete="SET NULL"), nullable=True, unique=True)
+    tournament_match_id: Mapped[int | None] = mapped_column(ForeignKey("tournament_matches.id", ondelete="SET NULL"), nullable=True, unique=True)
     opponent: Mapped[str] = mapped_column(String(120), default="")
     review_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     duration_min: Mapped[float] = mapped_column(Float, default=0)
@@ -313,6 +358,7 @@ class MatchReview(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     scrim: Mapped[Scrim | None] = relationship(back_populates="review")
+    tournament_match: Mapped["TournamentMatch | None"] = relationship(back_populates="review")
 
 
 # ---------------------------------------------------------------------------

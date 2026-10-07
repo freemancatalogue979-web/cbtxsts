@@ -8,6 +8,7 @@ import { Login } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 import { TrainingPage } from "./pages/Training";
 import { ScrimsPage } from "./pages/Scrims";
+import { TournamentsPage } from "./pages/Tournaments";
 import { ReviewsPage } from "./pages/Reviews";
 import { HeroesPage } from "./pages/Heroes";
 import { PlayersPage } from "./pages/Players";
@@ -78,6 +79,9 @@ export default function App() {
   switch (section) {
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;
+      break;
+    case "tournaments":
+      page = <TournamentsPage me={user} meta={meta} parts={rest} />;
       break;
     case "scrims":
       page = <ScrimsPage me={user} meta={meta} parts={rest} />;

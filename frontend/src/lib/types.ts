@@ -56,6 +56,47 @@ export interface Attachment {
   kind?: string;
 }
 
+export interface TournamentMatchT {
+  id: number;
+  match_no: number;
+  stage: string;
+  scheduled_date: string | null;
+  start_time: string;
+  opponent: string;
+  format: string;
+  status: "scheduled" | "played" | "cancelled" | string;
+  result: "WIN" | "LOSS" | "DRAW" | "" | string;
+  score_us: number;
+  score_them: number;
+  notes: string;
+  draft: { our_bans?: (string | null)[]; enemy_bans?: (string | null)[];
+    our_picks?: Record<string, string>; enemy_picks?: Record<string, string> };
+  attachments: { kind: string; label: string; url: string }[];
+  review_queued: boolean;
+  has_review: boolean;
+  review_id: number | null;
+  tournament_id?: number;
+  tournament_name?: string;
+}
+
+export interface Tournament {
+  id: number;
+  name: string;
+  status: "upcoming" | "ongoing" | "finished" | string;
+  review_queued: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string;
+  match_count: number;
+  played_count: number;
+  wins: number;
+  losses: number;
+  review_pending: number;
+  stages: string[];
+  matches?: TournamentMatchT[];
+  created_at: string | null;
+}
+
 export interface AssignedRef {
   id: number;
   ign: string;
@@ -133,6 +174,10 @@ export interface Review {
   id: number;
   scrim_id: number | null;
   scrim_number: number | null;
+  tournament_match_id: number | null;
+  tournament_id: number | null;
+  tournament_name: string | null;
+  tournament_stage: string | null;
   opponent: string;
   date: string | null;
   duration_min: number;

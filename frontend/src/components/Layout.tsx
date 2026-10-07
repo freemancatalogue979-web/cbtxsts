@@ -12,6 +12,7 @@ import {
   Menu,
   ShieldBan,
   Swords,
+  Trophy,
   Users,
   X,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const NAV = [
   { id: "dashboard", label: "Dashboard", icon: Home },
   { id: "training", label: "Training Center", icon: Dumbbell },
   { id: "scrims", label: "Scrims", icon: Swords },
+  { id: "tournaments", label: "Tournaments", icon: Trophy },
   { id: "reviews", label: "Match Reviews", icon: ClipboardList },
   { id: "heroes", label: "Hero Database", icon: Crosshair },
   { id: "players", label: "Players", icon: Users },

@@ -1,7 +1,7 @@
-import { AlertTriangle, FileText, Plus } from "lucide-react";
+import { AlertTriangle, FileText, Plus, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { Meta, Review, Scrim, User } from "../lib/types";
+import type { Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, navigate, REVIEW_STATUS_STYLE } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
 import { DraftBoard } from "../components/DraftBoard";
@@ -16,8 +16,9 @@ function emptyDraft() {
   return { our_bans: ["", "", "", "", ""], enemy_bans: ["", "", "", "", ""], our_picks: {} as Record<string, string>, enemy_picks: {} as Record<string, string> };
 }
 
-function ReviewForm({ meta, users, initial, scrim, onSaved, onClose }: {
+function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
   meta: Meta; users: User[]; initial: Partial<Review>; scrim: Scrim | null;
+  tmatch: TournamentMatchT | null;
   onSaved: (id: number) => void; onClose: () => void;
 }) {
   const edit = Boolean(initial.id);
@@ -70,7 +71,7 @@ function ReviewForm({ meta, users, initial, scrim, onSaved, onClose }: {
         const r = await api.patch<Review>(`/reviews/${initial.id}`, body);
         id = r.id;
       } else {
-        const r = await api.post<Review>("/reviews", { ...body, scrim_id: scrim?.id ?? null });
+        const r = await api.post<Review>("/reviews", { ...body, scrim_id: scrim?.id ?? null, tournament_match_id: tmatch?.id ?? null });
         id = r.id;
       }
       onSaved(id);
@@ -209,7 +210,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus }: {
     <div className="space-y-5">
       <button className="label !text-crim" onClick={() => navigate("reviews")}>← All reviews</button>
       <PageTitle
-        title={`Match Review — ${review.scrim_number ? `Scrim #${review.scrim_number}` : "Post-game"}`}
+        title={`Match Review — ${review.tournament_name ? `🏆 ${review.tournament_name}${review.tournament_stage ? ` · ${review.tournament_stage}` : ""}` : review.scrim_number ? `Scrim #${review.scrim_number}` : "Post-game"}`}
         sub={`vs ${review.opponent} · ${dayLabel(review.date)} · ${review.result}${review.duration_min ? ` · ${review.duration_min} min` : ""}`}
         right={<div className="flex items-center gap-2">
           <Badge cls={st.cls}>{st.label}</Badge>
@@ -298,6 +299,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [scrims, setScrims] = useState<Scrim[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [tQueue, setTQueue] = useState<TournamentMatchT[]>([]);
   const [tab, setTab] = useState("all");
   const [editing, setEditing] = useState(false);
 
@@ -307,37 +309,61 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   const load = useCallback(() => {
     api.get<Review[]>("/reviews").then(setReviews).catch(() => setReviews([]));
     api.get<Scrim[]>("/scrims").then(setScrims).catch(() => setScrims([]));
+    api.get<TournamentMatchT[]>("/tournaments/review-queue").then(setTQueue).catch(() => setTQueue([]));
     api.get<User[]>("/admin/users").then(setUsers).catch(() => setUsers([]));
   }, []);
   useEffect(load, [load]);
 
-  // -------- create flow (optionally prefilled from a scrim) --------
+  // -------- create flow (optionally prefilled from a scrim or tournament match) --------
   if (sub === "new") {
     const scrimIdParam = param?.startsWith("scrim=") ? Number(param.split("=")[1]) : null;
+    const tmatchParam = param?.startsWith("tmatch=") ? Number(param.split("=")[1]) : null;
     const scrim = scrims.find((s) => s.id === scrimIdParam) ?? null;
-    const draftSource = scrim?.games?.length ? [...scrim.games].reverse().find((g) => g.draft?.our_picks)?.draft : undefined;
+    const tmatch = tQueue.find((m) => m.id === tmatchParam) ?? null;
+    const draftSource = scrim?.games?.length ? [...scrim.games].reverse().find((g) => g.draft?.our_picks)?.draft
+      : tmatch?.draft?.our_picks ? tmatch.draft as Review["draft"] : undefined;
     return (
       <div className="max-w-3xl">
         <button className="label !text-crim mb-4 block" onClick={() => navigate("reviews")}>← All reviews</button>
-        <PageTitle title="New match review" sub="No review, no next scrim. Be honest — every game teaches us something." />
-        {!scrimIdParam && (
-          <div className="card p-4 mb-5">
-            <div className="label mb-2">Link to a scrim (recommended)</div>
-            <div className="flex flex-wrap gap-1.5">
-              {scrims.filter((s) => s.status === "played" && !s.has_review).map((s) => (
-                <button key={s.id} className="chip card-hover" onClick={() => navigate("reviews", "new", `scrim=${s.id}`)}>
-                  #{s.number} vs {s.opponent} · {s.result}
-                </button>
-              ))}
-              {scrims.filter((s) => s.status === "played" && !s.has_review).length === 0 && (
-                <span className="text-[12px] text-faint">No unreviewed played scrims — you can still file a free-form review below.</span>
-              )}
+        <PageTitle title="New match review"
+          sub={tmatch ? `Tournament match: ${tmatch.tournament_name} · ${tmatch.stage || "Match"} vs ${tmatch.opponent}`
+            : "No review, no next scrim. Be honest — every game teaches us something."} />
+        {!scrimIdParam && !tmatchParam && (
+          <div className="space-y-3 mb-5">
+            <div className="card p-4">
+              <div className="label mb-2">Link to a scrim (recommended)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {scrims.filter((s) => s.status === "played" && !s.has_review).map((s) => (
+                  <button key={s.id} className="chip card-hover" onClick={() => navigate("reviews", "new", `scrim=${s.id}`)}>
+                    #{s.number} vs {s.opponent} · {s.result}
+                  </button>
+                ))}
+                {scrims.filter((s) => s.status === "played" && !s.has_review).length === 0 && (
+                  <span className="text-[12px] text-faint">No unreviewed played scrims — you can still file a free-form review below.</span>
+                )}
+              </div>
             </div>
+            {tQueue.length > 0 && (
+              <div className="card p-4 border-amber/40">
+                <div className="label mb-2 !text-amber">Tournament matches awaiting review</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tQueue.map((m) => (
+                    <button key={m.id} className="chip card-hover !text-amber border-amber/40"
+                      onClick={() => navigate("reviews", "new", `tmatch=${m.id}`)}>
+                      <Trophy size={10} /> {m.tournament_name} · {m.stage || "M" + m.match_no} vs {m.opponent} · {m.result}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         {canEdit ? (
-          <ReviewForm meta={meta} users={users}
-            initial={draftSource ? { draft: draftSource as Review["draft"] } : {}}
+          <ReviewForm meta={meta} users={users} tmatch={tmatch ? { id: tmatch.id } as TournamentMatchT : null}
+            initial={{
+              ...(draftSource ? { draft: draftSource as Review["draft"] } : {}),
+              ...(tmatch ? { opponent: tmatch.opponent, result: tmatch.result as Review["result"], date: tmatch.scheduled_date ?? "" } : {}),
+            }}
             scrim={scrim}
             onClose={() => navigate(scrim ? ("scrims") : "reviews")}
             onSaved={(id) => { load(); navigate("reviews", id); }} />
@@ -361,7 +387,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
       return (
         <div className="max-w-3xl">
           <PageTitle title={`Editing review — Scrim #${review.scrim_number ?? ""}`} />
-          <ReviewForm meta={meta} users={users} initial={review} scrim={scrim}
+          <ReviewForm meta={meta} users={users} initial={review} scrim={scrim} tmatch={null}
             onClose={() => setEditing(false)}
             onSaved={(id) => { setEditing(false); load(); navigate("reviews", id); }} />
         </div>
@@ -401,8 +427,11 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className={`chip ${st.cls}`}>{st.label}</span>
                 {r.mandatory && <Badge cls="text-amber border-amber/40 bg-amber/10 !text-[9px] uppercase">mandatory</Badge>}
+                {r.tournament_name && (
+                  <span className="chip !py-0.5 !text-[9px] text-amber border-amber/40"><Trophy size={9} /> {r.tournament_name}</span>
+                )}
                 <span className="text-sm font-bold">
-                  {r.scrim_number ? `Scrim #${r.scrim_number}` : "Review"} vs {r.opponent}
+                  {r.tournament_name ? (r.tournament_stage || "Match") : r.scrim_number ? `Scrim #${r.scrim_number}` : "Review"} vs {r.opponent}
                 </span>
                 <span className="text-[11px] text-faint">{dayLabel(r.date)} · {r.result}</span>
               </div>

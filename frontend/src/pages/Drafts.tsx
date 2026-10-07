@@ -26,7 +26,7 @@ function blankDraft() {
 
 const STATUS_RANK: Record<string, number> = { META: 0, STRONG: 1, VIABLE: 2, SITUATIONAL: 3, WEAK: 4 };
 
-function HeroPicker({ heroes, value, onChange }: { heroes: Hero[]; value: string; onChange: (v: string) => void }) {
+export function HeroPicker({ heroes, value, onChange }: { heroes: Hero[]; value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const cur = heroes.find((h) => h.name === value);

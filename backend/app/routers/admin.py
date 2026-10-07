@@ -119,6 +119,8 @@ WIPEABLE: dict[str, str] = {
     "ban_entries": "Ban board entries",
     "events": "Calendar events",
     "notifications": "Notifications + announcements",
+    "tournaments": "Tournaments",
+    "tournament_matches": "Tournament matches",
     "training_programs": "Training programs",
     "program_weeks": "Program weeks/tasks",
     "week_progress": "Program week progress",

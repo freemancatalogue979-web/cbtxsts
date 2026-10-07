@@ -183,10 +183,15 @@ def scrim_out(s: Scrim, *, with_games: bool = True) -> dict:
 
 
 def review_out(r: MatchReview) -> dict:
+    tm = r.tournament_match
     return {
         "id": r.id,
         "scrim_id": r.scrim_id,
         "scrim_number": r.scrim.number if r.scrim else None,
+        "tournament_match_id": r.tournament_match_id,
+        "tournament_id": tm.tournament_id if tm else None,
+        "tournament_name": tm.tournament.name if tm else None,
+        "tournament_stage": tm.stage if tm else None,
         "opponent": r.opponent,
         "date": r.review_date.isoformat() if r.review_date else None,
         "duration_min": r.duration_min,

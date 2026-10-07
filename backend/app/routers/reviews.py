@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
-from ..models import MatchReview, Scrim, dumps, loads
+from ..models import MatchReview, Scrim, TournamentMatch, dumps, loads
 from ..schemas import ReviewIn, ReviewPatch
 from ..serializers import review_out
 
@@ -52,13 +52,21 @@ def create_review(payload: ReviewIn, db: Session = Depends(get_db), user=Depends
             raise HTTPException(status_code=404, detail="Scrim not found")
         if db.scalar(select(MatchReview).where(MatchReview.scrim_id == scrim.id)):
             raise HTTPException(status_code=409, detail="That scrim already has a review — edit it instead")
+    tmatch = None
+    if payload.tournament_match_id is not None:
+        tmatch = db.get(TournamentMatch, payload.tournament_match_id)
+        if tmatch is None:
+            raise HTTPException(status_code=404, detail="Tournament match not found")
+        if db.scalar(select(MatchReview).where(MatchReview.tournament_match_id == tmatch.id)):
+            raise HTTPException(status_code=409, detail="That match already has a review — edit it instead")
     mandatory = bool(scrim and scrim.result == "LOSS")
     review = MatchReview(
         scrim_id=payload.scrim_id,
-        opponent=payload.opponent or (scrim.opponent if scrim else ""),
-        review_date=payload.date or (scrim.scrim_date if scrim else None),
+        tournament_match_id=payload.tournament_match_id,
+        opponent=payload.opponent or (scrim.opponent if scrim else "") or (tmatch.opponent if tmatch else ""),
+        review_date=payload.date or (scrim.scrim_date if scrim else None) or (tmatch.scheduled_date if tmatch else None),
         duration_min=payload.duration_min,
-        result=(payload.result or (scrim.result if scrim else "LOSS")).upper(),
+        result=(payload.result or (scrim.result if scrim else "") or (tmatch.result if tmatch else "LOSS")).upper(),
         player_ids=dumps(payload.player_ids),
         stats=dumps(payload.stats), draft=dumps(payload.draft),
         biggest_mistakes=dumps([m for m in payload.biggest_mistakes if str(m).strip()]),
