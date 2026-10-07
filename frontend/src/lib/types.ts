@@ -166,6 +166,19 @@ export interface Hero {
     category: string; confidence: number; games: number; win_rate: number | null;
   }[];
   on_ban_board?: { scope: string; priority: number | null; opponent: string; patch: string; reason: string }[];
+  profile?: HeroProfile | null;
+}
+
+export interface HeroProfile {
+  slug: string;
+  title: string;
+  roles: string[];
+  lanes: string[];
+  specialties: string[];
+  release: string;
+  skins: number;
+  ratings: { offense: number; durability: number; ability_effects: number; difficulty: number };
+  skills: string[];
 }
 
 export interface PoolEntry {

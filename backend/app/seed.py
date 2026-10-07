@@ -273,7 +273,7 @@ def seed_heroes(db: Session) -> dict[str, Hero]:
 def apply_live_stats(db: Session) -> tuple[int, int]:
     """Idempotent refresh for a running database (no reseed): update rates,
     tier and status from hero_stats.py for every known hero and insert any
-    hero missing from the DB (new releases). Internal ratings/notes kept."""
+    hero missing from the DB (new or announced releases covers Dori/Wasp)."""
     from .hero_stats import lookup, rating_from_score, TIER_TO_STATUS, SITE_STATS
     from .hero_roster import ROSTER, TUNING
 
@@ -292,19 +292,21 @@ def apply_live_stats(db: Session) -> tuple[int, int]:
             h.tier = tier
             h.meta_status = TIER_TO_STATUS.get(tier, h.meta_status)
             updated += 1
-    roster_by_name = {r[0]: r for r in ROSTER}
-    for slug, st in SITE_STATS.items():
-        _, tier, win, ban, pick, score, low = st
-        name = st[0]
+    # insert every roster hero missing from the DB, whether ranked or announced
+    for name, lane, klass, diff in ROSTER:
         if name in existing:
             continue
-        lane, klass, diff = roster_by_name.get(name, ("EXP", "Fighter", 5))[1:]
+        st = lookup(name)
         t = TUNING.get(name)
+        _, stier, swin, sban, spick, score, low = st if st else (None,)*7
         db.add(Hero(
             name=name, role=lane, hero_class=klass, difficulty=diff,
-            meta_status=TIER_TO_STATUS.get(tier, "VIABLE"), tier=tier, patch=CURRENT_PATCH,
-            win_rate=win, pick_rate=pick, ban_rate=ban,
-            clover_rating=t[2] if t else rating_from_score(score, low),
+            meta_status=TIER_TO_STATUS.get(stier, "VIABLE") if st else (t[0] if t else "VIABLE"),
+            tier=(stier if st else (t[1] if t else "B")), patch=CURRENT_PATCH,
+            win_rate=swin if st else 50.0,
+            pick_rate=spick if st else 0.3,
+            ban_rate=sban if st else 0.3,
+            clover_rating=t[2] if t else (rating_from_score(score, low) if st else 5.5),
             notes=t[3] if t else "",
             strong_against=dumps([]), weak_against=dumps([]), synergy=dumps([]),
         ))

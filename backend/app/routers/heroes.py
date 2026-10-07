@@ -60,6 +60,8 @@ def get_hero(hero_id: int, db: Session = Depends(get_db), user=Depends(get_curre
         {"scope": b.scope, "priority": b.priority, "opponent": b.opponent, "patch": b.patch, "reason": b.reason}
         for b in bans
     ]
+    from ..hero_profiles import profile_for
+    data["profile"] = profile_for(hero.name)
     return data
 
 

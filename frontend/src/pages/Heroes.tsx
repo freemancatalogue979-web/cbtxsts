@@ -140,6 +140,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
   if (id) {
     if (!detail) return <Spinner />;
     const h = detail;
+    const p = h.profile ?? null;
     return (
       <div className="space-y-8 max-w-4xl">
         <button className="label !text-crim" onClick={() => navigate("heroes")}>← Hero database</button>
@@ -148,7 +149,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         <div className="flex flex-wrap items-start gap-6">
           <HeroImg name={h.name} size={96} eager className="rounded-lg border border-edge-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)]" />
           <div className="flex-1 min-w-56">
-            <PageTitle title={h.name} sub={`${h.role} · ${h.hero_class} · difficulty ${h.difficulty}/10 · patch ${h.patch}`} />
+            <PageTitle title={h.name} sub={`${p ? `${p.title} · ` : ""}${h.role} · ${h.hero_class} · difficulty ${h.difficulty}/10 · patch ${h.patch}`} />
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className={`chip ${HERO_STATUS_STYLE[h.meta_status] ?? "text-mute"}`}>{h.meta_status}</span>
               <span className={`chip ${TIER_TONE[h.tier] ?? ""}`}>Tier {h.tier}</span>
@@ -214,6 +215,64 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             </div>
           </div>
         </div>
+
+        {p && (
+          <>
+            {/* Full profile: identity, ratings, skills */}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="card p-5">
+                <div className="label mb-3">Identity</div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between gap-3"><span className="text-faint">Title</span><span className="font-semibold text-right">{p.title}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-faint">Roles</span>
+                    <span className="flex flex-wrap gap-1.5 justify-end">{p.roles.map((x) => <span key={x} className="chip border-edge-2 text-text/85">{x}</span>)}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-faint">Lanes</span>
+                    <span className="flex flex-wrap gap-1.5 justify-end">{p.lanes.map((x) => <span key={x} className="chip border-edge-2 text-text/85">{x}</span>)}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-faint">Specialties</span>
+                    <span className="flex flex-wrap gap-1.5 justify-end">{p.specialties.map((x) => <span key={x} className="chip border-leaf/30 text-leaf/90">{x}</span>)}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-faint">Released</span><span className="font-semibold">{p.release}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-faint">Skins</span><span className="font-semibold tabular-nums">{p.skins}</span></div>
+                </div>
+              </div>
+              <div className="card p-5">
+                <div className="label mb-3">Power profile</div>
+                <div className="space-y-4">
+                  {([["Offense", p.ratings.offense], ["Durability", p.ratings.durability],
+                     ["Ability effects", p.ratings.ability_effects], ["Difficulty", p.ratings.difficulty]] as [string, number][]).map(([label, v]) => (
+                    <div key={label}>
+                      <div className="flex justify-between text-[11px] mb-1.5">
+                        <span className="text-mute font-semibold uppercase tracking-[0.14em]">{label}</span>
+                        <span className="font-extrabold tabular-nums">{v}/10</span>
+                      </div>
+                      <div className="flex gap-1">
+                        {Array.from({ length: 10 }).map((_, i) => (
+                          <span key={i} className={`h-1.5 flex-1 rounded-full ${i < v ? (label === "Difficulty" ? "bg-amber" : "bg-crim") : "bg-raised border border-edge/60"}`} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {p.skills.length > 0 && (
+              <div className="card p-5">
+                <div className="label mb-4">Skills</div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {p.skills.map((s, i) => (
+                    <div key={`${s}-${i}`} className="flex items-center gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
+                      <span className="w-7 h-7 rounded bg-overlay border border-edge-2 flex items-center justify-center text-[10px] font-extrabold text-crim shrink-0">
+                        {i === 0 ? "P" : i === p.skills.length - 1 ? "ULT" : `S${i}`}
+                      </span>
+                      <span className="text-[13px] font-bold leading-tight">{s}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] text-faint mt-3">P = passive · skill order per live game; multi-form heroes list every form's kit.</div>
+              </div>
+            )}
+          </>
+        )}
 
         {form && <HeroForm meta={meta} initial={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
       </div>
