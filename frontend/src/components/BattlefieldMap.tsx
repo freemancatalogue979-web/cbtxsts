@@ -1,9 +1,9 @@
 /** Tactical Land of Dawn battlefield diagram (blue base bottom-left, red top-right).
  *  Square 0..100 coordinate space; pure SVG so boards scale crisply everywhere. */
-export function BattlefieldMap({ className = "" }: { className?: string }) {
+export function BattlefieldMap({ className = "", translucent = false }: { className?: string; translucent?: boolean }) {
   const lane = { stroke: "#3a3a48", strokeWidth: 1.6, fill: "none", strokeLinecap: "round" as const };
-  const jungle = { fill: "#1c2b22", opacity: 0.85 };
-  const river = { fill: "#122736", opacity: 0.85 };
+  const jungle = { fill: "#1c2b22", opacity: translucent ? 0.55 : 0.85 };
+  const river = { fill: "#122736", opacity: translucent ? 0.55 : 0.85 };
   return (
     <svg viewBox="0 0 100 100" className={`w-full h-full ${className}`} preserveAspectRatio="none" aria-hidden>
       <defs>
@@ -18,7 +18,7 @@ export function BattlefieldMap({ className = "" }: { className?: string }) {
       </defs>
 
       {/* terrain */}
-      <rect x="0" y="0" width="100" height="100" fill="#10131c" />
+      <rect x="0" y="0" width="100" height="100" fill="#10131c" opacity={translucent ? 0.6 : 1} />
 
       {/* jungle quadrants */}
       <ellipse cx="26" cy="26" rx="17" ry="13" {...jungle} />

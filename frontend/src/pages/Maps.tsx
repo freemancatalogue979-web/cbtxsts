@@ -1,4 +1,4 @@
-import { Eraser, Hand, Layers, MousePointer2, PenLine, Plus, RotateCcw, Save, Swords, Trash2 } from "lucide-react";
+import { Eraser, Hand, Layers, Maximize2, Minimize2, MousePointer2, PenLine, Plus, RotateCcw, Save, Swords, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { DraftPlan, Hero, MapBoard, User } from "../lib/types";
@@ -39,14 +39,30 @@ function BoardEditor({ id }: { id: number }) {
   const [stroke, setStroke] = useState<number[][] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [mapStyle, setMapStyle] = useState<"game" | "diagram">("game");
+  const [mapStyle, setMapStyle] = useState<"clover" | "game" | "diagram">("clover");
   const [gameMapFailed, setGameMapFailed] = useState(false);
+  const [isFs, setIsFs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [heroes, setHeroes] = useState<Hero[]>([]);
   const [heroQ, setHeroQ] = useState("");
   const [newSide, setNewSide] = useState<Side>("ours");
   const [err, setErr] = useState<string | null>(null);
   const area = useRef<HTMLDivElement>(null);
+  const fsWrap = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      fsWrap.current?.requestFullscreen?.().catch(() => {});
+    }
+  }
 
   const load = useCallback(() => {
     api.get<MapBoard>(`/maps/${id}`).then((b) => {
@@ -220,7 +236,7 @@ function BoardEditor({ id }: { id: number }) {
 
       <div className="grid lg:grid-cols-[minmax(0,2.6fr)_minmax(240px,1fr)] gap-5 items-start">
         {/* ------- the board ------- */}
-        <div className="card overflow-hidden">
+        <div ref={fsWrap} className={`card overflow-hidden ${isFs ? "!rounded-none !border-0 bg-ink flex flex-col h-full" : ""}`}>
           {/* toolbar */}
           <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60">
             {([
@@ -246,14 +262,18 @@ function BoardEditor({ id }: { id: number }) {
             )}
             <span className="mx-1.5 w-px h-5 bg-edge" />
             <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
-              {(["game", "diagram"] as const).map((m) => (
+              {(["clover", "game", "diagram"] as const).map((m) => (
                 <button key={m} type="button"
                   className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
                   onClick={() => setMapStyle(m)}>
-                  {m === "game" ? "Game map" : "Diagram"}
+                  {m === "clover" ? "9C" : m === "game" ? "Game map" : "Diagram"}
                 </button>
               ))}
             </div>
+            <button className="btn-ghost !px-2 !py-1.5 !text-[11.5px] ml-1" onClick={toggleFullscreen}
+              title={isFs ? "Exit fullscreen (Esc)" : "Plan fullscreen"}>
+              {isFs ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
             <span className="mx-1.5 w-px h-5 bg-edge" />
             <button className="btn-ghost !px-2 !py-1.5 !text-[11.5px]" onClick={undo} disabled={history.length === 0}>
               <RotateCcw size={13} /> Undo
@@ -268,21 +288,33 @@ function BoardEditor({ id }: { id: number }) {
           </div>
 
           {/* map surface */}
-          <div className="p-2 sm:p-3">
+          <div className={isFs ? "flex-1 min-h-0 grid place-items-center p-2" : "p-2 sm:p-3"}>
             <div
               ref={area}
-              className="relative w-full aspect-square rounded-lg overflow-hidden border border-edge select-none touch-none"
+              className={`relative aspect-square rounded-lg overflow-hidden border border-edge select-none touch-none ${isFs ? "" : "w-full"}`}
+              style={isFs ? { width: "min(100%, calc(100dvh - 120px))" } : undefined}
               onPointerDown={onAreaDown}
               onPointerMove={onAreaMove}
               onPointerUp={onAreaUp}
               onPointerLeave={onAreaUp}
             >
-              {mapStyle === "game" && !gameMapFailed ? (
+              {mapStyle === "clover" ? (
+                <>
+                  <img
+                    src="/brand/tribal-clover.jpg"
+                    alt=""
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none opacity-60"
+                  />
+                  <div className="absolute inset-0 bg-ink/40 pointer-events-none" />
+                  <BattlefieldMap className="absolute inset-0" translucent />
+                </>
+              ) : mapStyle === "game" && !gameMapFailed ? (
                 <img
                   src="https://mlbbhub.com/images/strategy-map-1400.webp"
                   alt="Land of Dawn battlefield"
                   draggable={false}
-                  onError={() => { setGameMapFailed(true); setMapStyle("diagram"); }}
+                  onError={() => { setGameMapFailed(true); setMapStyle("clover"); }}
                   className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
                 />
               ) : (
