@@ -50,9 +50,11 @@ def get_current_user(
 ) -> User:
     # Bearer token (app fetch calls) or browser cookie (img/video/link loads)
     raw: str | None = None
-    if authorization and authorization.lower().startswith("bearer "):
-        raw = authorization.split(None, 1)[1].strip()
-    elif session_cookie:
+    if authorization:
+        scheme, _, credential = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            raw = credential.strip() or None
+    if not raw and session_cookie:
         raw = session_cookie
     if not raw:
         raise HTTPException(status_code=401, detail="Sign in required")
