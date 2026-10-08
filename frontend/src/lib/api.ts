@@ -21,11 +21,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const attempt = async (): Promise<Response> =>
+    fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  let res = await attempt();
+  // backend may be mid-restart during deploys — GETs get one quick retry
+  if (method === "GET" && !res.ok && res.status >= 500) {
+    await new Promise((r) => setTimeout(r, 900));
+    res = await attempt();
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let payload: unknown = undefined;
