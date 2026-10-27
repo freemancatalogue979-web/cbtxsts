@@ -70,7 +70,7 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
   );
 }
 
-function Section({ title, payload }: { title: string; payload: unknown }) {
+function Section({ title, payload, hide }: { title: string; payload: unknown; hide?: string[] }) {
   const env = payload as AnyRec | undefined;
   if (!env) return null;
   if (typeof env.error === "string" || (typeof env.code === "number" && env.code !== 0)) {
@@ -81,11 +81,13 @@ function Section({ title, payload }: { title: string; payload: unknown }) {
       </div>
     );
   }
+  const hidden = new Set((hide ?? []).map((k) => k.toLowerCase()));
   const data = env.data;
   const flat: [string, string][] = [];
   const walk = (o: unknown, prefix = "") => {
-    if (flat.length >= 10 || !o) return;
+    if (flat.length >= 12 || !o) return;
     if (["string", "number", "boolean"].includes(typeof o)) {
+      if (hidden.has((prefix.split(".").pop() ?? "").toLowerCase())) return;
       flat.push([prefix.replace(/^\.|\.$/g, "").replace(/\./g, " · ") || "value", stripTags(String(o)).slice(0, 90)]);
       return;
     }
@@ -96,13 +98,73 @@ function Section({ title, payload }: { title: string; payload: unknown }) {
     }
   };
   walk(data);
+  const isImgUrl = (v: string) => /^https?:\/\//.test(v) && (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(v) || /face\/|akmpicture|youngjoygame/.test(v));
   return (
     <div className="card p-4">
       <div className="label mb-2">{title}</div>
       <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5">
-        {flat.slice(0, 10).map(([k, v]) => <KV key={k} k={k} v={v} />)}
+        {flat.slice(0, 12).map(([k, v]) =>
+          isImgUrl(v) ? (
+            <div key={k} className="flex items-center justify-between gap-4 py-1.5">
+              <span className="label pt-0.5 shrink-0">{k}</span>
+              <img src={v} alt={k} width={44} height={44} loading="lazy" referrerPolicy="no-referrer"
+                className="rounded-lg border border-edge object-cover bg-raised"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            </div>
+          ) : (
+            <KV key={k} k={k} v={v} />
+          ))}
       </div>
-      {flat.length === 0 && <div className="text-[11.5px] text-faint">No scalar fields to display.</div>}
+      {flat.length === 0 && <div className="text-[11.5px] text-faint">No further fields.</div>}
+    </div>
+  );
+}
+
+/** Premium identity banner — avatar as art, rank/level as chips, no raw URLs. */
+function ProfileHeroCard({ status, info }: { status: LinkStatus; info: unknown }) {
+  const env = info as AnyRec | undefined;
+  const d = (env && env.code === 0 && typeof env.data === "object" && env.data ? env.data : {}) as AnyRec;
+  const avatar = pickStr(d, "avatar") ?? status.avatar ?? "";
+  const name = pickStr(d, "name") ?? status.name ?? "Linked account";
+  const level = pickNum(d, "level") ?? null;
+  const rank = pickNum(d, "rank_level") ?? null;
+  const best = pickNum(d, "history_rank_level") ?? null;
+  const country = (pickStr(d, "reg_country") ?? "").toUpperCase();
+  const roleId = pickNum(d, "roleId", "role_id") ?? status.role_id;
+  const zoneId = pickNum(d, "zoneId", "zone_id") ?? status.zone_id;
+  return (
+    <div className="card relative overflow-hidden border-leaf/40">
+      <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-crim/15 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -left-20 w-64 h-64 rounded-full bg-leaf/10 blur-3xl" />
+      <div className="relative p-5 flex flex-wrap items-center gap-5">
+        <div className="relative shrink-0">
+          {avatar ? (
+            <img src={avatar} alt={name} width={84} height={84} referrerPolicy="no-referrer"
+              className="rounded-2xl border-2 border-crim/60 shadow-[0_0_28px_rgba(225,29,72,0.35)] object-cover" />
+          ) : (
+            <span className="w-[84px] h-[84px] rounded-2xl border-2 border-edge-2 bg-raised grid place-items-center">
+              <Gamepad2 size={30} className="text-faint" />
+            </span>
+          )}
+          {level != null && (
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-crim text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg whitespace-nowrap">
+              Lv {level}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-leaf font-bold mb-1">MLBB · Verified link</div>
+          <div className="text-xl font-extrabold truncate">{name}</div>
+          <div className="text-[11px] text-faint font-mono mt-0.5">ID {roleId} · Zone {zoneId}</div>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {rank != null && <Badge cls="text-crim border-crim/50">Rank tier {rank}</Badge>}
+            {best != null && <Badge cls="text-amber border-amber/50">Best {best}</Badge>}
+            {country && <Badge cls="text-sky border-sky/50">{country}</Badge>}
+          </div>
+        </div>
+        <Badge cls="text-leaf border-leaf/40">connected</Badge>
+      </div>
+      <div className="relative px-5 pb-3 text-[9.5px] text-faint">Tier values are the official ladder index as reported upstream.</div>
     </div>
   );
 }
@@ -189,20 +251,12 @@ export function AccountMLBBPage() {
         </>
       ) : (
         <>
-          <div className="card p-4 flex items-center gap-3.5 border-leaf/40">
-            {status.avatar
-              ? <img src={status.avatar} alt="" width={52} height={52} className="rounded-xl border border-edge" referrerPolicy="no-referrer" />
-              : <span className="w-[52px] h-[52px] rounded-xl border border-edge bg-raised flex items-center justify-center"><Gamepad2 size={22} className="text-faint" /></span>}
-            <div className="min-w-0">
-              <div className="text-base font-extrabold truncate">{status.name || "Linked account"}</div>
-              <div className="text-[11px] text-faint">Role {status.role_id} · Zone {status.zone_id}</div>
-            </div>
-            <Badge cls="text-leaf border-leaf/40 ml-auto">linked</Badge>
-          </div>
+          <ProfileHeroCard status={status} info={profile?.info} />
 
           {profile && (
             <div className="grid lg:grid-cols-3 gap-4">
-              <Section title="Profile" payload={profile.info} />
+              <Section title="Profile details" payload={profile.info}
+                hide={["avatar", "name", "level", "rank_level", "history_rank_level", "reg_country", "roleId", "zoneId", "role_id", "zone_id"]} />
               <Section title="Current season" payload={profile.season} />
               <Section title="Career stats" payload={profile.stats} />
             </div>

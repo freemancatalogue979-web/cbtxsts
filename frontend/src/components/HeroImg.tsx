@@ -1,13 +1,14 @@
 import { useState, useSyncExternalStore } from "react";
 import { artFor, artVersion, subscribeArt } from "../lib/mlbb";
 
-/** name → icon slug: "Yu Zhong" → yu-zhong, "Chang'e" → chang-e, "X.Borg" → x.borg */
-export function heroSlug(name: string): string {
-  return name
+/** name → icon slug: "Yu Zhong" → yu-zhong, "Chang'e" → chang-e, "X.Borg" → x.borg (undefined-safe) */
+export function heroSlug(name?: string | null): string {
+  return (name ?? "")
     .toLowerCase()
     .replace(/['’]/g, " ")
     .trim()
     .split(/\s+/)
+    .filter(Boolean)
     .join("-");
 }
 

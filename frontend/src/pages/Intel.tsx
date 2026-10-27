@@ -82,8 +82,8 @@ function HeroModal({ hero, byId, onClose }: { hero: IntelHero; byId: Map<number,
       <div className="label mb-1.5">{title}</div>
       <div className="flex flex-wrap gap-1.5">
         {names.length === 0 && <span className="text-[12px] text-faint">None listed upstream.</span>}
-        {names.map((n) => (
-          <span key={n} className={`chip ${cls} inline-flex items-center gap-1.5`}>
+        {names.map((n, j) => (
+          <span key={`${n}|${j}`} className={`chip ${cls} inline-flex items-center gap-1.5`}>
             <img src={`/heroes/${heroSlug(n)}.webp`} alt="" width={16} height={16} className="rounded"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
             {n}
