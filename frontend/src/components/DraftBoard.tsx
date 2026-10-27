@@ -357,3 +357,246 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
     </div>
   );
 }
+
+/* ---------------- in-game-style draft simulator (10-ban hub reference) ----------------
+   Layout mirrors the live MOBILE draft screen the user referenced:
+   blue team panel left, red team panel right, big filterable hero catalog centre,
+   5+5 ban boxes on top — click a slot to arm it, then click a hero in the catalog. */
+
+import { useEffect, useMemo } from "react";
+import { HeroImg } from "./HeroImg";
+import { Check, Search, X } from "lucide-react";
+
+type ArmTarget = { side: "our" | "enemy"; kind: "pick" | "ban"; key: string | number };
+
+export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLabel = "9 CLOVER", theirsLabel = "ENEMY" }: {
+  heroes: Hero[]; value: DraftValue; onChange: (next: DraftValue) => void;
+  lanes?: string[]; oursLabel?: string; theirsLabel?: string;
+}) {
+  const [armed, setArmed] = useState<ArmTarget | null>(null);
+  const [laneTab, setLaneTab] = useState("ALL");
+  const [q, setQ] = useState("");
+
+  const used = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of Object.values(value.our_picks ?? {})) if (v) s.add(v.toLowerCase());
+    for (const v of Object.values(value.enemy_picks ?? {})) if (v) s.add(v.toLowerCase());
+    for (const v of [...(value.our_bans ?? []), ...(value.enemy_bans ?? [])]) if (v) s.add(String(v).toLowerCase());
+    return s;
+  }, [value]);
+
+  const LANE_TABS = ["ALL", "EXP", "GOLD", "MID", "ROAM", "JUNGLE"];
+  const list = useMemo(() => {
+    const sorted = [...heroes].sort((a, b) =>
+      (STATUS_RANK[a.meta_status] ?? 9) - (STATUS_RANK[b.meta_status] ?? 9) ||
+      b.clover_rating - a.clover_rating || b.win_rate - a.win_rate);
+    const needle = q.trim().toLowerCase();
+    return sorted
+      .filter((h) => laneTab === "ALL" || (h.role ?? "").toUpperCase() === laneTab)
+      .filter((h) => !needle || h.name.toLowerCase().includes(needle))
+      .slice(0, 120);
+  }, [heroes, laneTab, q]);
+
+  const setPick = (side: "our_picks" | "enemy_picks", lane: string, v: string) =>
+    onChange({ ...value, [side]: { ...(value[side] ?? {}), [lane]: v } });
+  const setBan = (side: "our_bans" | "enemy_bans", idx: number, v: string) => {
+    const arr = [...(value[side] ?? [])] as (string | null)[];
+    while (arr.length < 5) arr.push(null);
+    arr[idx] = v || null;
+    onChange({ ...value, [side]: arr });
+  };
+
+  const slotValue = (t: ArmTarget): string => {
+    if (t.kind === "pick") {
+      return (t.side === "our" ? value.our_picks : value.enemy_picks)?.[String(t.key)] ?? "";
+    }
+    const arr = (t.side === "our" ? value.our_bans : value.enemy_bans) ?? [];
+    return String(arr[Number(t.key)] ?? "");
+  };
+
+  const armNext = useMemo(() => {
+    // after assigning, advance to the next empty slot: same kind first, ours before theirs
+    return (from: ArmTarget): ArmTarget | null => {
+      const order: ArmTarget[] = [];
+      for (const kind of [from.kind, from.kind === "pick" ? "ban" : "pick"] as const) {
+        for (const side of ["our", "enemy"] as const) {
+          if (kind === "pick") for (const lane of lanes) order.push({ side, kind, key: lane });
+          else for (let i = 0; i < 5; i++) order.push({ side, kind, key: i });
+        }
+      }
+      const start = order.findIndex((t) => t.side === from.side && t.kind === from.kind && t.key === from.key);
+      for (let i = 1; i <= order.length; i++) {
+        const t = order[(start + i) % order.length];
+        if (!slotValue(t)) return t;
+      }
+      return null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, lanes]);
+
+  const assign = (heroName: string) => {
+    if (!armed) return;
+    if (armed.kind === "pick") setPick(armed.side === "our" ? "our_picks" : "enemy_picks", String(armed.key), heroName);
+    else setBan(armed.side === "our" ? "our_bans" : "enemy_bans", Number(armed.key), heroName);
+    setArmed(armNext(armed));
+  };
+
+  const clearSlot = (t: ArmTarget) => {
+    if (t.kind === "pick") setPick(t.side === "our" ? "our_picks" : "enemy_picks", String(t.key), "");
+    else setBan(t.side === "our" ? "our_bans" : "enemy_bans", Number(t.key), "");
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArmed(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const phase = useMemo(() => {
+    const bansUsed = [...(value.our_bans ?? []), ...(value.enemy_bans ?? [])].filter(Boolean).length;
+    const picksUsed = Object.values(value.our_picks ?? {}).filter(Boolean).length
+      + Object.values(value.enemy_picks ?? {}).filter(Boolean).length;
+    if (bansUsed < 10 && picksUsed === 0) return { label: "BAN PHASE", left: 10 - bansUsed };
+    if (picksUsed < 10) return { label: "PICK PHASE", left: 10 - picksUsed };
+    return { label: "DRAFT COMPLETE", left: 0 };
+  }, [value]);
+
+  const isArmed = (t: ArmTarget) => !!armed && armed.side === t.side && armed.kind === t.kind && armed.key === t.key;
+
+  const teamPanel = (side: "our" | "enemy") => {
+    const ours = side === "our";
+    const picks = (ours ? value.our_picks : value.enemy_picks) ?? {};
+    return (
+      <div className={`rounded-xl border p-3 space-y-2 ${ours ? "border-leaf/40 bg-leaf/5" : "border-crim/40 bg-crim/5"}`}>
+        <div className={`text-[10px] font-bold uppercase tracking-[0.18em] ${ours ? "text-leaf" : "text-crim"}`}>
+          {ours ? oursLabel : theirsLabel}
+        </div>
+        {lanes.map((lane) => {
+          const name = picks[lane] ?? "";
+          const t: ArmTarget = { side, kind: "pick", key: lane };
+          const active = isArmed(t);
+          return (
+            <button key={lane} type="button"
+              onClick={() => setArmed(active ? null : t)}
+              className={`w-full flex items-center gap-2 rounded-lg p-1.5 border transition text-left
+                ${active ? "border-amber bg-amber/10 shadow-[0_0_12px_rgba(245,185,66,0.25)]"
+                  : ours ? "border-leaf/25 hover:border-leaf/60" : "border-crim/25 hover:border-crim/60"}`}>
+              <span className="relative shrink-0">
+                <HeroImg name={name || "?"} size={40} variant="icon" className="rounded-md" />
+                {name && (
+                  <span role="button" title="Clear"
+                    onClick={(e) => { e.stopPropagation(); clearSlot(t); }}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 border border-edge-2 grid place-items-center text-[9px] text-crim hover:text-white">
+                    <X size={9} />
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-[8.5px] font-bold uppercase tracking-widest ${ours ? "text-leaf/70" : "text-crim/70"}`}>{lane}</span>
+                <span className="block text-[11.5px] font-bold truncate">{name || (active ? "Select hero →" : "Empty slot")}</span>
+              </span>
+              {active && <Check size={13} className="ml-auto text-amber shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const banRow = (side: "our_bans" | "enemy_bans") => {
+    const ours = side === "our_bans";
+    const arr = ([...(value[side] ?? [])] as (string | null)[]).concat([null, null, null, null, null]).slice(0, 5);
+    return (
+      <div className={`flex gap-1.5 ${ours ? "" : "justify-end"}`}>
+        {arr.map((b, i) => {
+          const t: ArmTarget = { side: ours ? "our" : "enemy", kind: "ban", key: i };
+          const active = isArmed(t);
+          return (
+            <button key={i} type="button" title={b ? String(b) : `Ban slot ${i + 1}`}
+              onClick={() => setArmed(active ? null : t)}
+              className={`relative w-11 h-11 rounded-md border overflow-hidden transition grid place-items-center
+                  ${active ? "border-amber shadow-[0_0_10px_rgba(245,185,66,0.3)]"
+                    : b ? "border-edge" : "border-dashed " + (ours ? "border-leaf/30" : "border-crim/30")}`}>
+              {b ? (
+                <span className="absolute inset-0 grayscale">
+                  <HeroImg name={String(b)} size={44} variant="icon" className="rounded-none" />
+                </span>
+              ) : (
+                <span className="text-[9px] font-black text-faint">{i + 1}</span>
+              )}
+              {b && (
+                <span role="button" title="Clear ban" onClick={(e) => { e.stopPropagation(); clearSlot(t); }}
+                  className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 hover:opacity-100 transition text-white">
+                  <X size={14} />
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3" onClick={(e) => { if (!(e.target as HTMLElement).closest("button,input")) setArmed(null); }}>
+      {/* phase bar: ban boxes outside, phase centre — in-game 10-ban layout */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {banRow("our_bans")}
+        <div className="text-center px-3">
+          <div className={`text-[12px] font-black tracking-[0.22em] ${phase.label === "PICK PHASE" ? "text-leaf" : phase.label === "BAN PHASE" ? "text-crim" : "text-mute"}`}>
+            {phase.label}
+          </div>
+          <div className="label !text-[8px] mt-0.5">
+            {phase.left > 0 ? `${phase.left} LEFT` : "READY"}
+            {armed ? ` · SELECTING ${armed.kind.toUpperCase()} (${armed.side === "our" ? oursLabel : theirsLabel})` : " · CLICK A SLOT TO ARM"}
+          </div>
+        </div>
+        {banRow("enemy_bans")}
+      </div>
+
+      <div className="grid lg:grid-cols-[200px_minmax(0,1fr)_200px] gap-3 items-start">
+        {teamPanel("our")}
+
+        {/* catalog */}
+        <div className="card !bg-overlay/60 p-3 order-first lg:order-none">
+          <div className="flex flex-wrap items-center gap-1 mb-2.5">
+            {LANE_TABS.map((t) => (
+              <button key={t} type="button" onClick={() => setLaneTab(t)}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border transition
+                  ${laneTab === t ? "border-crim/60 bg-crim-dim/40 text-crim" : "border-edge text-faint hover:text-mute"}`}>
+                {t === "ALL" ? "All Lanes" : t}
+              </button>
+            ))}
+            <div className="relative ml-auto">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" />
+              <input className="input !py-1 !pl-7 !text-[11.5px] w-40" placeholder="Search hero…" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(58px,1fr))] gap-1.5 max-h-[380px] overflow-y-auto pr-1">
+            {list.map((h) => {
+              const taken = used.has(h.name.toLowerCase());
+              return (
+                <button key={h.id} type="button" disabled={!armed || taken}
+                  onClick={() => assign(h.name)}
+                  title={taken ? `${h.name} already drafted` : armed ? `Draft ${h.name}` : "Arm a slot first"}
+                  className={`relative rounded-md overflow-hidden border text-center transition group
+                    ${taken ? "opacity-35 grayscale cursor-not-allowed border-edge"
+                      : !armed ? "border-edge opacity-70"
+                        : "border-edge hover:border-amber hover:shadow-[0_0_10px_rgba(245,185,66,0.25)] hover:scale-[1.06]"}`}>
+                  <HeroImg name={h.name} size={58} variant="icon" className="w-full rounded-none aspect-square" />
+                  <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[8px] font-bold py-0.5 leading-none truncate px-0.5 select-none">
+                    {h.name}
+                  </span>
+                  {taken && <span className="absolute inset-0 grid place-items-center text-[8px] font-black text-crim tracking-widest bg-black/30">TAKEN</span>}
+                </button>
+              );
+            })}
+            {list.length === 0 && <div className="col-span-full text-center text-[11px] text-faint py-6">No heroes in this lane filter.</div>}
+          </div>
+        </div>
+
+        {teamPanel("enemy")}
+      </div>
+    </div>
+  );
+}

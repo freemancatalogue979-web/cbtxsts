@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import type { DraftPlan, Hero, Meta, User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, Spinner } from "../components/ui";
-import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
+import { DraftBoard, DraftSimulator } from "../components/DraftBoard";
 
 const STATUS_TONE: Record<string, string> = {
   idea: "text-sky border-sky/40 bg-sky/10",
@@ -70,7 +70,7 @@ function DraftEditor({ meta, heroes, initial, onSaved, onBack }: {
       </div>
 
       <div className="card p-5">
-        <DraftBoardEditor heroes={heroes} value={f.draft} onChange={(d) => set("draft", d)}
+        <DraftSimulator heroes={heroes} value={f.draft} onChange={(d) => set("draft", d)}
           theirsLabel={(f.opponent || "Enemy").toUpperCase()} lanes={meta.lanes} />
       </div>
 

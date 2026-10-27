@@ -113,6 +113,25 @@ function HeroModal({ hero, byId, onClose }: { hero: IntelHero; byId: Map<number,
   );
 }
 
+/** Upstream reference rows sometimes store "@path.into.record" template strings
+ *  (e.g. spells: "@__data.skillicon" / "@__data.skillname1"). Resolve them against
+ *  the row; fall back to a same-root key (skillname1 → skillname); unresolvable → undefined. */
+function resolveTemplate(row: AnyRec, v: unknown): string | undefined {
+  if (typeof v !== "string" || !v.startsWith("@")) return v === undefined || v === null ? undefined : String(v);
+  const parts = v.slice(1).split(".");
+  let cur: unknown = row;
+  for (const p of parts) cur = (cur as AnyRec)?.[p];
+  if (cur === undefined || cur === null) {
+    const parent = parts.slice(0, -1).reduce<unknown>((o, p) => (o as AnyRec)?.[p], row) as AnyRec | undefined;
+    if (parent && typeof parent === "object") {
+      const root = parts[parts.length - 1].replace(/\d+$/, "");
+      const hit = Object.keys(parent).find((k) => k.startsWith(root) && !k.includes("desc") || k === root);
+      if (hit) cur = parent[hit];
+    }
+  }
+  return typeof cur === "string" ? cur : undefined;
+}
+
 /** Generic remote reference-data tab: fetch records, search, render compact cards. */
 function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
   path: string; searchKeys: string[]; iconKeys: string[]; titleKeys: string[]; descKeys: string[];
@@ -151,9 +170,11 @@ function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
           {list.map((r, i) => {
             const emblem = (r.emblemskill ?? undefined) as AnyRec | undefined;
             const inner = (r.__data ?? undefined) as AnyRec | undefined;
-            const title = pickStr(r, ...titleKeys) ?? pickStr(emblem, ...titleKeys) ?? pickStr(inner, ...titleKeys) ?? `#${pickNum(r, "equipid", "id", "_object") ?? i}`;
-            const desc = pickStr(r, ...descKeys) ?? pickStr(emblem, ...descKeys) ?? pickStr(inner, ...descKeys);
-            const icon = pickStr(r, ...iconKeys) ?? pickStr(emblem, ...iconKeys) ?? pickStr(inner, ...iconKeys);
+            const title = resolveTemplate(r, pickStr(r, ...titleKeys) ?? pickStr(emblem, ...titleKeys) ?? pickStr(inner, ...titleKeys))
+              ?? resolveTemplate(r, r.skillname) ?? resolveTemplate(r, r.equipname)
+              ?? `#${pickNum(r, "equipid", "id", "_object") ?? i}`;
+            const desc = resolveTemplate(r, pickStr(r, ...descKeys) ?? pickStr(emblem, ...descKeys) ?? pickStr(inner, ...descKeys));
+            const icon = resolveTemplate(r, pickStr(r, ...iconKeys) ?? pickStr(emblem, ...iconKeys) ?? pickStr(inner, ...iconKeys));
             const num = pickStr(r, "numdescribe");
             const detail = () => setSel({ title: stripTags(String(title)), desc: desc ? stripTags(desc) : undefined, icon, num });
             return (
