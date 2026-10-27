@@ -11,6 +11,7 @@ import { ScrimsPage } from "./pages/Scrims";
 import { TournamentsPage } from "./pages/Tournaments";
 import { ReviewsPage } from "./pages/Reviews";
 import { HeroesPage } from "./pages/Heroes";
+import { IntelPage } from "./pages/Intel";
 import { PlayersPage } from "./pages/Players";
 import { BansPage } from "./pages/Bans";
 import { DraftsPage } from "./pages/Drafts";
@@ -91,6 +92,9 @@ export default function App() {
       break;
     case "heroes":
       page = <HeroesPage me={user} meta={meta} parts={rest} />;
+      break;
+    case "intel":
+      page = <IntelPage />;
       break;
     case "players":
       page = <PlayersPage me={user} meta={meta} parts={rest} />;

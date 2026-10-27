@@ -1,6 +1,7 @@
 import {
   Bell,
   BookOpenText,
+  Radar,
   CalendarDays,
   ClipboardList,
   Crosshair,
@@ -31,6 +32,7 @@ const NAV = [
   { id: "tournaments", label: "Tournaments", icon: Trophy },
   { id: "reviews", label: "Match Reviews", icon: ClipboardList },
   { id: "heroes", label: "Hero Database", icon: Crosshair },
+  { id: "intel", label: "MLBB Intel", icon: Radar },
   { id: "players", label: "Players", icon: Users },
   { id: "bans", label: "Ban Board", icon: ShieldBan },
   { id: "drafts", label: "Draft Lab", icon: Layers },
