@@ -1,4 +1,4 @@
-import { Eraser, Hand, Layers, Map as MapIcon, Maximize2, Minimize2, MousePointer2, PenLine, Plus, RotateCcw, Save, Swords, Trash2, X } from "lucide-react";
+import { Eraser, Hand, Layers, Map as MapIcon, Maximize2, Minimize2, MousePointer2, PenLine, Plus, RotateCcw, Save, Swords, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { DraftPlan, Hero, MapBoard, MapGuide, User } from "../lib/types";
@@ -35,7 +35,7 @@ function BoardEditor({ id }: { id: number }) {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [paths, setPaths] = useState<DrawPath[]>([]);
   const [history, setHistory] = useState<{ tokens: Token[]; paths: DrawPath[] }[]>([]);
-  const [tool, setTool] = useState<"move" | "pen" | "erase">("move");
+  const [tool, setTool] = useState<"move" | "pan" | "pen" | "erase">("move");
   const [penColor, setPenColor] = useState(PEN_COLORS[0].id);
   const [stroke, setStroke] = useState<number[][] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -48,8 +48,50 @@ function BoardEditor({ id }: { id: number }) {
   const [heroQ, setHeroQ] = useState("");
   const [newSide, setNewSide] = useState<Side>("ours");
   const [err, setErr] = useState<string | null>(null);
-  const area = useRef<HTMLDivElement>(null);
+  const area = useRef<HTMLDivElement>(null);   // viewport (fixed frame)
+  const surf = useRef<HTMLDivElement>(null);   // map surface (translated + scaled)
   const fsWrap = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ z: 1, x: 0, y: 0 }); // zoom & pan of the surface
+  const panRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+
+  const zoomStep = (v: { z: number; x: number; y: number }, k: number) => {
+    const s = area.current?.getBoundingClientRect();
+    if (!s) return v;
+    const nz = Math.max(1, Math.min(5, v.z * k));
+    const f = nz / v.z;
+    const px = s.width / 2, py = s.height / 2;
+    return clampView({ z: nz, x: px - (px - v.x) * f, y: py - (py - v.y) * f });
+  };
+
+  const clampView = (v: { z: number; x: number; y: number }) => {
+    if (v.z <= 1.001) return { z: 1, x: 0, y: 0 };
+    const s = area.current?.getBoundingClientRect();
+    if (!s) return v;
+    return {
+      z: v.z,
+      x: Math.max(s.width - s.width * v.z, Math.min(0, v.x)),
+      y: Math.max(s.height - s.height * v.z, Math.min(0, v.y)),
+    };
+  };
+
+  // wheel = zoom toward the cursor (non-passive so the page doesn't scroll instead)
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      setView((v) => {
+        const nz = Math.max(1, Math.min(5, v.z * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
+        const px = e.clientX - r.left, py = e.clientY - r.top;
+        const k = nz / v.z;
+        return clampView({ z: nz, x: px - (px - v.x) * k, y: py - (py - v.y) * k });
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onFs = () => setIsFs(!!document.fullscreenElement);
@@ -86,13 +128,22 @@ function BoardEditor({ id }: { id: number }) {
   });
 
   const pt = (e: React.PointerEvent): number[] => {
-    const r = area.current!.getBoundingClientRect();
+    // surf is the transformed surface — its rect already includes zoom & pan,
+    // so map-percentage coordinates stay correct at any zoom level
+    const r = surf.current!.getBoundingClientRect();
     const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
     const y = Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100));
     return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
   };
 
   function onAreaDown(e: React.PointerEvent) {
+    // pan: hand tool, or middle/right-drag with any tool
+    if (e.button === 1 || e.button === 2 || tool === "pan") {
+      panRef.current = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
     if (tool === "pen") {
       (e.target as Element).releasePointerCapture?.(e.pointerId);
       setStroke([pt(e)]);
@@ -102,20 +153,28 @@ function BoardEditor({ id }: { id: number }) {
     }
   }
   function onAreaMove(e: React.PointerEvent) {
+    if (panRef.current) {
+      const p = panRef.current;
+      setView((v) => clampView({ z: v.z, x: p.ox + (e.clientX - p.sx), y: p.oy + (e.clientY - p.sy) }));
+      return;
+    }
     if (dragId) {
       const [x, y] = pt(e);
       setTokens((ts) => ts.map((t) => (t.id === dragId ? { ...t, x, y } : t)));
       setDirty(true);
     } else if (stroke) {
-      setStroke((s) => s ? [...s, pt(e)] : s);
+      // straight arrows only: stroke is always just [anchor, current]
+      setStroke((s) => (s ? [s[0], pt(e)] : s));
     }
   }
   function onAreaUp() {
+    if (panRef.current) { panRef.current = null; return; }
     if (dragId) { setDragId(null); return; }
     if (stroke) {
-      if (stroke.length > 1) {
+      const [a, b] = stroke;
+      if (b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 1.2) {
         snapshot();
-        setPaths((p) => [...p, { color: penColor, points: stroke }]);
+        setPaths((p) => [...p, { color: penColor, points: [a, b] }]);
         setDirty(true);
       }
       setStroke(null);
@@ -130,11 +189,46 @@ function BoardEditor({ id }: { id: number }) {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
   }
 
+  /** Straight-arrow renderer. 2-point paths = new-style arrows (line + head);
+   *  older saved freehand boards (if any) render as plain polylines. */
+  const mapAspect = mapStyle === "game" && !gameMapFailed ? 1870 / 841 : 1;
+  function ArrowPath({ pts, color, aspect, fade }: { pts: number[][]; color: string; aspect: number; fade?: boolean }) {
+    if (pts.length === 2) {
+      const [[x1, y1], [x2, y2]] = pts;
+      const ang = Math.atan2(y2 - y1, (x2 - x1) * aspect); // aspect-corrected so heads aren't stretched
+      const H = 2.6; // arrow head length in map-%
+      const w1 = [x2 + Math.cos(ang + Math.PI + 0.55) * (H / aspect), y2 + Math.sin(ang + Math.PI + 0.55) * H];
+      const w2 = [x2 + Math.cos(ang + Math.PI - 0.55) * (H / aspect), y2 + Math.sin(ang + Math.PI - 0.55) * H];
+      return (
+        <g opacity={fade ? 0.85 : 0.95}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="4"
+            strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <path d={`M${x2},${y2} L${w1[0]},${w1[1]} L${w2[0]},${w2[1]} Z`} fill={color} />
+        </g>
+      );
+    }
+    return (
+      <polyline points={pts.map(([x, y]) => `${x},${y}`).join(" ")}
+        fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke" opacity="0.9" />
+    );
+  }
+
   function eraseNearestPath(x: number, y: number) {
     if (paths.length === 0) return;
     let best = -1; let bestDist = 5;
     paths.forEach((p, pi) => {
-      for (const [px, py] of p.points) {
+      // arrows store only 2 endpoints — probe the whole segment so mid-line clicks erase
+      const probes = p.points.length === 2
+        ? Array.from({ length: 9 }, (_, i) => {
+            const t = i / 8;
+            return [
+              p.points[0][0] + (p.points[1][0] - p.points[0][0]) * t,
+              p.points[0][1] + (p.points[1][1] - p.points[0][1]) * t,
+            ];
+          })
+        : p.points;
+      for (const [px, py] of probes) {
         const d = Math.hypot(px - x, py - y);
         if (d < bestDist) { bestDist = d; best = pi; }
       }
@@ -249,7 +343,8 @@ function BoardEditor({ id }: { id: number }) {
           <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60">
             {([
               ["move", "Drag", MousePointer2],
-              ["pen", "Draw", PenLine],
+              ["pan", "Pan", Hand],
+              ["pen", "Arrow", PenLine],
               ["erase", "Erase", Eraser],
             ] as const).map(([t, label, Icon]) => (
               <button key={t}
@@ -291,7 +386,13 @@ function BoardEditor({ id }: { id: number }) {
               <Trash2 size={13} /> Clear
             </button>
             <span className="ml-auto text-[10px] text-faint uppercase tracking-widest font-semibold">
-              {tool === "move" ? "drag heroes anywhere" : tool === "pen" ? "hold & draw on the map" : "click a stroke to erase"}
+              {tool === "move"
+                ? "drag heroes · scroll zooms · right-drag pans"
+                : tool === "pan"
+                  ? "drag to move around the map · scroll to zoom"
+                  : tool === "pen"
+                    ? "press, drag, release → straight arrow"
+                    : "click an arrow to erase"}
             </span>
           </div>
 
@@ -299,7 +400,7 @@ function BoardEditor({ id }: { id: number }) {
           <div className={isFs ? "flex-1 min-h-0 grid place-items-center p-2" : "p-2 sm:p-3"}>
             <div
               ref={area}
-              className="relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none"
+              className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : ""}`}
               style={{
                 aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
                 ...(isFs
@@ -310,7 +411,14 @@ function BoardEditor({ id }: { id: number }) {
               onPointerMove={onAreaMove}
               onPointerUp={onAreaUp}
               onPointerLeave={onAreaUp}
+              onContextMenu={(e) => e.preventDefault()}
             >
+              {/* zoomable / pannable surface */}
+              <div
+                ref={surf}
+                className="absolute inset-0"
+                style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: "0 0" }}
+              >
               {mapStyle === "game" && !gameMapFailed ? (
                 <img
                   src={GAME_SRC}
@@ -323,19 +431,11 @@ function BoardEditor({ id }: { id: number }) {
                 <BattlefieldMap className="absolute inset-0" />
               )}
 
-              {/* saved strokes + live stroke */}
+              {/* saved strokes + live preview stroke (all rendered with arrowheads) */}
               <svg viewBox="0 0 100 100" preserveAspectRatio="none"
-                className={`absolute inset-0 w-full h-full ${tool !== "move" ? "" : "pointer-events-none"}`}>
-                {paths.map((p, i) => (
-                  <polyline key={i} points={p.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                    fill="none" stroke={p.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke" opacity="0.9" />
-                ))}
-                {stroke && (
-                  <polyline points={stroke.map(([x, y]) => `${x},${y}`).join(" ")}
-                    fill="none" stroke={penColor} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke" opacity="0.9" />
-                )}
+                className="absolute inset-0 w-full h-full pointer-events-none">
+                {paths.map((p, i) => <ArrowPath key={i} pts={p.points} color={p.color} aspect={mapAspect} />)}
+                {stroke && <ArrowPath pts={stroke} color={penColor} aspect={mapAspect} fade />}
               </svg>
 
               {/* hero tokens */}
@@ -356,6 +456,25 @@ function BoardEditor({ id }: { id: number }) {
                   </span>
                 </div>
               ))}
+              </div>{/* /surf */}
+
+              {/* zoom controls */}
+              <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-1">
+                {view.z > 1 && (
+                  <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md px-1.5 py-1 text-[9.5px] font-bold text-mute hover:text-text"
+                    title="Reset zoom" onClick={() => setView({ z: 1, x: 0, y: 0 })}>
+                    {Math.round(view.z * 100)}%
+                  </button>
+                )}
+                <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom in"
+                  onClick={() => setView((v) => zoomStep(v, 1.3))}>
+                  <ZoomIn size={14} />
+                </button>
+                <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom out"
+                  onClick={() => setView((v) => zoomStep(v, 1 / 1.3))}>
+                  <ZoomOut size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
