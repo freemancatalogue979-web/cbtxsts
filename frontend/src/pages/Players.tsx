@@ -5,6 +5,7 @@ import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgres
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
+import { HeroPickerModal } from "../components/HeroPicker";
 import { HeroImg } from "../components/HeroImg";
 import { linkedRoster } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
@@ -53,10 +54,9 @@ function PoolForm({ playerId, heroes, meta, initial, onSaved, onClose }: {
     <Modal title={edit ? `Edit pool entry — ${initial!.hero_name}` : "Add hero to pool"} onClose={onClose}>
       <form onSubmit={save} className="space-y-4">
         <Field label="Hero">
-          <select className="input" required disabled={edit} value={f.hero_id} onChange={(e) => set("hero_id", e.target.value)}>
-            <option value="">Pick a hero…</option>
-            {heroes.map((h) => <option key={h.id} value={h.id}>{h.name} ({h.role})</option>)}
-          </select>
+          <HeroPickerModal heroes={heroes} disabled={Boolean(edit)}
+            value={f.hero_id === "" ? "" : Number(f.hero_id)}
+            onChange={(id) => set("hero_id", id === "" ? "" : String(id))} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Category">

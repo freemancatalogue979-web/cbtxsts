@@ -5,6 +5,7 @@ import type { Ban, Hero, Meta, User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { HeroImg } from "../components/HeroImg";
+import { HeroPickerModal } from "../components/HeroPicker";
 
 function BanForm({ heroes, meta, initial, onSaved, onClose }: {
   heroes: Hero[]; meta: Meta; initial: Partial<Ban>; onSaved: () => void; onClose: () => void;
@@ -50,17 +51,14 @@ function BanForm({ heroes, meta, initial, onSaved, onClose }: {
           </Field>
         </div>
         <Field label="Hero">
-          <div className="flex items-center gap-3">
-            <HeroImg name={String(f.hero_name || "?")} size={44} className="rounded-lg shrink-0" />
-            <select className="input" value={String(f.hero_id)} onChange={(e) => {
-              const hero = heroes.find((h) => h.id === Number(e.target.value));
-              set("hero_id", e.target.value);
+          <HeroPickerModal heroes={heroes}
+            value={f.hero_id === "" ? "" : Number(f.hero_id)}
+            onChange={(id) => {
+              set("hero_id", id);
+              const hero = heroes.find((h) => h.id === Number(id));
               if (hero) set("hero_name", hero.name);
-            }}>
-              <option value="">Custom / not in database…</option>
-              {heroes.map((h) => <option key={h.id} value={h.id}>{h.name} ({h.role})</option>)}
-            </select>
-          </div>
+            }}
+            onCustom={() => set("hero_id", "")} />
         </Field>
         {!f.hero_id && (
           <Field label="Hero name"><input className="input" required value={String(f.hero_name)} onChange={(e) => set("hero_name", e.target.value)} /></Field>
