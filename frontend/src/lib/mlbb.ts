@@ -54,6 +54,23 @@ export const fraction = (f?: number) => (f === undefined ? 0 : f * 100);
 export const RANK_DAYS = [1, 3, 7, 15, 30] as const;
 export const RANK_TIERS = ["all", "epic", "legend", "mythic", "honor", "glory"] as const;
 
+/** name → icon slug: "Yu Zhong" → yu-zhong, "Chang'e" → chang-e, "X.Borg" → x.borg (undefined-safe) */
+export function heroSlug(name?: string | null): string {
+  return (name ?? "")
+    .toLowerCase()
+    .replace(/['’]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join("-");
+}
+
+/** Bundled official artwork (our own DB, part of the repo):
+ *  heroArt  — tall rectangular splash portrait (pick/card contexts)
+ *  heroHead — square official head (ban circles / square contexts) */
+export const heroArt = (name?: string | null): string => `/heroes/${heroSlug(name)}.webp`;
+export const heroHead = (name?: string | null): string => `/heroes/head-${heroSlug(name)}.webp`;
+
 /* ---------------- official CDN artwork index ----------------
  * head     — square portrait (academy catalog)
  * art      — tall rectangular splash (academy catalog `painting`; wallpapers endpoint fallback)

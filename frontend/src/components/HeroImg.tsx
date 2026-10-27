@@ -1,32 +1,26 @@
 import { useState, useSyncExternalStore } from "react";
-import { artFor, artVersion, subscribeArt } from "../lib/mlbb";
+import { artFor, artVersion, heroArt, heroHead, heroSlug, subscribeArt } from "../lib/mlbb";
 
-/** name → icon slug: "Yu Zhong" → yu-zhong, "Chang'e" → chang-e, "X.Borg" → x.borg (undefined-safe) */
-export function heroSlug(name?: string | null): string {
-  return (name ?? "")
-    .toLowerCase()
-    .replace(/['’]/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .join("-");
-}
+export { heroSlug };
 
-/** Rone CDN art only (no bundled hero DB): icon variant = square head, art variant = wallpaper. */
-function useHeroSrc(name: string, variant: "icon" | "art"): string | null {
+/** Candidate chain (local DB first, Rone CDN as backup):
+ *  icon → bundled square head → Rone head;  art → bundled splash portrait → Rone art. */
+function useHeroCandidates(name: string, variant: "icon" | "art"): string[] {
   useSyncExternalStore(subscribeArt, artVersion); // re-render when the art index lands
   const remote = artFor(name);
-  const preferred = variant === "art" ? (remote?.art ?? remote?.head) : (remote?.head ?? remote?.art);
-  return preferred ?? null;
+  const list = variant === "art"
+    ? [heroArt(name), remote?.art]
+    : [heroHead(name), remote?.head];
+  return list.filter((u): u is string => Boolean(u));
 }
 
-/** Hero portrait — official CDN artwork, initials tile if upstream has none. */
+/** Hero portrait — bundled official artwork, Rone CDN backup, initials tile last. */
 export function HeroImg({ name, size = 40, className = "", eager = false, variant = "icon" }: {
   name: string; size?: number; className?: string; eager?: boolean; variant?: "icon" | "art";
 }) {
-  const remote = useHeroSrc(name || "", variant);
-  const [failed, setFailed] = useState(false);
-  if (failed || !remote || !name) {
+  const candidates = useHeroCandidates(name || "", variant);
+  const [failed, setFailed] = useState(0);
+  if (failed >= candidates.length || !name) {
     return (
       <div
         className={`flex items-center justify-center bg-overlay border border-edge text-[10px] font-extrabold text-mute select-none ${className}`}
@@ -39,7 +33,7 @@ export function HeroImg({ name, size = 40, className = "", eager = false, varian
   }
   return (
     <img
-      src={remote}
+      src={candidates[failed]}
       alt={name}
       width={size}
       height={size}
@@ -47,7 +41,7 @@ export function HeroImg({ name, size = 40, className = "", eager = false, varian
       decoding="async"
       referrerPolicy="no-referrer"
       draggable={false}
-      onError={() => setFailed(true)}
+      onError={() => setFailed((f) => f + 1)}
       className={`object-cover bg-raised select-none ${className}`}
       style={{ width: size, height: size }}
     />
