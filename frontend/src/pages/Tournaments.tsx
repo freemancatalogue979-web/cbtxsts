@@ -469,7 +469,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                           {draftOpen === m.id ? "Hide draft ▲" : "Show draft ▼"}
                         </button>
                         {draftOpen === m.id && (
-                          <div className="mt-2"><DraftBoard draft={m.draft as DraftPlan["draft"]} theirsLabel={(m.opponent || "Enemy").toUpperCase()} /></div>
+                          <div className="mt-2"><DraftBoard draft={m.draft as DraftPlan["draft"]} theirsLabel={(m.opponent || "Enemy").toUpperCase()}
+                            {...(m.status === "played" ? { scoreUS: m.score_us, scoreThem: m.score_them } : {})} /></div>
                         )}
                       </div>
                     )}

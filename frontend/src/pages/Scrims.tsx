@@ -564,7 +564,11 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                   {(g.draft?.our_picks || g.draft?.our_bans) && (
                     <details className="mt-3">
                       <summary className="label cursor-pointer hover:text-mute">Draft</summary>
-                      <div className="mt-2"><DraftBoard draft={g.draft} theirsLabel={s.opponent.toUpperCase()} /></div>
+                      <div className="mt-2"><DraftBoard draft={g.draft} theirsLabel={s.opponent.toUpperCase()}
+                        {...(s.status === "played" ? { scoreUS: s.score_us, scoreThem: s.score_them } : {})}
+                        players={Object.fromEntries(Object.entries(s.lineup ?? {})
+                          .filter(([, uid]) => uid != null)
+                          .map(([lane, uid]) => [lane, users.find((x) => x.id === uid)?.ign ?? ""]))} /></div>
                     </details>
                   )}
                 </div>
