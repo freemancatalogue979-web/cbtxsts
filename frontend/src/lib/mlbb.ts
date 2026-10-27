@@ -55,11 +55,12 @@ export const RANK_DAYS = [1, 3, 7, 15, 30] as const;
 export const RANK_TIERS = ["all", "epic", "legend", "mythic", "honor", "glory"] as const;
 
 /* ---------------- official CDN artwork index ----------------
- * head     — square portrait (heroes list)
- * art      — large/skin artwork (wallpapers endpoint, mobile crop preferred)
+ * head     — square portrait (academy catalog)
+ * art      — tall rectangular splash (academy catalog `painting`; wallpapers endpoint fallback)
  * Primed once per session; components re-render via version bump. */
 
 export interface WallpaperRecord { heroid?: number[]; pictures?: { resolution?: string; url?: string }[] }
+interface CatalogRec { data?: { hero_id?: number; hero_name?: string; name?: string; head?: string; head_big?: string; painting?: string } }
 
 let artMap: Map<string, { id?: number; head?: string; art?: string }> | null = null;
 let artLoading: Promise<void> | null = null;
@@ -73,11 +74,10 @@ export function ensureArtIndex(): void {
   if (artLoading) return;
   artLoading = (async () => {
     try {
-      const [heroList, walls] = await Promise.all([
-        intel<Records<IntelHero>>("heroes", { size: 300, index: 1, order: "asc" }, 30 * 60_000),
+      const [catalog, walls] = await Promise.all([
+        intel<Records<CatalogRec>>("academy/heroes/catalog", { size: 300, index: 1 }, 30 * 60_000),
         intel<Records<WallpaperRecord>>("heroes/wallpapers", { device: "mobile", size: 300, index: 1 }, 30 * 60_000).catch(() => null),
       ]);
-      const list = heroRecords(heroList);
       const wallById = new Map<number, string>();
       if (walls) {
         for (const r of walls.records ?? []) {
@@ -88,12 +88,18 @@ export function ensureArtIndex(): void {
           if (pick?.url) wallById.set(hid, pick.url);
         }
       }
-      artMap = new Map();
-      for (const h of list) {
-        const name = h.hero?.data?.name;
+      const map = new Map<string, { id?: number; head?: string; art?: string }>();
+      for (const r of catalog.records ?? []) {
+        const d: CatalogRec["data"] = r.data ?? {};
+        const name = d.hero_name ?? d.name;
         if (!name) continue;
-        artMap.set(name.toLowerCase(), { id: h.hero_id, head: h.hero?.data?.head, art: wallById.get(h.hero_id) });
+        map.set(name.toLowerCase(), {
+          id: d.hero_id,
+          head: d.head ?? d.head_big,
+          art: d.painting || wallById.get(d.hero_id ?? 0), // rectangular splash painting first
+        });
       }
+      artMap = map;
     } catch {
       artMap = new Map(); // offline/unreachable — local fallbacks apply
     }
