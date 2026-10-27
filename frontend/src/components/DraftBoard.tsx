@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Draft, Hero } from "../lib/types";
 import { heroSlug } from "./HeroImg";
-import { CloverMark } from "./Logo";
+import { BrandImg } from "./Logo";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
@@ -19,13 +19,15 @@ function initials(label: string): string {
 /* ---------------- broadcast atoms ---------------- */
 
 /** Portrait hero card — pro overlay style (3:4 art, side accent bar, name plate). */
-function HeroPortrait({ name, ours, player, interactive = false, onClick }: {
+function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid = false, bare = false }: {
   name?: string | null; ours: boolean; player?: string; interactive?: boolean; onClick?: () => void;
+  /** fluid: fill the parent's width (cinema banks); bare: no caption row under the card */
+  fluid?: boolean; bare?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
   const card = (
-    <div className={`relative w-[76px] sm:w-[92px] aspect-[3/4] rounded-lg overflow-hidden border transition
+    <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[3/4] rounded-lg overflow-hidden border transition
       ${ours ? "border-leaf/40 shadow-[0_0_16px_rgba(52,211,153,0.14)]" : "border-crim/40 shadow-[0_0_16px_rgba(225,29,72,0.14)]"}
       ${filled ? "bg-overlay" : "bg-raised/50 border-dashed opacity-60"}
       ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-opacity-90 hover:brightness-110" : ""}`}>
@@ -45,8 +47,9 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick }: {
       <div className={`absolute top-0 ${ours ? "left-0" : "right-0"} w-[3px] h-full ${ours ? "bg-leaf/70" : "bg-crim/70"}`} />
     </div>
   );
+  if (bare) return interactive ? <button type="button" className="block w-full" onClick={onClick}>{card}</button> : card;
   return (
-    <div className="flex flex-col items-center gap-1 min-w-0">
+    <div className={`flex flex-col items-center gap-1 min-w-0 ${fluid ? "w-full" : ""}`}>
       {interactive ? <button type="button" onClick={onClick}>{card}</button> : card}
       <span className={`text-[10px] font-semibold truncate max-w-[92px] ${player ? "text-mute" : "text-faint/70"}`}>
         {player || (filled ? "\u00A0" : "—")}
@@ -91,7 +94,7 @@ function DraftHeader({ oursLabel, theirsLabel, scoreUS, scoreThem, caption }: {
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="rounded-lg border border-leaf/30 bg-leaf-dim/30 p-0.5 shrink-0"><CloverMark size={30} /></span>
+        <span className="rounded-lg border border-leaf/30 bg-leaf-dim/30 p-1 shrink-0"><BrandImg size={28} /></span>
         <div className="min-w-0">
           <div className="text-[13px] font-extrabold tracking-wide text-leaf truncate">{oursLabel}</div>
           <div className="label !text-[8px] !text-leaf/50">BLUE SIDE</div>
@@ -154,7 +157,34 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
         <BanStrip bans={d.our_bans} ours label={`${oursLabel} BANS`} />
         <BanStrip bans={d.enemy_bans} ours={false} label={`${theirsLabel} BANS`} />
       </div>
-      <div className="divide-y divide-edge/50">
+      {/* cinema: facing banks of five portrait cards (desktop), lane rows below on mobile */}
+      <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+        <div className="grid grid-cols-5 gap-3">
+          {LANES.map((lane) => (
+            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
+              <HeroPortrait name={ourPicks[lane]} ours fluid bare />
+              <span className="label !text-[8px] mt-0.5">{lane}</span>
+              <span className={`text-[10px] font-semibold truncate max-w-full ${players?.[lane] ? "text-mute" : "text-faint/60"}`}>
+                {players?.[lane] ?? "\u00A0"}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-1 px-1">
+          <span className="text-2xl font-black tracking-[0.2em] text-mute">VS</span>
+          <span className="label !text-[7.5px] whitespace-nowrap">LANE MATCHUPS</span>
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {LANES.map((lane) => (
+            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
+              <HeroPortrait name={theirPicks[lane]} ours={false} fluid bare />
+              <span className="label !text-[8px] mt-0.5">{lane}</span>
+              <span className="text-[10px] font-semibold text-faint/60">{"\u00A0"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="lg:hidden divide-y divide-edge/50">
         {LANES.map((lane) => {
           const ours = ourPicks[lane]; const theirs = theirPicks[lane];
           return (
@@ -214,15 +244,17 @@ function HeroPopover({ heroes, value, onChange, anchor, close }: {
 }
 
 /** Clickable board slot (portrait pick or ban thumb) owning its picker popover. */
-function Slot({ heroes, value, onChange, ours, kind, order, anchor }: {
+function Slot({ heroes, value, onChange, ours, kind, order, anchor, fluid = false, bare = false }: {
   heroes: Hero[]; value: string; onChange: (v: string) => void;
   ours: boolean; kind: "pick" | "ban"; order?: number; anchor: "left" | "right";
+  fluid?: boolean; bare?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="relative inline-flex">
+    <div className={`relative ${fluid ? "block w-full" : "inline-flex"}`}>
       {kind === "pick" ? (
-        <HeroPortrait name={value || null} ours={ours} interactive onClick={() => setOpen((v) => !v)} player={value ? undefined : "—"} />
+        <HeroPortrait name={value || null} ours={ours} interactive fluid={fluid} bare={bare}
+          onClick={() => setOpen((v) => !v)} player={value ? undefined : "—"} />
       ) : (
         <BanThumb name={value || null} ours={ours} order={order ?? 0} interactive onClick={() => setOpen((v) => !v)} />
       )}
@@ -273,7 +305,33 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
         {banStrip("our_bans")}
         {banStrip("enemy_bans")}
       </div>
-      <div className="divide-y divide-edge/50">
+      {/* cinema banks (desktop) */}
+      <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+        <div className="grid grid-cols-5 gap-3">
+          {lanes.map((lane) => (
+            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
+              <Slot kind="pick" heroes={heroes} ours anchor="left" fluid bare
+                value={value.our_picks?.[lane] ?? ""} onChange={(v) => setPick("our_picks", lane, v)} />
+              <span className="label !text-[8px] mt-0.5">{lane}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-1 px-1">
+          <span className="text-2xl font-black tracking-[0.2em] text-mute">VS</span>
+          <span className="label !text-[7.5px] whitespace-nowrap">CLICK TO PICK</span>
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {lanes.map((lane) => (
+            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
+              <Slot kind="pick" heroes={heroes} ours={false} anchor="right" fluid bare
+                value={value.enemy_picks?.[lane] ?? ""} onChange={(v) => setPick("enemy_picks", lane, v)} />
+              <span className="label !text-[8px] mt-0.5">{lane}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* lane rows (mobile/tablet) */}
+      <div className="lg:hidden divide-y divide-edge/50">
         {lanes.map((lane) => (
           <div key={lane} className="grid grid-cols-[1fr_auto_1fr] items-center py-2">
             <div className="flex justify-end">

@@ -23,7 +23,7 @@ export function CloverMark({ size = 28 }: { size?: number }) {
   );
 }
 
-function BrandImg({ size, className = "" }: { size: number; className?: string }) {
+export function BrandImg({ size, className = "", rounded = "rounded" }: { size: number; className?: string; rounded?: string }) {
   const [idx, setIdx] = useState(0);
   if (idx >= CANDIDATES.length) return <CloverMark size={size} />;
   return (
@@ -33,7 +33,7 @@ function BrandImg({ size, className = "" }: { size: number; className?: string }
       width={size}
       height={size}
       onError={() => setIdx((i) => i + 1)}
-      className={`rounded object-contain ${className}`}
+      className={`${rounded} object-contain ${className}`}
       style={{ width: size, height: size }}
       draggable={false}
     />

@@ -16,7 +16,7 @@ const SIDE_RING: Record<Side, string> = {
   theirs: "ring-crim/90 bg-crim/10",
   neutral: "ring-amber/80 bg-amber/10",
 };
-const GAME_SRC = "/map/game-map.jpg"; // official battlefield render (user-provided), 735×490 → ratio 1.5
+const GAME_SRC = "/map/game-map.webp"; // official battlefield render (user-provided), 1870×841 → ratio 2.224
 const PEN_COLORS = [
   { id: "#34d399", label: "Ours" },
   { id: "#e11d48", label: "Enemy" },
@@ -301,7 +301,7 @@ function BoardEditor({ id }: { id: number }) {
               ref={area}
               className="relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none"
               style={{
-                aspectRatio: mapStyle === "game" && !gameMapFailed ? "735 / 490" : "1 / 1",
+                aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
                 ...(isFs
                   ? { width: `min(100%, calc((100dvh - 120px) * ${mapStyle === "game" && !gameMapFailed ? "1.5" : "1"}))` }
                   : {}),
