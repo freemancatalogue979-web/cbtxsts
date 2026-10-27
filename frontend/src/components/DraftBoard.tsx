@@ -145,10 +145,99 @@ function BanStrip({ bans, ours, label }: { bans?: (string | null)[]; ours: boole
   );
 }
 
-/* ---------------- read-only board ---------------- */
+/* ---------------- read-only board (stream overlay look) ---------------- */
 
-/** Pro broadcast draft board: header with crests + score, slash-through ban strips,
- *  portrait hero cards facing off per lane. */
+/** Cinematic draft stage: arena glow backdrop, big team crests, amber VS centerpiece,
+ *  name-banded portrait banks, ban stacks on the arena edges. */
+function BroadcastCard({ name, ours, lane, player }: { name?: string | null; ours: boolean; lane: string; player?: string }) {
+  useSyncExternalStore(subscribeArt, artVersion);
+  const [failed, setFailed] = useState(false);
+  const filled = Boolean(name);
+  const art = filled ? (artFor(name!)?.art ?? artFor(name!)?.head) : undefined;
+  const src = !failed && art ? art : filled ? `/heroes/${heroSlug(name)}.webp` : null;
+  const showImg = filled && !(!art && !src);
+  return (
+    <figure className="flex flex-col items-center gap-0.5 min-w-0">
+      <div className={`relative w-full aspect-[3/4] rounded-lg overflow-hidden border-2 transition ${
+          ours ? "border-leaf/60 shadow-[0_0_24px_rgba(52,211,153,0.25)]" : "border-crim/60 shadow-[0_0_24px_rgba(225,29,72,0.25)]"
+        } ${filled ? "" : "border-dashed !border-edge-2 opacity-50"}`}>
+        {/* light sheen */}
+        <div className="pointer-events-none absolute inset-0 z-10" style={{ background: "linear-gradient(155deg, rgba(255,255,255,0.14), transparent 34%)" }} />
+        {showImg && src ? (
+          <img src={src} alt={name!} draggable={false} loading="lazy" referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className="absolute inset-0 w-full h-full object-cover object-top" />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center bg-raised/60">
+            <span className="text-xl font-black text-faint/50 italic select-none">?</span>
+          </div>
+        )}
+        {/* team spine */}
+        <div className={`absolute top-0 ${ours ? "left-0" : "right-0"} w-[3px] h-full z-10 ${ours ? "bg-leaf/80" : "bg-crim/80"}`} />
+        {/* name band */}
+        {filled && (
+          <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-1.5 pt-3 pb-1">
+            <div className={`text-center text-[10px] sm:text-[11px] font-black italic uppercase tracking-wider truncate drop-shadow ${ours ? "text-leaf" : "text-crim"}`}>
+              {name}
+            </div>
+          </div>
+        )}
+      </div>
+      <span className="label !text-[8px] mt-0.5">{lane}</span>
+      <span className={`text-[10px] font-semibold truncate max-w-full ${player ? "text-mute" : "text-faint/60"}`}>{player || " "}</span>
+    </figure>
+  );
+}
+
+/** Stadium header: big crests, phase-serif caption, amber VS / score center. */
+function StageHeader({ oursLabel, theirsLabel, scoreUS, scoreThem }: {
+  oursLabel: string; theirsLabel: string; scoreUS?: number; scoreThem?: number;
+}) {
+  const hasScore = scoreUS !== undefined && scoreThem !== undefined;
+  return (
+    <div className="relative flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="rounded-xl border-2 border-leaf/50 bg-leaf-dim/30 p-1.5 shrink-0 shadow-[0_0_22px_rgba(52,211,153,0.3)]"><BrandImg size={38} /></span>
+        <div className="min-w-0">
+          <div className="text-[15px] font-black italic tracking-wider text-leaf truncate uppercase">{oursLabel}</div>
+          <div className="label !text-[8px] !text-leaf/60">BLUE SIDE</div>
+        </div>
+      </div>
+      <div className="text-center shrink-0">
+        {hasScore ? (
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-3xl font-black italic text-leaf tabular-nums drop-shadow-[0_0_14px_rgba(52,211,153,0.45)]">{scoreUS}</span>
+            <span className="text-xl font-black text-faint">:</span>
+            <span className="text-3xl font-black italic text-crim tabular-nums drop-shadow-[0_0_14px_rgba(225,29,72,0.45)]">{scoreThem}</span>
+          </div>
+        ) : (
+          <span className="text-3xl font-black italic tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-b from-amber via-amber to-crim drop-shadow-[0_2px_16px_rgba(245,185,66,0.35)]">VS</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="min-w-0 text-right">
+          <div className="text-[15px] font-black italic tracking-wider text-crim truncate uppercase">{theirsLabel}</div>
+          <div className="label !text-[8px] !text-crim/60">RED SIDE</div>
+        </div>
+        <span className="w-[42px] h-[42px] rounded-xl border-2 border-crim/50 bg-crim-dim/30 flex items-center justify-center text-sm font-black italic text-crim shrink-0 shadow-[0_0_22px_rgba(225,29,72,0.3)]">
+          {initials(theirsLabel)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Vertical ban stack for the arena edges (5 slashes, numbered). */
+function BanStack({ bans, ours }: { bans?: (string | null)[]; ours: boolean }) {
+  const list = (bans ?? []).concat([null, null, null, null, null]).slice(0, 5);
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <span className={`label !text-[7px] ${ours ? "text-leaf/60" : "text-crim/60"}`}>BANS</span>
+      {list.map((b, i) => <BanThumb key={i} name={b} ours={ours} order={i + 1} />)}
+    </div>
+  );
+}
+
 export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY", scoreUS, scoreThem, players }: {
   draft?: Draft; oursLabel?: string; theirsLabel?: string; scoreUS?: number; scoreThem?: number;
   players?: Record<string, string>;
@@ -157,53 +246,57 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
   const ourPicks = d.our_picks ?? {};
   const theirPicks = d.enemy_picks ?? {};
   return (
-    <div className="card relative overflow-hidden p-4 sm:p-5 space-y-4">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-leaf/[0.06] to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-crim/[0.06] to-transparent" />
-      <DraftHeader oursLabel={oursLabel} theirsLabel={theirsLabel} scoreUS={scoreUS} scoreThem={scoreThem} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-y border-edge/60 py-3">
-        <BanStrip bans={d.our_bans} ours label={`${oursLabel} BANS`} />
-        <BanStrip bans={d.enemy_bans} ours={false} label={`${theirsLabel} BANS`} />
-      </div>
-      {/* cinema: facing banks of five portrait cards (desktop), lane rows below on mobile */}
-      <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+    <div className="card relative overflow-hidden p-4 sm:p-6 space-y-5 bg-[#07070b]">
+      {/* arena atmosphere: side tints + ember floor glow + top vignette */}
+      <div className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(55% 60% at 8% 50%, rgba(52,211,153,0.10), transparent 70%)," +
+            "radial-gradient(55% 60% at 92% 50%, rgba(225,29,72,0.12), transparent 70%)," +
+            "radial-gradient(70% 55% at 50% 118%, rgba(245,185,66,0.16), transparent 65%)," +
+            "linear-gradient(rgba(0,0,0,0.35), transparent 22%)",
+        }} />
+      <div className="relative"><StageHeader oursLabel={oursLabel} theirsLabel={theirsLabel} scoreUS={scoreUS} scoreThem={scoreThem} /></div>
+
+      {/* banks with ban stacks on the arena edges — desktop */}
+      <div className="relative hidden lg:grid grid-cols-[44px_1fr_56px_1fr_44px] items-center gap-4">
+        <BanStack bans={d.our_bans} ours />
         <div className="grid grid-cols-5 gap-3">
           {LANES.map((lane) => (
-            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
-              <HeroPortrait name={ourPicks[lane]} ours fluid bare />
-              <span className="label !text-[8px] mt-0.5">{lane}</span>
-              <span className={`text-[10px] font-semibold truncate max-w-full ${players?.[lane] ? "text-mute" : "text-faint/60"}`}>
-                {players?.[lane] ?? "\u00A0"}
-              </span>
-            </div>
+            <BroadcastCard key={lane} name={ourPicks[lane]} ours lane={lane} player={players?.[lane]} />
           ))}
         </div>
         <div className="flex flex-col items-center gap-1 px-1">
-          <span className="text-2xl font-black tracking-[0.2em] text-mute">VS</span>
-          <span className="label !text-[7.5px] whitespace-nowrap">LANE MATCHUPS</span>
+          <span className="text-[26px] font-black italic tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-b from-amber/90 to-crim/90">VS</span>
+          <span className="label !text-[7px] whitespace-nowrap">LANE MATCHUPS</span>
         </div>
         <div className="grid grid-cols-5 gap-3">
           {LANES.map((lane) => (
-            <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
-              <HeroPortrait name={theirPicks[lane]} ours={false} fluid bare />
-              <span className="label !text-[8px] mt-0.5">{lane}</span>
-              <span className="text-[10px] font-semibold text-faint/60">{"\u00A0"}</span>
-            </div>
+            <BroadcastCard key={lane} name={theirPicks[lane]} ours={false} lane={lane} />
           ))}
         </div>
+        <BanStack bans={d.enemy_bans} ours={false} />
       </div>
-      <div className="lg:hidden divide-y divide-edge/50">
+      {/* phase caption footer — desktop */}
+      <div className="relative hidden lg:flex items-center gap-3 pt-1">
+        <span className="h-px flex-1 bg-gradient-to-r from-transparent via-edge to-transparent" />
+        <span className="text-[10px] font-black italic tracking-[0.4em] text-amber/90 drop-shadow-[0_0_10px_rgba(245,185,66,0.35)]">THE DRAFTING PHASE</span>
+        <span className="h-px flex-1 bg-gradient-to-r from-transparent via-edge to-transparent" />
+      </div>
+
+      {/* mobile: ban strips then lane rows */}
+      <div className="relative lg:hidden grid grid-cols-2 gap-4 border-y border-edge/60 py-3">
+        <BanStrip bans={d.our_bans} ours label={`${oursLabel} BANS`} />
+        <BanStrip bans={d.enemy_bans} ours={false} label={`${theirsLabel} BANS`} />
+      </div>
+      <div className="relative lg:hidden divide-y divide-edge/50">
         {LANES.map((lane) => {
           const ours = ourPicks[lane]; const theirs = theirPicks[lane];
           return (
             <div key={lane} className="grid grid-cols-[1fr_auto_1fr] items-center py-2">
-              <div className="flex justify-end">
-                <HeroPortrait name={ours} ours player={players?.[lane]} />
-              </div>
+              <div className="flex justify-end"><div className="w-[82px]"><BroadcastCard name={ours} ours lane={lane} player={players?.[lane]} /></div></div>
               <span className="label w-16 text-center !text-[9px]">{lane}</span>
-              <div className="flex justify-start">
-                <HeroPortrait name={theirs} ours={false} player={players ? "" : undefined} />
-              </div>
+              <div className="flex justify-start"><div className="w-[82px]"><BroadcastCard name={theirs} ours={false} lane={lane} /></div></div>
             </div>
           );
         })}
