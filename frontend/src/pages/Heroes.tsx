@@ -408,9 +408,10 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => {
     setSets(null); setErr(null);
-    intel<{ data?: { records?: HeroDetailRec[] } }>(`heroes/${encodeURIComponent(heroName)}`, { size: 1, index: 1, lang: "en" }, 30 * 60_000)
+    // intel() already unwraps the envelope — `d` IS { records, total }
+    intel<{ records?: HeroDetailRec[] }>(`heroes/${encodeURIComponent(heroName)}`, { size: 1, index: 1, lang: "en" }, 30 * 60_000)
       .then((d) => {
-        const rec = (d.data?.records?.[0] ?? {}) as AnyRec;
+        const rec = (d.records?.[0] ?? {}) as AnyRec;
         const found = findKits(rec);
         const heroData = found?.host ?? {};
         const kits = found?.kits ?? [];
