@@ -61,7 +61,6 @@ export const RANK_TIERS = ["all", "epic", "legend", "mythic", "honor", "glory"] 
 
 export interface WallpaperRecord { heroid?: number[]; pictures?: { resolution?: string; url?: string }[] }
 interface CatalogData { hero_id?: number; hero_name?: string; name?: string; head?: string; head_big?: string; painting?: string }
-type CatalogRec = { data?: CatalogData };
 
 let artMap: Map<string, { id?: number; head?: string; art?: string }> | null = null;
 let artLoading: Promise<void> | null = null;
@@ -76,7 +75,7 @@ export function ensureArtIndex(): void {
   artLoading = (async () => {
     try {
       const [catalog, walls] = await Promise.all([
-        intel<Records<CatalogRec>>("academy/heroes/catalog", { size: 300, index: 1 }, 30 * 60_000),
+        intel<Records<CatalogData>>("academy/heroes/catalog", { size: 300, index: 1 }, 30 * 60_000),
         intel<Records<WallpaperRecord>>("heroes/wallpapers", { device: "mobile", size: 300, index: 1 }, 30 * 60_000).catch(() => null),
       ]);
       const wallById = new Map<number, string>();
