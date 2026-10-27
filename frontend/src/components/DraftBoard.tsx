@@ -33,24 +33,29 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
   const src = stage === 0 ? (remote ?? `/heroes/${heroSlug(name!)}.webp`) : `/heroes/${heroSlug(name!)}.webp`;
   const showImg = filled && stage < 2;
   const card = (
-    <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[3/4] rounded-lg overflow-hidden border transition
-      ${ours ? "border-leaf/40 shadow-[0_0_16px_rgba(52,211,153,0.14)]" : "border-crim/40 shadow-[0_0_16px_rgba(225,29,72,0.14)]"}
-      ${filled ? "bg-overlay" : "bg-raised/50 border-dashed opacity-60"}
-      ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-opacity-90 hover:brightness-110" : ""}`}>
+    <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[5/8] overflow-hidden border transition bg-[#111111]
+      ${filled ? "border-[#C8AA6E]/25" : "border-[#C8AA6E]/10"}
+      ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-[#C8AA6E]/60 hover:brightness-110" : ""}`}>
       {showImg ? (
         <img src={src} alt={name!} onError={() => setStage((s) => (s === 0 ? 1 : 2))}
-          className="absolute inset-0 w-full h-full object-cover object-top" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
+          className="absolute inset-0 w-full h-full object-cover object-center" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-mute font-extrabold text-lg select-none">
-          {filled ? initials(name!) : "?"}
+        <div className="absolute inset-0 flex items-center justify-center select-none">
+          {filled
+            ? <span className="text-mute font-extrabold text-lg">{initials(name!)}</span>
+            : <CircleSlash2 size={18} className="text-faint/50" />}
         </div>
       )}
       {filled && (
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-5 pb-1 px-1">
-          <div className="text-[10.5px] font-bold leading-tight truncate text-center">{name}</div>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pt-4 pb-1 px-1">
+          <div className="mb-0.5 h-px w-full" style={{
+            background: ours
+              ? "linear-gradient(90deg, transparent, rgb(52,211,153), transparent)"
+              : "linear-gradient(90deg, transparent, rgb(225,29,72), transparent)",
+          }} />
+          <div className="text-[9.5px] font-semibold uppercase tracking-wide leading-tight truncate text-center text-[#E8E6E3]">{name}</div>
         </div>
       )}
-      <div className={`absolute top-0 ${ours ? "left-0" : "right-0"} w-[3px] h-full ${ours ? "bg-leaf/70" : "bg-crim/70"}`} />
     </div>
   );
   if (bare) return interactive ? <button type="button" className="block w-full" onClick={onClick}>{card}</button> : card;
@@ -82,7 +87,7 @@ function BanThumb({ name, order, interactive = false, onClick }: {
       ${interactive ? "cursor-pointer hover:scale-110 hover:border-opacity-80" : ""}`}>
       {filled && !failed ? (
         <img src={src} alt={name!} onError={() => setFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover object-[50%_25%] grayscale-[0.35]" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
+          className="absolute inset-0 w-full h-full object-cover object-center grayscale-[0.35]" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center select-none">
           {filled ? <span className="text-[10px] font-extrabold text-mute">{initials(name!)}</span> : <span className="h-px w-1/2 bg-mute/60" />}
@@ -580,8 +585,8 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
               className={`w-full flex items-center gap-2 rounded-lg p-1.5 border transition text-left
                 ${active ? "border-amber bg-amber/10 shadow-[0_0_12px_rgba(245,185,66,0.25)]"
                   : ours ? "border-leaf/25 hover:border-leaf/60" : "border-crim/25 hover:border-crim/60"}`}>
-              <span className="relative shrink-0">
-                <HeroImg name={name || "?"} size={40} variant="icon" className="rounded-md" />
+              <span className={`relative shrink-0 rounded-sm overflow-hidden border ${name ? "border-[#C8AA6E]/30" : "border-[#C8AA6E]/10"}`}>
+                <HeroImg name={name || "?"} size={40} variant="icon" className="rounded-none" />
                 {name && (
                   <span role="button" title="Clear"
                     onClick={(e) => { e.stopPropagation(); clearSlot(t); }}
@@ -613,19 +618,21 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
           return (
             <button key={i} type="button" title={b ? String(b) : `Ban slot ${i + 1}`}
               onClick={() => setArmed(active ? null : t)}
-              className={`relative w-11 h-11 rounded-md border overflow-hidden transition grid place-items-center
-                  ${active ? "border-amber shadow-[0_0_10px_rgba(245,185,66,0.3)]"
-                    : b ? "border-edge" : "border-dashed " + (ours ? "border-leaf/30" : "border-crim/30")}`}>
+              className={`relative w-11 h-11 rounded-full overflow-hidden transition grid place-items-center
+                  ${active ? "border-2 border-amber shadow-[0_0_10px_rgba(245,185,66,0.35)]"
+                    : b ? "border-2 border-crim/80 shadow-[0_0_10px_rgba(225,29,72,0.35),inset_0_0_10px_rgba(225,29,72,0.2)]"
+                      : "border border-dashed border-mute/40 bg-[#111111]"}`}>
               {b ? (
-                <span className="absolute inset-0 grayscale">
-                  <HeroImg name={String(b)} size={44} variant="icon" className="rounded-none" />
+                <span className="absolute inset-0">
+                  <HeroImg name={String(b)} size={44} variant="icon" className="rounded-full grayscale-[0.35]" />
+                  <span className="absolute inset-0 rounded-full bg-crim/10" />
                 </span>
               ) : (
-                <span className="text-[9px] font-black text-faint">{i + 1}</span>
+                <span className="h-px w-1/2 bg-mute/60" />
               )}
               {b && (
                 <span role="button" title="Clear ban" onClick={(e) => { e.stopPropagation(); clearSlot(t); }}
-                  className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 hover:opacity-100 transition text-white">
+                  className="absolute inset-0 rounded-full grid place-items-center bg-black/55 opacity-0 hover:opacity-100 transition text-white">
                   <X size={14} />
                 </span>
               )}
@@ -678,12 +685,12 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
                 <button key={h.id} type="button" disabled={!armed || taken}
                   onClick={() => assign(h.name)}
                   title={taken ? `${h.name} already drafted` : armed ? `Draft ${h.name}` : "Arm a slot first"}
-                  className={`relative rounded-md overflow-hidden border text-center transition group
-                    ${taken ? "opacity-35 grayscale cursor-not-allowed border-edge"
-                      : !armed ? "border-edge opacity-70"
-                        : "border-edge hover:border-amber hover:shadow-[0_0_10px_rgba(245,185,66,0.25)] hover:scale-[1.06]"}`}>
+                  className={`relative overflow-hidden border text-center transition group bg-[#111111]
+                    ${taken ? "opacity-35 grayscale cursor-not-allowed border-[#C8AA6E]/10"
+                      : !armed ? "border-[#C8AA6E]/10 opacity-70"
+                        : "border-[#C8AA6E]/15 hover:border-amber hover:shadow-[0_0_10px_rgba(245,185,66,0.25)] hover:scale-[1.06]"}`}>
                   <HeroImg name={h.name} size={58} variant="icon" className="w-full rounded-none aspect-square" />
-                  <span className="absolute inset-x-0 bottom-0 bg-black/70 text-[8px] font-bold py-0.5 leading-none truncate px-0.5 select-none">
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-2 pb-0.5 text-[8px] font-semibold uppercase tracking-wide leading-none truncate px-0.5 select-none text-[#E8E6E3]">
                     {h.name}
                   </span>
                   {taken && <span className="absolute inset-0 grid place-items-center text-[8px] font-black text-crim tracking-widest bg-black/30">TAKEN</span>}
