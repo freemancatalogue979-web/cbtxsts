@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
+import { ensureArtIndex } from "./lib/mlbb";
 import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
 import { Layout } from "./components/Layout";
@@ -12,6 +13,8 @@ import { TournamentsPage } from "./pages/Tournaments";
 import { ReviewsPage } from "./pages/Reviews";
 import { HeroesPage } from "./pages/Heroes";
 import { IntelPage } from "./pages/Intel";
+import { EsportsPage } from "./pages/Esports";
+import { AccountMLBBPage } from "./pages/AccountMLBB";
 import { PlayersPage } from "./pages/Players";
 import { BansPage } from "./pages/Bans";
 import { DraftsPage } from "./pages/Drafts";
@@ -58,6 +61,7 @@ export default function App() {
   useEffect(() => {
     if (user && !meta) {
       api.get<Meta>("/meta").then(setMeta).catch(() => setMeta(null));
+      ensureArtIndex(); // warm the official CDN artwork cache (fire-and-forget)
     }
   }, [user, meta]);
 
@@ -95,6 +99,12 @@ export default function App() {
       break;
     case "intel":
       page = <IntelPage />;
+      break;
+    case "esports":
+      page = <EsportsPage />;
+      break;
+    case "mlbb":
+      page = <AccountMLBBPage />;
       break;
     case "players":
       page = <PlayersPage me={user} meta={meta} parts={rest} />;

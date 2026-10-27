@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { Draft, Hero } from "../lib/types";
 import { heroSlug } from "./HeroImg";
 import { BrandImg } from "./Logo";
+import { artFor, artVersion, subscribeArt } from "../lib/mlbb";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
@@ -24,16 +25,20 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
   /** fluid: fill the parent's width (cinema banks); bare: no caption row under the card */
   fluid?: boolean; bare?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  useSyncExternalStore(subscribeArt, artVersion);
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
   const filled = Boolean(name);
+  const remote = filled ? (artFor(name!)?.art ?? artFor(name!)?.head) : undefined;
+  const src = stage === 0 ? (remote ?? `/heroes/${heroSlug(name!)}.webp`) : `/heroes/${heroSlug(name!)}.webp`;
+  const showImg = filled && stage < 2;
   const card = (
     <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[3/4] rounded-lg overflow-hidden border transition
       ${ours ? "border-leaf/40 shadow-[0_0_16px_rgba(52,211,153,0.14)]" : "border-crim/40 shadow-[0_0_16px_rgba(225,29,72,0.14)]"}
       ${filled ? "bg-overlay" : "bg-raised/50 border-dashed opacity-60"}
       ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-opacity-90 hover:brightness-110" : ""}`}>
-      {filled && !failed ? (
-        <img src={`/heroes/${heroSlug(name!)}.webp`} alt={name!} onError={() => setFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover object-top" draggable={false} />
+      {showImg ? (
+        <img src={src} alt={name!} onError={() => setStage((s) => (s === 0 ? 1 : 2))}
+          className="absolute inset-0 w-full h-full object-cover object-top" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-mute font-extrabold text-lg select-none">
           {filled ? initials(name!) : "?"}
@@ -62,15 +67,18 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
 function BanThumb({ name, ours, order, interactive = false, onClick }: {
   name?: string | null; ours: boolean; order: number; interactive?: boolean; onClick?: () => void;
 }) {
+  useSyncExternalStore(subscribeArt, artVersion);
   const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
+  const remote = filled ? (artFor(name!)?.head ?? artFor(name!)?.art) : undefined;
+  const src = remote && !failed ? remote : `/heroes/${heroSlug(name!)}.webp`;
   const thumb = (
     <div className={`relative w-[38px] h-[38px] rounded-md overflow-hidden border transition
       ${ours ? "border-leaf/30" : "border-crim/30"} ${filled ? "" : "border-dashed opacity-50 bg-raised/50"}
       ${interactive ? "cursor-pointer hover:scale-110 hover:border-opacity-80" : ""}`}>
       {filled && !failed ? (
-        <img src={`/heroes/${heroSlug(name!)}.webp`} alt={name!} onError={() => setFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover object-top brightness-[0.68] saturate-75" draggable={false} />
+        <img src={src} alt={name!} onError={() => setFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover object-top brightness-[0.68] saturate-75" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-mute select-none">
           {filled ? initials(name!) : "?"}

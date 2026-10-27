@@ -8,7 +8,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -497,3 +497,23 @@ class TeamSettings(Base):
     weakness_drills_target: Mapped[int] = mapped_column(Integer, default=3)
     season_name: Mapped[str] = mapped_column(String(80), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class IntelLink(Base):
+    """Per-user MLBB account link — Rone Arena auth tokens (JWT + refresh token).
+
+    Stored server-side only; never written to logs and never returned by any API
+    response. `role_id`/`zone_id` are big MLBB numeric ids.
+    """
+
+    __tablename__ = "intel_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    role_id: Mapped[int] = mapped_column(BigInteger)
+    zone_id: Mapped[int] = mapped_column(Integer)
+    jwt: Mapped[str] = mapped_column(Text)
+    token: Mapped[str] = mapped_column(Text, default="")
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    avatar: Mapped[str] = mapped_column(String(500), default="")
+    linked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
