@@ -48,11 +48,6 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
         <div className="font-extrabold tracking-[0.22em] text-[15px]">
           9&nbsp;<span className="text-crim">CLOVER</span>
         </div>
-        {!compact && (
-          <div className="text-[8.5px] font-semibold uppercase tracking-[0.3em] text-faint mt-1">
-            Competitive Operations
-          </div>
-        )}
       </div>
     </div>
   );

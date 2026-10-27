@@ -35,9 +35,6 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
           <div className="mt-4 text-2xl font-extrabold tracking-[0.25em]">
             9&nbsp;<span className="text-crim">CLOVER</span>
           </div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.35em] text-faint mt-2">
-            Competitive Operations
-          </div>
           <div className="mt-5 chip border-leaf/30 text-leaf/90 text-[10px] tracking-[0.2em] uppercase">
             Play. Review. Adapt. Dominate.
           </div>
