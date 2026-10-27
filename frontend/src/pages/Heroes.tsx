@@ -386,6 +386,23 @@ function skillKey(idx: number, total: number): string {
 type ResolvedSkill = { id?: number; name: string; desc: string; icon: string; cd: string; tags: string[]; tagsRgb: (string | undefined)[] };
 type ResolvedKit = { listid?: string | number; skills: ResolvedSkill[] };
 
+/** Upstream nesting has moved between releases (record.data.hero.data…). Search the record
+ *  tree (depth ≤ 5) for the first heroskilllist array and return it with its container. */
+function findKits(node: unknown, depth = 0): { kits: LiveSkillSet[]; host: AnyRec } | null {
+  if (depth > 5 || !node || typeof node !== "object") return null;
+  if (Array.isArray(node)) return null;
+  const rec = node as AnyRec;
+  const kits = rec.heroskilllist;
+  if (Array.isArray(kits) && kits.length > 0) return { kits: kits as LiveSkillSet[], host: rec };
+  for (const key of ["data", "hero"] as const) {
+    const hit = Array.isArray(rec[key])
+      ? findKits((rec[key] as unknown[])[0], depth + 1) ?? (rec[key] as unknown[]).reduce<ReturnType<typeof findKits>>((acc, el) => acc ?? findKits(el, depth + 1), null)
+      : findKits(rec[key], depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbackNames: string[] }) {
   const [sets, setSets] = useState<ResolvedKit[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -393,16 +410,21 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
     setSets(null); setErr(null);
     intel<{ data?: { records?: HeroDetailRec[] } }>(`heroes/${encodeURIComponent(heroName)}`, { size: 1, index: 1, lang: "en" }, 30 * 60_000)
       .then((d) => {
-        const rec = (d.data?.records?.[0] ?? {}) as HeroDetailRec;
-        const data = (rec.data ?? (rec as unknown as Record<string, unknown>)) as AnyRec;
-        const heroData = (((data.hero as AnyRec | undefined)?.data
-          ?? (Array.isArray(data.hero) ? (data.hero as AnyRec[])[0]?.data : undefined)
-          ?? data) ?? {}) as AnyRec;
-        const kits = ((heroData.heroskilllist ?? data.heroskilllist ?? []) as LiveSkillSet[]);
+        const rec = (d.data?.records?.[0] ?? {}) as AnyRec;
+        const found = findKits(rec);
+        const heroData = found?.host ?? {};
+        const kits = found?.kits ?? [];
+        if (kits.length === 0) {
+          console.warn("[skills] no heroskilllist found in hero detail — top keys:",
+            Object.keys(rec).join(","), "— data keys:", rec.data ? Object.keys(rec.data as object).join(",") : "(none)");
+        }
         const resolved: ResolvedKit[] = kits.map((k) => {
           const skills = ((k.skilllist ?? []) as (LiveSkill & Record<string, unknown>)[])
-            .map((s) => {
-              const roots: Record<string, unknown>[] = [s, heroData as Record<string, unknown>, data];
+            .map((raw) => {
+              // skill entries can themselves be wrapped ({ data: {...} }) at some releases
+              const s = (raw.skillname !== undefined || raw.skillicon !== undefined ? raw
+                : ((raw.data ?? Object.values(raw).find((v) => v && typeof v === "object")) ?? raw)) as LiveSkill & Record<string, unknown>;
+              const roots: Record<string, unknown>[] = [s, heroData, rec];
               return {
                 id: s.skillid,
                 name: resolveField(s.skillname, roots).trim(),
@@ -410,11 +432,11 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
                 icon: resolveField(s.skillicon, roots).trim(),
                 cd: resolveField(s["skillcd&cost"], roots).trim(),
                 tags: ((s.skilltag ?? []) as (Record<string, unknown>)[])
-                  .map((t) => resolveField(t.tagname, [t, s, heroData, data]).trim())
+                  .map((t) => resolveField(t.tagname, [t, s, heroData, rec]).trim())
                   .filter(Boolean),
                 tagsRgb: ((s.skilltag ?? []) as (Record<string, unknown>)[])
                   .map((t) => {
-                    const rgb = resolveField(t.tagrgb, [t, s, heroData, data]).trim();
+                    const rgb = resolveField(t.tagrgb, [t, s, heroData, rec]).trim();
                     return rgb || undefined;
                   }),
               } satisfies ResolvedSkill;
@@ -451,7 +473,7 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
       : <div className="card p-5"><div className="label mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Live kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
     return <div className="card p-5"><div className="label">Skills</div><Spinner label="Loading official kit" /></div>;
   }
-  if (sets.length === 0) return fallbackNames.length > 0 ? fallbackCard(false) : null;
+  if (sets.length === 0) return fallbackNames.length > 0 ? fallbackCard(true) : null;
 
   const multiForm = sets.length > 1;
   return (
