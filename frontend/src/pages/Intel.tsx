@@ -4,6 +4,7 @@ import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner
 import { heroRecords, intel, intelRaw, pct, rankRecords, recData, digRecords, stripTags, pickStr, pickNum, RANK_DAYS, RANK_TIERS } from "../lib/mlbb";
 import type { AnyRec, IntelHero, RankRecord, Records } from "../lib/mlbb";
 import { heroSlug } from "../components/HeroImg";
+import { navigate } from "../lib/util";
 
 type SortField = "win_rate" | "pick_rate" | "ban_rate";
 
@@ -69,47 +70,6 @@ function Board({ field, title, tone, icon: Icon, rows, onPick }: {
         {rows.length === 0 && <li className="text-[12px] text-faint">No records in this window.</li>}
       </ol>
     </div>
-  );
-}
-
-function HeroModal({ hero, byId, onClose }: { hero: IntelHero; byId: Map<number, IntelHero>; onClose: () => void }) {
-  const data = hero.hero?.data ?? {};
-  const name = data.name ?? `Hero ${hero.hero_id}`;
-  const rel = (key: "strong" | "weak" | "assist") =>
-    (hero.relation?.[key]?.target_hero_id ?? []).map((id) => byId.get(id)?.hero?.data?.name ?? `#${id}`);
-  const section = (title: string, names: string[], cls: string) => (
-    <div>
-      <div className="label mb-1.5">{title}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {names.length === 0 && <span className="text-[12px] text-faint">None listed upstream.</span>}
-        {names.map((n, j) => (
-          <span key={`${n}|${j}`} className={`chip ${cls} inline-flex items-center gap-1.5`}>
-            <img src={`/heroes/${heroSlug(n)}.webp`} alt="" width={16} height={16} className="rounded"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-            {n}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-  return (
-    <Modal title={name} onClose={onClose}>
-      <div className="flex items-center gap-3 mb-4">
-        <Head url={data.head} name={name} size={64} />
-        <div>
-          <div className="text-lg font-extrabold">{name}</div>
-          <div className="text-[11px] text-faint">Hero ID {hero.hero_id}</div>
-        </div>
-      </div>
-      <div className="space-y-4">
-        {section("Strong against", rel("strong"), "text-leaf border-leaf/40")}
-        {section("Weak against", rel("weak"), "text-crim border-crim/40")}
-        {section("Pairs well with", rel("assist"), "text-sky border-sky/40")}
-      </div>
-      <p className="mt-5 text-[11px] text-faint leading-relaxed">
-        Relations from the community dataset. Per-hero statistics, skill combos and builds load on this page next phase.
-      </p>
-    </Modal>
   );
 }
 
@@ -314,7 +274,6 @@ export function IntelPage() {
   const [busy, setBusy] = useState(true);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<number | null>(null);
 
   const loadHeroes = useCallback(async () =>
     heroRecords(await intel<Records<IntelHero>>("heroes", { size: 300, index: 1, order: "asc" }, 5 * 60_000)), []);
@@ -349,7 +308,6 @@ export function IntelPage() {
     const base = [...heroes].sort((a, b) => (a.hero?.data?.name ?? "").localeCompare(b.hero?.data?.name ?? ""));
     return needle ? base.filter((h) => (h.hero?.data?.name ?? "").toLowerCase().includes(needle)) : base;
   }, [heroes, q]);
-  const openHero = openId !== null ? byId.get(openId) ?? null : null;
 
   const tabs = [
     { id: "overview", label: "Overview" }, { id: "heroes", label: "Heroes" },
@@ -388,7 +346,7 @@ export function IntelPage() {
 
       {tab === "overview" && (busy && !fetchedAt ? <Spinner label="Pulling live hero analytics" /> : (
         <div className="grid md:grid-cols-3 gap-4">
-          {BOARDS.map((b) => <Board key={b.field} {...b} rows={boards[b.field]} onPick={setOpenId} />)}
+          {BOARDS.map((b) => <Board key={b.field} {...b} rows={boards[b.field]} onPick={(id) => navigate("heroes", id)} />)}
         </div>
       ))}
 
@@ -405,7 +363,7 @@ export function IntelPage() {
                 const name = h.hero?.data?.name ?? `#${h.hero_id}`;
                 const local = `/heroes/${heroSlug(name)}.webp`;
                 return (
-                  <button key={h.hero_id} type="button" onClick={() => setOpenId(h.hero_id)}
+                  <button key={h.hero_id} type="button" onClick={() => navigate("heroes", h.hero_id)}
                     className="card card-hover p-2.5 flex flex-col items-center gap-2 text-center">
                     <img src={h.hero?.data?.head ?? local} alt={name} width={56} height={56} loading="lazy" referrerPolicy="no-referrer"
                       className="rounded-lg border border-edge object-cover"
@@ -425,8 +383,6 @@ export function IntelPage() {
       {tab === "ranks" && <ReferenceGrid path="academy/ranks" searchKeys={["bigrank_name", "minrank_name"]} iconKeys={["icon"]} titleKeys={["bigrank_name", "name"]} descKeys={["minrank_name", "description"]} />}
       {tab === "builds" && <BuildsTab byId={byId} />}
       {tab === "tools" && <ToolsTab />}
-
-      {openHero && <HeroModal hero={openHero} byId={byId} onClose={() => setOpenId(null)} />}
 
       <p className="text-[10.5px] text-faint leading-relaxed border-t border-edge/60 pt-3">
         Data source: community-maintained Rone Arena API for MLBB — unaffiliated with Moonton. Leaderboards use the

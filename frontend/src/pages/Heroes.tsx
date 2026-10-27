@@ -344,20 +344,18 @@ interface ComboRec { data?: { title?: string; desc?: string; skill_id?: ComboSki
 function SkillCombosCard({ heroName }: { heroName: string }) {
   const [rows, setRows] = useState<ComboRec[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
+  const load = useCallback(() => {
     setRows(null); setErr(null);
-    const id = heroIdFor(heroName);
-    if (!id) { setErr("__noidx"); return; }
-    intel<{ records?: ComboRec[] }>(`heroes/${id}/skill-combos`, { lang: "en" }, 30 * 60_000)
+    intel<{ records?: ComboRec[] }>(`heroes/${encodeURIComponent(heroName)}/skill-combos`, { lang: "en" }, 30 * 60_000)
       .then((d) => setRows(d.records ?? []))
       .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
   }, [heroName]);
-  if (err === "__noidx") return null; // art index offline — nothing reliable to key on
+  useEffect(load, [load]);
   if (err) return (
     <div className="card p-5">
       <div className="label mb-2">Skill combos · live game data</div>
       <div className="text-[11.5px] text-faint flex items-center justify-between gap-2">
-        Data service unreachable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={() => { setErr(null); setRows(null); const id = heroIdFor(heroName); if (id) intel<{ records?: ComboRec[] }>(`heroes/${id}/skill-combos`).then((d) => setRows(d.records ?? [])).catch((e) => setErr(e instanceof Error ? e.message : "Failed")); else setErr("__noidx"); }}>Retry</button>
+        Data service unreachable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button>
       </div>
     </div>
   );

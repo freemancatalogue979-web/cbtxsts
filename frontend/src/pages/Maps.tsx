@@ -1,4 +1,4 @@
-import { Eraser, Hand, Layers, Map as MapIcon, Maximize2, Minimize2, MousePointer2, PenLine, Plus, RotateCcw, Save, Swords, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Eraser, Hand, Layers, Map as MapIcon, Maximize2, Minimize2, MousePointer2, MoveUpRight, PenLine, Plus, RotateCcw, Save, Swords, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { DraftPlan, Hero, MapBoard, MapGuide, User } from "../lib/types";
@@ -35,7 +35,10 @@ function BoardEditor({ id }: { id: number }) {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [paths, setPaths] = useState<DrawPath[]>([]);
   const [history, setHistory] = useState<{ tokens: Token[]; paths: DrawPath[] }[]>([]);
-  const [tool, setTool] = useState<"move" | "pan" | "pen" | "erase">("move");
+  const [tool, setTool] = useState<"move" | "pan" | "pen" | "free" | "erase">("move");
+  const strokeFree = useRef(false); // true = freehand, false = straight arrow
+  const ptrs = useRef(new Map<number, { x: number; y: number }>()); // live pointers: pinch gestures
+  const pinch = useRef<{ d0: number; m0: { x: number; y: number }; v0: { z: number; x: number; y: number } } | null>(null);
   const [penColor, setPenColor] = useState(PEN_COLORS[0].id);
   const [stroke, setStroke] = useState<number[][] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -136,7 +139,36 @@ function BoardEditor({ id }: { id: number }) {
     return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
   };
 
+  function startPinch() {
+    const [a, b] = [...ptrs.current.values()];
+    if (!a || !b) return;
+    pinch.current = {
+      d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      v0: { ...view },
+    };
+    setStroke(null); setDragId(null); panRef.current = null;
+  }
+  function applyPinch() {
+    const [a, b] = [...ptrs.current.values()];
+    const g = pinch.current;
+    if (!a || !b || !g) return;
+    const d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const rect = area.current!.getBoundingClientRect();
+    const px = mx - rect.left, py = my - rect.top;      // cursor midpoint in viewport px
+    const px0 = g.m0.x - rect.left, py0 = g.m0.y - rect.top;
+    const nz = Math.max(1, Math.min(5, g.v0.z * (d / g.d0)));
+    const k = nz / g.v0.z;
+    // zoom about the gesture midpoint, following finger drift
+    const x = px - (px0 - g.v0.x) * k;
+    const y = py - (py0 - g.v0.y) * k;
+    setView(clampView({ z: nz, x, y }));
+  }
   function onAreaDown(e: React.PointerEvent) {
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.current.size === 2) { startPinch(); e.preventDefault(); return; }
+    if (ptrs.current.size > 2) return;
     // pan: hand tool, or middle/right-drag with any tool
     if (e.button === 1 || e.button === 2 || tool === "pan") {
       panRef.current = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
@@ -144,7 +176,8 @@ function BoardEditor({ id }: { id: number }) {
       e.preventDefault();
       return;
     }
-    if (tool === "pen") {
+    if (tool === "pen" || tool === "free") {
+      strokeFree.current = tool === "free";
       (e.target as Element).releasePointerCapture?.(e.pointerId);
       setStroke([pt(e)]);
     } else if (tool === "erase") {
@@ -153,6 +186,8 @@ function BoardEditor({ id }: { id: number }) {
     }
   }
   function onAreaMove(e: React.PointerEvent) {
+    if (ptrs.current.has(e.pointerId)) ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch.current && ptrs.current.size >= 2) { applyPinch(); return; }
     if (panRef.current) {
       const p = panRef.current;
       setView((v) => clampView({ z: v.z, x: p.ox + (e.clientX - p.sx), y: p.oy + (e.clientY - p.sy) }));
@@ -163,19 +198,30 @@ function BoardEditor({ id }: { id: number }) {
       setTokens((ts) => ts.map((t) => (t.id === dragId ? { ...t, x, y } : t)));
       setDirty(true);
     } else if (stroke) {
-      // straight arrows only: stroke is always just [anchor, current]
-      setStroke((s) => (s ? [s[0], pt(e)] : s));
+      if (strokeFree.current) setStroke((s) => (s ? [...s, pt(e)] : s));      // freehand ink
+      else setStroke((s) => (s ? [s[0], pt(e)] : s));                        // straight arrow
     }
   }
-  function onAreaUp() {
+  function onAreaUp(e?: React.PointerEvent) {
+    if (e) ptrs.current.delete(e.pointerId);
+    if (ptrs.current.size < 2) pinch.current = null;
+    if (ptrs.current.size > 0) return; // another finger still down — wait
     if (panRef.current) { panRef.current = null; return; }
     if (dragId) { setDragId(null); return; }
     if (stroke) {
-      const [a, b] = stroke;
-      if (b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 1.2) {
-        snapshot();
-        setPaths((p) => [...p, { color: penColor, points: [a, b] }]);
-        setDirty(true);
+      if (strokeFree.current) {
+        if (stroke.length > 1) {
+          snapshot();
+          setPaths((p) => [...p, { color: penColor, points: stroke }]);
+          setDirty(true);
+        }
+      } else {
+        const [a, b] = stroke;
+        if (b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 1.2) {
+          snapshot();
+          setPaths((p) => [...p, { color: penColor, points: [a, b] }]);
+          setDirty(true);
+        }
       }
       setStroke(null);
     }
@@ -344,7 +390,8 @@ function BoardEditor({ id }: { id: number }) {
             {([
               ["move", "Drag", MousePointer2],
               ["pan", "Pan", Hand],
-              ["pen", "Arrow", PenLine],
+              ["pen", "Arrow", MoveUpRight],
+              ["free", "Draw", PenLine],
               ["erase", "Erase", Eraser],
             ] as const).map(([t, label, Icon]) => (
               <button key={t}
@@ -353,7 +400,7 @@ function BoardEditor({ id }: { id: number }) {
                 <Icon size={13} /> {label}
               </button>
             ))}
-            {tool === "pen" && (
+            {(tool === "pen" || tool === "free") && (
               <span className="flex items-center gap-1.5 ml-1">
                 {PEN_COLORS.map((c) => (
                   <button key={c.id} title={c.label}
@@ -392,6 +439,8 @@ function BoardEditor({ id }: { id: number }) {
                   ? "drag to move around the map · scroll to zoom"
                   : tool === "pen"
                     ? "press, drag, release → straight arrow"
+                  : tool === "free"
+                    ? "hold & draw freely · pinch to zoom"
                     : "click an arrow to erase"}
             </span>
           </div>
@@ -411,6 +460,7 @@ function BoardEditor({ id }: { id: number }) {
               onPointerMove={onAreaMove}
               onPointerUp={onAreaUp}
               onPointerLeave={onAreaUp}
+              onPointerCancel={onAreaUp}
               onContextMenu={(e) => e.preventDefault()}
             >
               {/* zoomable / pannable surface */}
