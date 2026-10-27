@@ -395,9 +395,9 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
       .then((d) => {
         const rec = (d.data?.records?.[0] ?? {}) as HeroDetailRec;
         const data = (rec.data ?? (rec as unknown as Record<string, unknown>)) as AnyRec;
-        const heroData = (data.hero as AnyRec | undefined)?.data
-          ?? (Array.isArray(data.hero) ? (data.hero[0] as AnyRec | undefined)?.data : undefined)
-          ?? data;
+        const heroData = (((data.hero as AnyRec | undefined)?.data
+          ?? (Array.isArray(data.hero) ? (data.hero as AnyRec[])[0]?.data : undefined)
+          ?? data) ?? {}) as AnyRec;
         const kits = ((heroData.heroskilllist ?? data.heroskilllist ?? []) as LiveSkillSet[]);
         const resolved: ResolvedKit[] = kits.map((k) => {
           const skills = ((k.skilllist ?? []) as (LiveSkill & Record<string, unknown>)[])
