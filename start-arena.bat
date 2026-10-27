@@ -10,6 +10,14 @@ REM recreates it automatically.
 setlocal EnableExtensions
 cd /d "%~dp0"
 
+REM Optional: start-arena.bat update  ->  pull the latest code first (running API
+REM reloads itself afterwards -- uvicorn --reload watches backend\app\ and vite
+REM hot-reloads the frontend, so a pull alone updates a running app).
+if /i "%~1"=="update" (
+  echo [*] Pulling latest code...
+  git pull --rebase || echo [!] pull reported a conflict - fix it and re-run.
+)
+
 where py >nul 2>nul && (set "PYTHON=py -3") || (set "PYTHON=python")
 where node >nul 2>nul || (
   echo [x] Node.js is required - install it from https://nodejs.org then re-run.

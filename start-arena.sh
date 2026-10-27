@@ -66,7 +66,9 @@ start_api_daemon() {
   (
     cd "$ROOT/backend"
     # setsid gives the service its own session; nohup ignores the SSH hangup.
-    nohup setsid ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" \
+    # --reload makes 'git pull' take effect on a RUNNING backend: any changed
+    # file under app/ restarts uvicorn by itself.
+    nohup setsid ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" --reload --reload-dir "$ROOT/backend/app" \
       >> "$API_LOG" 2>&1 < /dev/null &
     echo $! > "$API_PID_FILE"
   )
@@ -176,6 +178,17 @@ case "$TARGET" in
     ;;
   stop)
     stop_all
+    ;;
+  update)
+    # pull latest and restart only what the update touched; deps self-refresh on restart.
+    log "Pulling latest…"
+    git -C "$ROOT" pull --rebase
+    stop_all
+    setup_backend
+    setup_frontend
+    start_api_daemon
+    start_web_daemon
+    show_status || true
     ;;
   restart)
     stop_all
