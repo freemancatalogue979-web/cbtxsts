@@ -106,6 +106,24 @@ export interface HeroArt { id?: number; head?: string; art?: string }
 export const artFor = (name: string): HeroArt | undefined => artMap?.get(name.toLowerCase());
 export const heroIdFor = (name: string): number | undefined => artMap?.get(name.toLowerCase())?.id;
 
+/** Community hero guide (academy/recommended) for one hero — locate its list row by
+ * hero_id, then fetch the detail. Returns the inner payload: { hero: { hero_overview,
+ * hero_strength, hero_weakness }, cooperates, counters, equips, emblems, spell… } */
+export async function guideForHero(heroId: number): Promise<AnyRec | null> {
+  const list = await intel<Records<AnyRec>>("academy/recommended", { size: 60, index: 1 }, 10 * 60_000);
+  const rec = (list.records ?? []).find((r) => {
+    const inner = (r.data as AnyRec | undefined)?.data as AnyRec | undefined;
+    const hero = (inner?.hero ?? {}) as AnyRec;
+    return pickNum(hero, "hero_id") === heroId || pickNum(inner ?? {}, "hero_id") === heroId;
+  });
+  const gid = (rec as { id?: number } | undefined)?.id;
+  if (gid === undefined) return null;
+  const detail = await intel<Records<AnyRec>>(`academy/recommended/${gid}`, { lang: "en" }, 30 * 60_000);
+  const first = (detail.records ?? [])[0];
+  const inner = ((first as unknown as AnyRec | undefined)?.data ?? null) as AnyRec | null;
+  return ((inner?.data ?? inner) ?? null) as AnyRec | null;
+}
+
 /** Recursive fallback extractor: some Rone payloads aren't `records`-shaped (emblem/spell
  * records nest under custom keys). Walk the envelope data and return the FIRST array of
  * objects we find (depth-limited, records/list/rows preferred at each level). */

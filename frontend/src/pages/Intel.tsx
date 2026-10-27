@@ -120,6 +120,7 @@ function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
   const [rows, setRows] = useState<AnyRec[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [sel, setSel] = useState<{ title: string; desc?: string; icon?: string; num?: string } | null>(null);
   useEffect(() => {
     intel<AnyRec>(path, { size: 300, index: 1 }, 10 * 60_000)
       .then((d) => {
@@ -153,20 +154,41 @@ function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
             const title = pickStr(r, ...titleKeys) ?? pickStr(emblem, ...titleKeys) ?? pickStr(inner, ...titleKeys) ?? `#${pickNum(r, "equipid", "id", "_object") ?? i}`;
             const desc = pickStr(r, ...descKeys) ?? pickStr(emblem, ...descKeys) ?? pickStr(inner, ...descKeys);
             const icon = pickStr(r, ...iconKeys) ?? pickStr(emblem, ...iconKeys) ?? pickStr(inner, ...iconKeys);
+            const num = pickStr(r, "numdescribe");
+            const detail = () => setSel({ title: stripTags(String(title)), desc: desc ? stripTags(desc) : undefined, icon, num });
             return (
-              <div key={i} className="card p-3.5 flex items-start gap-3">
+              <button key={i} type="button" onClick={detail} title="Open details"
+                className="card card-hover p-3.5 flex items-start gap-3 text-left w-full">
                 {icon ? <img src={icon} alt="" width={42} height={42} loading="lazy" referrerPolicy="no-referrer"
                   className="rounded-lg border border-edge object-cover shrink-0 bg-raised"
                   onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }} /> : null}
                 <div className="min-w-0">
                   <div className="text-[13px] font-bold truncate">{title}</div>
-                  {desc && <div className="text-[11.5px] text-mute mt-1 leading-relaxed">{stripTags(desc)}</div>}
-                  {pickStr(r, "numdescribe") && <Badge cls="text-leaf border-leaf/40 mt-1.5">{pickStr(r, "numdescribe")}</Badge>}
+                  {desc && <div className="text-[11.5px] text-mute mt-1 leading-relaxed line-clamp-2">{stripTags(desc)}</div>}
+                  {num && <Badge cls="text-leaf border-leaf/40 mt-1.5">{num}</Badge>}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
+      )}
+      {sel && (
+        <Modal title={sel.title} onClose={() => setSel(null)}>
+          <div className="flex items-center gap-3 mb-4">
+            {sel.icon && (
+              <img src={sel.icon} alt="" width={56} height={56} referrerPolicy="no-referrer"
+                className="rounded-xl border border-edge bg-raised shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            )}
+            <div>
+              <div className="text-[15px] font-extrabold">{sel.title}</div>
+              {sel.num && <Badge cls="text-leaf border-leaf/40 mt-1">{sel.num}</Badge>}
+            </div>
+          </div>
+          {sel.desc
+            ? <div className="text-[13px] text-mute leading-relaxed whitespace-pre-line bg-raised border border-edge/60 rounded-lg px-4 py-3.5 max-h-[50dvh] overflow-y-auto">{sel.desc}</div>
+            : <div className="text-[12px] text-faint">Upstream provides no description for this entry.</div>}
+        </Modal>
       )}
     </div>
   );
@@ -376,7 +398,7 @@ export function IntelPage() {
         </section>
       )}
 
-      {tab === "equipment" && <ReferenceGrid path="academy/equipment" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["description", "itemdesc", "desc"]} />}
+      {tab === "equipment" && <ReferenceGrid path="academy/equipment/expanded" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["equipskilldesc", "skilldesc", "description", "itemdesc", "desc"]} />}
       {tab === "emblems" && <ReferenceGrid path="academy/emblems" searchKeys={["emblemname", "skillname"]} iconKeys={["emblemicon", "skillicon", "icon"]} titleKeys={["emblemname", "skillname", "name"]} descKeys={["skilldesc", "skilldescemblem", "description"]} />}
       {tab === "spells" && <ReferenceGrid path="academy/spells" searchKeys={["skillname", "name"]} iconKeys={["skillicon", "icon"]} titleKeys={["skillname", "name"]} descKeys={["skilldesc", "description"]} />}
       {tab === "ranks" && <ReferenceGrid path="academy/ranks" searchKeys={["bigrank_name", "minrank_name"]} iconKeys={["icon"]} titleKeys={["bigrank_name", "name"]} descKeys={["minrank_name", "description"]} />}

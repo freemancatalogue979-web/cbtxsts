@@ -1,7 +1,8 @@
 import { Plus, Search, ShieldBan, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, qs } from "../lib/api";
-import { heroIdFor, intel, stripTags } from "../lib/mlbb";
+import { guideForHero, heroIdFor, intel, pickStr, stripTags } from "../lib/mlbb";
+import type { AnyRec } from "../lib/mlbb";
 import type { Hero, Meta, User } from "../lib/types";
 import { navigate, HERO_STATUS_STYLE } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Tabs } from "../components/ui";
@@ -273,6 +274,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
               </div>
             )}
             <SkillCombosCard heroName={h.name} />
+            <SkillGuideCard heroName={h.name} />
           </>
         )}
 
@@ -409,6 +411,85 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Skill descriptions from the verified community guide (academy/recommended) ---------- */
+
+interface ParsedSkill { key: string; name: string; text: string }
+
+function parseSkillBlocks(overview: string): ParsedSkill[] {
+  const clean = stripTags(overview);
+  const start = clean.search(/HERO SKILLS/i);
+  if (start < 0) return [];
+  let body = clean.slice(start);
+  const end = body.search(/Standard Combo/i);
+  if (end > 0) body = body.slice(0, end);
+  const out: ParsedSkill[] = [];
+  for (const block of body.split(/\n{2,}/)) {
+    const m = block.match(/(Passive|Ultimate|Skill\s*[123])\s*(?:\(([^)]+)\))?\s*[:\-–]?\s*(.*)/is);
+    if (!m) continue;
+    const kind = /passive/i.test(m[1]) ? "P" : /ultimate/i.test(m[1]) ? "ULT" : `S${m[1].replace(/\D/g, "") || "1"}`;
+    const text = (m[3] ?? "").trim();
+    if (!text) continue;
+    out.push({ key: kind, name: (m[2] ?? m[1]).trim(), text });
+  }
+  return out;
+}
+
+function SkillGuideCard({ heroName }: { heroName: string }) {
+  const [skills, setSkills] = useState<ParsedSkill[] | null>(null);
+  const [strength, setStrength] = useState<string>("");
+  const [weakness, setWeakness] = useState<string>("");
+  useEffect(() => {
+    setSkills(null); setStrength(""); setWeakness("");
+    const id = heroIdFor(heroName);
+    if (!id) return;
+    let live = true;
+    guideForHero(id)
+      .then((g) => {
+        if (!live || !g) { if (live) setSkills([]); return; }
+        const hero = (g.hero ?? {}) as AnyRec;
+        const ov = pickStr(hero, "hero_overview");
+        setSkills(ov ? parseSkillBlocks(ov) : []);
+        setStrength(pickStr(hero, "hero_strength") ?? "");
+        setWeakness(pickStr(hero, "hero_weakness") ?? "");
+      })
+      .catch(() => { if (live) setSkills([]); });
+    return () => { live = false; };
+  }, [heroName]);
+  if (!skills || skills.length === 0) return null; // no guide upstream — stay silent, never fabricate
+  return (
+    <div className="card p-5">
+      <div className="label mb-4">Skill details · official guide</div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {skills.map((s, i) => (
+          <div key={`${s.key}-${i}`} className="bg-raised border border-edge/60 rounded-lg px-4 py-3.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="w-7 h-7 rounded bg-overlay border border-edge-2 grid place-items-center text-[10px] font-extrabold text-crim shrink-0">{s.key}</span>
+              <span className="text-[13px] font-extrabold leading-tight truncate">{s.name}</span>
+            </div>
+            <p className="text-[12px] text-mute leading-relaxed">{s.text}</p>
+          </div>
+        ))}
+      </div>
+      {(strength || weakness) && (
+        <div className="grid sm:grid-cols-2 gap-3 mt-4">
+          {strength && (
+            <div className="bg-leaf/5 border border-leaf/30 rounded-lg px-4 py-3">
+              <div className="label !text-leaf mb-1.5">Strengths</div>
+              <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(strength).replace(/✨/g, "• ")}</p>
+            </div>
+          )}
+          {weakness && (
+            <div className="bg-crim/5 border border-crim/30 rounded-lg px-4 py-3">
+              <div className="label !text-crim mb-1.5">Weaknesses</div>
+              <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(weakness).replace(/✨/g, "• ")}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

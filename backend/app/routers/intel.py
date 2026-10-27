@@ -158,6 +158,8 @@ def account_connect(body: ConnectIn, user: User = Depends(get_current_user), db:
     info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
     idata = info.get("data") if isinstance(info.get("data"), dict) else {}
     _cache_profile(link, idata)
+    if link.avatar and not user.avatar:
+        user.avatar = link.avatar  # adopt the MLBB profile pic until a custom one is uploaded
     db.add(link)
     db.commit()
     logger.info("MLBB account linked for user %s (role %s)", user.id, body.role_id)  # ids only, never tokens
@@ -193,6 +195,8 @@ def account_profile(user: User = Depends(get_current_user), db: Session = Depend
             out[key] = _rone_request("GET", path, params={"lang": "en"}, jwt=link.jwt)
             if key == "info" and isinstance(out[key].get("data"), dict):
                 _cache_profile(link, out[key]["data"])  # keep roster snapshot fresh
+                if link.avatar and not user.avatar:
+                    user.avatar = link.avatar
                 db.commit()
                 out["link"] = _summary(link)
         except HTTPException as exc:
