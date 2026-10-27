@@ -60,7 +60,8 @@ export const RANK_TIERS = ["all", "epic", "legend", "mythic", "honor", "glory"] 
  * Primed once per session; components re-render via version bump. */
 
 export interface WallpaperRecord { heroid?: number[]; pictures?: { resolution?: string; url?: string }[] }
-interface CatalogRec { data?: { hero_id?: number; hero_name?: string; name?: string; head?: string; head_big?: string; painting?: string } }
+interface CatalogData { hero_id?: number; hero_name?: string; name?: string; head?: string; head_big?: string; painting?: string }
+type CatalogRec = { data?: CatalogData };
 
 let artMap: Map<string, { id?: number; head?: string; art?: string }> | null = null;
 let artLoading: Promise<void> | null = null;
@@ -90,7 +91,7 @@ export function ensureArtIndex(): void {
       }
       const map = new Map<string, { id?: number; head?: string; art?: string }>();
       for (const r of catalog.records ?? []) {
-        const d: CatalogRec["data"] = r.data ?? {};
+        const d: CatalogData = r.data ?? {};
         const name = d.hero_name ?? d.name;
         if (!name) continue;
         map.set(name.toLowerCase(), {
