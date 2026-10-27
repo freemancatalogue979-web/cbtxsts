@@ -1,6 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
 import type { Draft, Hero } from "../lib/types";
-import { heroSlug } from "./HeroImg";
 import { CircleSlash2 } from "lucide-react";
 import { BrandImg } from "./Logo";
 import { artFor, artVersion, subscribeArt } from "../lib/mlbb";
@@ -27,17 +26,16 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
   fluid?: boolean; bare?: boolean;
 }) {
   useSyncExternalStore(subscribeArt, artVersion);
-  const [stage, setStage] = useState<0 | 1 | 2>(0);
+  const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
   const remote = filled ? artFor(name!)?.art : undefined; // rectangle cards wear wallpaper, never the square head
-  const src = stage === 0 ? (remote ?? `/heroes/${heroSlug(name!)}.webp`) : `/heroes/${heroSlug(name!)}.webp`;
-  const showImg = filled && stage < 2;
+  const showImg = filled && !!remote && !failed;
   const card = (
     <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[5/8] overflow-hidden border transition bg-[#111111]
       ${filled ? "border-[#C8AA6E]/25" : "border-[#C8AA6E]/10"}
       ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-[#C8AA6E]/60 hover:brightness-110" : ""}`}>
       {showImg ? (
-        <img src={src} alt={name!} onError={() => setStage((s) => (s === 0 ? 1 : 2))}
+        <img src={remote!} alt={name!} onError={() => setFailed(true)}
           className="absolute inset-0 w-full h-full object-cover object-center" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center select-none">
@@ -78,14 +76,14 @@ function BanThumb({ name, order, interactive = false, onClick }: {
   const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
   const remote = filled ? (artFor(name!)?.head ?? artFor(name!)?.art) : undefined;
-  const src = remote && !failed ? remote : `/heroes/${heroSlug(name!)}.webp`;
+  const src = remote && !failed ? remote : null;
   const thumb = (
     <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden transition
       ${filled
         ? "border-2 border-crim/80 shadow-[0_0_10px_rgba(225,29,72,0.35),inset_0_0_10px_rgba(225,29,72,0.2)]"
         : "border border-dashed border-mute/40 bg-[#111111]"}
       ${interactive ? "cursor-pointer hover:scale-110 hover:border-opacity-80" : ""}`}>
-      {filled && !failed ? (
+      {filled && !failed && src ? (
         <img src={src} alt={name!} onError={() => setFailed(true)}
           className="absolute inset-0 w-full h-full object-cover object-center grayscale-[0.35]" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
@@ -159,7 +157,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
   const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
   const art = filled ? artFor(name!)?.art : undefined; // wallpaper crop only — square heads stay on the round ban circles
-  const src = !failed && art ? art : filled ? `/heroes/${heroSlug(name)}.webp` : null;
+  const src = !failed && art ? art : null;
   const showImg = filled && Boolean(src);
   return (
     <figure className="flex flex-col items-center gap-1 min-w-0 w-full">
@@ -340,7 +338,7 @@ function HeroPopover({ heroes, value, onChange, anchor, close }: {
           {list.map((h) => (
             <button type="button" key={h.id} onClick={() => { onChange(h.name); close(); }}
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-raised ${h.name === value ? "bg-raised" : ""}`}>
-              <img src={`/heroes/${heroSlug(h.name)}.webp`} alt={h.name} width={26} height={26} className="rounded" loading="lazy" />
+              <HeroImg name={h.name} size={26} className="rounded" />
               <span className="text-[12px] font-bold truncate">{h.name}</span>
               <span className={`ml-auto chip !text-[8px] !px-1 !py-0 uppercase ${
                 h.meta_status === "META" ? "text-crim border-crim/40" : h.meta_status === "STRONG" ? "text-leaf border-leaf/40" : "text-faint border-edge"}`}>

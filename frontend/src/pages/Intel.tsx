@@ -3,7 +3,7 @@ import { Calculator, Crown, RefreshCw, Search, Sparkles, Swords, TrendingUp } fr
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
 import { heroRecords, intel, intelRaw, pct, rankRecords, recData, digRecords, stripTags, pickStr, pickNum, RANK_DAYS, RANK_TIERS } from "../lib/mlbb";
 import type { AnyRec, IntelHero, RankRecord, Records } from "../lib/mlbb";
-import { heroSlug } from "../components/HeroImg";
+import { HeroImg } from "../components/HeroImg";
 import { navigate } from "../lib/util";
 
 type SortField = "win_rate" | "pick_rate" | "ban_rate";
@@ -198,7 +198,7 @@ function BuildsTab({ byId }: { byId: Map<number, IntelHero> }) {
           <div key={String(r.id ?? i)} className="card p-4">
             <div className="flex items-center gap-2.5 mb-2">
               {heroName
-                ? <img src={`/heroes/${heroSlug(heroName)}.webp`} alt={heroName} width={34} height={34} className="rounded-lg border border-edge" />
+                ? <HeroImg name={heroName} size={34} className="rounded-lg border border-edge" />
                 : <Sparkles size={18} className="text-amber" />}
               <div>
                 <div className="text-[13px] font-extrabold truncate">{stripTags(title)}</div>
@@ -361,13 +361,10 @@ export function IntelPage() {
             <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-8 gap-2.5">
               {filtered.map((h) => {
                 const name = h.hero?.data?.name ?? `#${h.hero_id}`;
-                const local = `/heroes/${heroSlug(name)}.webp`;
                 return (
                   <button key={h.hero_id} type="button" onClick={() => navigate("heroes", h.hero_id)}
                     className="card card-hover p-2.5 flex flex-col items-center gap-2 text-center">
-                    <img src={h.hero?.data?.head ?? local} alt={name} width={56} height={56} loading="lazy" referrerPolicy="no-referrer"
-                      className="rounded-lg border border-edge object-cover"
-                      onError={(e) => { const img = e.target as HTMLImageElement; if (!img.src.endsWith(local)) img.src = local; else img.style.visibility = "hidden"; }} />
+                    <HeroImg name={name} size={56} className="rounded-lg border border-edge" />
                     <span className="text-[11px] font-bold leading-tight truncate w-full">{name}</span>
                   </button>
                 );

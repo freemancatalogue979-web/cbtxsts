@@ -4,7 +4,7 @@ The curated `HEROES` list in seed.py keeps detailed internal notes for the
 heroes 9 CLOVER actually tracks; every other hero here gets a sensible
 baseline row so the database is complete for drafts, pools and the ban board.
 
-Icon slugs (frontend/public/heroes/<slug>.webp) are derived in the UI:
+Hero artwork is streamed from the Rone CDN (no bundled hero DB); names match here:
 name.lower() with spaces/apostrophes → dashes.
 """
 from __future__ import annotations
