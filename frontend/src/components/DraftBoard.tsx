@@ -65,7 +65,8 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
 }
 
 /** Small slashed ban thumbnail. */
-function BanThumb({ name, ours, order, interactive = false, onClick }: {
+/** Sim-style ban circle: round grayscale face with crimson ring+glow; empty = dashed circle with a skip dash. */
+function BanThumb({ name, order, interactive = false, onClick }: {
   name?: string | null; ours: boolean; order: number; interactive?: boolean; onClick?: () => void;
 }) {
   useSyncExternalStore(subscribeArt, artVersion);
@@ -74,22 +75,20 @@ function BanThumb({ name, ours, order, interactive = false, onClick }: {
   const remote = filled ? (artFor(name!)?.head ?? artFor(name!)?.art) : undefined;
   const src = remote && !failed ? remote : `/heroes/${heroSlug(name!)}.webp`;
   const thumb = (
-    <div className={`relative w-[52px] h-[36px] rounded-md overflow-hidden border transition
-      ${ours ? "border-leaf/30" : "border-crim/30"} ${filled ? "" : "border-dashed opacity-60 bg-raised/50"}
+    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden transition
+      ${filled
+        ? "border-2 border-crim/80 shadow-[0_0_10px_rgba(225,29,72,0.35),inset_0_0_10px_rgba(225,29,72,0.2)]"
+        : "border border-dashed border-mute/40 bg-[#111111]"}
       ${interactive ? "cursor-pointer hover:scale-110 hover:border-opacity-80" : ""}`}>
       {filled && !failed ? (
         <img src={src} alt={name!} onError={() => setFailed(true)}
-          className="absolute inset-0 w-full h-full object-cover object-[50%_25%] brightness-[0.68] saturate-75" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
+          className="absolute inset-0 w-full h-full object-cover object-[50%_25%] grayscale-[0.35]" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-mute select-none">
-          {filled ? <span className="text-[10px] font-extrabold">{initials(name!)}</span> : <CircleSlash2 size={12} className="text-faint/60" />}
+        <div className="absolute inset-0 flex items-center justify-center select-none">
+          {filled ? <span className="text-[10px] font-extrabold text-mute">{initials(name!)}</span> : <span className="h-px w-1/2 bg-mute/60" />}
         </div>
       )}
-      {filled && (
-        <div className="absolute inset-0"
-          style={{ background: "linear-gradient(135deg, transparent 45%, rgba(225,29,72,0.95) 46.5%, rgba(225,29,72,0.95) 53.5%, transparent 55%)" }} />
-      )}
-      <span className="absolute bottom-0 right-0.5 text-[8px] font-black text-white/70 drop-shadow tabular-nums">{order}</span>
+      {filled && <div className="absolute inset-0 rounded-full bg-crim/10" />}
     </div>
   );
   return interactive ? <button type="button" title={name || `Ban ${order}`} onClick={onClick}>{thumb}</button> : thumb;
@@ -158,33 +157,34 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
   const src = !failed && art ? art : filled ? `/heroes/${heroSlug(name)}.webp` : null;
   const showImg = filled && Boolean(src);
   return (
-    <figure className="flex flex-col items-center gap-0.5 min-w-0">
-      <div className={`relative w-full aspect-[3/4] rounded-lg overflow-hidden border-2 transition ${
-          ours ? "border-leaf/60 shadow-[0_0_24px_rgba(52,211,153,0.25)]" : "border-crim/60 shadow-[0_0_24px_rgba(225,29,72,0.25)]"
-        } ${filled ? "" : "border-dashed !border-edge-2"}`}>
-        {/* light sheen */}
-        <div className="pointer-events-none absolute inset-0 z-10" style={{ background: "linear-gradient(155deg, rgba(255,255,255,0.14), transparent 34%)" }} />
+    <figure className="flex flex-col items-center gap-1 min-w-0 w-full">
+      <div className={`relative w-full aspect-[5/8] overflow-hidden border transition bg-[#111111] ${
+          filled ? "border-[#C8AA6E]/25" : "border-[#C8AA6E]/10"
+        }`}>
         {showImg && src ? (
           <img src={src} alt={name!} draggable={false} loading="lazy" referrerPolicy="no-referrer"
             onError={() => setFailed(true)}
-            className="absolute inset-0 w-full h-full object-cover object-top" />
+            className="absolute inset-0 w-full h-full object-cover object-center" />
         ) : (
-          <div className="absolute inset-0 grid place-items-center bg-raised/60">
+          <div className="absolute inset-0 grid place-items-center">
             <CircleSlash2 size={20} className="text-faint/50" />
           </div>
         )}
-        {/* team spine */}
-        <div className={`absolute top-0 ${ours ? "left-0" : "right-0"} w-[3px] h-full z-10 ${ours ? "bg-leaf/80" : "bg-crim/80"}`} />
-        {/* name band */}
+        {/* name strip: gradient + team-colored hairline + small uppercase name */}
         {filled && (
-          <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-1.5 pt-3 pb-1">
-            <div className={`text-center text-[10px] sm:text-[11px] font-black italic uppercase tracking-wider truncate drop-shadow ${ours ? "text-leaf" : "text-crim"}`}>
-              {name}
-            </div>
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent px-1 pb-1 pt-3">
+            <div className="mb-0.5 h-px w-full" style={{
+              background: ours
+                ? "linear-gradient(90deg, transparent, rgb(52,211,153), transparent)"
+                : "linear-gradient(90deg, transparent, rgb(225,29,72), transparent)",
+            }} />
+            <span className="block truncate text-center font-semibold uppercase tracking-wide text-[#E8E6E3] text-[10px]">{name}</span>
           </div>
         )}
       </div>
-      <span className={`text-[10px] font-semibold truncate max-w-full ${player ? "text-mute" : "text-faint/60"}`}>{player || " "}</span>
+      {player !== undefined && (
+        <span className={`text-[10px] font-semibold truncate max-w-full ${player ? "text-mute" : "text-transparent"}`}>{player || "-"}</span>
+      )}
     </figure>
   );
 }
@@ -257,27 +257,29 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
         }} />
       <div className="relative"><StageHeader oursLabel={oursLabel} theirsLabel={theirsLabel} scoreUS={scoreUS} scoreThem={scoreThem} /></div>
 
-      {/* bans across the top, rectangular cards — desktop */}
+      {/* bans across the top — round sim circles, enemy row mirrors */}
       <div className="relative hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
         <BanRow bans={d.our_bans} ours />
         <span className="label !text-[8px] tracking-[0.3em]">BANS</span>
         <BanRow bans={d.enemy_bans} ours={false} />
       </div>
 
-      {/* facing banks — desktop */}
-      <div className="relative hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-5 border-t border-edge/50 pt-5">
-        <div className="grid grid-cols-5 gap-3">
+      {/* facing banks with seam — desktop */}
+      <div className="relative hidden lg:flex items-stretch gap-1.5 border-t border-edge/50 pt-4">
+        <div className="flex min-w-0 flex-1 items-start gap-1.5">
           {LANES.map((lane) => (
-            <BroadcastCard key={lane} name={ourPicks[lane]} ours player={players?.[lane]} />
+            <div key={lane} className="flex-1 min-w-0 max-w-[160px]">
+              <BroadcastCard name={ourPicks[lane]} ours player={players?.[lane]} />
+            </div>
           ))}
         </div>
-        <div className="flex flex-col items-center gap-1 px-1">
-          <span className="text-[26px] font-black italic tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-b from-amber/90 to-crim/90">VS</span>
-          <span className="label !text-[7px] whitespace-nowrap">LAND OF DAWN</span>
-        </div>
-        <div className="grid grid-cols-5 gap-3">
+        <span className="w-px shrink-0 self-stretch" aria-hidden
+          style={{ background: "linear-gradient(transparent, rgba(200,170,110,0.35), transparent)" }} />
+        <div className="flex min-w-0 flex-1 items-start gap-1.5 flex-row-reverse">
           {LANES.map((lane) => (
-            <BroadcastCard key={lane} name={theirPicks[lane]} ours={false} />
+            <div key={lane} className="flex-1 min-w-0 max-w-[160px]">
+              <BroadcastCard name={theirPicks[lane]} ours={false} />
+            </div>
           ))}
         </div>
       </div>
