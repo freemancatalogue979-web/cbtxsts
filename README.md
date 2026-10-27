@@ -6,8 +6,8 @@ A private esports training, analysis, strategy and team-management platform for 
 (IX CLOVER ☘︎). Dark premium dashboard, deep crimson accents, subtle clover green, Montserrat.
 
 ```
-backend/    FastAPI + SQLAlchemy + SQLite          → http://localhost:3000  (docs at /docs)
-frontend/   React 19 + Vite + Tailwind v4          → http://localhost:5173
+backend/    FastAPI + SQLAlchemy + SQLite          → http://localhost:9000  (docs at /docs)
+frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 ```
 
 **The loop:** PLAY → RECORD → REVIEW → IDENTIFY → TRAIN → APPLY → IMPROVE
@@ -53,7 +53,7 @@ Enforced on the API, not just the UI.
 You need **Python 3.11+** and **Node 18+** once. Then:
 
 ```bash
-./start-arena.sh          # installs dependencies, starts API :3000 + web :5173 (survives SSH close)
+./start-arena.sh          # installs dependencies, starts API :9000 + web :9009 (survives SSH close)
 ./start-arena.sh status   # confirm both are running
 ./start-arena.sh logs     # follow logs (Ctrl+C only closes the viewer)
 ./start-arena.sh stop     # stop both
@@ -66,16 +66,21 @@ start-arena.bat           :: Windows — opens two terminals and your browser
 Or by hand:
 
 ```bash
-# API (port 3000)
+# API (port 9000)
 cd backend
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload --reload-dir app
+./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir app
 
-# Web app (port 5173, proxies /api to :3000)
+# Web app (port 9009, proxies /api to :9000)
 cd frontend
 npm install
-npm run dev
+npm run dev -- --port 9009
 ```
+
+**Windows note:** a virtualenv breaks if you move/rename the project folder (it embeds
+absolute paths). Symptom: `Fatal error in launcher: Unable to create process...`.
+`start-arena.bat` detects this and rebuilds automatically; by hand, delete
+`backend\.venv` and recreate it with `py -3 -m venv backend\.venv`.
 
 The SQLite database is created and **seeded on first boot** — roster, 40+ heroes,
 a five-week training block (Week 04, *OBJECTIVE CONTROL*, 80%), 12 scrims with full
