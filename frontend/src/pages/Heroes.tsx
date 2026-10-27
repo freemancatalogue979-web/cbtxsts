@@ -1,5 +1,6 @@
 import { Plus, Search, ShieldBan, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { api, qs } from "../lib/api";
 import { guideForHero, heroIdFor, intel, pickStr, stripTags } from "../lib/mlbb";
 import type { AnyRec } from "../lib/mlbb";
@@ -257,22 +258,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
               </div>
             </div>
 
-            {p.skills.length > 0 && (
-              <div className="card p-5">
-                <div className="label mb-4">Skills</div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {p.skills.map((s, i) => (
-                    <div key={`${s}-${i}`} className="flex items-center gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
-                      <span className="w-7 h-7 rounded bg-overlay border border-edge-2 flex items-center justify-center text-[10px] font-extrabold text-crim shrink-0">
-                        {i === 0 ? "P" : i === p.skills.length - 1 ? "ULT" : `S${i}`}
-                      </span>
-                      <span className="text-[13px] font-bold leading-tight">{s}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-[10px] text-faint mt-3">P = passive · skill order per live game; multi-form heroes list every form's kit.</div>
-              </div>
-            )}
+            <LiveSkillsCard heroName={h.name} fallbackNames={p.skills} />
             <SkillCombosCard heroName={h.name} />
             <SkillGuideCard heroName={h.name} />
           </>
@@ -332,6 +318,132 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         {heroes && heroes.length === 0 && <Empty title="No heroes match" />}
       </div>
       {form && <HeroForm meta={meta} initial={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
+    </div>
+  );
+}
+
+/* ---------- Official kit (Rone Arena hero detail: icons + descriptions) ---------- */
+
+interface LiveSkill {
+  skillid?: number; skillname?: string; skilldesc?: string; skillicon?: string;
+  skillvideo?: string; skilltag?: { tagname?: string }[];
+}
+interface LiveSkillSet { skilllist?: LiveSkill[]; skilllistid?: string | number }
+type HeroDetailRec = { data?: { heroskilllist?: LiveSkillSet[] } };
+
+/** The official skilldesc carries MLBB's <font color="xxxxxx"> highlights. Convert them
+ *  into real colored spans without ever trusting upstream HTML (strip unknown tags first). */
+function SkillDesc({ text }: { text: string }) {
+  const parts = text.split(/(<font color="?[0-9a-fA-F]{6}"?>|<\/font>)/g); // keep delimiters
+  const nodes: ReactNode[] = [];
+  let colored = false;
+  let color = "";
+  for (const chunk of parts) {
+    const m = chunk.match(/^<font color="?([0-9a-fA-F]{6})"?>$/);
+    if (m) { colored = true; color = m[1]; continue; }
+    if (chunk === "</font>") { colored = false; continue; }
+    const plain = stripTags(chunk);
+    if (!plain) continue;
+    nodes.push(colored
+      ? <span key={nodes.length} style={{ color: `#${color}` }}>{plain}</span>
+      : <span key={nodes.length}>{plain}</span>);
+  }
+  return <p className="text-[12px] text-mute leading-relaxed whitespace-pre-line">{nodes}</p>;
+}
+
+function skillKey(idx: number, total: number): string {
+  if (idx === 0) return "P";
+  if (idx === total - 1) return "ULT";
+  return `S${idx}`;
+}
+
+function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbackNames: string[] }) {
+  const [sets, setSets] = useState<LiveSkillSet[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setSets(null); setErr(null);
+    intel<{ data?: { records?: HeroDetailRec[] } }>(`heroes/${encodeURIComponent(heroName)}`, { size: 1, index: 1, lang: "en" }, 30 * 60_000)
+      .then((d) => {
+        const rec = d.data?.records?.[0];
+        const kits = (rec?.data?.heroskilllist ?? [])
+          .map((k) => ({ ...k, skilllist: (k.skilllist ?? []).filter((s) => s.skillname) }))
+          .filter((k) => (k.skilllist ?? []).length > 0);
+        setSets(kits.length ? kits : []);
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
+  }, [heroName]);
+  useEffect(load, [load]);
+
+  // Offline fallback: plain names, never fabricate icons/descriptions.
+  const fallbackCard = (withRetry: boolean) => (
+    <div className="card p-5">
+      <div className="label mb-4 flex items-center justify-between">Skills
+        {withRetry && <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry live kit</button>}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {fallbackNames.map((s, i) => (
+          <div key={`${s}-${i}`} className="flex items-center gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
+            <span className="w-7 h-7 rounded bg-overlay border border-edge-2 flex items-center justify-center text-[10px] font-extrabold text-crim shrink-0">
+              {i === 0 ? "P" : i === fallbackNames.length - 1 ? "ULT" : `S${i}`}
+            </span>
+            <span className="text-[13px] font-bold leading-tight">{s}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  if (!sets) {
+    if (err) return fallbackNames.length > 0 ? fallbackCard(true)
+      : <div className="card p-5"><div className="label mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Live kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
+    return <div className="card p-5"><div className="label">Skills</div><Spinner label="Loading official kit" /></div>;
+  }
+  if (sets.length === 0) return fallbackNames.length > 0 ? fallbackCard(false) : null;
+
+  const multiForm = sets.length > 1;
+  return (
+    <div className="card p-5">
+      <div className="label mb-4">Skills · official kit</div>
+      <div className="space-y-5">
+        {sets.map((kit, ki) => (
+          <div key={kit.skilllistid ?? ki} className={multiForm ? "space-y-2" : ""}>
+            {multiForm && <div className="label !text-[9.5px]">Form {ki + 1}</div>}
+            <div className="grid sm:grid-cols-2 gap-3">
+              {(kit.skilllist ?? []).map((s, si) => (
+                <div key={s.skillid ?? si} className="flex gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
+                  <span className="relative w-11 h-11 rounded-lg overflow-hidden bg-overlay border border-edge-2 shrink-0 grid place-items-center">
+                    {s.skillicon ? (
+                      <img src={s.skillicon} alt={s.skillname ?? ""} width={44} height={44} loading="lazy" referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    ) : (
+                      <span className="text-[10px] font-extrabold text-crim">{skillKey(si, kit.skilllist?.length ?? 0)}</span>
+                    )}
+                    <span className="absolute bottom-0 right-0 px-1 rounded-tl-md bg-black/80 text-[8px] font-black text-crim">
+                      {skillKey(si, kit.skilllist?.length ?? 2)}
+                    </span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-[13px] font-extrabold leading-tight truncate">{s.skillname}</span>
+                      {(s as AnyRec)["skillcd&cost"] ? (
+                        <span className="text-[9.5px] text-faint font-semibold shrink-0 uppercase tracking-wide">{String((s as AnyRec)["skillcd&cost"])}</span>
+                      ) : null}
+                    </span>
+                    {(s.skilltag ?? []).length > 0 && (
+                      <span className="flex flex-wrap gap-1 mt-0.5">
+                        {(s.skilltag ?? []).map((t, ti) => t.tagname && (
+                          <span key={ti} className="text-[8.5px] px-1.5 py-px rounded border border-edge-2 text-faint uppercase tracking-wide">{t.tagname}</span>
+                        ))}
+                      </span>
+                    )}
+                    {s.skilldesc && <span className="block mt-1"><SkillDesc text={s.skilldesc} /></span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] text-faint mt-3">P = passive · S1/S2 = skills · ULT = ultimate. Icons, descriptions &amp; tags: live Rone Arena (Moonton) data.</div>
     </div>
   );
 }
@@ -413,81 +525,48 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
   );
 }
 
-/* ---------- Skill descriptions from the verified community guide (academy/recommended) ---------- */
-
-interface ParsedSkill { key: string; name: string; text: string }
-
-function parseSkillBlocks(overview: string): ParsedSkill[] {
-  const clean = stripTags(overview);
-  const start = clean.search(/HERO SKILLS/i);
-  if (start < 0) return [];
-  let body = clean.slice(start);
-  const end = body.search(/Standard Combo/i);
-  if (end > 0) body = body.slice(0, end);
-  const out: ParsedSkill[] = [];
-  for (const block of body.split(/\n{2,}/)) {
-    const m = block.match(/(Passive|Ultimate|Skill\s*[123])\s*(?:\(([^)]+)\))?\s*[:\-–]?\s*(.*)/is);
-    if (!m) continue;
-    const kind = /passive/i.test(m[1]) ? "P" : /ultimate/i.test(m[1]) ? "ULT" : `S${m[1].replace(/\D/g, "") || "1"}`;
-    const text = (m[3] ?? "").trim();
-    if (!text) continue;
-    out.push({ key: kind, name: (m[2] ?? m[1]).trim(), text });
-  }
-  return out;
-}
+/* ---------- Official guide strengths & weaknesses (academy/recommended) ---------- */
 
 function SkillGuideCard({ heroName }: { heroName: string }) {
-  const [skills, setSkills] = useState<ParsedSkill[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [strength, setStrength] = useState<string>("");
   const [weakness, setWeakness] = useState<string>("");
   useEffect(() => {
-    setSkills(null); setStrength(""); setWeakness("");
+    setLoaded(false); setStrength(""); setWeakness("");
     const id = heroIdFor(heroName);
-    if (!id) return;
+    if (!id) { setLoaded(true); return; }
     let live = true;
     guideForHero(id)
       .then((g) => {
-        if (!live || !g) { if (live) setSkills([]); return; }
-        const hero = (g.hero ?? {}) as AnyRec;
-        const ov = pickStr(hero, "hero_overview");
-        setSkills(ov ? parseSkillBlocks(ov) : []);
-        setStrength(pickStr(hero, "hero_strength") ?? "");
-        setWeakness(pickStr(hero, "hero_weakness") ?? "");
+        if (!live) return;
+        if (g) {
+          const hero = (g.hero ?? {}) as AnyRec;
+          setStrength(pickStr(hero, "hero_strength") ?? "");
+          setWeakness(pickStr(hero, "hero_weakness") ?? "");
+        }
+        setLoaded(true);
       })
-      .catch(() => { if (live) setSkills([]); });
+      .catch(() => { if (live) setLoaded(true); });
     return () => { live = false; };
   }, [heroName]);
-  if (!skills || skills.length === 0) return null; // no guide upstream — stay silent, never fabricate
+  if (!loaded || (!strength && !weakness)) return null; // no guide upstream — stay silent, never fabricate
   return (
     <div className="card p-5">
-      <div className="label mb-4">Skill details · official guide</div>
+      <div className="label mb-4">Coach notes · official guide</div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {skills.map((s, i) => (
-          <div key={`${s.key}-${i}`} className="bg-raised border border-edge/60 rounded-lg px-4 py-3.5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-7 h-7 rounded bg-overlay border border-edge-2 grid place-items-center text-[10px] font-extrabold text-crim shrink-0">{s.key}</span>
-              <span className="text-[13px] font-extrabold leading-tight truncate">{s.name}</span>
-            </div>
-            <p className="text-[12px] text-mute leading-relaxed">{s.text}</p>
+        {strength && (
+          <div className="bg-leaf/5 border border-leaf/30 rounded-lg px-4 py-3">
+            <div className="label !text-leaf mb-1.5">Strengths</div>
+            <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(strength).replace(/✨/g, "• ")}</p>
           </div>
-        ))}
+        )}
+        {weakness && (
+          <div className="bg-crim/5 border border-crim/30 rounded-lg px-4 py-3">
+            <div className="label !text-crim mb-1.5">Weaknesses</div>
+            <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(weakness).replace(/✨/g, "• ")}</p>
+          </div>
+        )}
       </div>
-      {(strength || weakness) && (
-        <div className="grid sm:grid-cols-2 gap-3 mt-4">
-          {strength && (
-            <div className="bg-leaf/5 border border-leaf/30 rounded-lg px-4 py-3">
-              <div className="label !text-leaf mb-1.5">Strengths</div>
-              <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(strength).replace(/✨/g, "• ")}</p>
-            </div>
-          )}
-          {weakness && (
-            <div className="bg-crim/5 border border-crim/30 rounded-lg px-4 py-3">
-              <div className="label !text-crim mb-1.5">Weaknesses</div>
-              <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(weakness).replace(/✨/g, "• ")}</p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
