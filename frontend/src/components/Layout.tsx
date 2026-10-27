@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
+import { linkOf } from "../lib/mlbb";
+import type { LinkSummary } from "../lib/mlbb";
 import type { User } from "../lib/types";
 import { hashRoute, navigate } from "../lib/util";
 import { Wordmark } from "./Logo";
@@ -87,7 +89,10 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
   const [f, setF] = useState({ name: user.name, ign: user.ign, main_role: user.main_role, bio: user.bio });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mlbb, setMlbb] = useState<LinkSummary | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { linkOf(user.id).then(setMlbb).catch(() => setMlbb({ linked: false })); }, [user.id]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -139,6 +144,37 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
               onChange={(e) => { const f2 = e.target.files?.[0]; if (f2) upload(f2); e.target.value = ""; }} />
           </div>
         </div>
+        {mlbb && (
+          <div className={`rounded-lg px-3.5 py-3 flex items-center gap-3 border ${mlbb.linked ? "bg-raised border-leaf/35" : "bg-raised border-edge/60"}`}>
+            {mlbb.linked ? (
+              <>
+                <span className="w-10 h-10 rounded-lg overflow-hidden border border-edge-2 bg-overlay grid place-items-center shrink-0">
+                  {mlbb.avatar
+                    ? <img src={mlbb.avatar} alt="" width={40} height={40} referrerPolicy="no-referrer" className="object-cover w-full h-full" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    : <Gamepad2 size={16} className="text-leaf" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12.5px] font-extrabold text-leaf truncate">{mlbb.name || "MLBB account"} <span className="text-[9px] uppercase text-faint font-bold">· connected</span></div>
+                  <div className="text-[10px] text-faint">
+                    {mlbb.level != null ? `Lv ${mlbb.level} · ` : ""}{mlbb.rank_level != null ? `rank tier ${mlbb.rank_level} · ` : ""}ID {mlbb.role_id}
+                  </div>
+                </div>
+                {mlbb.name && (
+                  <button type="button" className="btn-ghost !py-1 !text-[10px] shrink-0" title="Copy MLBB in-game name (exact casing) into the profile IGN field"
+                    onClick={() => setF({ ...f, ign: mlbb.name! })}>
+                    Use as IGN
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2.5 w-full">
+                <Gamepad2 size={15} className="text-faint shrink-0" />
+                <div className="text-[11px] text-faint flex-1">MLBB account not connected — rank, level and official IGN can fill this profile.</div>
+                <button type="button" className="btn-ghost !py-1 !text-[10px] text-crim shrink-0" onClick={() => { onClose(); navigate("mlbb"); }}>Connect</button>
+              </div>
+            )}
+          </div>
+        )}
         <Field label="Name"><input className="input" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="In-game name"><input className="input" value={f.ign} onChange={(e) => setF({ ...f, ign: e.target.value })} /></Field>

@@ -1,4 +1,4 @@
-import { Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Gamepad2, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgress } from "../lib/types";
@@ -6,6 +6,8 @@ import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
 import { HeroImg } from "../components/HeroImg";
+import { linkedRoster } from "../lib/mlbb";
+import type { LinkSummary } from "../lib/mlbb";
 
 const POOL_LABEL: Record<string, string> = { comfort: "Comfort picks", meta: "Meta picks", pocket: "Pocket picks", emergency: "Emergency picks" };
 const POOL_ORDER = ["comfort", "meta", "pocket", "emergency"];
@@ -139,11 +141,13 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   const [showDev, setShowDev] = useState(false);
   const [editPool, setEditPool] = useState<null | PoolEntry>(null);
   const [editDev, setEditDev] = useState<null | DevEntry>(null);
+  const [links, setLinks] = useState<Map<number, LinkSummary>>(new Map());
   const id = parts[0] ? Number(parts[0]) : null;
 
   const load = useCallback(() => {
     api.get<User[]>("/players").then(setRoster).catch(() => setRoster([]));
     api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
+    linkedRoster().then((rows) => setLinks(new Map(rows.map((l) => [l.user_id ?? -1, l])))).catch(() => setLinks(new Map()));
     if (id) api.get<PlayerDetail>(`/players/${id}`).then(setDetail).catch(() => setDetail(null));
   }, [id]);
   useEffect(load, [load]);
@@ -162,6 +166,28 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             <div>
               <div className="text-xl font-extrabold">{p.ign}</div>
               <div className="text-[13px] text-mute">{p.name} · {p.main_role || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
+              {(() => {
+                const l = links.get(p.id);
+                if (!l?.linked) return null;
+                return (
+                  <div className="flex items-center gap-2.5 mt-2 bg-raised border border-leaf/30 rounded-lg px-3 py-2 w-fit">
+                    <span className="w-8 h-8 rounded-md border border-edge-2 overflow-hidden bg-overlay grid place-items-center shrink-0">
+                      {l.avatar
+                        ? <img src={l.avatar} alt="" width={32} height={32} loading="lazy" referrerPolicy="no-referrer" className="object-cover w-full h-full" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        : <Gamepad2 size={14} className="text-leaf" />}
+                    </span>
+                    <div>
+                      <div className="text-[11.5px] font-extrabold text-leaf flex items-center gap-1.5">
+                        {l.name || "MLBB account"} <span className="text-[8.5px] uppercase font-bold text-faint">· linked</span>
+                      </div>
+                      <div className="text-[10px] text-faint">
+                        in-game: {l.name}{l.level != null ? ` · Lv ${l.level}` : ""}{l.rank_level != null ? ` · rank tier ${l.rank_level}` : ""}
+                        {l.role_id != null ? ` · ID ${l.role_id} (${l.zone_id})` : ""}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
           <div className="flex gap-2">
@@ -287,7 +313,13 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                 <div className="font-extrabold truncate">{p.ign}
                   {p.role === "captain" && <span className="text-amber text-[10px] font-bold"> · C</span>}
                 </div>
-                <div className="text-[11px] text-faint">{p.main_role || p.role_label}</div>
+                <div className="text-[11px] text-faint flex items-center gap-1.5">{p.main_role || p.role_label}
+                  {links.get(p.id)?.linked && (
+                    <span className="chip !text-[8.5px] uppercase text-leaf border-leaf/40 inline-flex items-center gap-1">
+                      <Gamepad2 size={9} /> MLBB ✓
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center justify-between mt-3.5 text-[11.5px] text-mute">

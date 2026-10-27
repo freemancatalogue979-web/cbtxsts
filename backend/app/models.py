@@ -516,4 +516,7 @@ class IntelLink(Base):
     token: Mapped[str] = mapped_column(Text, default="")
     display_name: Mapped[str] = mapped_column(String(120), default="")
     avatar: Mapped[str] = mapped_column(String(500), default="")
+    # cached profile snapshot so teammates can see rank/level without an upstream call
+    level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     linked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -61,7 +61,7 @@ export const RANK_TIERS = ["all", "epic", "legend", "mythic", "honor", "glory"] 
 
 export interface WallpaperRecord { heroid?: number[]; pictures?: { resolution?: string; url?: string }[] }
 
-let artMap: Map<string, { head?: string; art?: string }> | null = null;
+let artMap: Map<string, { id?: number; head?: string; art?: string }> | null = null;
 let artLoading: Promise<void> | null = null;
 let version = 0;
 const listeners = new Set<() => void>();
@@ -78,7 +78,6 @@ export function ensureArtIndex(): void {
         intel<Records<WallpaperRecord>>("heroes/wallpapers", { device: "mobile", size: 300, index: 1 }, 30 * 60_000).catch(() => null),
       ]);
       const list = heroRecords(heroList);
-      const nameById = new Map(list.map((h) => [h.hero_id, h.hero?.data?.name ?? ""]));
       const wallById = new Map<number, string>();
       if (walls) {
         for (const r of walls.records ?? []) {
@@ -93,7 +92,7 @@ export function ensureArtIndex(): void {
       for (const h of list) {
         const name = h.hero?.data?.name;
         if (!name) continue;
-        artMap.set(name.toLowerCase(), { head: h.hero?.data?.head, art: wallById.get(h.hero_id) });
+        artMap.set(name.toLowerCase(), { id: h.hero_id, head: h.hero?.data?.head, art: wallById.get(h.hero_id) });
       }
     } catch {
       artMap = new Map(); // offline/unreachable — local fallbacks apply
@@ -103,8 +102,38 @@ export function ensureArtIndex(): void {
   })();
 }
 
-export interface HeroArt { head?: string; art?: string }
+export interface HeroArt { id?: number; head?: string; art?: string }
 export const artFor = (name: string): HeroArt | undefined => artMap?.get(name.toLowerCase());
+export const heroIdFor = (name: string): number | undefined => artMap?.get(name.toLowerCase())?.id;
+
+/** Recursive fallback extractor: some Rone payloads aren't `records`-shaped (emblem/spell
+ * records nest under custom keys). Walk the envelope data and return the FIRST array of
+ * objects we find (depth-limited, records/list/rows preferred at each level). */
+export function digRecords(x: unknown, depth = 0): AnyRec[] {
+  if (depth > 6 || x == null) return [];
+  if (Array.isArray(x)) return x.length && typeof x[0] === "object" && x[0] !== null ? (x as AnyRec[]) : [];
+  if (typeof x !== "object") return [];
+  const o = x as AnyRec;
+  for (const k of ["records", "list", "rows", "items"]) {
+    const v = digRecords(o[k], depth + 1);
+    if (v.length) return v;
+  }
+  for (const v of Object.values(o)) {
+    const r = digRecords(v, depth + 1);
+    if (r.length) return r;
+  }
+  return [];
+}
+
+export interface LinkSummary {
+  linked: boolean; name?: string; avatar?: string; role_id?: number; zone_id?: number;
+  level?: number | null; rank_level?: number | null; linked_at?: string | null; user_id?: number;
+}
+export function linkedRoster(): Promise<LinkSummary[]> {
+  return api.get<{ linked?: LinkSummary[] }>("/intel/linked").then((d) => d.linked ?? []);
+}
+export const linkOf = (userId: number): Promise<LinkSummary> =>
+  api.get<LinkSummary>(`/intel/account/of/${userId}`);
 
 /* ---------------- account link (per-user, backend-held tokens) ---------------- */
 

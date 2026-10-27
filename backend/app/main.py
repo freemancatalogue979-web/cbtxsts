@@ -62,6 +62,16 @@ def health():
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(engine)
+    # SQLite is not migrated by create_all for existing tables; add newer columns by hand.
+    with engine.begin() as conn:
+        for stmt in (
+            "ALTER TABLE intel_links ADD COLUMN level INTEGER",
+            "ALTER TABLE intel_links ADD COLUMN rank_level INTEGER",
+        ):
+            try:
+                conn.exec_driver_sql(stmt)
+            except Exception:
+                pass  # column already exists
     with SessionLocal() as db:
         if seed_if_empty(db):
             logger.info("Database seeded: accounts, heroes, settings (demo data skipped unless CLOVER_DEMO_DATA=1).")

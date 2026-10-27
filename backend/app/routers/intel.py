@@ -105,7 +105,21 @@ def _envelope_error(env: dict) -> str | None:
 def _summary(link: IntelLink) -> dict:
     return {"linked": True, "name": link.display_name, "avatar": link.avatar,
             "role_id": link.role_id, "zone_id": link.zone_id,
+            "level": link.level, "rank_level": link.rank_level,
             "linked_at": link.linked_at.isoformat() if link.linked_at else None}
+
+
+def _cache_profile(link: IntelLink, idata: dict) -> None:
+    """Stash name/avatar/level/rank from a user/info payload (coerce defensively)."""
+    link.display_name = str(idata.get("name") or link.display_name or "")
+    link.avatar = str(idata.get("avatar") or link.avatar or "")
+    for key, attr in (("level", "level"), ("rank_level", "rank_level")):
+        try:
+            v = idata.get(key)
+            if v is not None:
+                setattr(link, attr, int(v))
+        except (TypeError, ValueError):
+            pass
 
 
 def _get_link(user: User, db: Session) -> IntelLink:
@@ -140,11 +154,10 @@ def account_connect(body: ConnectIn, user: User = Depends(get_current_user), db:
     link.zone_id = body.zone_id
     link.jwt = jwt
     link.token = str(data.get("token") or "")
-    # capture display name + avatar while the session is fresh
+    # capture display name + avatar + level/rank while the session is fresh
     info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
     idata = info.get("data") if isinstance(info.get("data"), dict) else {}
-    link.display_name = str(idata.get("name") or "")
-    link.avatar = str(idata.get("avatar") or "")
+    _cache_profile(link, idata)
     db.add(link)
     db.commit()
     logger.info("MLBB account linked for user %s (role %s)", user.id, body.role_id)  # ids only, never tokens
@@ -157,6 +170,20 @@ def account_status(user: User = Depends(get_current_user), db: Session = Depends
     return _summary(link) if link else {"linked": False}
 
 
+@router.get("/linked")
+def linked_roster(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    """Team-wide view: who has a linked MLBB account (cached profile snapshot only —
+    no tokens, no upstream call). Drives the MLBB chip on the Players roster."""
+    links = db.query(IntelLink).all()
+    return {"linked": [{**_summary(l), "user_id": l.user_id} for l in links]}
+
+
+@router.get("/account/of/{user_id}")
+def account_of(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    link = db.query(IntelLink).filter(IntelLink.user_id == user_id).one_or_none()
+    return _summary(link) if link else {"linked": False}
+
+
 @router.get("/account/profile")
 def account_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     link = _get_link(user, db)
@@ -164,6 +191,10 @@ def account_profile(user: User = Depends(get_current_user), db: Session = Depend
     for key, path in (("info", "user/info"), ("season", "user/season"), ("stats", "user/stats")):
         try:
             out[key] = _rone_request("GET", path, params={"lang": "en"}, jwt=link.jwt)
+            if key == "info" and isinstance(out[key].get("data"), dict):
+                _cache_profile(link, out[key]["data"])  # keep roster snapshot fresh
+                db.commit()
+                out["link"] = _summary(link)
         except HTTPException as exc:
             out[key] = {"code": -1, "error": str(exc.detail)}
     return out

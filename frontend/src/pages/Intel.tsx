@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Calculator, Crown, RefreshCw, Search, Sparkles, Swords, TrendingUp } from "lucide-react";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
-import { heroRecords, intel, intelRaw, pct, rankRecords, recData, stripTags, pickStr, pickNum, RANK_DAYS, RANK_TIERS } from "../lib/mlbb";
+import { heroRecords, intel, intelRaw, pct, rankRecords, recData, digRecords, stripTags, pickStr, pickNum, RANK_DAYS, RANK_TIERS } from "../lib/mlbb";
 import type { AnyRec, IntelHero, RankRecord, Records } from "../lib/mlbb";
 import { heroSlug } from "../components/HeroImg";
 
@@ -121,8 +121,17 @@ function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
   useEffect(() => {
-    intel<Records<AnyRec>>(path, { size: 300, index: 1 }, 10 * 60_000)
-      .then((d) => setRows(recData<AnyRec>(d)))
+    intel<AnyRec>(path, { size: 300, index: 1 }, 10 * 60_000)
+      .then((d) => {
+        let rows = recData<AnyRec>(d as unknown as Records<AnyRec>);
+        if (rows.length === 0) {
+          // payload isn't records-shaped (emblems/spells nest under custom keys) —
+          // dig for the first array of objects, then unwrap one .data level if present
+          const dug = digRecords(d);
+          rows = dug.map((r) => (typeof r.data === "object" && r.data !== null ? { ...(r.data as AnyRec) } : r));
+        }
+        setRows(rows);
+      })
       .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
   }, [path]);
   if (err) return <ErrorNote error={err} />;

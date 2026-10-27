@@ -1,6 +1,7 @@
 import { Plus, Search, ShieldBan, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, qs } from "../lib/api";
+import { heroIdFor, intel, stripTags } from "../lib/mlbb";
 import type { Hero, Meta, User } from "../lib/types";
 import { navigate, HERO_STATUS_STYLE } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Tabs } from "../components/ui";
@@ -271,6 +272,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                 <div className="text-[10px] text-faint mt-3">P = passive · skill order per live game; multi-form heroes list every form's kit.</div>
               </div>
             )}
+            <SkillCombosCard heroName={h.name} />
           </>
         )}
 
@@ -328,6 +330,85 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         {heroes && heroes.length === 0 && <Empty title="No heroes match" />}
       </div>
       {form && <HeroForm meta={meta} initial={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
+    </div>
+  );
+}
+
+/* ---------- Live skill combos (Rone Arena official data, icons included) ---------- */
+
+interface ComboSkill { data?: { skillid?: number; skillicon?: string } }
+interface ComboRec { data?: { title?: string; desc?: string; skill_id?: ComboSkill[] } }
+
+function SkillCombosCard({ heroName }: { heroName: string }) {
+  const [rows, setRows] = useState<ComboRec[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    setRows(null); setErr(null);
+    const id = heroIdFor(heroName);
+    if (!id) { setErr("__noidx"); return; }
+    intel<{ records?: ComboRec[] }>(`heroes/${id}/skill-combos`, { lang: "en" }, 30 * 60_000)
+      .then((d) => setRows(d.records ?? []))
+      .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
+  }, [heroName]);
+  if (err === "__noidx") return null; // art index offline — nothing reliable to key on
+  if (err) return (
+    <div className="card p-5">
+      <div className="label mb-2">Skill combos · live game data</div>
+      <div className="text-[11.5px] text-faint flex items-center justify-between gap-2">
+        Data service unreachable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={() => { setErr(null); setRows(null); const id = heroIdFor(heroName); if (id) intel<{ records?: ComboRec[] }>(`heroes/${id}/skill-combos`).then((d) => setRows(d.records ?? [])).catch((e) => setErr(e instanceof Error ? e.message : "Failed")); else setErr("__noidx"); }}>Retry</button>
+      </div>
+    </div>
+  );
+  if (!rows) return <div className="card p-5"><div className="label">Skill combos · live game data</div><Spinner label="Loading combos" /></div>;
+  if (rows.length === 0) return null; // upstream simply has none for this hero
+  const skills: { icon?: string; id?: number }[] = [];
+  // dedupe icons in order of first appearance across all combos
+  const seen = new Set<number>();
+  for (const r of rows) for (const s of r.data?.skill_id ?? []) {
+    const sk = s.data?.skillid;
+    if (sk != null && !seen.has(sk)) { seen.add(sk); skills.push({ id: sk, icon: s.data?.skillicon }); }
+  }
+  return (
+    <div className="card p-5">
+      <div className="label mb-4">Skill combos · live game data</div>
+      {skills.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {skills.map((s, i) => (
+            <span key={s.id ?? i} className="w-10 h-10 rounded-lg bg-raised border border-edge overflow-hidden grid place-items-center" title={s.id != null ? `Skill #${s.id}` : undefined}>
+              {s.icon
+                ? <img src={s.icon} alt={s.id != null ? `Skill ${s.id}` : ""} width={40} height={40} loading="lazy" referrerPolicy="no-referrer" className="object-cover w-full h-full" onError={(e) => { const el = e.target as HTMLImageElement; el.style.display = "none"; }} />
+                : <span className="text-[9px] font-extrabold text-faint">{s.id ?? "?"}</span>}
+            </span>
+          ))}
+          <span className="text-[10px] text-faint ml-1">official skill icons</span>
+        </div>
+      )}
+      <div className="space-y-3">
+        {rows.map((r, i) => {
+          const d = r.data ?? {};
+          const seq = d.skill_id ?? [];
+          return (
+            <div key={i} className="bg-raised border border-edge/60 rounded-lg px-4 py-3.5">
+              <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
+                {d.title && <span className="chip border-crim/40 text-crim !text-[9px] uppercase">{d.title}</span>}
+                {seq.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    {seq.map((s, j) => (
+                      <span key={j} className="flex items-center gap-1">
+                        {s.data?.skillicon
+                          ? <img src={s.data.skillicon} alt="" width={26} height={26} loading="lazy" referrerPolicy="no-referrer" className="rounded-md border border-edge-2 bg-overlay" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          : <span className="w-6 h-6 rounded-md bg-overlay border border-edge-2 grid place-items-center text-[8px] font-extrabold text-faint">{s.data?.skillid ?? "?"}</span>}
+                        {j < seq.length - 1 && <span className="text-faint text-[11px]">→</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {d.desc && <div className="text-[12px] text-mute leading-relaxed">{stripTags(d.desc)}</div>}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
