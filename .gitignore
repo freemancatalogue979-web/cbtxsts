@@ -47,3 +47,6 @@ backend/data/ai_keys.json
 backend/data/ai_keys.tmp
 
 image-search/
+
+# Archive locker uploads (private files live server-side only).
+backend/data/archive/

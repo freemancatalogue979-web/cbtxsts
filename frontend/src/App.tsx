@@ -22,6 +22,7 @@ import { MapsPage } from "./pages/Maps";
 import { NotificationsPage } from "./pages/Notifications";
 import { StrategyPage } from "./pages/Strategy";
 import { EventsPage } from "./pages/Events";
+import { ArchivePage } from "./pages/Archive";
 import { AdminPage } from "./pages/Admin";
 
 function useRoute() {
@@ -123,6 +124,9 @@ export default function App() {
       break;
     case "events":
       page = <EventsPage me={user} meta={meta} />;
+      break;
+    case "archive":
+      page = <ArchivePage me={user} parts={rest} />;
       break;
     case "notifications":
       page = <NotificationsPage me={user} />;

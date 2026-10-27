@@ -1,4 +1,5 @@
 import {
+  Archive,
   Bell,
   BookOpenText,
   Gamepad2,
@@ -44,6 +45,7 @@ const NAV = [
   { id: "drafts", label: "Draft Lab", icon: Layers },
   { id: "maps", label: "Map Lab", icon: Map },
   { id: "strategy", label: "Strategy", icon: BookOpenText },
+  { id: "archive", label: "Archive", icon: Archive },
   { id: "events", label: "Calendar", icon: CalendarDays },
   { id: "notifications", label: "Notifications", icon: Bell },
 ];

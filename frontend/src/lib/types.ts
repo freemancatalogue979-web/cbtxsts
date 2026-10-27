@@ -460,3 +460,53 @@ export interface Program {
   created_at: string | null;
   matrix?: Record<string, Record<string, ProgressCell>>; // week_id -> user_id -> cell
 }
+
+// ------------------------------------------------------------ Archive
+export interface MemberBrief {
+  id: number;
+  name: string;
+  ign: string;
+  main_role: string;
+  role: Role;
+  avatar: string | null;
+}
+
+export interface ArchiveFolderT {
+  id: number;
+  name: string;
+  tag: string;
+  owner: MemberBrief | null;
+  mine: boolean;
+  item_count: number;
+  private_count?: number; // only present on my own locker
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArchiveItemT {
+  id: number;
+  folder_id: number;
+  title: string;
+  kind: "note" | "link" | "video" | "file";
+  url: string;
+  body: string;
+  visibility: "public" | "private";
+  shared: MemberBrief[]; // populated for the owner only
+  mine: boolean;
+  comments: number;
+  file?: { name: string; kind: string; size: number; url: string };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArchiveCommentT {
+  id: number;
+  item_id: number;
+  author: MemberBrief | null;
+  body: string;
+  created_at: string;
+}
+
+export interface ArchiveLocker extends ArchiveFolderT {
+  items: ArchiveItemT[];
+}

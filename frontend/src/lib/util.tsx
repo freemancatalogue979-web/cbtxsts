@@ -90,3 +90,13 @@ export function hashRoute(): string[] {
 export function navigate(...parts: (string | number)[]) {
   window.location.hash = `/${parts.join("/")}`;
 }
+
+/** "27 Oct · 14:22" from an ISO datetime string (UTC with trailing Z). */
+export function fmtStamp(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const date = d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${date} · ${time}`;
+}

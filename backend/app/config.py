@@ -12,6 +12,8 @@ AVATAR_DIR = DATA_DIR / "avatars"
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ARCHIVE_DIR = DATA_DIR / "archive"
+ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load_dotenv(path: Path) -> None:

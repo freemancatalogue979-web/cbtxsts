@@ -360,3 +360,28 @@ class MapBoardPatch(BaseModel):
     data: dict[str, Any] | None = None
     notes: str | None = None
     draft_id: int | None = None
+
+
+# ---------------------------------------------------------------------------
+# Archive
+# ---------------------------------------------------------------------------
+class ArchiveFolderIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    tag: str = Field(default="", max_length=60)
+
+
+class ArchiveFolderPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    tag: str | None = Field(default=None, max_length=60)
+
+
+class ArchiveItemPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    url: str | None = Field(default=None, max_length=600)
+    body: str | None = Field(default=None, max_length=20000)
+    visibility: Literal["public", "private"] | None = None
+    shared: list[int] | None = None
+
+
+class ArchiveCommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)

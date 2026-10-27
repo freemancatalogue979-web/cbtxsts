@@ -520,3 +520,70 @@ class IntelLink(Base):
     level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rank_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     linked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Archive — per-player lockers for theory, docs, videos and private drops
+# ---------------------------------------------------------------------------
+class ArchiveFolder(Base):
+    """One locker per squad member. The locker itself is team-visible; its
+    contents are gated per item (public = squad, private = owner + picks)."""
+
+    __tablename__ = "archive_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    tag: Mapped[str] = mapped_column(String(60), default="")  # free label: THEORY / SECRETS / VODS …
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    owner: Mapped[User] = relationship()
+    items: Mapped[list["ArchiveItem"]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan", order_by="ArchiveItem.created_at.desc()"
+    )
+
+
+class ArchiveItem(Base):
+    """A note / link / video / file drop inside a locker.
+
+    Private items are hidden from everyone — including admins — except the
+    locker owner and the users listed in `shared`.
+    """
+
+    __tablename__ = "archive_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("archive_folders.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    kind: Mapped[str] = mapped_column(String(12), default="note", index=True)  # note|link|video|file
+    url: Mapped[str] = mapped_column(String(600), default="")          # external link / YouTube
+    body: Mapped[str] = mapped_column(Text, default="")                 # note text / description
+    file_name: Mapped[str] = mapped_column(String(200), default="")     # original filename
+    file_stored: Mapped[str] = mapped_column(String(80), default="")    # random on-disk name
+    file_kind: Mapped[str] = mapped_column(String(12), default="")      # image|video|pdf|sheet|file
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    visibility: Mapped[str] = mapped_column(String(10), default="public", index=True)  # public|private
+    shared: Mapped[str] = mapped_column(Text, default="[]")  # JSON [user ids] — viewers of a private item
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    folder: Mapped[ArchiveFolder] = relationship(back_populates="items")
+    comments: Mapped[list["ArchiveComment"]] = relationship(
+        back_populates="item", cascade="all, delete-orphan", order_by="ArchiveComment.created_at"
+    )
+
+
+class ArchiveComment(Base):
+    """Reply thread on an archive item — anyone who can view the item can comment."""
+
+    __tablename__ = "archive_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("archive_items.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    item: Mapped[ArchiveItem] = relationship(back_populates="comments")

@@ -44,7 +44,8 @@ def user_out(u: User) -> dict:
 def user_brief(u: User | None) -> dict | None:
     if u is None:
         return None
-    return {"id": u.id, "name": u.name, "ign": u.ign, "main_role": u.main_role, "role": u.role}
+    return {"id": u.id, "name": u.name, "ign": u.ign, "main_role": u.main_role, "role": u.role,
+            "avatar": avatar_url(u.id)}
 
 
 def hero_out(h: Hero) -> dict:

@@ -10,6 +10,7 @@ from .config import CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_ORIGINS, TEAM_NAME, TEAM
 from .db import Base, SessionLocal, engine
 from .routers import (
     admin,
+    archive,
     auth,
     bans,
     dashboard,
@@ -49,7 +50,8 @@ app.add_middleware(
 
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
-               bans, events, strategy, drafts, admin, maps, users, map_guide, notifications, programs, files, tournaments, intel):
+               bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
+               programs, files, tournaments, intel, archive):
     api.include_router(module.router)
 app.include_router(api)
 
