@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; /* oblique flavor applied on body */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif; /* oblique flavor applied on body; symbol fonts cover IPA/Greek/special glyphs */
 
   /* dark premium foundation */
   --color-ink: #0a0a0d;
