@@ -4,8 +4,7 @@ import { api } from "../lib/api";
 import type { DraftPlan, Hero, Meta, Tournament, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
-import { DraftBoard } from "../components/DraftBoard";
-import { HeroPicker } from "./Drafts";
+import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { FilePick } from "../components/FilePick";
 import { FileText, Film, ImageIcon, Link2 } from "lucide-react";
 
@@ -205,7 +204,6 @@ const blankTDraft = () => ({
   our_bans: ["", "", "", "", ""], enemy_bans: ["", "", "", "", ""],
   our_picks: {} as Record<string, string>, enemy_picks: {} as Record<string, string>,
 });
-const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
 function DraftForm({ tournament, match, heroes, onSaved, onClose }: {
   tournament: Tournament; match: TournamentMatchT; heroes: Hero[]; onSaved: () => void; onClose: () => void;
@@ -228,39 +226,9 @@ function DraftForm({ tournament, match, heroes, onSaved, onClose }: {
   return (
     <Modal title={`Draft — vs ${match.opponent} (${tournament.name})`} onClose={onClose} wide>
       <form onSubmit={save} className="space-y-5">
-        <div className="grid sm:grid-cols-2 gap-4">
-          {(["our_bans", "enemy_bans"] as const).map((side) => (
-            <div key={side} className={`rounded-xl p-3 ${side === "our_bans" ? "bg-leaf-dim/40 ring-1 ring-leaf/20" : "bg-crim-dim/40 ring-1 ring-crim/20"}`}>
-              <div className={`label !mb-2 ${side === "our_bans" ? "!text-leaf/90" : "!text-crim/90"}`}>
-                {side === "our_bans" ? "Our bans" : `${match.opponent || "Enemy"} bans`}
-              </div>
-              <div className="space-y-1.5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <HeroPicker key={i} heroes={heroes} value={(draft[side]?.[i] as string) ?? ""}
-                    onChange={(v) => setDraft((d) => {
-                      const arr = [...(d[side] as string[])];
-                      while (arr.length < 5) arr.push("");
-                      arr[i] = v;
-                      return { ...d, [side]: arr };
-                    })} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="space-y-1.5">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center text-center gap-2">
-            <span className="label !mb-0 text-leaf/90">9 CLOVER</span><span className="label !mb-0">Lane</span><span className="label !mb-0 text-crim/90">{(match.opponent || "Enemy").toUpperCase()}</span>
-          </div>
-          {LANES.map((lane) => (
-            <div key={lane} className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-              <HeroPicker heroes={heroes} value={draft.our_picks?.[lane] ?? ""}
-                onChange={(v) => setDraft((d) => ({ ...d, our_picks: { ...d.our_picks, [lane]: v } }))} />
-              <span className="text-[10px] font-extrabold text-mute text-center">{lane}</span>
-              <HeroPicker heroes={heroes} value={draft.enemy_picks?.[lane] ?? ""}
-                onChange={(v) => setDraft((d) => ({ ...d, enemy_picks: { ...d.enemy_picks, [lane]: v } }))} />
-            </div>
-          ))}
+        <div className="card p-5">
+          <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)}
+            theirsLabel={(match.opponent || "Enemy").toUpperCase()} />
         </div>
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">

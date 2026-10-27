@@ -4,8 +4,7 @@ import { api } from "../lib/api";
 import type { DraftPlan, Hero, Meta, User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, Spinner } from "../components/ui";
-import { DraftBoard } from "../components/DraftBoard";
-import { HeroImg } from "../components/HeroImg";
+import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 
 const STATUS_TONE: Record<string, string> = {
   idea: "text-sky border-sky/40 bg-sky/10",
@@ -23,51 +22,6 @@ function blankDraft() {
   };
 }
 
-
-const STATUS_RANK: Record<string, number> = { META: 0, STRONG: 1, VIABLE: 2, SITUATIONAL: 3, WEAK: 4 };
-
-export function HeroPicker({ heroes, value, onChange }: { heroes: Hero[]; value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const cur = heroes.find((h) => h.name === value);
-  const sorted = [...heroes].sort((a, b) =>
-    (STATUS_RANK[a.meta_status] ?? 9) - (STATUS_RANK[b.meta_status] ?? 9) ||
-    b.clover_rating - a.clover_rating || b.win_rate - a.win_rate);
-  const list = (q ? sorted.filter((h) => h.name.toLowerCase().includes(q.toLowerCase())) : sorted).slice(0, 80);
-  return (
-    <div className="relative flex items-center gap-2 min-w-0">
-      {open && <div className="fixed inset-0 z-20" onClick={() => { setOpen(false); setQ(""); }} />}
-      <HeroImg name={value || "?"} size={28} className="rounded-md shrink-0" />
-      <button type="button" className="input !px-2 !py-1.5 min-w-0 text-left truncate flex items-center justify-between gap-1.5"
-        onClick={() => setOpen((v) => !v)}>
-        <span className="truncate">{value || "—"}</span>
-        {cur && <span className="text-[10px] text-mute tabular-nums shrink-0">{cur.win_rate}%</span>}
-      </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-30 w-64 card !border-edge-2 bg-panel shadow-[0_12px_40px_rgba(0,0,0,0.7)] p-2">
-          <input autoFocus className="input !py-1.5 !text-[12px] mb-1.5" placeholder="Search heroes…"
-            value={q} onChange={(e) => setQ(e.target.value)} />
-          <div className="max-h-64 overflow-y-auto -mx-1 px-1">
-            <button type="button" onClick={() => { onChange(""); setOpen(false); setQ(""); }}
-              className="w-full text-left px-2 py-1.5 rounded text-[12px] text-faint hover:bg-raised">— empty slot</button>
-            {list.map((h) => (
-              <button type="button" key={h.id} onClick={() => { onChange(h.name); setOpen(false); setQ(""); }}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-raised ${h.name === value ? "bg-raised" : ""}`}>
-                <HeroImg name={h.name} size={26} className="rounded" />
-                <span className="text-[12px] font-bold truncate">{h.name}</span>
-                <span className={`ml-auto chip !text-[8px] !px-1 !py-0 uppercase ${
-                  h.meta_status === "META" ? "text-crim border-crim/40" : h.meta_status === "STRONG" ? "text-leaf border-leaf/40" : "text-faint border-edge"}`}>
-                  {h.meta_status.toLowerCase()}
-                </span>
-                <span className="text-[10px] text-mute tabular-nums w-10 text-right">{h.win_rate}%</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function DraftEditor({ meta, heroes, initial, onSaved, onBack }: {
   meta: Meta; heroes: Hero[]; initial: DraftPlan | null;
@@ -115,41 +69,9 @@ function DraftEditor({ meta, heroes, initial, onSaved, onBack }: {
         </div>
       </div>
 
-      <div className="card p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {(["our_bans", "enemy_bans"] as const).map((side) => (
-            <div key={side}>
-              <div className={`label mb-2 ${side === "our_bans" ? "text-leaf/80" : "text-crim/80"}`}>{side === "our_bans" ? "Our bans" : "Enemy bans"}</div>
-              <div className="space-y-1.5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-faint text-[10px] font-bold w-3">{i + 1}.</span>
-                    <HeroPicker heroes={heroes} value={(f.draft[side][i] as string) ?? ""}
-                      onChange={(v) => set("draft", { ...f.draft, [side]: f.draft[side].map((x: string | null, j: number) => (j === i ? v : x)) })} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-1.5">
-            <span className="label text-right text-leaf/80">9 CLOVER picks</span>
-            <span className="label w-14 text-center">Lane</span>
-            <span className="label text-crim/80">Enemy picks</span>
-          </div>
-          <div className="space-y-1.5">
-            {meta.lanes.map((lane) => (
-              <div key={lane} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <HeroPicker heroes={heroes} value={f.draft.our_picks[lane] ?? ""}
-                  onChange={(v) => set("draft", { ...f.draft, our_picks: { ...f.draft.our_picks, [lane]: v } })} />
-                <span className="label w-14 text-center">{lane}</span>
-                <HeroPicker heroes={heroes} value={f.draft.enemy_picks[lane] ?? ""}
-                  onChange={(v) => set("draft", { ...f.draft, enemy_picks: { ...f.draft.enemy_picks, [lane]: v } })} />
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="card p-5">
+        <DraftBoardEditor heroes={heroes} value={f.draft} onChange={(d) => set("draft", d)}
+          theirsLabel={(f.opponent || "Enemy").toUpperCase()} lanes={meta.lanes} />
       </div>
 
       <Field label="Notes / win condition">

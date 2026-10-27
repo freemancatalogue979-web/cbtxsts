@@ -1,10 +1,10 @@
 import { AlertTriangle, FileText, Plus, Trophy, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
+import type { Hero, Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, navigate, REVIEW_STATUS_STYLE } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
-import { DraftBoard } from "../components/DraftBoard";
+import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 
 const STAT_FIELDS: [string, string][] = [
   ["kills", "Kills"], ["deaths", "Deaths"], ["gold", "Gold"], ["turrets", "Turrets"],
@@ -16,8 +16,8 @@ function emptyDraft() {
   return { our_bans: ["", "", "", "", ""], enemy_bans: ["", "", "", "", ""], our_picks: {} as Record<string, string>, enemy_picks: {} as Record<string, string> };
 }
 
-function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
-  meta: Meta; users: User[]; initial: Partial<Review>; scrim: Scrim | null;
+function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onClose }: {
+  meta: Meta; users: User[]; heroes: Hero[]; initial: Partial<Review>; scrim: Scrim | null;
   tmatch: TournamentMatchT | null;
   onSaved: (id: number) => void; onClose: () => void;
 }) {
@@ -45,15 +45,6 @@ function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
   const draft = f.draft as ReturnType<typeof emptyDraft>;
 
-  function setDraft(side: "our_bans" | "enemy_bans", idx: number, v: string) {
-    const arr = [...draft[side]];
-    arr[idx] = v;
-    set("draft", { ...draft, [side]: arr });
-  }
-  function setPick(side: "our_picks" | "enemy_picks", lane: string, v: string) {
-    set("draft", { ...draft, [side]: { ...draft[side], [lane]: v } });
-  }
-
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -80,14 +71,6 @@ function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
     }
   }
 
-  const laneRow = (lane: string) => (
-    <div key={lane} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-      <input className="input !px-2 text-right" value={draft.our_picks[lane] ?? ""} onChange={(e) => setPick("our_picks", lane, e.target.value)} placeholder="hero" />
-      <span className="label w-14 text-center">{lane}</span>
-      <input className="input !px-2" value={draft.enemy_picks[lane] ?? ""} onChange={(e) => setPick("enemy_picks", lane, e.target.value)} placeholder="hero" />
-    </div>
-  );
-
   return (
     <form onSubmit={save} className="space-y-6">
       {scrim && (
@@ -108,28 +91,10 @@ function ReviewForm({ meta, users, initial, scrim, tmatch, onSaved, onClose }: {
         </Field>
       </div>
 
-      {/* Draft */}
-      <section className="card p-4">
-        <div className="label mb-3">Draft</div>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {(["our_bans", "enemy_bans"] as const).map((side) => (
-            <div key={side}>
-              <div className={`label mb-1.5 ${side === "our_bans" ? "text-leaf/80" : "text-crim/80"}`}>{side === "our_bans" ? "Our bans" : "Enemy bans"}</div>
-              <div className="space-y-1.5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-faint text-[10px] font-bold w-3">{i + 1}.</span>
-                    <input className="input !py-1.5 !px-2" value={draft[side][i] ?? ""} onChange={(e) => setDraft(side, i, e.target.value)} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-1.5">
-          <span className="label text-right text-leaf/80">9 CLOVER</span><span className="label w-14 text-center">Lane</span><span className="label text-crim/80">Enemy</span>
-        </div>
-        <div className="space-y-1.5">{meta.lanes.map(laneRow)}</div>
+      {/* Draft — pro-league board */}
+      <section className="card p-5">
+        <DraftBoardEditor heroes={heroes} lanes={meta.lanes} value={draft}
+          onChange={(d) => set("draft", d)} theirsLabel={String(f.opponent || "Enemy").toUpperCase()} />
       </section>
 
       {/* Stats */}
@@ -305,6 +270,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [scrims, setScrims] = useState<Scrim[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [heroes, setHeroes] = useState<Hero[]>([]);
   const [tQueue, setTQueue] = useState<TournamentMatchT[]>([]);
   const [tab, setTab] = useState("all");
   const [editing, setEditing] = useState(false);
@@ -317,6 +283,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
     api.get<Scrim[]>("/scrims").then(setScrims).catch(() => setScrims([]));
     api.get<TournamentMatchT[]>("/tournaments/review-queue").then(setTQueue).catch(() => setTQueue([]));
     api.get<User[]>("/admin/users").then(setUsers).catch(() => setUsers([]));
+    api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
   }, []);
   useEffect(load, [load]);
 
@@ -365,7 +332,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           </div>
         )}
         {canEdit ? (
-          <ReviewForm meta={meta} users={users} tmatch={tmatch ? { id: tmatch.id } as TournamentMatchT : null}
+          <ReviewForm meta={meta} users={users} heroes={heroes} tmatch={tmatch ? { id: tmatch.id } as TournamentMatchT : null}
             initial={{
               ...(draftSource ? { draft: draftSource as Review["draft"] } : {}),
               ...(tmatch ? { opponent: tmatch.opponent, result: tmatch.result as Review["result"], date: tmatch.scheduled_date ?? "" } : {}),
@@ -393,7 +360,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
       return (
         <div className="max-w-3xl">
           <PageTitle title={`Editing review — Scrim #${review.scrim_number ?? ""}`} />
-          <ReviewForm meta={meta} users={users} initial={review} scrim={scrim} tmatch={null}
+          <ReviewForm meta={meta} users={users} heroes={heroes} initial={review} scrim={scrim} tmatch={null}
             onClose={() => setEditing(false)}
             onSaved={(id) => { setEditing(false); load(); navigate("reviews", id); }} />
         </div>
