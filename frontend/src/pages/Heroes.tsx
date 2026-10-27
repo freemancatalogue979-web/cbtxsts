@@ -331,6 +331,32 @@ interface LiveSkill {
 interface LiveSkillSet { skilllist?: LiveSkill[]; skilllistid?: string | number }
 type HeroDetailRec = { data?: { heroskilllist?: LiveSkillSet[] } };
 
+/** Fields may arrive as "@__data.skillname" style placeholders — resolve them against the
+ *  skill item, then the record data (same pattern Rone uses for spells/equipment). */
+function resolveField(v: unknown, roots: Record<string, unknown>[]): string {
+  if (typeof v !== "string") return v == null ? "" : String(v);
+  if (!v.startsWith("@")) return v;
+  const parts = v.slice(1).split(".");
+  for (const root of roots) {
+    let cur: unknown = root;
+    for (const p of parts) cur = (cur as Record<string, unknown> | undefined)?.[p];
+    if (typeof cur === "string" && cur !== v) return cur;
+  }
+  // numbered siblings fallback: @__data.skillname → find any skillnameN near the parent
+  for (const root of roots) {
+    const parent = parts.slice(0, -1).reduce<unknown>((o, p) => (o as Record<string, unknown> | undefined)?.[p], root);
+    if (parent && typeof parent === "object") {
+      const key = parts[parts.length - 1].replace(/\d+$/, "");
+      const hit = Object.keys(parent as Record<string, unknown>).find((k) => k === key || (k.startsWith(key) && typeof (parent as Record<string, unknown>)[k] === "string"));
+      if (hit) {
+        const val = (parent as Record<string, unknown>)[hit];
+        if (typeof val === "string" && val !== v) return val;
+      }
+    }
+  }
+  return "";
+}
+
 /** The official skilldesc carries MLBB's <font color="xxxxxx"> highlights. Convert them
  *  into real colored spans without ever trusting upstream HTML (strip unknown tags first). */
 function SkillDesc({ text }: { text: string }) {
@@ -357,20 +383,40 @@ function skillKey(idx: number, total: number): string {
   return `S${idx}`;
 }
 
+type ResolvedSkill = { id?: number; name: string; desc: string; icon: string; cd: string; tags: string[] };
+type ResolvedKit = { listid?: string | number; skills: ResolvedSkill[] };
+
 function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbackNames: string[] }) {
-  const [sets, setSets] = useState<LiveSkillSet[] | null>(null);
+  const [sets, setSets] = useState<ResolvedKit[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => {
     setSets(null); setErr(null);
     intel<{ data?: { records?: HeroDetailRec[] } }>(`heroes/${encodeURIComponent(heroName)}`, { size: 1, index: 1, lang: "en" }, 30 * 60_000)
       .then((d) => {
-        const rec = d.data?.records?.[0];
-        const kits = (rec?.data?.heroskilllist ?? [])
-          .map((k) => ({ ...k, skilllist: (k.skilllist ?? []).filter((s) => s.skillname) }))
-          .filter((k) => (k.skilllist ?? []).length > 0);
-        setSets(kits.length ? kits : []);
+        const rec = (d.data?.records?.[0] ?? {}) as HeroDetailRec;
+        const data = rec.data ?? (rec as unknown as Record<string, unknown>);
+        const kits = ((data as Record<string, unknown>).heroskilllist ?? []) as LiveSkillSet[];
+        const resolved: ResolvedKit[] = kits.map((k) => {
+          const skills = ((k.skilllist ?? []) as (LiveSkill & Record<string, unknown>)[])
+            .map((s) => {
+              const roots: Record<string, unknown>[] = [s, data];
+              return {
+                id: s.skillid,
+                name: resolveField(s.skillname, roots).trim(),
+                desc: resolveField(s.skilldesc, roots).trim(),
+                icon: resolveField(s.skillicon, roots).trim(),
+                cd: resolveField(s["skillcd&cost"], roots).trim(),
+                tags: ((s.skilltag ?? []) as (Record<string, unknown>)[])
+                  .map((t) => resolveField(t.tagname, [t, s, data]).trim())
+                  .filter(Boolean),
+              } satisfies ResolvedSkill;
+            })
+            .filter((s) => s.name);
+          return { listid: k.skilllistid, skills };
+        }).filter((k) => k.skills.length > 0);
+        setSets(resolved.length ? resolved : []);
       })
-      .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
+      .catch((e) => { setErr(e instanceof Error ? e.message : "Failed"); setSets(null); });
   }, [heroName]);
   useEffect(load, [load]);
 
@@ -405,37 +451,35 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
       <div className="label mb-4">Skills · official kit</div>
       <div className="space-y-5">
         {sets.map((kit, ki) => (
-          <div key={kit.skilllistid ?? ki} className={multiForm ? "space-y-2" : ""}>
+          <div key={kit.listid ?? ki} className={multiForm ? "space-y-2" : ""}>
             {multiForm && <div className="label !text-[9.5px]">Form {ki + 1}</div>}
             <div className="grid sm:grid-cols-2 gap-3">
-              {(kit.skilllist ?? []).map((s, si) => (
-                <div key={s.skillid ?? si} className="flex gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
+              {kit.skills.map((s, si) => (
+                <div key={s.id ?? si} className="flex gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
                   <span className="relative w-11 h-11 rounded-lg overflow-hidden bg-overlay border border-edge-2 shrink-0 grid place-items-center">
-                    {s.skillicon ? (
-                      <img src={s.skillicon} alt={s.skillname ?? ""} width={44} height={44} loading="lazy" referrerPolicy="no-referrer"
+                    {s.icon ? (
+                      <img src={s.icon} alt={s.name} width={44} height={44} loading="lazy" referrerPolicy="no-referrer"
                         className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     ) : (
-                      <span className="text-[10px] font-extrabold text-crim">{skillKey(si, kit.skilllist?.length ?? 0)}</span>
+                      <span className="text-[10px] font-extrabold text-crim">{skillKey(si, kit.skills.length)}</span>
                     )}
                     <span className="absolute bottom-0 right-0 px-1 rounded-tl-md bg-black/80 text-[8px] font-black text-crim">
-                      {skillKey(si, kit.skilllist?.length ?? 2)}
+                      {skillKey(si, Math.max(kit.skills.length, 2))}
                     </span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="text-[13px] font-extrabold leading-tight truncate">{s.skillname}</span>
-                      {(s as AnyRec)["skillcd&cost"] ? (
-                        <span className="text-[9.5px] text-faint font-semibold shrink-0 uppercase tracking-wide">{String((s as AnyRec)["skillcd&cost"])}</span>
-                      ) : null}
+                      <span className="text-[13px] font-extrabold leading-tight truncate">{s.name}</span>
+                      {s.cd ? <span className="text-[9.5px] text-faint font-semibold shrink-0 uppercase tracking-wide">{s.cd}</span> : null}
                     </span>
-                    {(s.skilltag ?? []).length > 0 && (
+                    {s.tags.length > 0 && (
                       <span className="flex flex-wrap gap-1 mt-0.5">
-                        {(s.skilltag ?? []).map((t, ti) => t.tagname && (
-                          <span key={ti} className="text-[8.5px] px-1.5 py-px rounded border border-edge-2 text-faint uppercase tracking-wide">{t.tagname}</span>
+                        {s.tags.map((t, ti) => (
+                          <span key={ti} className="text-[8.5px] px-1.5 py-px rounded border border-edge-2 text-faint uppercase tracking-wide">{t}</span>
                         ))}
                       </span>
                     )}
-                    {s.skilldesc && <span className="block mt-1"><SkillDesc text={s.skilldesc} /></span>}
+                    {s.desc && <span className="block mt-1"><SkillDesc text={s.desc} /></span>}
                   </span>
                 </div>
               ))}
