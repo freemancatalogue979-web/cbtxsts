@@ -29,7 +29,7 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
   useSyncExternalStore(subscribeArt, artVersion);
   const [stage, setStage] = useState<0 | 1 | 2>(0);
   const filled = Boolean(name);
-  const remote = filled ? (artFor(name!)?.art ?? artFor(name!)?.head) : undefined;
+  const remote = filled ? artFor(name!)?.art : undefined; // rectangle cards wear wallpaper, never the square head
   const src = stage === 0 ? (remote ?? `/heroes/${heroSlug(name!)}.webp`) : `/heroes/${heroSlug(name!)}.webp`;
   const showImg = filled && stage < 2;
   const card = (
@@ -158,7 +158,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
   useSyncExternalStore(subscribeArt, artVersion);
   const [failed, setFailed] = useState(false);
   const filled = Boolean(name);
-  const art = filled ? (artFor(name!)?.art ?? artFor(name!)?.head) : undefined;
+  const art = filled ? artFor(name!)?.art : undefined; // wallpaper crop only — square heads stay on the round ban circles
   const src = !failed && art ? art : filled ? `/heroes/${heroSlug(name)}.webp` : null;
   const showImg = filled && Boolean(src);
   return (
