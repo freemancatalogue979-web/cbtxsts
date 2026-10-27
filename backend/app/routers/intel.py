@@ -11,6 +11,7 @@ Upstream envelope: `{code: 0, message, data, traceID}`; ranking rows live in
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -25,6 +26,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..config import AVATAR_DIR
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import IntelLink, User
@@ -109,6 +111,33 @@ def _summary(link: IntelLink) -> dict:
             "linked_at": link.linked_at.isoformat() if link.linked_at else None}
 
 
+def _adopt_avatar(user: User, url: str) -> None:
+    """Linked account gives the pfp — but NEVER stomps an existing avatar file
+    (a custom upload, or a previously synced one). Delete your avatar to re-sync."""
+    if not url:
+        return
+    target = AVATAR_DIR / f"{user.id}.png"
+    if target.exists():
+        return
+    try:
+        from PIL import Image  # Pillow is a pinned requirement; local import keeps boot cheap
+        req = urllib.request.Request(url, headers={"User-Agent": "9clover-hub/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+        if len(raw) > 5 * 1024 * 1024:
+            return
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+        w, h = im.size
+        side = min(w, h)
+        im = im.crop(((w - side) // 2, (h - side) // 2, (w - side) // 2 + side, (h - side) // 2 + side))
+        im = im.resize((256, 256), Image.LANCZOS)
+        AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+        im.save(target, "PNG", optimize=True)
+        logger.info("adopted MLBB avatar for user %s", user.id)
+    except Exception as exc:  # avatar sync is nice-to-have, never fail the flow
+        logger.info("avatar sync skipped for user %s: %s", user.id, exc)
+
+
 def _cache_profile(link: IntelLink, idata: dict) -> None:
     """Stash name/avatar/level/rank from a user/info payload (coerce defensively)."""
     link.display_name = str(idata.get("name") or link.display_name or "")
@@ -158,8 +187,7 @@ def account_connect(body: ConnectIn, user: User = Depends(get_current_user), db:
     info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
     idata = info.get("data") if isinstance(info.get("data"), dict) else {}
     _cache_profile(link, idata)
-    if link.avatar and not user.avatar:
-        user.avatar = link.avatar  # adopt the MLBB profile pic until a custom one is uploaded
+    _adopt_avatar(user, link.avatar)
     db.add(link)
     db.commit()
     logger.info("MLBB account linked for user %s (role %s)", user.id, body.role_id)  # ids only, never tokens
@@ -195,8 +223,7 @@ def account_profile(user: User = Depends(get_current_user), db: Session = Depend
             out[key] = _rone_request("GET", path, params={"lang": "en"}, jwt=link.jwt)
             if key == "info" and isinstance(out[key].get("data"), dict):
                 _cache_profile(link, out[key]["data"])  # keep roster snapshot fresh
-                if link.avatar and not user.avatar:
-                    user.avatar = link.avatar
+                _adopt_avatar(user, link.avatar)
                 db.commit()
                 out["link"] = _summary(link)
         except HTTPException as exc:
