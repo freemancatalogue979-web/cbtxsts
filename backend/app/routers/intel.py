@@ -38,7 +38,7 @@ router = APIRouter(prefix="/intel", tags=["intel"])
 BASE_URL = os.getenv("RONE_BASE_URL", "https://arena.rone.dev/api").rstrip("/")
 FALLBACK_URL = os.getenv("RONE_FALLBACK_URL", "").rstrip("/")
 
-SAFE_PATH = re.compile(r"^[a-z0-9][a-z0-9\-_/\.]*$", re.IGNORECASE)
+SAFE_PATH = re.compile(r"^[a-z0-9][a-z0-9\-_/\. ]*$", re.IGNORECASE)  # hero names carry spaces ("Yu Zhong", "Yi Sun-shin")
 ALLOWED_BASES = ("heroes", "academy", "esports", "addon")
 
 _cache: dict[str, tuple[float, int, bytes]] = {}
@@ -271,6 +271,7 @@ def intel_proxy(path: str, request: Request, _user: User = Depends(get_current_u
         raise HTTPException(403, "endpoint not proxied")
 
     qs = request.url.query
+    safe_path = urllib.parse.quote(path, safe="/._-")
     key = f"{path}?{qs}"
     hit = _cache.get(key)
     if hit and hit[0] > time.time():
@@ -280,7 +281,7 @@ def intel_proxy(path: str, request: Request, _user: User = Depends(get_current_u
     last_err: Exception | None = None
     for host in [BASE_URL] + ([FALLBACK_URL] if FALLBACK_URL else []):
         try:
-            status, body = _fetch(f"{host}/{path}" + (f"?{qs}" if qs else ""))
+            status, body = _fetch(f"{host}/{safe_path}" + (f"?{qs}" if qs else ""))
             payload = json.loads(body)
             if status == 200:
                 _cache[key] = (time.time() + ttl, status, body)
