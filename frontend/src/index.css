@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif; /* oblique flavor applied on body; symbol fonts cover IPA/Greek/special glyphs */
+  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif; /* symbol fallbacks cover IPA/Greek/special glyphs */
 
   /* dark premium foundation */
   --color-ink: #0a0a0d;
@@ -31,7 +31,7 @@
   }
   body {
     @apply bg-ink text-text font-sans antialiased;
-    font-style: oblique; /* Helvetica Oblique flavor across the app */
+    font-style: oblique; /* Keep the app-wide slanted style. */
     font-feature-settings: "ss01";
   }
   ::selection {
