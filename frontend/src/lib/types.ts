@@ -380,13 +380,48 @@ export interface Settings {
   season_name: string;
 }
 
+export interface MapToken {
+  id: string;
+  hero: string;
+  side: "ours" | "theirs" | "neutral";
+  x: number;
+  y: number;
+  size?: number;
+}
+
+export interface MapChip {
+  id: string;
+  name: string;
+  color: string;
+  size: number;
+  x: number;
+  y: number;
+}
+
+export interface MapStep {
+  id: string;
+  number: number;
+  mode: "arrow" | "free";
+  color: string;
+  points: number[][];
+  parentId?: string;
+  tokenId?: string;
+  chipId?: string;
+}
+
 export interface MapBoard {
   id: number;
   name: string;
   kind: "draft" | "strategy" | "scrim-review";
   opponent: string;
   draft_id: number | null;
-  data: { tokens?: { id: string; hero: string; side: string; x: number; y: number }[]; paths?: { color: string; points: number[][] }[] };
+  data: {
+    tokens?: MapToken[];
+    paths?: { color: string; points: number[][] }[];
+    steps?: MapStep[];
+    chips?: MapChip[];
+    [key: string]: unknown;
+  };
   notes: string;
   author_id: number | null;
   created_at: string | null;

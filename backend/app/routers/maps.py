@@ -1,4 +1,4 @@
-"""Tactical map boards — Land of Dawn drawing + hero tokens."""
+"""Tactical map boards — hero tokens, drawings, numbered steps and custom chips."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,7 +34,7 @@ def create_board(payload: MapBoardIn, db: Session = Depends(get_db), user=Depend
     b = MapBoard(
         name=payload.name.strip(), kind=payload.kind or "strategy",
         opponent=payload.opponent or "", draft_id=payload.draft_id,
-        data=dumps(payload.data or {"tokens": [], "paths": [], "text": []}),
+        data=dumps(payload.data or {"tokens": [], "paths": [], "steps": [], "chips": [], "text": []}),
         notes=payload.notes or "", author_id=user.id,
     )
     db.add(b)
