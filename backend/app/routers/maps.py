@@ -1,11 +1,11 @@
-"""Tactical map boards — hero tokens, drawings, numbered steps and custom chips."""
+"""Tactical map boards — heroes, drawings, numbered steps, chips and zones."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..deps import get_current_user, get_db
+from ..deps import can, get_current_user, get_db, require
 from ..models import MapBoard, dumps, loads
 from ..schemas import MapBoardIn, MapBoardPatch
 from ..serializers import board_out
@@ -31,10 +31,11 @@ def list_boards(kind: str | None = None, db: Session = Depends(get_db), user=Dep
 @router.post("", status_code=201)
 @router.post("/", status_code=201)
 def create_board(payload: MapBoardIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require(can.manage_strategy(user), "create map boards")
     b = MapBoard(
         name=payload.name.strip(), kind=payload.kind or "strategy",
         opponent=payload.opponent or "", draft_id=payload.draft_id,
-        data=dumps(payload.data or {"tokens": [], "paths": [], "steps": [], "chips": [], "text": []}),
+        data=dumps(payload.data or {"tokens": [], "paths": [], "steps": [], "chips": [], "zones": [], "text": []}),
         notes=payload.notes or "", author_id=user.id,
     )
     db.add(b)
@@ -53,6 +54,7 @@ def get_board(board_id: int, db: Session = Depends(get_db), user=Depends(get_cur
 
 @router.patch("/{board_id}")
 def update_board(board_id: int, payload: MapBoardPatch, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require(can.manage_strategy(user), "edit map boards")
     b = db.get(MapBoard, board_id)
     if b is None:
         raise HTTPException(status_code=404, detail="Board not found")
@@ -69,6 +71,7 @@ def update_board(board_id: int, payload: MapBoardPatch, db: Session = Depends(ge
 
 @router.delete("/{board_id}", status_code=204)
 def delete_board(board_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    require(can.manage_strategy(user), "delete map boards")
     b = db.get(MapBoard, board_id)
     if b is None:
         raise HTTPException(status_code=404, detail="Board not found")

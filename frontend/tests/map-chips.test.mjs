@@ -18,8 +18,8 @@ function inFrame(point, frame, surface) {
   return x >= frame.left && x <= frame.right && y >= frame.top && y <= frame.bottom;
 }
 
-test("six presets have locally bundled WebP portraits", async () => {
-  assert.deepEqual(CHIP_PRESETS.map((p) => p.id), ["litho", "minion", "turret", "retribution", "lord", "turtle"]);
+test("eight presets have locally bundled WebP portraits", async () => {
+  assert.deepEqual(CHIP_PRESETS.map((p) => p.id), ["litho", "minion", "turret", "retribution", "lord", "turtle", "blue-buff", "red-buff"]);
   for (const preset of CHIP_PRESETS) {
     const image = await readFile(new URL(`../public/map-chips/${preset.id}.webp`, import.meta.url));
     assert.equal(image.subarray(0, 4).toString("ascii"), "RIFF");
@@ -28,7 +28,7 @@ test("six presets have locally bundled WebP portraits", async () => {
 });
 
 test("legacy aliases get portraits and explicit preset survives a rename", () => {
-  for (const [name, id] of [["Lithowanderer", "litho"], ["MINIONS", "minion"], ["Turrets", "turret"], ["Retri", "retribution"], ["Lord", "lord"], [" Turtle ", "turtle"]]) {
+  for (const [name, id] of [["Lithowanderer", "litho"], ["MINIONS", "minion"], ["Turrets", "turret"], ["Retri", "retribution"], ["Lord", "lord"], [" Turtle ", "turtle"], ["Blue Buff", "blue-buff"], ["Purple Buff", "blue-buff"], ["Red Buff", "red-buff"], ["Orange Buff", "red-buff"]]) {
     assert.equal(chipPreset({ name })?.id, id);
   }
   assert.equal(chipPreset({ name: "River scout", preset: "litho" })?.id, "litho");

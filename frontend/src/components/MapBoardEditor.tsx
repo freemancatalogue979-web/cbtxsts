@@ -1,11 +1,13 @@
 import {
-  CirclePlus, Eraser, Footprints, Hand, Layers, Maximize2, Minimize2, MousePointer2,
+  CircleDot, CirclePlus, Eraser, Footprints, Hand, Layers, Maximize2, Minimize2, MousePointer2,
   MoveUpRight, PenLine, RotateCcw, Save, Trash2, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { CHIP_PRESETS, chipPreset, chipSpawnPoint, type ChipSettings } from "../lib/mapChips";
-import type { DraftPlan, Hero, MapBoard, MapChip, MapStep, MapToken } from "../lib/types";
+import { detachStepAnchors, detachZoneAnchors, removeStepPreservingBranches } from "../lib/mapElements";
+import { closestMapItem, DEFAULT_ZONE_RADIUS, MAX_ZONE_RADIUS, MIN_ZONE_RADIUS, zoneCenter, zoneRadius } from "../lib/mapZones";
+import type { DraftPlan, Hero, MapBoard, MapChip, MapStep, MapToken, MapZone } from "../lib/types";
 import { navigate } from "../lib/util";
 import { BattlefieldMap } from "./BattlefieldMap";
 import { HeroImg } from "./HeroImg";
@@ -13,14 +15,18 @@ import { Field, Spinner } from "./ui";
 
 type Side = MapToken["side"];
 type DrawPath = { color: string; points: number[][]; mode?: "arrow" | "free" };
-type Tool = "move" | "pan" | "pen" | "free" | "steps" | "chip" | "erase";
-type Target = { kind: "hero" | "chip" | "step"; id: string };
-type BoardSnapshot = { tokens: MapToken[]; paths: DrawPath[]; steps: MapStep[]; chips: MapChip[] };
+type Tool = "move" | "pan" | "pen" | "free" | "steps" | "chip" | "zone" | "erase";
+type Target = { kind: "hero" | "chip" | "step" | "zone" | "path"; id: string };
+type BoardSnapshot = { tokens: MapToken[]; paths: DrawPath[]; steps: MapStep[]; chips: MapChip[]; zones: MapZone[] };
 type Gesture =
   | { kind: "pan"; pointerId: number; sx: number; sy: number; ox: number; oy: number }
   | { kind: "drag"; pointerId: number; target: Target; sx: number; sy: number; changed: boolean }
+  | { kind: "select"; pointerId: number; target: Target }
+  | { kind: "erase"; pointerId: number; target: Target }
+  | { kind: "zone-resize"; pointerId: number; zoneId: string; sx: number; sy: number; changed: boolean }
+  | { kind: "zone-place"; pointerId: number; sx: number; sy: number; moved: boolean; zone: MapZone }
   | { kind: "draw"; pointerId: number; sx: number; sy: number; moved: boolean; points: number[][]; mode: "arrow" | "free";
-      color: string; isStep: boolean; number: number; parentId?: string; tokenId?: string; chipId?: string }
+      color: string; isStep: boolean; number: number; target: Target | null; parentId?: string; tokenId?: string; chipId?: string }
   | { kind: "place"; pointerId: number; point: number[]; settings: ChipSettings };
 
 const SIDE_RING: Record<Side, string> = {
@@ -87,8 +93,8 @@ function resolvedPoints(step: MapStep, steps: MapStep[], tokens: MapToken[], chi
 }
 
 /** Draw in map-percent coordinates while keeping arrowheads aspect-correct. */
-function PathShape({ points, color, aspect, head, fade = false }: {
-  points: number[][]; color: string; aspect: number; head: boolean; fade?: boolean;
+function PathShape({ points, color, aspect, head, fade = false, selected = false, pathId, stepId }: {
+  points: number[][]; color: string; aspect: number; head: boolean; fade?: boolean; selected?: boolean; pathId?: string; stepId?: string;
 }) {
   if (points.length < 2) return null;
   const [x2, y2] = points[points.length - 1];
@@ -102,7 +108,9 @@ function PathShape({ points, color, aspect, head, fade = false }: {
   const wing1 = [x2 + Math.cos(angle + Math.PI + 0.55) * (h / aspect), y2 + Math.sin(angle + Math.PI + 0.55) * h];
   const wing2 = [x2 + Math.cos(angle + Math.PI - 0.55) * (h / aspect), y2 + Math.sin(angle + Math.PI - 0.55) * h];
   return (
-    <g opacity={fade ? 0.7 : 0.95}>
+    <g opacity={fade ? 0.7 : 0.95} data-map-path={pathId} data-map-step-line={stepId}>
+      {selected && <polyline points={points.map(([x, y]) => `${x},${y}`).join(" ")} fill="none"
+        stroke="#fff" strokeWidth="8" strokeOpacity="0.75" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
       <polyline points={points.map(([x, y]) => `${x},${y}`).join(" ")} fill="none"
         stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       {head && <path d={`M${x2},${y2} L${wing1[0]},${wing1[1]} L${wing2[0]},${wing2[1]} Z`} fill={color} />}
@@ -110,19 +118,17 @@ function PathShape({ points, color, aspect, head, fade = false }: {
   );
 }
 
-/** Distance to the full line, not just sampled points, in aspect-corrected coordinates. */
-function distanceToPath(x: number, y: number, points: number[][], aspect: number): number {
-  let best = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const ax = points[i - 1][0] * aspect, ay = points[i - 1][1];
-    const bx = points[i][0] * aspect, by = points[i][1];
-    const px = x * aspect, py = y;
-    const dx = bx - ax, dy = by - ay;
-    const denominator = dx * dx + dy * dy;
-    const t = denominator ? clamp(((px - ax) * dx + (py - ay) * dy) / denominator, 0, 1) : 0;
-    best = Math.min(best, Math.hypot(px - ax - t * dx, py - ay - t * dy));
-  }
-  return best;
+function ZoneShape({ zone, center, aspect, selected = false, preview = false }: {
+  zone: MapZone; center: readonly number[]; aspect: number; selected?: boolean; preview?: boolean;
+}) {
+  const shape = { cx: center[0], cy: center[1], rx: zone.radius / aspect, ry: zone.radius };
+  return (
+    <g data-map-zone={preview ? undefined : zone.id} data-map-zone-anchor={zone.tokenId ?? zone.chipId}>
+      {selected && <ellipse {...shape} fill="none" stroke="#fff" strokeOpacity="0.75" strokeWidth="5" vectorEffect="non-scaling-stroke" />}
+      <ellipse {...shape} fill={zone.color} fillOpacity={preview ? 0.1 : 0.16} stroke={zone.color} strokeOpacity="0.95"
+        strokeWidth="2.5" strokeDasharray={preview ? "6 4" : undefined} vectorEffect="non-scaling-stroke" />
+    </g>
+  );
 }
 
 function PenPalette({ color, onChange, prefix }: { color: string; onChange: (value: string) => void; prefix: string }) {
@@ -138,14 +144,15 @@ function PenPalette({ color, onChange, prefix }: { color: string; onChange: (val
   );
 }
 
-export function MapBoardEditor({ id }: { id: number }) {
+export function MapBoardEditor({ id, canManage }: { id: number; canManage: boolean }) {
   const [board, setBoard] = useState<MapBoard | null>(null);
   const [tokens, setTokens] = useState<MapToken[]>([]);
   const [paths, setPaths] = useState<DrawPath[]>([]);
   const [steps, setSteps] = useState<MapStep[]>([]);
   const [chips, setChips] = useState<MapChip[]>([]);
+  const [zones, setZones] = useState<MapZone[]>([]);
   const [history, setHistory] = useState<BoardSnapshot[]>([]);
-  const [tool, setTool] = useState<Tool>("move");
+  const [tool, setTool] = useState<Tool>(canManage ? "move" : "pan");
   const [stepMode, setStepMode] = useState<"arrow" | "free">("arrow");
   const [penColor, setPenColor] = useState(PEN_COLORS[0].id);
   const [chipDraft, setChipDraft] = useState<ChipSettings>(DEFAULT_CHIP);
@@ -153,6 +160,7 @@ export function MapBoardEditor({ id }: { id: number }) {
   const [selected, setSelected] = useState<Target | null>(null);
   const [preview, setPreview] = useState<{ points: number[][]; color: string; head: boolean } | null>(null);
   const [chipPreview, setChipPreview] = useState<{ point: number[]; settings: ChipSettings } | null>(null);
+  const [zonePreview, setZonePreview] = useState<MapZone | null>(null);
   const [dirty, setDirty] = useState(false);
   const [mapStyle, setMapStyle] = useState<"game" | "diagram">("game");
   const [gameMapFailed, setGameMapFailed] = useState(false);
@@ -174,7 +182,11 @@ export function MapBoardEditor({ id }: { id: number }) {
   const selectedChip = selected?.kind === "chip" ? chips.find((c) => c.id === selected.id) : undefined;
   const selectedHero = selected?.kind === "hero" ? tokens.find((t) => t.id === selected.id) : undefined;
   const selectedStep = selected?.kind === "step" ? steps.find((s) => s.id === selected.id) : undefined;
+  const selectedZone = selected?.kind === "zone" ? zones.find((z) => z.id === selected.id) : undefined;
+  const selectedPath = selected?.kind === "path" ? paths[Number(selected.id)] : undefined;
   const chipSettings = selectedChip ?? chipDraft;
+  const attachedZones = selectedHero ? zones.filter((z) => z.tokenId === selectedHero.id)
+    : selectedChip ? zones.filter((z) => z.chipId === selectedChip.id) : [];
 
   const clampView = (v: { z: number; x: number; y: number }) => {
     if (v.z <= 1.001) return { z: 1, x: 0, y: 0 };
@@ -239,6 +251,7 @@ export function MapBoardEditor({ id }: { id: number }) {
       setTokens(data.tokens ?? []);
       setPaths(data.paths ?? []);
       setSteps(data.steps ?? []);
+      setZones(data.zones ?? []);
       setChips((data.chips ?? []).map((chip) => {
         const preset = chipPreset(chip);
         return !chip.preset && preset ? { ...chip, preset: preset.id } : chip;
@@ -246,20 +259,20 @@ export function MapBoardEditor({ id }: { id: number }) {
       setHistory([]);
       setSelected(null);
       setView({ z: 1, x: 0, y: 0 });
-      setTool("move");
+      setTool(canManage ? "move" : "pan");
       setChipDraft(DEFAULT_CHIP);
       setAddedNotice("");
       setDirty(false);
     }).catch(() => setBoard(null));
-    api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
-  }, [id]);
+    if (canManage) api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
+  }, [id, canManage]);
   useEffect(load, [load]);
 
-  const snapshot = () => setHistory((h) => [...h.slice(-29), { tokens, paths, steps, chips }]);
+  const snapshot = () => setHistory((h) => [...h.slice(-29), { tokens, paths, steps, chips, zones }]);
   const undo = () => {
     const last = history[history.length - 1];
     if (!last) return;
-    setTokens(last.tokens); setPaths(last.paths); setSteps(last.steps); setChips(last.chips);
+    setTokens(last.tokens); setPaths(last.paths); setSteps(last.steps); setChips(last.chips); setZones(last.zones);
     setHistory(history.slice(0, -1)); setSelected(null); setDirty(true);
   };
   const point = (e: React.PointerEvent): number[] => {
@@ -294,7 +307,7 @@ export function MapBoardEditor({ id }: { id: number }) {
     pinch.current = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
       m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
     gesture.current = null;
-    setPreview(null); setChipPreview(null);
+    setPreview(null); setChipPreview(null); setZonePreview(null);
   }
   function applyPinch() {
     const [a, b] = [...ptrs.current.values()], p = pinch.current, r = area.current?.getBoundingClientRect();
@@ -307,22 +320,17 @@ export function MapBoardEditor({ id }: { id: number }) {
   }
 
   function deleteStep(idToDelete: string) {
-    const ids = new Set([idToDelete]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const step of steps) {
-        if (step.parentId && ids.has(step.parentId) && !ids.has(step.id)) { ids.add(step.id); changed = true; }
-      }
-    }
-    snapshot(); setSteps((ss) => ss.filter((s) => !ids.has(s.id))); setSelected(null); setDirty(true);
+    if (!steps.some((step) => step.id === idToDelete)) return;
+    snapshot();
+    setSteps((ss) => removeStepPreservingBranches(ss, idToDelete));
+    setSelected(null); setDirty(true);
   }
   function removeToken(idToDelete: string) {
     const token = tokens.find((t) => t.id === idToDelete);
     if (!token) return;
     snapshot();
-    setSteps((ss) => ss.map((s) => s.tokenId === idToDelete
-      ? { ...s, tokenId: undefined, points: [[token.x, token.y], ...s.points.slice(1)] } : s));
+    setSteps((ss) => detachStepAnchors(ss, "tokenId", idToDelete, token.x, token.y));
+    setZones((zs) => detachZoneAnchors(zs, "tokenId", idToDelete, token.x, token.y));
     setTokens((ts) => ts.filter((t) => t.id !== idToDelete));
     setSelected(null); setDirty(true);
   }
@@ -330,28 +338,53 @@ export function MapBoardEditor({ id }: { id: number }) {
     const chip = chips.find((c) => c.id === idToDelete);
     if (!chip) return;
     snapshot();
-    setSteps((ss) => ss.map((s) => s.chipId === idToDelete
-      ? { ...s, chipId: undefined, points: [[chip.x, chip.y], ...s.points.slice(1)] } : s));
+    setSteps((ss) => detachStepAnchors(ss, "chipId", idToDelete, chip.x, chip.y));
+    setZones((zs) => detachZoneAnchors(zs, "chipId", idToDelete, chip.x, chip.y));
     setChips((cs) => cs.filter((c) => c.id !== idToDelete));
     setSelected(null); setDirty(true);
   }
-  function eraseAt(x: number, y: number, target: Target | null) {
-    if (target?.kind === "step") { deleteStep(target.id); return; }
-    if (target?.kind === "chip") { removeChip(target.id); return; }
-    let best = 4.5 / view.z;
-    let found: { kind: "path"; index: number } | { kind: "step"; id: string } | null = null;
-    paths.forEach((p, index) => {
-      const distance = distanceToPath(x, y, p.points, mapAspect);
-      if (distance < best) { best = distance; found = { kind: "path", index }; }
-    });
-    steps.forEach((s) => {
-      const distance = distanceToPath(x, y, resolvedPoints(s, steps, tokens, chips), mapAspect);
-      if (distance < best) { best = distance; found = { kind: "step", id: s.id }; }
-    });
-    // Assignments in forEach are invisible to TypeScript's control-flow analysis.
-    const hit = found as { kind: "path"; index: number } | { kind: "step"; id: string } | null;
-    if (hit?.kind === "step") deleteStep(hit.id);
-    else if (hit?.kind === "path") { snapshot(); setPaths((pp) => pp.filter((_, i) => i !== hit.index)); setDirty(true); }
+  function deleteTarget(target: Target) {
+    if (target.kind === "hero") { removeToken(target.id); return; }
+    if (target.kind === "chip") { removeChip(target.id); return; }
+    if (target.kind === "step") { deleteStep(target.id); return; }
+    if (target.kind === "zone" && zones.some((z) => z.id === target.id)) {
+      snapshot(); setZones((zs) => zs.filter((z) => z.id !== target.id)); setSelected(null); setDirty(true);
+    } else if (target.kind === "path") {
+      const index = Number(target.id);
+      if (!Number.isInteger(index) || !paths[index]) return;
+      snapshot(); setPaths((pp) => pp.filter((_, i) => i !== index)); setSelected(null); setDirty(true);
+    }
+  }
+
+  /** Markers win first, then the closest visible line or zone edge, then a zone's fill. */
+  function mapItemAt(x: number, y: number, marker: Target | null): Target | null {
+    if (marker) return marker;
+    const surfaceHeight = surf.current?.getBoundingClientRect().height ?? 0;
+    const tolerance = Math.max(4.5 / view.z, surfaceHeight ? 14 * 100 / surfaceHeight : 0);
+    const hitZones = zones.map((zone) => ({ id: zone.id, center: zoneCenter(zone, tokens, chips), radius: zone.radius }));
+    const hitLines = [
+      ...paths.map((path, index) => ({ kind: "path" as const, id: String(index), points: path.points })),
+      ...steps.map((step) => ({ kind: "step" as const, id: step.id, points: resolvedPoints(step, steps, tokens, chips) })),
+    ];
+    return closestMapItem([x, y], mapAspect, tolerance, hitZones, hitLines);
+  }
+
+  function makeZone(target: Target | null, point: number[]): MapZone {
+    const token = target?.kind === "hero" ? tokens.find((t) => t.id === target.id) : undefined;
+    const chip = target?.kind === "chip" ? chips.find((c) => c.id === target.id) : undefined;
+    const height = area.current?.getBoundingClientRect().height ?? 0;
+    const markerSize = token?.size ?? (token ? HERO_SIZE : chip?.size ?? 0);
+    const radius = clamp(Math.max(DEFAULT_ZONE_RADIUS, height ? (markerSize / 2 + 12) * 100 / height : 0), MIN_ZONE_RADIUS, MAX_ZONE_RADIUS);
+    const color = token ? (token.side === "ours" ? "#34d399" : token.side === "theirs" ? "#e11d48" : "#f5b942")
+      : chip?.color ?? "#7db5f5";
+    return { id: uid(), x: token?.x ?? chip?.x ?? point[0], y: token?.y ?? chip?.y ?? point[1],
+      radius: Math.round(radius * 10) / 10, color, tokenId: token?.id, chipId: chip?.id };
+  }
+  function addZone(zone: MapZone) {
+    snapshot(); setZones((zs) => [...zs, zone]); setTool("move"); setSelected({ kind: "zone", id: zone.id }); setDirty(true);
+  }
+  function updateZone(idToUpdate: string, patch: Partial<Pick<MapZone, "radius" | "color">>) {
+    snapshot(); setZones((zs) => zs.map((z) => z.id === idToUpdate ? { ...z, ...patch } : z)); setDirty(true);
   }
 
   function onAreaDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -359,19 +392,33 @@ export function MapBoardEditor({ id }: { id: number }) {
     e.currentTarget.setPointerCapture(e.pointerId);
     if (ptrs.current.size === 2) { startPinch(); e.preventDefault(); return; }
     if (ptrs.current.size > 2) return;
-    if (e.button === 1 || e.button === 2 || tool === "pan") {
+    if (!canManage || e.button === 1 || e.button === 2 || tool === "pan") {
       gesture.current = { kind: "pan", pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
       e.preventDefault(); return;
     }
     if (e.button !== 0) return;
     const target = targetAt(e);
     if (tool === "move") {
-      if (target) {
-        // Opening the marker editor changes the layout, so wait until release.
-        // Otherwise the map shifts underneath a marker as soon as it is dragged.
-        gesture.current = { kind: "drag", pointerId: e.pointerId, target, sx: e.clientX, sy: e.clientY, changed: false };
+      const handle = (e.target as Element).closest<HTMLElement>("[data-map-zone-handle]");
+      const handleId = handle?.dataset.mapZoneHandle;
+      if (handleId && zones.some((z) => z.id === handleId)) {
+        gesture.current = { kind: "zone-resize", pointerId: e.pointerId, zoneId: handleId, sx: e.clientX, sy: e.clientY, changed: false };
+        e.preventDefault(); return;
+      }
+      const [x, y] = point(e), hit = mapItemAt(x, y, target);
+      if (hit) {
+        const zone = hit.kind === "zone" ? zones.find((z) => z.id === hit.id) : undefined;
+        const draggable = !!target || (zone && !zone.tokenId && !zone.chipId);
+        // Open the inspector only on release, so it cannot move the map under a drag.
+        gesture.current = draggable
+          ? { kind: "drag", pointerId: e.pointerId, target: hit, sx: e.clientX, sy: e.clientY, changed: false }
+          : { kind: "select", pointerId: e.pointerId, target: hit };
         e.preventDefault();
       } else setSelected(null);
+    } else if (tool === "zone") {
+      const zone = makeZone(target, point(e));
+      gesture.current = { kind: "zone-place", pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false, zone };
+      setZonePreview(zone); e.preventDefault();
     } else if (tool === "pen" || tool === "free" || tool === "steps") {
       const parent = tool === "steps" && target?.kind === "step" ? steps.find((s) => s.id === target.id) : undefined;
       const token = tool === "steps" && target?.kind === "hero" ? tokens.find((t) => t.id === target.id) : undefined;
@@ -380,7 +427,7 @@ export function MapBoardEditor({ id }: { id: number }) {
       const color = parent?.color ?? penColor;
       const mode = tool === "steps" ? stepMode : tool === "free" ? "free" : "arrow";
       gesture.current = { kind: "draw", pointerId: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false, points: [start],
-        mode, color, isStep: tool === "steps", number: parent ? parent.number + 1 : 1,
+        mode, color, isStep: tool === "steps", number: parent ? parent.number + 1 : 1, target,
         parentId: parent?.id, tokenId: token?.id, chipId: chip?.id };
       setPreview({ points: [start], color, head: tool === "steps" || mode === "arrow" });
       e.preventDefault();
@@ -390,7 +437,10 @@ export function MapBoardEditor({ id }: { id: number }) {
       setChipPreview({ point: p, settings });
       e.preventDefault();
     } else if (tool === "erase") {
-      const [x, y] = point(e); eraseAt(x, y, target); e.preventDefault();
+      const [x, y] = point(e), hit = mapItemAt(x, y, target);
+      // Wait for release: a second finger may turn this tap into a pinch.
+      if (hit) gesture.current = { kind: "erase", pointerId: e.pointerId, target: hit };
+      e.preventDefault();
     }
   }
   function onAreaMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -407,8 +457,22 @@ export function MapBoardEditor({ id }: { id: number }) {
       const [x, y] = point(e);
       if (g.target.kind === "hero") setTokens((ts) => ts.map((t) => t.id === g.target.id ? { ...t, x, y } : t));
       else if (g.target.kind === "chip") setChips((cs) => cs.map((c) => c.id === g.target.id ? { ...c, x, y } : c));
-      else setSteps((ss) => ss.map((s) => s.id === g.target.id ? { ...s, points: [...s.points.slice(0, -1), [x, y]] } : s));
+      else if (g.target.kind === "step") setSteps((ss) => ss.map((s) => s.id === g.target.id ? { ...s, points: [...s.points.slice(0, -1), [x, y]] } : s));
+      else if (g.target.kind === "zone") setZones((zs) => zs.map((z) => z.id === g.target.id ? { ...z, x, y } : z));
       setDirty(true);
+    } else if (g.kind === "zone-resize") {
+      if (!g.changed && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 3) return;
+      const zone = zones.find((z) => z.id === g.zoneId);
+      if (!zone) return;
+      if (!g.changed) { snapshot(); g.changed = true; }
+      const radius = zoneRadius(zoneCenter(zone, tokens, chips), point(e), mapAspect);
+      setZones((zs) => zs.map((z) => z.id === g.zoneId ? { ...z, radius } : z)); setDirty(true);
+    } else if (g.kind === "zone-place") {
+      if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) >= 5) g.moved = true;
+      if (g.moved) {
+        g.zone = { ...g.zone, radius: zoneRadius(zoneCenter(g.zone, tokens, chips), point(e), mapAspect) };
+        setZonePreview(g.zone);
+      }
     } else if (g.kind === "draw") {
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) >= 5) g.moved = true;
       const p = point(e);
@@ -417,7 +481,7 @@ export function MapBoardEditor({ id }: { id: number }) {
         if (Math.hypot((p[0] - last[0]) * mapAspect, p[1] - last[1]) > 0.15) g.points = [...g.points, p];
       } else g.points = [g.points[0], p];
       setPreview({ points: g.points, color: g.color, head: g.isStep || g.mode === "arrow" });
-    } else {
+    } else if (g.kind === "place") {
       g.point = point(e);
       setChipPreview({ point: g.point, settings: g.settings });
     }
@@ -431,10 +495,17 @@ export function MapBoardEditor({ id }: { id: number }) {
     if (ptrs.current.size > 0) return;
     const g = gesture.current;
     gesture.current = null;
-    setPreview(null); setChipPreview(null);
+    setPreview(null); setChipPreview(null); setZonePreview(null);
     if (!g || g.pointerId !== e.pointerId || cancelled) return;
-    if (g.kind === "drag") {
-      selectTarget(g.target);
+    if (g.kind === "drag" || g.kind === "select") {
+      selectTarget(g.target); e.currentTarget.focus({ preventScroll: true });
+    } else if (g.kind === "erase") {
+      deleteTarget(g.target);
+    } else if (g.kind === "zone-resize") {
+      setSelected({ kind: "zone", id: g.zoneId }); e.currentTarget.focus({ preventScroll: true });
+    } else if (g.kind === "zone-place") {
+      const zone = g.moved ? { ...g.zone, radius: zoneRadius(zoneCenter(g.zone, tokens, chips), point(e), mapAspect) } : g.zone;
+      addZone(zone); e.currentTarget.focus({ preventScroll: true });
     } else if (g.kind === "place") {
       const [x, y] = point(e), preset = g.settings.preset ?? chipPreset(g.settings)?.id;
       snapshot(); setChips((cs) => [...cs, { id: uid(), ...g.settings, preset, x, y }]); setDirty(true);
@@ -451,18 +522,19 @@ export function MapBoardEditor({ id }: { id: number }) {
           parentId: g.parentId, tokenId: g.tokenId, chipId: g.chipId }]);
       } else setPaths((pp) => [...pp, { color: g.color, points, mode: g.mode }]);
       setDirty(true);
+    } else if (g.kind === "draw") {
+      // A tap selects existing content; a drag still draws a new line or step.
+      const [x, y] = point(e), hit = mapItemAt(x, y, g.target);
+      if (hit) { setTool("move"); selectTarget(hit); e.currentTarget.focus({ preventScroll: true }); }
     }
   }
 
   function onMarkerKey(e: React.KeyboardEvent, target: Target) {
+    if (!canManage) return;
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTool("move"); selectTarget(target); return; }
     if (tool !== "move") return;
     if (e.key === "Delete" || e.key === "Backspace") {
-      e.preventDefault();
-      if (target.kind === "hero") removeToken(target.id);
-      else if (target.kind === "chip") removeChip(target.id);
-      else deleteStep(target.id);
-      return;
+      e.preventDefault(); deleteTarget(target); return;
     }
     const d = e.shiftKey ? 2 : 0.5;
     const dx = e.key === "ArrowLeft" ? -d : e.key === "ArrowRight" ? d : 0;
@@ -471,12 +543,19 @@ export function MapBoardEditor({ id }: { id: number }) {
     e.preventDefault(); snapshot(); selectTarget(target);
     if (target.kind === "hero") setTokens((ts) => ts.map((t) => t.id === target.id ? { ...t, x: clamp(t.x + dx, 0, 100), y: clamp(t.y + dy, 0, 100) } : t));
     else if (target.kind === "chip") setChips((cs) => cs.map((c) => c.id === target.id ? { ...c, x: clamp(c.x + dx, 0, 100), y: clamp(c.y + dy, 0, 100) } : c));
-    else setSteps((ss) => ss.map((s) => {
+    else if (target.kind === "step") setSteps((ss) => ss.map((s) => {
       if (s.id !== target.id) return s;
       const last = endpoint(s);
       return { ...s, points: [...s.points.slice(0, -1), [clamp(last[0] + dx, 0, 100), clamp(last[1] + dy, 0, 100)]] };
     }));
     setDirty(true);
+  }
+
+  function onAreaKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (!canManage || e.defaultPrevented || tool !== "move") return;
+    if (selected && (e.key === "Delete" || e.key === "Backspace")) {
+      e.preventDefault(); deleteTarget(selected);
+    } else if (e.key === "Escape") setSelected(null);
   }
 
   function updateChip(patch: Partial<ChipSettings>) {
@@ -536,7 +615,7 @@ export function MapBoardEditor({ id }: { id: number }) {
     try {
       const b = await api.patch<MapBoard>(`/maps/${board.id}`, {
         name: board.name, opponent: board.opponent, notes: board.notes,
-        data: { ...board.data, tokens, paths, steps, chips },
+        data: { ...board.data, tokens, paths, steps, chips, zones },
       });
       setBoard(b); setDirty(false);
     } catch (error) { setErr(error instanceof Error ? error.message : "Save failed"); }
@@ -553,6 +632,19 @@ export function MapBoardEditor({ id }: { id: number }) {
     return (q ? list.filter((h) => h.name.toLowerCase().includes(q)) : list).slice(0, 60);
   }, [heroes, heroQ]);
 
+  // A tiny zone can be hidden beneath its marker, so linked zones remain
+  // directly editable from the marker inspector as well as from the map.
+  const attachedZoneControls = attachedZones.length > 0 && (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Attached zones">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-faint">Zones</span>
+      {attachedZones.map((zone, index) => <button key={zone.id} type="button"
+        className="btn-ghost !px-2 !py-1 !text-[10px]" aria-label={`Edit zone ${index + 1}, ${Math.round(zone.radius)}% radius`}
+        onClick={() => { setTool("move"); setSelected({ kind: "zone", id: zone.id }); }}>
+        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: zone.color }} />
+        {index + 1} · {Math.round(zone.radius)}%
+      </button>)}
+    </div>
+  );
   const chipEditor = (tool === "chip" || selectedChip) && (
     <div className="border-b border-edge bg-raised/35 px-3.5 py-3 space-y-2.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -564,7 +656,10 @@ export function MapBoardEditor({ id }: { id: number }) {
             {selectedChip ? "Changes apply to this chip. Drag it on the map to move it." : "Name it, pick a color and size, then add it or tap anywhere on the map."}
           </p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 max-w-full">
+          {selectedChip && <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] text-leaf" onClick={() => addZone(makeZone({ kind: "chip", id: selectedChip.id }, [selectedChip.x, selectedChip.y]))}>
+            <CircleDot size={12} /> Add zone
+          </button>}
           {selectedChip && <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim" onClick={() => removeChip(selectedChip.id)}>
             <Trash2 size={12} /> Remove
           </button>}
@@ -573,6 +668,7 @@ export function MapBoardEditor({ id }: { id: number }) {
           </button>
         </div>
       </div>
+      {selectedChip && attachedZoneControls}
       <div className="flex flex-wrap items-end gap-x-4 gap-y-2.5">
         <label className="block min-w-36 flex-1 max-w-64">
           <span className="label block mb-1">Chip name</span>
@@ -609,10 +705,11 @@ export function MapBoardEditor({ id }: { id: number }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <button className="label !text-crim" onClick={() => navigate("maps")}>← Map boards</button>
-        <input className="input !w-auto min-w-40 flex-1 max-w-72 !font-extrabold" value={board.name}
+        <input className="input !w-auto min-w-40 flex-1 max-w-72 !font-extrabold" value={board.name} readOnly={!canManage}
           onChange={(e) => { setBoard({ ...board, name: e.target.value }); setDirty(true); }} placeholder="Board name" />
         <span className="chip text-faint border-edge-2 uppercase !text-[10px]">{board.kind}</span>
-        <div className="flex items-center gap-2 ml-auto">
+        {!canManage && <span className="chip text-faint">View only</span>}
+        {canManage && <div className="flex items-center gap-2 ml-auto">
           {board.draft_id != null && <button className="btn-ghost !py-1.5 !text-[12px]" onClick={loadDraftLineup}>
             <Layers size={13} /> Place draft lineup
           </button>}
@@ -622,16 +719,16 @@ export function MapBoardEditor({ id }: { id: number }) {
           <button className="btn-primary !py-1.5 !text-[12.5px]" disabled={!dirty || saving} onClick={save}>
             <Save size={13} /> {saving ? "Saving…" : dirty ? "Save board" : "Saved"}
           </button>
-        </div>
+        </div>}
       </div>
       {err && <div className="text-crim text-sm" role="alert">{err}</div>}
 
-      <div className="grid lg:grid-cols-[minmax(0,2.6fr)_minmax(240px,1fr)] gap-5 items-start">
+      <div className={`grid gap-5 items-start ${canManage ? "lg:grid-cols-[minmax(0,2.6fr)_minmax(240px,1fr)]" : ""}`}>
         <div ref={fsWrap} className={`card overflow-hidden ${isFs ? "!rounded-none !border-0 bg-ink flex flex-col h-full" : ""}`}>
-          <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60">
-            {([
+          <div className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60 ${isFs ? "map-fullscreen-toolbar" : ""}`}>
+            {canManage && ([
               ["move", "Drag", MousePointer2], ["pan", "Pan", Hand], ["pen", "Arrow", MoveUpRight],
-              ["free", "Draw", PenLine], ["steps", "Steps", Footprints], ["chip", "Chip", CirclePlus], ["erase", "Erase", Eraser],
+              ["free", "Draw", PenLine], ["steps", "Steps", Footprints], ["zone", "Zone", CircleDot], ["chip", "Chip", CirclePlus], ["erase", "Erase", Eraser],
             ] as const).map(([t, label, Icon]) => (
               <button key={t} type="button" className={`btn-ghost !px-2.5 !py-1.5 !text-[11.5px] ${tool === t ? "border-crim/60 text-crim bg-crim-dim/40" : ""}`}
                 onClick={() => chooseTool(t)} aria-pressed={tool === t}>
@@ -639,7 +736,7 @@ export function MapBoardEditor({ id }: { id: number }) {
               </button>
             ))}
             {(tool === "pen" || tool === "free") && <PenPalette color={penColor} onChange={setPenColor} prefix="Drawing" />}
-            <span className="mx-1.5 w-px h-5 bg-edge" />
+            {canManage && <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />}
             <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
               {(["game", "diagram"] as const).map((m) => (
                 <button key={m} type="button" className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
@@ -650,33 +747,40 @@ export function MapBoardEditor({ id }: { id: number }) {
               aria-label={isFs ? "Exit fullscreen" : "Plan fullscreen"} title={isFs ? "Exit fullscreen (Esc)" : "Plan fullscreen"}>
               {isFs ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
-            <span className="mx-1.5 w-px h-5 bg-edge" />
-            <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px]" onClick={undo} disabled={history.length === 0}>
-              <RotateCcw size={13} /> Undo
-            </button>
-            <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px] hover:!text-crim"
-              onClick={() => { snapshot(); setTokens([]); setPaths([]); setSteps([]); setChips([]); setSelected(null); setDirty(true); }}>
-              <Trash2 size={13} /> Clear
-            </button>
-            <span className="ml-auto text-[10px] text-faint uppercase tracking-widest font-semibold">
-              {tool === "move" ? "drag markers · pinch or scroll to zoom"
+            {canManage && <>
+              <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />
+              <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px]" onClick={undo} disabled={history.length === 0}>
+                <RotateCcw size={13} /> Undo
+              </button>
+              <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px] !text-crim" onClick={() => selected && deleteTarget(selected)}
+                disabled={!selected} aria-label="Delete selected" title="Delete only the selected map element">
+                <Trash2 size={13} /> <span>Delete<span className="map-delete-selected-word"> selected</span></span>
+              </button>
+              <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px] hover:!text-crim"
+                onClick={() => { snapshot(); setTokens([]); setPaths([]); setSteps([]); setChips([]); setZones([]); setSelected(null); setDirty(true); }}>
+                <Trash2 size={13} /> Clear
+              </button>
+            </>}
+            <span className="map-toolbar-hint ml-auto text-[10px] text-faint uppercase tracking-widest font-semibold">
+              {tool === "move" ? "select or drag · delete selected · pinch to zoom"
                 : tool === "pan" ? "drag to pan · pinch to zoom"
                   : tool === "pen" ? "drag to draw an arrow"
                     : tool === "free" ? "hold & draw freely"
                       : tool === "steps" ? "drag a numbered point to continue"
-                        : tool === "chip" ? "tap or drag on the map to place"
-                          : "erase a step and its following steps · undo to restore"}
+                        : tool === "zone" ? "tap a hero or drag outward to set a zone"
+                          : tool === "chip" ? "tap or drag on the map to place"
+                            : "tap an element to erase just that one"}
             </span>
           </div>
 
-          <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
+          {canManage && <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
             <div className="map-quick-chips-heading flex items-center justify-between gap-3 mb-2">
               <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-amber whitespace-nowrap">Quick chips</span>
               <span role="status" aria-live="polite" className="text-[10px] text-mute truncate text-right">
                 {addedNotice || "Click to add · drag to position"}
               </span>
             </div>
-            <div className="map-quick-chip-list grid grid-cols-6 gap-1 sm:flex sm:gap-3" role="group" aria-label="Objective chips">
+            <div className="map-quick-chip-list grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-3" role="group" aria-label="Objective chips">
               {CHIP_PRESETS.map((preset) => (
                 <button key={preset.id} type="button" data-chip-preset={preset.id}
                   aria-label={`Add ${preset.description} chip`} title={`Add ${preset.description} to the map`}
@@ -691,10 +795,10 @@ export function MapBoardEditor({ id }: { id: number }) {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {tool === "steps" && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-leaf/20 bg-leaf/[0.045]">
+            <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-leaf/20 bg-leaf/[0.045] ${isFs ? "map-steps-fullscreen" : ""}`}>
               <div className="flex items-center gap-2 text-leaf">
                 <Footprints size={15} /><span className="text-[11px] font-extrabold uppercase tracking-[0.13em]">Steps</span>
                 {steps.length > 0 && <span className="chip !text-[10px] text-leaf border-leaf/30">{steps.length}</span>}
@@ -710,7 +814,7 @@ export function MapBoardEditor({ id }: { id: number }) {
                 </button>
               </div>
               <PenPalette color={penColor} onChange={setPenColor} prefix="Step" />
-              <p className="text-[11px] leading-relaxed text-mute flex-1 min-w-[190px]">
+              <p className="map-steps-hint text-[11px] leading-relaxed text-mute flex-1 min-w-[190px]">
                 Start from a hero or anywhere. Drag from a number to add the next step.
               </p>
             </div>
@@ -721,11 +825,11 @@ export function MapBoardEditor({ id }: { id: number }) {
           <div className={isFs ? "map-fullscreen-workspace flex flex-col flex-1 min-h-0 overflow-hidden" : ""}>
             <div className={isFs ? "flex-1 min-h-0 min-w-0 grid place-items-center p-2 overflow-hidden" : "p-2 sm:p-3"}
               style={isFs ? { containerType: "size" } : undefined}>
-              <div ref={area} data-map-viewport
-                className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : tool === "steps" || tool === "chip" ? "cursor-crosshair" : ""}`}
+              <div ref={area} data-map-viewport tabIndex={0} aria-label={canManage ? "Map canvas: select a marker, line or zone to delete it" : "Map canvas: drag to pan or pinch to zoom"}
+                className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-crim ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : tool === "steps" || tool === "chip" || tool === "zone" ? "cursor-crosshair" : ""}`}
                 style={{ aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
                   ...(isFs ? { width: `min(100%, calc(${fullscreenHeight} * ${mapAspect}))` } : {}) }}
-                onPointerDown={onAreaDown} onPointerMove={onAreaMove} onPointerUp={(e) => onAreaUp(e)}
+                onPointerDown={onAreaDown} onPointerMove={onAreaMove} onPointerUp={(e) => onAreaUp(e)} onKeyDown={onAreaKey}
                 onPointerCancel={(e) => onAreaUp(e, true)} onContextMenu={(e) => e.preventDefault()}>
                 <div ref={surf} data-map-surface className="absolute inset-0"
                   style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: "0 0" }}>
@@ -735,9 +839,13 @@ export function MapBoardEditor({ id }: { id: number }) {
                       className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none" />
                   ) : <BattlefieldMap className="absolute inset-0 pointer-events-none" />}
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
-                    {paths.map((p, i) => <PathShape key={`path-${i}`} points={p.points} color={p.color} aspect={mapAspect}
-                      head={p.mode ? p.mode === "arrow" : p.points.length === 2} />)}
-                    {steps.map((s) => <PathShape key={s.id} points={resolvedPoints(s, steps, tokens, chips)} color={s.color} aspect={mapAspect} head />)}
+                    {zones.map((z) => <ZoneShape key={z.id} zone={z} center={zoneCenter(z, tokens, chips)} aspect={mapAspect}
+                      selected={selected?.kind === "zone" && selected.id === z.id} />)}
+                    {zonePreview && <ZoneShape zone={zonePreview} center={zoneCenter(zonePreview, tokens, chips)} aspect={mapAspect} preview />}
+                    {paths.map((p, i) => <PathShape key={`path-${i}`} pathId={String(i)} points={p.points} color={p.color} aspect={mapAspect}
+                      selected={selected?.kind === "path" && selected.id === String(i)} head={p.mode ? p.mode === "arrow" : p.points.length === 2} />)}
+                    {steps.map((s) => <PathShape key={s.id} stepId={s.id} points={resolvedPoints(s, steps, tokens, chips)} color={s.color} aspect={mapAspect}
+                      selected={selected?.kind === "step" && selected.id === s.id} head />)}
                     {preview && <PathShape points={preview.points} color={preview.color} aspect={mapAspect} head={preview.head} fade />}
                   </svg>
 
@@ -746,9 +854,9 @@ export function MapBoardEditor({ id }: { id: number }) {
                     const target: Target = { kind: "hero", id: t.id };
                     return (
                       <button key={t.id} type="button" data-map-kind="hero" data-map-id={t.id} data-map-hero={t.hero}
-                        aria-label={`${t.hero} hero token`} title={`${t.hero} (${t.side}) — select to resize or remove`}
-                        onKeyDown={(e) => onMarkerKey(e, target)}
-                        onDoubleClick={() => { if (tool === "move") removeToken(t.id); }}
+                        aria-label={`${t.hero} hero token`} title={canManage ? `${t.hero} (${t.side}) — select to resize or remove` : `${t.hero} (${t.side})`}
+                        tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)}
+                        onDoubleClick={() => { if (canManage && tool === "move") removeToken(t.id); }}
                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ${SIDE_RING[t.side]} shadow-[0_4px_14px_rgba(0,0,0,0.65)] ${selected?.kind === "hero" && selected.id === t.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={{ left: `${t.x}%`, top: `${t.y}%`, width: size, height: size, touchAction: "none" }}>
                         <HeroImg name={t.hero} size={size} eager className="rounded-full block" />
@@ -760,8 +868,8 @@ export function MapBoardEditor({ id }: { id: number }) {
                     const target: Target = { kind: "chip", id: c.id };
                     return (
                       <button key={c.id} type="button" data-map-kind="chip" data-map-id={c.id} data-map-chip={c.name}
-                        aria-label={`${c.name || "Chip"} chip`} title={`${c.name || "Chip"} — select to edit or resize`}
-                        onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (tool === "move") removeChip(c.id); }}
+                        aria-label={`${c.name || "Chip"} chip`} title={canManage ? `${c.name || "Chip"} — select to edit or resize` : (c.name || "Chip")}
+                        tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (canManage && tool === "move") removeChip(c.id); }}
                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={{ left: `${c.x}%`, top: `${c.y}%`, width: c.size, height: c.size, borderColor: c.color,
                           fontSize: Math.max(12, c.size * 0.32), touchAction: "none" }}>
@@ -776,14 +884,25 @@ export function MapBoardEditor({ id }: { id: number }) {
                     const target: Target = { kind: "step", id: s.id };
                     return (
                       <button key={s.id} type="button" data-map-kind="step" data-map-id={s.id} data-map-step={s.number}
-                        aria-label={`Step ${s.number}`} title={`Step ${s.number} — drag from here in Steps to continue`}
-                        onKeyDown={(e) => onMarkerKey(e, target)}
+                        aria-label={`Step ${s.number}`} title={canManage ? `Step ${s.number} — drag from here in Steps to continue` : `Step ${s.number}`}
+                        tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)}
                         className={`absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 shadow-[0_2px_9px_rgba(0,0,0,0.8)] flex items-center justify-center text-[11px] font-black ${selected?.kind === "step" && selected.id === s.id ? "outline outline-2 outline-offset-2 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : tool === "steps" ? "cursor-crosshair" : ""}`}
                         style={{ left: `${end[0]}%`, top: `${end[1]}%`, width: 26, height: 26, backgroundColor: s.color, color: contrast(s.color), touchAction: "none" }}>
                         {s.number}
                       </button>
                     );
                   })}
+                  {tool === "move" && selectedZone && (() => {
+                    const center = zoneCenter(selectedZone, tokens, chips);
+                    return <button type="button" data-map-zone-handle={selectedZone.id} aria-label="Resize zone" title="Drag to resize the zone"
+                      className="absolute z-[3] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-ink shadow-lg cursor-ew-resize"
+                      style={{ left: `${center[0] + selectedZone.radius / mapAspect}%`, top: `${center[1]}%`, width: 18, height: 18, touchAction: "none" }}
+                      onKeyDown={(e) => {
+                        const delta = e.key === "ArrowRight" || e.key === "ArrowUp" ? 2 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -2 : 0;
+                        if (delta) { e.preventDefault(); e.stopPropagation(); updateZone(selectedZone.id, { radius: clamp(selectedZone.radius + delta, MIN_ZONE_RADIUS, MAX_ZONE_RADIUS) }); }
+                        else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); e.stopPropagation(); deleteTarget({ kind: "zone", id: selectedZone.id }); }
+                      }} />;
+                  })()}
                   {chipPreview && <div aria-hidden="true" className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 opacity-60 pointer-events-none font-black"
                     style={{ left: `${chipPreview.point[0]}%`, top: `${chipPreview.point[1]}%`, width: chipPreview.settings.size, height: chipPreview.settings.size,
                       borderColor: chipPreview.settings.color, fontSize: Math.max(12, chipPreview.settings.size * 0.32) }}>
@@ -800,7 +919,7 @@ export function MapBoardEditor({ id }: { id: number }) {
                 </div>
               </div>
             </div>
-            {(selectedChip || (isFs && tool === "chip") || (tool === "move" && (selectedHero || selectedStep))) && (
+            {(selectedChip || (isFs && tool === "chip") || (tool === "move" && (selectedHero || selectedStep || selectedZone || selectedPath))) && (
               <div className={isFs ? "map-fullscreen-inspector" : ""}>
                 {(selectedChip || (isFs && tool === "chip")) && chipEditor}
                 {tool === "move" && selectedHero && (
@@ -811,6 +930,10 @@ export function MapBoardEditor({ id }: { id: number }) {
                         onChange={(e) => { snapshot(); setTokens((ts) => ts.map((t) => t.id === selectedHero.id ? { ...t, size: Number(e.target.value) } : t)); setDirty(true); }} />
                       <span className="text-mute">{selectedHero.size ?? HERO_SIZE}px</span>
                     </label>
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] text-leaf" onClick={() => addZone(makeZone({ kind: "hero", id: selectedHero.id }, [selectedHero.x, selectedHero.y]))}>
+                      <CircleDot size={12} /> Add zone
+                    </button>
+                    {attachedZoneControls}
                     <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => removeToken(selectedHero.id)}>
                       <Trash2 size={12} /> Remove hero
                     </button>
@@ -820,11 +943,41 @@ export function MapBoardEditor({ id }: { id: number }) {
                 {tool === "move" && selectedStep && (
                   <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
                     <span className="text-[11px] font-extrabold text-mute">Step {selectedStep.number}</span>
-                    <span className="text-[11px] text-faint">Drag to reposition. Removing it also removes the steps after it.</span>
+                    <span className="text-[11px] text-faint">Drag to reposition. Removing this step leaves the other steps in place.</span>
                     <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => deleteStep(selectedStep.id)}>
                       <Trash2 size={12} /> Remove step
                     </button>
                     <button type="button" aria-label="Close step editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
+                  </div>
+                )}
+                {tool === "move" && selectedZone && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-edge bg-raised/35">
+                    <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-leaf"><CircleDot size={14} /> Coverage zone</span>
+                    <span className="text-[11px] text-faint">
+                      {selectedZone.tokenId ? `Follows ${tokens.find((t) => t.id === selectedZone.tokenId)?.hero ?? "hero"}`
+                        : selectedZone.chipId ? `Follows ${chips.find((c) => c.id === selectedZone.chipId)?.name ?? "chip"}` : "Free zone"}
+                      {" · drag the edge handle or use the slider"}
+                    </span>
+                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-faint">
+                      Radius <input type="range" aria-label="Zone radius" min={MIN_ZONE_RADIUS} max={MAX_ZONE_RADIUS} step={1} value={selectedZone.radius}
+                        onChange={(e) => updateZone(selectedZone.id, { radius: Number(e.target.value) })} />
+                      <span className="text-mute">{Math.round(selectedZone.radius)}%</span>
+                    </label>
+                    <PenPalette color={selectedZone.color} onChange={(color) => updateZone(selectedZone.id, { color })} prefix="Zone" />
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => deleteTarget({ kind: "zone", id: selectedZone.id })}>
+                      <Trash2 size={12} /> Remove zone
+                    </button>
+                    <button type="button" aria-label="Close zone editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
+                  </div>
+                )}
+                {tool === "move" && selected?.kind === "path" && selectedPath && (
+                  <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
+                    <span className="text-[11px] font-extrabold text-mute">{selectedPath.mode === "free" || (!selectedPath.mode && selectedPath.points.length > 2) ? "Drawing" : "Arrow"} selected</span>
+                    <span className="text-[11px] text-faint">Only this line will be removed.</span>
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => deleteTarget(selected)}>
+                      <Trash2 size={12} /> Remove line
+                    </button>
+                    <button type="button" aria-label="Close line editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
                   </div>
                 )}
               </div>
@@ -832,14 +985,14 @@ export function MapBoardEditor({ id }: { id: number }) {
           </div>
 
           {!isFs && <div className="grid sm:grid-cols-2 gap-3 px-3.5 pb-3.5">
-            <Field label="Opponent (optional)"><input className="input" value={board.opponent}
+            <Field label="Opponent (optional)"><input className="input" value={board.opponent} readOnly={!canManage}
               onChange={(e) => { setBoard({ ...board, opponent: e.target.value }); setDirty(true); }} /></Field>
-            <Field label="Notes / win condition"><input className="input" value={board.notes}
+            <Field label="Notes / win condition"><input className="input" value={board.notes} readOnly={!canManage}
               onChange={(e) => { setBoard({ ...board, notes: e.target.value }); setDirty(true); }} /></Field>
           </div>}
         </div>
 
-        <div className="card p-4 lg:sticky lg:top-6">
+        {canManage && <div className="card p-4 lg:sticky lg:top-6">
           <div className="label mb-2.5">Place a hero</div>
           <div className="flex gap-1.5 mb-3">
             {(["ours", "theirs", "neutral"] as Side[]).map((s) => <button key={s}
@@ -858,9 +1011,9 @@ export function MapBoardEditor({ id }: { id: number }) {
             {filteredHeroes.length === 0 && <div className="col-span-5 text-xs text-faint py-4 text-center">—</div>}
           </div>
           <div className="text-[10px] text-faint mt-3 leading-relaxed border-t border-edge/60 pt-2.5">
-            Select a marker in Drag to resize or remove it. Steps, chips, drawings and positions save together with the board.
+            Select anything in Drag to remove it. Use Zone on a hero to show its coverage; the zone follows that hero. Save the board to keep everything.
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

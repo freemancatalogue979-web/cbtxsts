@@ -400,10 +400,11 @@ class Notification(Base):
 class MapBoard(Base):
     """Tactical Land-of-Dawn board, stored as extensible JSON.
 
-    Board data contains hero tokens, freehand/arrow paths, numbered steps, and
-    custom chips. Coordinates are percentages of the map, so all overlays stay
-    aligned when the board is zoomed or displayed at a different size. Older
-    boards may omit steps or chips; the editor treats missing collections as empty.
+    Board data contains hero tokens, freehand/arrow paths, numbered steps,
+    chips, and coverage zones. Coordinates are percentages of the map, so all
+    overlays stay aligned when the board is zoomed or displayed at a different
+    size. Older boards may omit steps, chips or zones; the editor treats missing
+    collections as empty.
     """
 
     __tablename__ = "map_boards"

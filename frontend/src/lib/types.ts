@@ -389,7 +389,7 @@ export interface MapToken {
   size?: number;
 }
 
-export type MapChipPreset = "litho" | "minion" | "turret" | "retribution" | "lord" | "turtle";
+export type MapChipPreset = "litho" | "minion" | "turret" | "retribution" | "lord" | "turtle" | "blue-buff" | "red-buff";
 
 export interface MapChip {
   id: string;
@@ -399,6 +399,17 @@ export interface MapChip {
   x: number;
   y: number;
   preset?: MapChipPreset;
+}
+
+export interface MapZone {
+  id: string;
+  x: number;
+  y: number;
+  /** Radius as a percentage of the map height, so the circle stays round. */
+  radius: number;
+  color: string;
+  tokenId?: string;
+  chipId?: string;
 }
 
 export interface MapStep {
@@ -420,9 +431,10 @@ export interface MapBoard {
   draft_id: number | null;
   data: {
     tokens?: MapToken[];
-    paths?: { color: string; points: number[][] }[];
+    paths?: { color: string; points: number[][]; mode?: "arrow" | "free" }[];
     steps?: MapStep[];
     chips?: MapChip[];
+    zones?: MapZone[];
     [key: string]: unknown;
   };
   notes: string;

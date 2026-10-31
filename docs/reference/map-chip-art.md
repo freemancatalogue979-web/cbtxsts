@@ -8,5 +8,7 @@ The locally bundled files in `frontend/public/map-chips/` are cropped thumbnails
 | Minion | [VCGamers — types of minions in MLBB](https://www.vcgamers.com/news/en/5-type-minion-in-mlbb/) |
 | Turret | [MobileLegendsGame — battlefield turrets](https://www.reddit.com/r/MobileLegendsGame/comments/1q9vx6i/battlefield_turrets_as_the_game_progresses/) |
 | Retribution | [NovaZenn — battle spell PNGs](https://www.novazenn.com/2023/07/battle-spell-mlbb-png.html) |
+| Blue buff (Thunder Fenrir) | [BitTopup — Mobile Legends jungle guide](https://bittopup.com/article/Mobile-Legends-Jungle-Guide-2025-Master-6040-Rotation) |
+| Red buff (Molten Fiend) | [ONE Esports — which jungle buff to start](https://www.oneesports.gg/mobile-legends/which-jungle-buff-to-start-mlbb/) |
 
 The application serves these files locally rather than depending on the source sites at runtime. Preset IDs are stored separately from display names, so renaming a placed chip does not change its portrait.

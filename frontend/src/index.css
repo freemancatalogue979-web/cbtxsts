@@ -104,6 +104,14 @@
   box-shadow: inset 2px 0 0 var(--color-crim);
 }
 
+/* Compact fullscreen controls leave more room for the map on small screens. */
+@media (max-height: 600px) {
+  .map-fullscreen-toolbar { gap: 4px; padding-block: 4px; }
+  .map-fullscreen-toolbar > .btn-ghost { padding-inline: 6px !important; gap: 4px; }
+  .map-fullscreen-toolbar > .map-toolbar-divider,
+  .map-fullscreen-toolbar > .map-toolbar-hint { display: none; }
+}
+
 /* Keep the map usable beside the marker editor on short landscape screens. */
 .map-fullscreen-inspector {
   max-height: 40%;
@@ -111,9 +119,12 @@
   flex-shrink: 0;
 }
 @media (max-height: 550px) and (orientation: landscape) {
+  .map-fullscreen-toolbar .map-delete-selected-word { display: none; }
+  .map-steps-fullscreen { padding-block: 4px; }
+  .map-steps-fullscreen .map-steps-hint { display: none; }
   .map-quick-chips-fullscreen { display: flex; align-items: center; gap: 12px; padding-block: 4px; }
   .map-quick-chips-fullscreen .map-quick-chips-heading { margin: 0; flex-shrink: 0; }
-  .map-quick-chips-fullscreen .map-quick-chip-list { display: flex; gap: 4px; }
+  .map-quick-chips-fullscreen .map-quick-chip-list { display: flex; flex-wrap: nowrap; gap: 4px; min-width: 0; overflow-x: auto; }
   .map-quick-chips-fullscreen [role="status"] {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;

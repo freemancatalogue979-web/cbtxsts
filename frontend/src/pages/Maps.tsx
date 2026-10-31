@@ -8,7 +8,7 @@ import { BattlefieldMap } from "../components/BattlefieldMap";
 import { MapBoardEditor } from "../components/MapBoardEditor";
 
 export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
-  void me;
+  const canManage = ["admin", "captain", "coach"].includes(me.role);
   const [boards, setBoards] = useState<MapBoard[] | null>(null);
   const [kindFilter, setKindFilter] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -22,7 +22,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
   }, [kindFilter]);
   useEffect(() => { if (!id) load(); }, [load, id]);
 
-  if (id) return <MapBoardEditor id={id} />;
+  if (id) return <MapBoardEditor id={id} canManage={canManage} />;
   if (tab === "guide") return <MapGuideView onBack={() => setTab("boards")} />;
 
   async function create(kind: string, name: string, opponent: string, draftId: number | null) {
@@ -35,7 +35,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
       <PageTitle title="Map Lab" sub="Tactical boards on the Land of Dawn — drag heroes, draw rotations, save the plan."
         right={<div className="flex gap-2">
           <button className="btn-ghost" onClick={() => setTab("guide")}><MapIcon size={15} /> Field guide</button>
-          <button className="btn-primary" onClick={() => setShowNew(true)}><Plus size={15} /> New board</button>
+          {canManage && <button className="btn-primary" onClick={() => setShowNew(true)}><Plus size={15} /> New board</button>}
         </div>} />
 
       <div className="flex gap-1.5">
@@ -62,9 +62,9 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
           </button>
         ))}
       </div>
-      {boards && boards.length === 0 && <Empty title="No boards yet" hint="Create a board and start planning rotations." />}
+      {boards && boards.length === 0 && <Empty title="No boards yet" hint={canManage ? "Create a board and start planning rotations." : "Staff will publish map plans here."} />}
 
-      {showNew && (
+      {canManage && showNew && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowNew(false)}>
           <form className="card p-6 w-full max-w-sm space-y-4 bg-panel" onClick={(e) => e.stopPropagation()} onSubmit={(e) => {
             e.preventDefault();

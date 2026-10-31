@@ -12,12 +12,15 @@ export const CHIP_PRESETS: readonly Preset[] = [
   { id: "retribution", name: "Retribution", label: "Retri", description: "Retribution", color: "#fb923c" },
   { id: "lord", name: "Lord", label: "Lord", description: "Lord", color: "#a78bfa" },
   { id: "turtle", name: "Turtle", label: "Turtle", description: "Turtle", color: "#38bdf8" },
+  { id: "blue-buff", name: "Blue buff", label: "Blue buff", description: "Blue buff", color: "#818cf8" },
+  { id: "red-buff", name: "Red buff", label: "Red buff", description: "Red buff", color: "#fb923c" },
 ];
 
 const CHIP_ALIASES: Record<string, MapChipPreset> = {
   litho: "litho", lithowanderer: "litho", minion: "minion", minions: "minion",
   turret: "turret", turrets: "turret", retri: "retribution", retribution: "retribution",
-  lord: "lord", turtle: "turtle",
+  lord: "lord", turtle: "turtle", "blue buff": "blue-buff", "purple buff": "blue-buff",
+  "red buff": "red-buff", "orange buff": "red-buff",
 };
 
 /** Older custom chips with recognizable names get the same portrait, too. */
