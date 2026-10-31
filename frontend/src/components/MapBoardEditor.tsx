@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
+import { CHIP_PRESETS, chipPreset, chipSpawnPoint, type ChipSettings } from "../lib/mapChips";
 import type { DraftPlan, Hero, MapBoard, MapChip, MapStep, MapToken } from "../lib/types";
 import { navigate } from "../lib/util";
 import { BattlefieldMap } from "./BattlefieldMap";
@@ -15,7 +16,6 @@ type DrawPath = { color: string; points: number[][]; mode?: "arrow" | "free" };
 type Tool = "move" | "pan" | "pen" | "free" | "steps" | "chip" | "erase";
 type Target = { kind: "hero" | "chip" | "step"; id: string };
 type BoardSnapshot = { tokens: MapToken[]; paths: DrawPath[]; steps: MapStep[]; chips: MapChip[] };
-type ChipSettings = Pick<MapChip, "name" | "color" | "size">;
 type Gesture =
   | { kind: "pan"; pointerId: number; sx: number; sy: number; ox: number; oy: number }
   | { kind: "drag"; pointerId: number; target: Target; sx: number; sy: number; changed: boolean }
@@ -60,6 +60,18 @@ function contrast(color: string): string {
   const hex = /^#[\da-f]{6}$/i.test(color) ? color.slice(1) : "f5b942";
   const n = parseInt(hex, 16);
   return (((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 160) ? "#111116" : "#fff";
+}
+
+function ChipPortrait({ chip }: { chip: Pick<MapChip, "name" | "color" | "preset"> }) {
+  const preset = chipPreset(chip);
+  const initials = (chip.name ?? "").trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "?";
+  return (
+    <span className="absolute inset-0 rounded-full overflow-hidden" aria-hidden="true">
+      <span className="absolute inset-0 flex items-center justify-center font-black" style={{ backgroundColor: chip.color, color: contrast(chip.color) }}>{initials}</span>
+      {preset && <img key={preset.id} src={`/map-chips/${preset.id}.webp`} alt="" draggable={false}
+        className="relative block w-full h-full object-cover" onError={(e) => { e.currentTarget.hidden = true; }} />}
+    </span>
+  );
 }
 
 /** Resolve attached starts without changing their saved fallback coordinates. */
@@ -137,6 +149,7 @@ export function MapBoardEditor({ id }: { id: number }) {
   const [stepMode, setStepMode] = useState<"arrow" | "free">("arrow");
   const [penColor, setPenColor] = useState(PEN_COLORS[0].id);
   const [chipDraft, setChipDraft] = useState<ChipSettings>(DEFAULT_CHIP);
+  const [addedNotice, setAddedNotice] = useState("");
   const [selected, setSelected] = useState<Target | null>(null);
   const [preview, setPreview] = useState<{ points: number[][]; color: string; head: boolean } | null>(null);
   const [chipPreview, setChipPreview] = useState<{ point: number[]; settings: ChipSettings } | null>(null);
@@ -157,6 +170,7 @@ export function MapBoardEditor({ id }: { id: number }) {
   const pinch = useRef<{ d0: number; m0: { x: number; y: number }; v0: { z: number; x: number; y: number } } | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const mapAspect = mapStyle === "game" && !gameMapFailed ? 1870 / 841 : 1;
+  const fullscreenHeight = typeof CSS !== "undefined" && CSS.supports("width", "100cqh") ? "100cqh" : "(100vh - 220px)";
   const selectedChip = selected?.kind === "chip" ? chips.find((c) => c.id === selected.id) : undefined;
   const selectedHero = selected?.kind === "hero" ? tokens.find((t) => t.id === selected.id) : undefined;
   const selectedStep = selected?.kind === "step" ? steps.find((s) => s.id === selected.id) : undefined;
@@ -193,11 +207,30 @@ export function MapBoardEditor({ id }: { id: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board?.id]);
 
+  // A fullscreen inspector or device rotation can resize the map while it is
+  // zoomed. Keep the transformed surface covering the viewport in that case.
+  useEffect(() => {
+    const el = area.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setView((v) => {
+      const next = clampView(v);
+      return next.x === v.x && next.y === v.y && next.z === v.z ? v : next;
+    }));
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board?.id]);
+
   useEffect(() => {
     const onFs = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+  useEffect(() => {
+    if (!addedNotice) return;
+    const timer = window.setTimeout(() => setAddedNotice(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [addedNotice]);
 
   const load = useCallback(() => {
     api.get<MapBoard>(`/maps/${id}`).then((b) => {
@@ -206,9 +239,16 @@ export function MapBoardEditor({ id }: { id: number }) {
       setTokens(data.tokens ?? []);
       setPaths(data.paths ?? []);
       setSteps(data.steps ?? []);
-      setChips(data.chips ?? []);
+      setChips((data.chips ?? []).map((chip) => {
+        const preset = chipPreset(chip);
+        return !chip.preset && preset ? { ...chip, preset: preset.id } : chip;
+      }));
       setHistory([]);
       setSelected(null);
+      setView({ z: 1, x: 0, y: 0 });
+      setTool("move");
+      setChipDraft(DEFAULT_CHIP);
+      setAddedNotice("");
       setDirty(false);
     }).catch(() => setBoard(null));
     api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
@@ -230,7 +270,7 @@ export function MapBoardEditor({ id }: { id: number }) {
 
   function chooseTool(next: Tool) {
     if (next === "chip" && selectedChip) {
-      setChipDraft({ name: selectedChip.name, color: selectedChip.color, size: selectedChip.size });
+      setChipDraft({ name: selectedChip.name, color: selectedChip.color, size: selectedChip.size, preset: selectedChip.preset });
     }
     setSelected(null);
     setTool(next);
@@ -239,7 +279,7 @@ export function MapBoardEditor({ id }: { id: number }) {
     setSelected(target);
     if (target.kind === "chip") {
       const chip = chips.find((c) => c.id === target.id);
-      if (chip) setChipDraft({ name: chip.name, color: chip.color, size: chip.size });
+      if (chip) setChipDraft({ name: chip.name, color: chip.color, size: chip.size, preset: chip.preset });
     }
   }
   function targetAt(e: React.PointerEvent): Target | null {
@@ -396,8 +436,8 @@ export function MapBoardEditor({ id }: { id: number }) {
     if (g.kind === "drag") {
       selectTarget(g.target);
     } else if (g.kind === "place") {
-      const [x, y] = point(e);
-      snapshot(); setChips((cs) => [...cs, { id: uid(), ...g.settings, x, y }]); setDirty(true);
+      const [x, y] = point(e), preset = g.settings.preset ?? chipPreset(g.settings)?.id;
+      snapshot(); setChips((cs) => [...cs, { id: uid(), ...g.settings, preset, x, y }]); setDirty(true);
     } else if (g.kind === "draw" && (g.moved || Math.hypot(e.clientX - g.sx, e.clientY - g.sy) >= 5)) {
       const end = point(e);
       const last = g.points[g.points.length - 1];
@@ -441,8 +481,32 @@ export function MapBoardEditor({ id }: { id: number }) {
 
   function updateChip(patch: Partial<ChipSettings>) {
     if (selectedChip) {
-      snapshot(); setChips((cs) => cs.map((c) => c.id === selectedChip.id ? { ...c, ...patch } : c)); setDirty(true);
-    } else setChipDraft((draft) => ({ ...draft, ...patch }));
+      const preset = selectedChip.preset ?? chipPreset(selectedChip)?.id ?? (patch.name !== undefined ? chipPreset({ name: patch.name })?.id : undefined);
+      snapshot(); setChips((cs) => cs.map((c) => c.id === selectedChip.id ? { ...c, ...patch, preset } : c)); setDirty(true);
+    } else setChipDraft((draft) => ({ ...draft, ...patch, ...(patch.name !== undefined ? { preset: undefined } : {}) }));
+  }
+  function currentChipSpawn(settings: ChipSettings) {
+    const occupied = [...tokens.map((token) => ({ x: token.x, y: token.y, size: token.size ?? HERO_SIZE })), ...chips];
+    return chipSpawnPoint(area.current?.getBoundingClientRect(), surf.current?.getBoundingClientRect(), settings.size, view.z, occupied);
+  }
+  function addChipToMap(settings: ChipSettings) {
+    const name = settings.name.trim() || "Chip", id = uid();
+    const preset = settings.preset ?? chipPreset({ name })?.id;
+    const position = currentChipSpawn(settings);
+    snapshot();
+    setChips((cs) => [...cs, { id, ...settings, name, preset, ...position }]);
+    setTool("move"); setSelected(null); setDirty(true);
+    setAddedNotice(`${name} added — drag it into position.`);
+    requestAnimationFrame(() => {
+      // Closing an inspector can resize the fullscreen map. Recompute after
+      // layout so the new chip still lands in the part the user can see.
+      const settled = currentChipSpawn(settings);
+      setChips((cs) => cs.map((chip) => chip.id === id ? { ...chip, ...settled } : chip));
+      const rect = area.current?.getBoundingClientRect();
+      if (!isFs && rect && (rect.top < 60 || rect.bottom > window.innerHeight - 65)) {
+        area.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
   }
   function addToken(hero: string) {
     snapshot();
@@ -488,6 +552,56 @@ export function MapBoardEditor({ id }: { id: number }) {
     const list = [...heroes].sort((a, b) => (rank[a.meta_status] ?? 9) - (rank[b.meta_status] ?? 9) || b.clover_rating - a.clover_rating);
     return (q ? list.filter((h) => h.name.toLowerCase().includes(q)) : list).slice(0, 60);
   }, [heroes, heroQ]);
+
+  const chipEditor = (tool === "chip" || selectedChip) && (
+    <div className="border-b border-edge bg-raised/35 px-3.5 py-3 space-y-2.5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex-1 min-w-32">
+          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.13em] text-amber">
+            <CirclePlus size={14} /> {selectedChip ? "Edit chip" : "Place chips"}
+          </div>
+          <p className="text-[11px] text-mute mt-1">
+            {selectedChip ? "Changes apply to this chip. Drag it on the map to move it." : "Name it, pick a color and size, then add it or tap anywhere on the map."}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {selectedChip && <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim" onClick={() => removeChip(selectedChip.id)}>
+            <Trash2 size={12} /> Remove
+          </button>}
+          <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px]" onClick={() => { setSelected(null); setTool("move"); }}>
+            <X size={12} /> Done
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2.5">
+        <label className="block min-w-36 flex-1 max-w-64">
+          <span className="label block mb-1">Chip name</span>
+          <input className="input !py-1.5" aria-label="Chip name" maxLength={24} value={chipSettings.name}
+            onChange={(e) => updateChip({ name: e.target.value })} placeholder="e.g. Minion" />
+        </label>
+        <div>
+          <span className="label block mb-1">Color</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {CHIP_COLORS.map((c) => <button key={c.id} type="button" title={c.label} aria-label={`Chip color: ${c.label}`}
+              aria-pressed={chipSettings.color.toLowerCase() === c.id}
+              className={`rounded-full border-2 ${chipSettings.color.toLowerCase() === c.id ? "border-text" : "border-transparent"}`}
+              style={{ backgroundColor: c.id, width: 21, height: 21 }} onClick={() => updateChip({ color: c.id })} />)}
+            <input type="color" aria-label="Custom chip color" title="Choose any color" value={chipSettings.color}
+              onChange={(e) => updateChip({ color: e.target.value })} className="w-7 h-7 p-0.5 rounded border border-edge-2 bg-raised cursor-pointer" />
+          </div>
+        </div>
+        <label className="block min-w-32 flex-1 max-w-52">
+          <span className="label flex justify-between mb-1"><span>Chip size</span><span className="text-mute">{chipSettings.size}px</span></span>
+          <input type="range" aria-label="Chip size" min={32} max={112} step={4} value={chipSettings.size}
+            onChange={(e) => updateChip({ size: Number(e.target.value) })} className="w-full h-2 cursor-pointer"
+            style={{ accentColor: chipSettings.color }} />
+        </label>
+        {!selectedChip && <button type="button" className="btn-primary !py-1.5 !text-[11px]" onClick={() => addChipToMap(chipSettings)}>
+          <CirclePlus size={13} /> Add to map
+        </button>}
+      </div>
+    </div>
+  );
 
   if (!board) return <Spinner />;
 
@@ -555,6 +669,30 @@ export function MapBoardEditor({ id }: { id: number }) {
             </span>
           </div>
 
+          <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
+            <div className="map-quick-chips-heading flex items-center justify-between gap-3 mb-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-amber whitespace-nowrap">Quick chips</span>
+              <span role="status" aria-live="polite" className="text-[10px] text-mute truncate text-right">
+                {addedNotice || "Click to add · drag to position"}
+              </span>
+            </div>
+            <div className="map-quick-chip-list grid grid-cols-6 gap-1 sm:flex sm:gap-3" role="group" aria-label="Objective chips">
+              {CHIP_PRESETS.map((preset) => (
+                <button key={preset.id} type="button" data-chip-preset={preset.id}
+                  aria-label={`Add ${preset.description} chip`} title={`Add ${preset.description} to the map`}
+                  onClick={() => addChipToMap({ name: preset.name, color: preset.color, size: 52, preset: preset.id })}
+                  className="group flex flex-col items-center gap-1 rounded-md px-0.5 sm:px-1 py-0.5 hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-crim transition-colors">
+                  <span className="relative rounded-full border-2 shadow-[0_2px_8px_rgba(0,0,0,0.55)]" style={{ borderColor: preset.color }}>
+                    <img src={`/map-chips/${preset.id}.webp`} alt="" draggable={false} width={38} height={38}
+                      className="block rounded-full object-cover" style={{ width: "clamp(28px, 9vw, 38px)", height: "clamp(28px, 9vw, 38px)" }} />
+                    <span className="absolute -right-1 -bottom-0.5 flex items-center justify-center rounded-full bg-raised border border-edge-2 text-leaf w-3.5 h-3.5 text-[10px] leading-none">+</span>
+                  </span>
+                  <span className="text-[9.5px] font-bold text-mute group-hover:text-text leading-none whitespace-nowrap">{preset.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {tool === "steps" && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-leaf/20 bg-leaf/[0.045]">
               <div className="flex items-center gap-2 text-leaf">
@@ -578,164 +716,127 @@ export function MapBoardEditor({ id }: { id: number }) {
             </div>
           )}
 
-          {(tool === "chip" || selectedChip) && (
-            <div className="border-b border-edge bg-raised/35 px-3.5 py-3 space-y-2.5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.13em] text-amber">
-                    <CirclePlus size={14} /> {selectedChip ? "Edit chip" : "Place chips"}
-                  </div>
-                  <p className="text-[11px] text-mute mt-1">
-                    {selectedChip ? "Changes apply to this chip. Drag it on the map to move it." : "Name it, pick a color and size, then tap or drag on the map. Place as many as you like."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {selectedChip && <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim" onClick={() => removeChip(selectedChip.id)}>
-                    <Trash2 size={12} /> Remove
-                  </button>}
-                  <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px]" onClick={() => { setSelected(null); setTool("move"); }}>
-                    <X size={12} /> Done
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-end gap-x-4 gap-y-2.5">
-                <label className="block min-w-36 flex-1 max-w-64">
-                  <span className="label block mb-1">Chip name</span>
-                  <input className="input !py-1.5" aria-label="Chip name" maxLength={24} value={chipSettings.name}
-                    onChange={(e) => updateChip({ name: e.target.value })} placeholder="e.g. Minion" />
-                </label>
-                <div>
-                  <span className="label block mb-1">Color</span>
-                  <div className="flex items-center gap-1.5">
-                    {CHIP_COLORS.map((c) => <button key={c.id} type="button" title={c.label} aria-label={`Chip color: ${c.label}`}
-                      aria-pressed={chipSettings.color.toLowerCase() === c.id}
-                      className={`rounded-full border-2 ${chipSettings.color.toLowerCase() === c.id ? "border-text" : "border-transparent"}`}
-                      style={{ backgroundColor: c.id, width: 21, height: 21 }} onClick={() => updateChip({ color: c.id })} />)}
-                    <input type="color" aria-label="Custom chip color" title="Choose any color" value={chipSettings.color}
-                      onChange={(e) => updateChip({ color: e.target.value })} className="w-7 h-7 p-0.5 rounded border border-edge-2 bg-raised cursor-pointer" />
-                  </div>
-                </div>
-                <label className="block min-w-32 flex-1 max-w-52">
-                  <span className="label flex justify-between mb-1"><span>Chip size</span><span className="text-mute">{chipSettings.size}px</span></span>
-                  <input type="range" aria-label="Chip size" min={32} max={112} step={4} value={chipSettings.size}
-                    onChange={(e) => updateChip({ size: Number(e.target.value) })} className="w-full h-2 cursor-pointer"
-                    style={{ accentColor: chipSettings.color }} />
-                </label>
-              </div>
-            </div>
-          )}
-          {tool === "move" && selectedHero && (
-            <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
-              <span className="text-[11px] font-extrabold text-mute">{selectedHero.hero}</span>
-              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-faint">
-                Hero size <input type="range" aria-label="Hero size" min={32} max={112} step={4} value={selectedHero.size ?? HERO_SIZE}
-                  onChange={(e) => { snapshot(); setTokens((ts) => ts.map((t) => t.id === selectedHero.id ? { ...t, size: Number(e.target.value) } : t)); setDirty(true); }} />
-                <span className="text-mute">{selectedHero.size ?? HERO_SIZE}px</span>
-              </label>
-              <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => removeToken(selectedHero.id)}>
-                <Trash2 size={12} /> Remove hero
-              </button>
-              <button type="button" aria-label="Close marker editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
-            </div>
-          )}
-          {tool === "move" && selectedStep && (
-            <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
-              <span className="text-[11px] font-extrabold text-mute">Step {selectedStep.number}</span>
-              <span className="text-[11px] text-faint">Drag to reposition. Removing it also removes the steps after it.</span>
-              <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => deleteStep(selectedStep.id)}>
-                <Trash2 size={12} /> Remove step
-              </button>
-              <button type="button" aria-label="Close step editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
-            </div>
-          )}
+          {tool === "chip" && !selectedChip && !isFs && chipEditor}
+          {/* Selected marker controls follow the map so it stays put after a drag. */}
+          <div className={isFs ? "map-fullscreen-workspace flex flex-col flex-1 min-h-0 overflow-hidden" : ""}>
+            <div className={isFs ? "flex-1 min-h-0 min-w-0 grid place-items-center p-2 overflow-hidden" : "p-2 sm:p-3"}
+              style={isFs ? { containerType: "size" } : undefined}>
+              <div ref={area} data-map-viewport
+                className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : tool === "steps" || tool === "chip" ? "cursor-crosshair" : ""}`}
+                style={{ aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
+                  ...(isFs ? { width: `min(100%, calc(${fullscreenHeight} * ${mapAspect}))` } : {}) }}
+                onPointerDown={onAreaDown} onPointerMove={onAreaMove} onPointerUp={(e) => onAreaUp(e)}
+                onPointerCancel={(e) => onAreaUp(e, true)} onContextMenu={(e) => e.preventDefault()}>
+                <div ref={surf} data-map-surface className="absolute inset-0"
+                  style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: "0 0" }}>
+                  {mapStyle === "game" && !gameMapFailed ? (
+                    <img src={GAME_SRC} alt="Land of Dawn battlefield" draggable={false}
+                      onError={() => { setGameMapFailed(true); setMapStyle("diagram"); }}
+                      className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none" />
+                  ) : <BattlefieldMap className="absolute inset-0 pointer-events-none" />}
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
+                    {paths.map((p, i) => <PathShape key={`path-${i}`} points={p.points} color={p.color} aspect={mapAspect}
+                      head={p.mode ? p.mode === "arrow" : p.points.length === 2} />)}
+                    {steps.map((s) => <PathShape key={s.id} points={resolvedPoints(s, steps, tokens, chips)} color={s.color} aspect={mapAspect} head />)}
+                    {preview && <PathShape points={preview.points} color={preview.color} aspect={mapAspect} head={preview.head} fade />}
+                  </svg>
 
-          <div className={isFs ? "flex-1 min-h-0 grid place-items-center p-2 overflow-auto" : "p-2 sm:p-3"}>
-            <div ref={area} data-map-viewport
-              className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : tool === "steps" || tool === "chip" ? "cursor-crosshair" : ""}`}
-              style={{ aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
-                ...(isFs ? { width: `min(100%, calc((100dvh - 220px) * ${mapAspect}))` } : {}) }}
-              onPointerDown={onAreaDown} onPointerMove={onAreaMove} onPointerUp={(e) => onAreaUp(e)}
-              onPointerCancel={(e) => onAreaUp(e, true)} onContextMenu={(e) => e.preventDefault()}>
-              <div ref={surf} data-map-surface className="absolute inset-0"
-                style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: "0 0" }}>
-                {mapStyle === "game" && !gameMapFailed ? (
-                  <img src={GAME_SRC} alt="Land of Dawn battlefield" draggable={false}
-                    onError={() => { setGameMapFailed(true); setMapStyle("diagram"); }}
-                    className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none" />
-                ) : <BattlefieldMap className="absolute inset-0 pointer-events-none" />}
-                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
-                  {paths.map((p, i) => <PathShape key={`path-${i}`} points={p.points} color={p.color} aspect={mapAspect}
-                    head={p.mode ? p.mode === "arrow" : p.points.length === 2} />)}
-                  {steps.map((s) => <PathShape key={s.id} points={resolvedPoints(s, steps, tokens, chips)} color={s.color} aspect={mapAspect} head />)}
-                  {preview && <PathShape points={preview.points} color={preview.color} aspect={mapAspect} head={preview.head} fade />}
-                </svg>
-
-                {tokens.map((t) => {
-                  const size = t.size ?? HERO_SIZE;
-                  const target: Target = { kind: "hero", id: t.id };
-                  return (
-                    <button key={t.id} type="button" data-map-kind="hero" data-map-id={t.id} data-map-hero={t.hero}
-                      aria-label={`${t.hero} hero token`} title={`${t.hero} (${t.side}) — select to resize or remove`}
-                      onKeyDown={(e) => onMarkerKey(e, target)}
-                      onDoubleClick={() => { if (tool === "move") removeToken(t.id); }}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ${SIDE_RING[t.side]} shadow-[0_4px_14px_rgba(0,0,0,0.65)] ${selected?.kind === "hero" && selected.id === t.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
-                      style={{ left: `${t.x}%`, top: `${t.y}%`, width: size, height: size, touchAction: "none" }}>
-                      <HeroImg name={t.hero} size={size} eager className="rounded-full block" />
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9px] font-bold bg-black/80 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[100px] truncate pointer-events-none">{t.hero}</span>
-                    </button>
-                  );
-                })}
-                {chips.map((c) => {
-                  const target: Target = { kind: "chip", id: c.id };
-                  const initials = c.name.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "?";
-                  return (
-                    <button key={c.id} type="button" data-map-kind="chip" data-map-id={c.id} data-map-chip={c.name}
-                      aria-label={`${c.name || "Chip"} chip`} title={`${c.name || "Chip"} — select to edit or resize`}
-                      onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (tool === "move") removeChip(c.id); }}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black flex items-center justify-center ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
-                      style={{ left: `${c.x}%`, top: `${c.y}%`, width: c.size, height: c.size, backgroundColor: c.color,
-                        color: contrast(c.color), fontSize: Math.max(12, c.size * 0.32), touchAction: "none" }}>
-                      {initials}
-                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9.5px] text-white font-bold bg-black/85 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[140px] truncate pointer-events-none">{c.name || "Chip"}</span>
-                    </button>
-                  );
-                })}
-                {steps.map((s) => {
-                  const end = endpoint(s);
-                  if (!end) return null;
-                  const target: Target = { kind: "step", id: s.id };
-                  return (
-                    <button key={s.id} type="button" data-map-kind="step" data-map-id={s.id} data-map-step={s.number}
-                      aria-label={`Step ${s.number}`} title={`Step ${s.number} — drag from here in Steps to continue`}
-                      onKeyDown={(e) => onMarkerKey(e, target)}
-                      className={`absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 shadow-[0_2px_9px_rgba(0,0,0,0.8)] flex items-center justify-center text-[11px] font-black ${selected?.kind === "step" && selected.id === s.id ? "outline outline-2 outline-offset-2 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : tool === "steps" ? "cursor-crosshair" : ""}`}
-                      style={{ left: `${end[0]}%`, top: `${end[1]}%`, width: 26, height: 26, backgroundColor: s.color, color: contrast(s.color), touchAction: "none" }}>
-                      {s.number}
-                    </button>
-                  );
-                })}
-                {chipPreview && <div aria-hidden="true" className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 opacity-60 pointer-events-none flex items-center justify-center font-black"
-                  style={{ left: `${chipPreview.point[0]}%`, top: `${chipPreview.point[1]}%`, width: chipPreview.settings.size, height: chipPreview.settings.size,
-                    color: contrast(chipPreview.settings.color), backgroundColor: chipPreview.settings.color }}>
-                  {chipPreview.settings.name.slice(0, 1).toUpperCase()}
-                </div>}
-              </div>
-              <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
-                {view.z > 1 && <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md px-1.5 py-1 text-[9.5px] font-bold text-mute hover:text-text"
-                  title="Reset zoom" onClick={() => setView({ z: 1, x: 0, y: 0 })}>{Math.round(view.z * 100)}%</button>}
-                <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom in" aria-label="Zoom in"
-                  onClick={() => setView((v) => zoomStep(v, 1.3))}><ZoomIn size={14} /></button>
-                <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom out" aria-label="Zoom out"
-                  onClick={() => setView((v) => zoomStep(v, 1 / 1.3))}><ZoomOut size={14} /></button>
+                  {tokens.map((t) => {
+                    const size = t.size ?? HERO_SIZE;
+                    const target: Target = { kind: "hero", id: t.id };
+                    return (
+                      <button key={t.id} type="button" data-map-kind="hero" data-map-id={t.id} data-map-hero={t.hero}
+                        aria-label={`${t.hero} hero token`} title={`${t.hero} (${t.side}) — select to resize or remove`}
+                        onKeyDown={(e) => onMarkerKey(e, target)}
+                        onDoubleClick={() => { if (tool === "move") removeToken(t.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ${SIDE_RING[t.side]} shadow-[0_4px_14px_rgba(0,0,0,0.65)] ${selected?.kind === "hero" && selected.id === t.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
+                        style={{ left: `${t.x}%`, top: `${t.y}%`, width: size, height: size, touchAction: "none" }}>
+                        <HeroImg name={t.hero} size={size} eager className="rounded-full block" />
+                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9px] font-bold bg-black/80 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[100px] truncate pointer-events-none">{t.hero}</span>
+                      </button>
+                    );
+                  })}
+                  {chips.map((c) => {
+                    const target: Target = { kind: "chip", id: c.id };
+                    return (
+                      <button key={c.id} type="button" data-map-kind="chip" data-map-id={c.id} data-map-chip={c.name}
+                        aria-label={`${c.name || "Chip"} chip`} title={`${c.name || "Chip"} — select to edit or resize`}
+                        onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (tool === "move") removeChip(c.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
+                        style={{ left: `${c.x}%`, top: `${c.y}%`, width: c.size, height: c.size, borderColor: c.color,
+                          fontSize: Math.max(12, c.size * 0.32), touchAction: "none" }}>
+                        <ChipPortrait chip={c} />
+                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9.5px] text-white font-bold bg-black/85 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[140px] truncate pointer-events-none">{c.name || "Chip"}</span>
+                      </button>
+                    );
+                  })}
+                  {steps.map((s) => {
+                    const end = endpoint(s);
+                    if (!end) return null;
+                    const target: Target = { kind: "step", id: s.id };
+                    return (
+                      <button key={s.id} type="button" data-map-kind="step" data-map-id={s.id} data-map-step={s.number}
+                        aria-label={`Step ${s.number}`} title={`Step ${s.number} — drag from here in Steps to continue`}
+                        onKeyDown={(e) => onMarkerKey(e, target)}
+                        className={`absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 shadow-[0_2px_9px_rgba(0,0,0,0.8)] flex items-center justify-center text-[11px] font-black ${selected?.kind === "step" && selected.id === s.id ? "outline outline-2 outline-offset-2 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : tool === "steps" ? "cursor-crosshair" : ""}`}
+                        style={{ left: `${end[0]}%`, top: `${end[1]}%`, width: 26, height: 26, backgroundColor: s.color, color: contrast(s.color), touchAction: "none" }}>
+                        {s.number}
+                      </button>
+                    );
+                  })}
+                  {chipPreview && <div aria-hidden="true" className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 opacity-60 pointer-events-none font-black"
+                    style={{ left: `${chipPreview.point[0]}%`, top: `${chipPreview.point[1]}%`, width: chipPreview.settings.size, height: chipPreview.settings.size,
+                      borderColor: chipPreview.settings.color, fontSize: Math.max(12, chipPreview.settings.size * 0.32) }}>
+                    <ChipPortrait chip={chipPreview.settings} />
+                  </div>}
+                </div>
+                <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+                  {view.z > 1 && <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md px-1.5 py-1 text-[9.5px] font-bold text-mute hover:text-text"
+                    title="Reset zoom" onClick={() => setView({ z: 1, x: 0, y: 0 })}>{Math.round(view.z * 100)}%</button>}
+                  <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom in" aria-label="Zoom in"
+                    onClick={() => setView((v) => zoomStep(v, 1.3))}><ZoomIn size={14} /></button>
+                  <button type="button" className="bg-black/65 backdrop-blur-sm border border-edge-2 rounded-md p-1.5 text-mute hover:text-text" title="Zoom out" aria-label="Zoom out"
+                    onClick={() => setView((v) => zoomStep(v, 1 / 1.3))}><ZoomOut size={14} /></button>
+                </div>
               </div>
             </div>
+            {(selectedChip || (isFs && tool === "chip") || (tool === "move" && (selectedHero || selectedStep))) && (
+              <div className={isFs ? "map-fullscreen-inspector" : ""}>
+                {(selectedChip || (isFs && tool === "chip")) && chipEditor}
+                {tool === "move" && selectedHero && (
+                  <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
+                    <span className="text-[11px] font-extrabold text-mute">{selectedHero.hero}</span>
+                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-faint">
+                      Hero size <input type="range" aria-label="Hero size" min={32} max={112} step={4} value={selectedHero.size ?? HERO_SIZE}
+                        onChange={(e) => { snapshot(); setTokens((ts) => ts.map((t) => t.id === selectedHero.id ? { ...t, size: Number(e.target.value) } : t)); setDirty(true); }} />
+                      <span className="text-mute">{selectedHero.size ?? HERO_SIZE}px</span>
+                    </label>
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => removeToken(selectedHero.id)}>
+                      <Trash2 size={12} /> Remove hero
+                    </button>
+                    <button type="button" aria-label="Close marker editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
+                  </div>
+                )}
+                {tool === "move" && selectedStep && (
+                  <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
+                    <span className="text-[11px] font-extrabold text-mute">Step {selectedStep.number}</span>
+                    <span className="text-[11px] text-faint">Drag to reposition. Removing it also removes the steps after it.</span>
+                    <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px] !text-crim ml-auto" onClick={() => deleteStep(selectedStep.id)}>
+                      <Trash2 size={12} /> Remove step
+                    </button>
+                    <button type="button" aria-label="Close step editor" onClick={() => setSelected(null)} className="text-faint hover:text-text"><X size={14} /></button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="grid sm:grid-cols-2 gap-3 px-3.5 pb-3.5">
+
+          {!isFs && <div className="grid sm:grid-cols-2 gap-3 px-3.5 pb-3.5">
             <Field label="Opponent (optional)"><input className="input" value={board.opponent}
               onChange={(e) => { setBoard({ ...board, opponent: e.target.value }); setDirty(true); }} /></Field>
             <Field label="Notes / win condition"><input className="input" value={board.notes}
               onChange={(e) => { setBoard({ ...board, notes: e.target.value }); setDirty(true); }} /></Field>
-          </div>
+          </div>}
         </div>
 
         <div className="card p-4 lg:sticky lg:top-6">

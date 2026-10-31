@@ -389,6 +389,8 @@ export interface MapToken {
   size?: number;
 }
 
+export type MapChipPreset = "litho" | "minion" | "turret" | "retribution" | "lord" | "turtle";
+
 export interface MapChip {
   id: string;
   name: string;
@@ -396,6 +398,7 @@ export interface MapChip {
   size: number;
   x: number;
   y: number;
+  preset?: MapChipPreset;
 }
 
 export interface MapStep {
