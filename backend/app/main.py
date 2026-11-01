@@ -18,6 +18,7 @@ from .routers import (
     events,
     heroes,
     intel,
+    esports,
     map_guide,
     maps,
     notifications,
@@ -51,7 +52,7 @@ app.add_middleware(
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
-               programs, files, tournaments, intel, archive):
+               programs, files, tournaments, intel, archive, esports):
     api.include_router(module.router)
 app.include_router(api)
 
@@ -76,4 +77,14 @@ def startup() -> None:
                 pass  # column already exists
     with SessionLocal() as db:
         if seed_if_empty(db):
-            logger.info("Database seeded: accounts, heroes, settings (demo data skipped unless CLOVER_DEMO_DATA=1).")
+            logger.info("Database bootstrapped: admin, heroes and settings (example accounts/data require CLOVER_DEMO_DATA=1).")
+    # This worker is read-only against Aerena and writes only its own public
+    # esports tables. A database lease prevents duplicate refreshes per deployment.
+    from .aerena_service import start_worker
+    start_worker()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    from .aerena_service import stop_worker
+    stop_worker()

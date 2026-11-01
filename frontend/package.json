@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test:map-chips": "node --test tests/map-chips.test.mjs",
     "test:map": "node --test tests/map-chips.test.mjs tests/map-zones.test.mjs tests/map-elements.test.mjs",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test:esports": "node --test tests/esports.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.3.0",

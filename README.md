@@ -31,6 +31,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Strategy & Knowledge Base** | Playbook notes by category (macro, objective, teamfight, composition, opponent file, meta), pinned doctrine, squad-wide read access |
 | **Draft Lab** | Saved pick/ban boards: 5+5 bans, lane picks both sides, status idea → testing → approved |
 | **Calendar & Events** | Tournaments, scrims, training and review deadlines in one feed |
+| **Esports** | Saved Aerena seasons and matches, source-reported team/player stats and ordered draft coverage when available, plus bounded evidence-based analysis |
 
 ## Roles & permissions
 
@@ -82,30 +83,85 @@ absolute paths). Symptom: `Fatal error in launcher: Unable to create process...`
 `start-arena.bat` detects this and rebuilds automatically; by hand, delete
 `backend\.venv` and recreate it with `py -3 -m venv backend\.venv`.
 
-The SQLite database is created and **seeded on first boot** — roster, 40+ heroes,
-a five-week training block (Week 04, *OBJECTIVE CONTROL*, 80%), 12 scrims with full
-stat sheets, the Scrim #23 model review, the ban board, playbook notes, draft boards
-and development entries. One loss (Scrim #31) is deliberately unreviewed so the
-*NO REVIEW, NO NEXT SCRIM* rule is visible from the first login.
+On first boot, the SQLite database creates the bootstrap admin, hero defaults and
+team settings. Example roster accounts, scrims and other fictional operational
+content are **opt-in**: set `CLOVER_DEMO_DATA=1` before the first startup to add
+them. The bundled hero default values are not a verified live patch/meta feed.
+Existing databases are not reseeded. Data-wipe actions in the app are admin-only.
 
-Delete `backend/data/clover.db` and restart the API to reset the world.
+The development bootstrap login defaults to `admin@9clover.gg` / `clover2026`.
+Set `CLOVER_ADMIN_EMAIL`, `CLOVER_ADMIN_PASSWORD` and a strong `CLOVER_SECRET_KEY`
+**before** exposing the application. Bootstrap credentials are used only when
+the database is first created; changing them later does not change an existing
+account. If example data is opted in, the example accounts use the same initial
+password and must also be changed or removed before real use.
 
-## Seeded accounts (password `clover2026` for all)
+## Aerena Esports and 9 Clover AI
 
-| Account | Role | Lane |
-| --- | --- | --- |
-| admin@9clover.gg (DRE) | Admin | — |
-| captain@9clover.gg (KAZE) | Captain | ROAM |
-| coach@9clover.gg (ICHIZU) | Coach | — |
-| rinji@9clover.gg (RINJI) | Player | EXP |
-| sora@9clover.gg (SORA) | Player | JUNGLE |
-| mira@9clover.gg (MIRA) | Player | MID |
-| tobi@9clover.gg (TOBI) | Player | GOLD |
-| pip@9clover.gg (PIP) | Player (sub) | EXP |
-| analyst@9clover.gg (NOX) | Analyst | — |
+The Esports page reads match data from the app's own database, not an Aerena
+API from the browser. Team logos, when available, load directly from Aerena's
+media host (without a referrer), so that host can see the viewer's IP. A backend
+worker tries to discover the read-only actions used by
+Aerena's public site, save its series/season/hero catalog, and refresh matches
+in the latest dated season of each series. Changed match and detail observations
+are retained with source timestamps and snapshots; source errors do not erase the
+last successful data. A staff member (admin, captain or coach) can queue a full
+refresh or load an older season; viewing a match can fetch its additional
+player stats. Searching and AI analysis use saved public records only.
 
-Change the bootstrap admin via `backend/.env` — see `backend/.env.example`
-(`CLOVER_SECRET_KEY`, `CLOVER_ADMIN_EMAIL`, `CLOVER_ADMIN_PASSWORD`, …).
+- This is an **undocumented website integration**, not an official or stable
+  Aerena API. Deployments may change the action IDs, format or access rules.
+  Confirm that your planned automated and commercial use is permitted by Aerena;
+  public availability alone is not a reuse licence. Respect their limits.
+- Aerena independently compiles community data. A source verification flag is
+  displayed when present, but is not independent verification. Coverage varies;
+  the season-level match request is not proven to include every stage, and
+  missing games, stats, heroes or drafts remain unknown. The app only shows a
+  combined draft sequence where the source provides the full standard mapping.
+- Set `CLOVER_AERENA_ENABLED=0` to disable sync. Default interval is two hours
+  (`CLOVER_AERENA_SYNC_SECONDS`, minimum 300 seconds); failures retry after at
+  most 15 minutes. The page reports last successful full sync and errors.
+  This environment could not directly reach Aerena during development, so live
+  ingestion must be verified from the actual host; mocked tests are not proof
+  of provider connectivity or complete coverage.
+- A persistent database, running backend worker, outbound HTTPS to Aerena,
+  backups, storage monitoring and operational alerting are required. Snapshots
+  grow over time; plan retention and storage. Multi-process workers share a DB
+  lease, but a sleeping/serverless deployment will not run continuously. Do not
+  claim 24/7 freshness without monitoring the actual service.
+
+### Optional DeepSeek match analysis
+
+Set `DEEPSEEK_API_KEY` in the **backend environment** (see
+`backend/.env.example`); never put it in frontend variables, source control or
+chat. With no key, provider failure, or an exhausted quota, the UI returns a
+labelled facts-only summary rather than pretending to answer the question. A
+submitted match question sends that explicit question and bounded saved public Aerena
+match evidence to DeepSeek. Scene analysis uses at most the first eight matches
+shown by the current filter, not a complete season. Neither path automatically
+retrieves private Archive items, team boards, credentials or chat history; do not
+put secrets or private notes in the question. Provider requests are limited by
+`CLOVER_DEEPSEEK_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
+failed requests count). The key, provider access, quotas and outbound HTTPS to
+`api.deepseek.com` must all work on the deployed backend.
+
+Responses are interpretations, not recorded coach reasoning, and should be
+checked against the linked source. They are not stored as verified facts, and
+neither source refresh nor conversations automatically retrain the model. This
+integration does **not** yet provide verified live Original/Advanced Server patch
+feeds, a calibrated prediction model, or automatic team-specific draft
+recommendations. It cannot establish why a decision was made without evidence.
+
+## Tests
+
+```bash
+cd backend && CLOVER_AERENA_ENABLED=0 python -m unittest discover -s tests -v
+cd ../frontend && npm run typecheck && npm run test:map && npm run test:esports && npm run build
+```
+
+The Aerena tests use fixtures and mocked provider responses; they do not call or
+seed Aerena or DeepSeek. Run a separate authorized connectivity check and monitor
+the in-app source status in the deployment environment.
 
 ---
 

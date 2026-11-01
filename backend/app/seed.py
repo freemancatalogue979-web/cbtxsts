@@ -42,7 +42,7 @@ def d(days: int) -> date:
 # ---------------------------------------------------------------------------
 # People
 # ---------------------------------------------------------------------------
-def seed_users(db: Session) -> dict[str, User]:
+def seed_users(db: Session, *, include_demo: bool = False) -> dict[str, User]:
     password = hash_password(DEFAULT_ADMIN_PASSWORD)
     rows = [
         ("admin", DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_NAME, DEFAULT_ADMIN_IGN, ROLE_ADMIN, "", False),
@@ -57,6 +57,8 @@ def seed_users(db: Session) -> dict[str, User]:
     ]
     users: dict[str, User] = {}
     for key, email, name, ign, role, lane, roster in rows:
+        if key != "admin" and not include_demo:
+            continue  # Example roster/accounts are opt-in, not bootstrap essentials.
         u = User(
             email=email,
             password_hash=password,
@@ -873,30 +875,34 @@ def seed_development(db: Session, users: dict[str, User]) -> None:
     db.flush()
 
 
-def seed_settings(db: Session) -> None:
-    db.add(TeamSettings(
-        id=1,
-        current_weakness="Late-game decision making",
-        weakness_category="MACRO",
-        weakness_drills_target=4,
-        season_name="Season 36 — ADM Clash qualifier run",
-    ))
+def seed_settings(db: Session, *, include_demo: bool = False) -> None:
+    if include_demo:
+        db.add(TeamSettings(
+            id=1,
+            current_weakness="Late-game decision making",
+            weakness_category="MACRO",
+            weakness_drills_target=4,
+            season_name="Season 36 — ADM Clash qualifier run",
+        ))
+    else:
+        db.add(TeamSettings(id=1))
     db.flush()
 
 
 # ---------------------------------------------------------------------------
 def seed_if_empty(db: Session) -> bool:
-    """Seed the essentials (accounts, heroes, settings) when the DB has no users.
+    """Seed the bootstrap admin, hero defaults and settings on an empty DB.
 
-    Demo/scrim content (pools, training block, scrims, bans, strategy, drafts,
-    events, development entries) is only seeded when CLOVER_DEMO_DATA=1 so new
-    environments start clean by default. Returns True if seeded."""
+    Example accounts and demo/scrim content (pools, training, scrims, bans,
+    strategy, drafts, events and development entries) require an explicit
+    truthy CLOVER_DEMO_DATA flag. Returns True if seeded."""
     if db.scalar(select(func.count()).select_from(User)):
         return False
-    users = seed_users(db)
+    demo = os.getenv("CLOVER_DEMO_DATA", "").strip().lower() in {"1", "true", "yes", "on"}
+    users = seed_users(db, include_demo=demo)
     heroes = seed_heroes(db)
-    seed_settings(db)
-    if os.getenv("CLOVER_DEMO_DATA"):
+    seed_settings(db, include_demo=demo)
+    if demo:
         seed_pools(db, users, heroes)
         seed_training(db, users)
         seed_scrims(db, users)

@@ -102,7 +102,7 @@ export default function App() {
       page = <IntelPage />;
       break;
     case "esports":
-      page = <EsportsPage />;
+      page = <EsportsPage me={user} />;
       break;
     case "mlbb":
       page = <AccountMLBBPage />;
