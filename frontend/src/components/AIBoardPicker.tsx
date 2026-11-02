@@ -58,7 +58,7 @@ export function AIBoardPicker({ initialDrafts, initialMaps, onApply, onCancel }:
   return <div className="space-y-4">
     <div className="flex gap-3 rounded-lg border border-leaf/20 bg-leaf/5 p-3">
       <ShieldCheck size={17} className="text-leaf shrink-0 mt-0.5" />
-      <p className="text-[11px] text-mute leading-relaxed">Choose up to two saved drafts and two saved maps. Their latest saved contents and notes, including team edits, are sent to the external AI provider with your next message only. Unsaved edits and Archive items are not included.</p>
+      <p className="text-[11px] text-mute leading-relaxed">Choose up to two saved drafts and two saved maps. Their latest saved contents and notes, including team edits, may be sent to the external AI provider with your next message only. Unsaved edits and Archive items are not included.</p>
     </div>
     <label className="relative block"><span className="sr-only">Search saved boards</span><Search size={14} className="absolute left-3 top-3 text-mute pointer-events-none" />
       <input className="input !pl-9 !text-[12px]" maxLength={100} placeholder="Search board name or opponent…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>

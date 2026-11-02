@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import re
 from typing import Annotated, Literal
 from uuid import uuid4
 
@@ -215,7 +216,7 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
             if state["configured"]
             else "The AI provider is not configured or the saved key cannot be unlocked."
         ),
-        "knowledge": "Saved community esports and hero snapshots, bundled historical profiles and approved community notes; bounded retrieval.",
+        "knowledge": "MLBB game knowledge, saved hero and esports records, private memory and reviewed community notes.",
         "patch_feed": "not connected",
         "web_search": (
             "available when enabled and the provider is configured; connectivity not verified"
@@ -563,8 +564,6 @@ def send_message(
         raise HTTPException(status_code=403, detail="Only admins can request AI platform-change proposals.")
     from .. import ai_actions
     action_kinds = ai_actions.intent(db, question) if user.role == "admin" else []
-    if data.request_action and not action_kinds:
-        raise HTTPException(status_code=422, detail="Specify a draft, strategy, hero, patch label or equipment change to propose.")
     token = uuid4().hex
     now = utcnow()
     lock = db.execute(
@@ -598,8 +597,18 @@ def send_message(
                 source["auto_selected"] = True
         prefs = service.settings_for(db, user.id)
         history, previous_user = service.recent_history(db, conversation_id, prefs.use_history)
+        if user.role == "admin" and not action_kinds:
+            action_kinds = ai_actions.followup_intent(db, question, history)
+        if "set_draft_patch" in action_kinds:
+            if re.search(r"\b(default|global|new boards?)\b", question, re.I):
+                action_kinds.remove("set_draft_patch")
+            elif data.draft_ids and "set_patch" in action_kinds:
+                action_kinds.remove("set_patch")
+        if data.request_action and not action_kinds:
+            raise HTTPException(status_code=422, detail="Specify a draft, strategy, hero, patch label or equipment change to propose.")
         facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources,
-                                                include_auto_esports=data.auto_esports)
+                                                include_auto_esports=data.auto_esports,
+                                                include_season_aggregate=not bool(data.match_ids))
         facts.update(board_facts)
         sources.extend(board_sources)
         from .. import ai_saved
@@ -626,8 +635,18 @@ def send_message(
         if learning_status != "none":
             facts["memory_action"] = {"status": learning_status, "topic": learned.topic if learned else None,
                                       "notice": "Server-confirmed private memory result; a separate notice is shown to the member."}
-        output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports, action_kinds)
-        sources.extend(output.get("sources", []))
+        clarification = ai_actions.patch_clarification(question, action_kinds, data.draft_ids)
+        direct_patch = ai_actions.direct_patch_proposal(question, action_kinds, data.draft_ids) if not clarification else None
+        if clarification:
+            output = {"mode": "guidance", "content": clarification, "note": "", "sources": []}
+            sources = []  # No model or web search was used for this clarification.
+        elif direct_patch:
+            output = {"mode": "guidance", "content": "Got it, bro — here’s the patch change for your review.",
+                      "note": "", "sources": [], "proposal": direct_patch}
+            sources = []
+        else:
+            output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports, action_kinds)
+            sources.extend(output.get("sources", []))
         # A deleted chat or expired/replaced lease must never be resurrected.
         db.expire_all()
         row = (
@@ -663,14 +682,15 @@ def send_message(
         row.busy_token = row.busy_until = None
         db.add(reply)
         db.flush()
-        if action_kinds and output.get("mode") == "ai":
+        if action_kinds and output.get("mode") in {"ai", "guidance"}:
             if output.get("proposal") is not None:
                 try:
-                    ai_actions.prepare(db, user, reply, output["proposal"], action_kinds)
+                    ai_actions.prepare(db, user, reply, output["proposal"], action_kinds,
+                                       attached_draft_ids=data.draft_ids, request_text=question)
                     reply.content += "\n\nThis is a proposal only; nothing changes until you review and confirm it."
                 except ai_actions.ActionError as exc:
                     reply.content = f"I couldn’t prepare that change: {public_ai_text(str(exc))[:300]} Nothing was changed."
-            elif "nothing" not in reply.content.lower():
+            elif output.get("mode") == "ai" and "nothing" not in reply.content.lower():
                 reply.content += "\n\nNo change was made."
         db.commit()
         db.refresh(reply)

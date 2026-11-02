@@ -111,8 +111,14 @@ class PatchProposal(StrictModel):
         return self
 
 
+class DraftPatchProposal(PatchProposal):
+    draft_id: Annotated[int, Field(ge=1)]
+
+
 class ActionEnvelope(StrictModel):
-    kind: Literal["create_draft", "create_strategy", "create_hero", "update_hero", "set_patch", "create_item"]
+    kind: Literal[
+        "create_draft", "create_strategy", "create_hero", "update_hero", "set_patch", "set_draft_patch", "create_item"
+    ]
     payload: dict[str, Any]
 
 
@@ -122,6 +128,7 @@ SCHEMAS = {
     "create_hero": CreateHeroProposal,
     "update_hero": UpdateHeroProposal,
     "set_patch": PatchProposal,
+    "set_draft_patch": DraftPatchProposal,
     "create_item": EquipmentIn,
 }
 LIST_FIELDS = {"strong_against", "weak_against", "synergy"}
@@ -134,6 +141,15 @@ class ActionError(ValueError):
 def intent(db: Session, question: str) -> list[str]:
     """Only explicit write requests enable the model's proposal format."""
     lower = question.casefold()
+    if re.search(
+        r"\b(?:don['’]?t|do not|never|avoid)\s+(?:actually\s+)?(?:change|update|edit|set|modify|create|add|save|delete)\b",
+        lower,
+    ):
+        return []
+    if re.search(
+        r"\b(?:should i|should we|what if i|what if we|how do i|how can i)\s+(?:change|update|edit|set|modify)\b", lower
+    ):
+        return []
     # 'draft' alone may be a noun ("review my draft"), not a request to save one.
     draft_verb = bool(
         re.search(
@@ -157,7 +173,9 @@ def intent(db: Session, question: str) -> list[str]:
     names = [name for (name,) in db.query(Hero.name).limit(500).all() if isinstance(name, str)]
     named_hero = any(re.search(r"(?<!\w)" + re.escape(name.casefold()) + r"(?!\w)", lower) for name in names)
     hero_word = bool(re.search(r"\b(hero|heroes)\b", lower)) or named_hero
-    if hero_word and update_existing:
+    draft_ref = bool(re.search(r"\b(draft|drafts|drfat|board|boards)\b", lower))
+    draft_patch_request = draft_ref and bool(re.search(r"\bpatch\b", lower))
+    if hero_word and update_existing and not draft_patch_request:
         kinds.append("update_hero")
     if (
         re.search(r"\b(?:add|create|make|save)\s+(?:(?:a|an|new|the|custom)\s+){0,3}(?:hero|heroes)\b", lower)
@@ -167,11 +185,79 @@ def intent(db: Session, question: str) -> list[str]:
     if (
         re.search(r"\bpatch\b", lower)
         and update_existing
-        and not named_hero
-        and not re.search(r"\b(hero|heroes)\b", lower)
+        and (draft_ref or not named_hero)
+        and (draft_ref or not re.search(r"\b(hero|heroes)\b", lower))
     ):
-        kinds.append("set_patch")
+        specific_board = bool(
+            re.search(r"\b(board|boards|(?:this|my|our|existing)\s+draft(?!\s+lab\b)|draft\s*#\d+)\b", lower)
+        )
+        if draft_ref:
+            kinds.append("set_draft_patch")
+        if not specific_board:
+            kinds.append("set_patch")
     return list(dict.fromkeys(kinds))
+
+
+_PATCH_VERSION = re.compile(r"(?<![\w.])v?\d+(?:\.\d+){1,3}[a-z]?(?!\w|\.\d)", re.I)
+
+
+def followup_intent(db: Session, question: str, history: list[dict]) -> list[str]:
+    """Resolve a version-only answer to the immediately preceding patch question."""
+    if not _PATCH_VERSION.search(question) or len(question) > 160 or not history:
+        return []
+    last = history[-1]
+    if last.get("role") != "assistant" or "?" not in last.get("content", ""):
+        return []
+    if not re.search(r"\b(patch|version|number)\b", last["content"], re.I):
+        return []
+    previous_user = next((item["content"] for item in reversed(history[:-1]) if item.get("role") == "user"), "")
+    return [kind for kind in intent(db, previous_user) if kind in {"set_patch", "set_draft_patch"}]
+
+
+def patch_clarification(question: str, kinds: list[str], draft_ids: list[int]) -> str | None:
+    patch_kinds = set(kinds) & {"set_patch", "set_draft_patch"}
+    if not patch_kinds:
+        return None
+    supplied = bool(
+        _PATCH_VERSION.search(question)
+        or re.search(r"\b(?:to|as)\s+(?:patch\s+)?(?!(?:the|latest|current|new)\b)[a-z0-9][\w.+-]*", question, re.I)
+    )
+    if patch_kinds == {"set_draft_patch"} and not draft_ids:
+        return (
+            "Sure, bro — attach the draft board you want changed"
+            + (" and tell me the patch number" if not supplied else "")
+            + ". I’ll prepare it for your review."
+        )
+    if not supplied:
+        return (
+            "Sure, bro — what patch number should I use? I can update the default for new Draft Lab boards, "
+            "or update an existing board if you attach it."
+        )
+    return None
+
+
+def direct_patch_proposal(question: str, kinds: list[str], draft_ids: list[int]) -> dict | None:
+    """Prepare simple exact-version edits without relying on a model or web result."""
+    patch_kinds = set(kinds) & {"set_patch", "set_draft_patch"}
+    if not patch_kinds:
+        return None
+    values = [match.group(0) for match in _PATCH_VERSION.finditer(question)]
+    if not values:
+        return None
+    after_to = re.search(r"\b(?:to|as)\s+(?:patch\s+)?(" + _PATCH_VERSION.pattern + r")", question, re.I)
+    if after_to:
+        label = after_to.group(1)
+    elif len(set(value.casefold() for value in values)) == 1 and not re.search(r"\bfrom\b", question, re.I):
+        label = values[0]
+    else:
+        return None
+    if "set_draft_patch" in patch_kinds and draft_ids:
+        if len(draft_ids) != 1:
+            return None  # The model can disambiguate an explicitly named attached board.
+        return {"kind": "set_draft_patch", "payload": {"draft_id": draft_ids[0], "label": label}}
+    if "set_patch" in patch_kinds:
+        return {"kind": "set_patch", "payload": {"label": label}}
+    return None
 
 
 def instruction(kinds: list[str], hero_names: list[str]) -> str:
@@ -187,7 +273,12 @@ def instruction(kinds: list[str], hero_names: list[str]) -> str:
         "body, opponent, patch, tags. Hero creation: name, role, hero_class, patch, notes. "
         "Hero update: hero (exact existing name), changes (only role, hero_class, difficulty, meta_status, tier, patch, notes, "
         "win_rate, pick_rate, ban_rate, clover_rating, strong_against, weak_against, synergy). "
-        "Patch schema: label. Equipment schema: name, category, description, patch, source_url (empty or HTTPS). "
+        "Default team patch schema: set_patch {label}; this changes the default for new Draft Lab boards, not existing boards. "
+        "Existing draft patch schema: set_draft_patch {draft_id, label}; use only the current message's attached draft board ID. "
+        "If a specific board is not attached, ask the admin to attach it rather than changing the default instead. "
+        "For an ambiguous Draft Lab patch request, explain the default versus an existing board and ask only for what is missing. "
+        "Equipment schema: name, category, description, patch, source_url (empty or HTTPS). "
+        "Use only a patch label the admin explicitly supplied in this message; ask if missing. "
         "Do not invent current patch numbers, item attributes, balance changes or statistics; request missing details. "
         "The server validates every field and the admin must review and explicitly confirm before anything changes. "
         "Existing hero names: " + ", ".join(hero_names[:300])
@@ -236,7 +327,16 @@ def validate_payload(db: Session, kind: str, payload: Any) -> dict:
     return data
 
 
-def prepare(db: Session, owner: User, message: AIMessage, raw: Any, allowed: list[str]) -> AIActionProposal:
+def prepare(
+    db: Session,
+    owner: User,
+    message: AIMessage,
+    raw: Any,
+    allowed: list[str],
+    *,
+    attached_draft_ids: list[int] | None = None,
+    request_text: str | None = None,
+) -> AIActionProposal:
     if owner.role != "admin" or not owner.active:
         raise ActionError("Only admins can prepare AI changes.")
     try:
@@ -246,6 +346,11 @@ def prepare(db: Session, owner: User, message: AIMessage, raw: Any, allowed: lis
     if envelope.kind not in allowed:
         raise ActionError("The proposed change does not match your request.")
     data = validate_payload(db, envelope.kind, envelope.payload)
+    if envelope.kind in {"set_patch", "set_draft_patch"} and request_text is not None:
+        # A model or web excerpt cannot silently choose the patch for the admin.
+        label = data["label"]
+        if not re.search(r"(?<![\w.])" + re.escape(label) + r"(?!\w|\.\d)", request_text, re.I):
+            raise ActionError("Tell me the exact patch label you want, and I can prepare it for review.")
     before: dict[str, Any] = {}
     target_id = None
     if envelope.kind == "update_hero":
@@ -265,6 +370,14 @@ def prepare(db: Session, owner: User, message: AIMessage, raw: Any, allowed: lis
         before = {
             "notice": "New local hero records use placeholder rates 50/5/5, rating 5 and difficulty 5 until edited."
         }
+    elif envelope.kind == "set_draft_patch":
+        if data["draft_id"] not in (attached_draft_ids or []):
+            raise ActionError("Attach the draft board you want changed to this message.")
+        draft = db.get(DraftPlan, data["draft_id"])
+        if draft is None:
+            raise ActionError("That draft board is no longer available.")
+        target_id = draft.id
+        before = {"draft_id": draft.id, "draft_name": draft.name, "patch": draft.patch}
     elif envelope.kind == "set_patch":
         row = db.get(PlatformPatch, 1)
         before = {
@@ -392,6 +505,20 @@ def apply(db: Session, user: User, proposal_id: str) -> AIActionProposal:
             if not result.rowcount:
                 raise ActionError("The hero changed after this proposal. Review a new proposal instead.")
             before = {k: v for k, v in before.items() if k != "_raw"}
+        elif row.kind == "set_draft_patch":
+            if target_id != data["draft_id"]:
+                raise ActionError("The draft target changed. Ask for a new proposal.")
+            result = db.execute(
+                update(DraftPlan)
+                .where(
+                    DraftPlan.id == target_id,
+                    DraftPlan.name == before.get("draft_name"),
+                    DraftPlan.patch == before.get("patch"),
+                )
+                .values(patch=data["label"], updated_at=now)
+            )
+            if not result.rowcount:
+                raise ActionError("The draft patch or board changed after this proposal. Review a new one.")
         elif row.kind == "set_patch":
             current = db.get(PlatformPatch, 1)
             revision = before.get("revision")

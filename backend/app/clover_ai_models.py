@@ -141,7 +141,7 @@ class AIMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[str] = mapped_column(
         String(20), default="user", nullable=False
-    )  # user | ai | facts; historic values remain readable
+    )  # user | ai | facts | guidance; historic values remain readable
     note: Mapped[str] = mapped_column(String(600), default="", nullable=False)
     sources_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     feedback: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # -1 | 0 | 1

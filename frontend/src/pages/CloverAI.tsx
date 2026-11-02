@@ -131,7 +131,7 @@ function MessageBubble({ message, conversationId, onFeedback, onManageMemory, on
     <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-edge bg-raised/50 p-3 sm:p-4">
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className="text-[10px] tracking-[0.14em] uppercase font-extrabold">9 Clover AI</span>
-        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${message.mode === "ai" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : "Local facts only"}</span>
+        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${message.mode === "ai" || message.mode === "guidance" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : message.mode === "guidance" ? "Next step" : "Local facts only"}</span>
       </div>
       <div className="ai-markdown text-[12px] sm:text-[13px] text-text/90 leading-relaxed break-words">
         <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml disallowedElements={["img"]}
@@ -510,7 +510,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             </div>
           </form>
           <AIWebControls mode={webMode} onChange={setWebMode} enabled={Boolean(status?.web_search_enabled)} disabled={busy || exporting || !workspaceReady} dailyLimit={status?.web_search_daily_limit ?? 10} />
-          {me.role === "admin" && <p className="text-[10px] text-leaf mt-2">Drafts, strategies, heroes, patch labels and team equipment can be proposed for admin review — never applied automatically.</p>}
+          {me.role === "admin" && <p className="text-[10px] text-leaf mt-2">Ask Clover to prepare drafts, strategies, heroes, patch labels or equipment changes for your review. Attach an existing draft to change its patch.</p>}
           <p className="text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Named MPL questions may retrieve a public Rone feed even with web search off. Avoid sharing secrets.</p>
         </div>
       </section>

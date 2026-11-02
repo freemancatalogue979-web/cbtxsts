@@ -8,7 +8,7 @@ import { ErrorNote, Modal } from "./ui";
 
 const labels: Record<AIProposal["kind"], string> = {
   create_draft: "Create draft board", create_strategy: "Create strategy", create_hero: "Add hero",
-  update_hero: "Update hero", set_patch: "Update patch label", create_item: "Add team equipment",
+  update_hero: "Update hero", set_patch: "Update default patch", set_draft_patch: "Update draft board patch", create_item: "Add team equipment",
 };
 const readable = (key: string) => key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
@@ -74,7 +74,7 @@ export function AIProposalCard({ proposal, onChange }: { proposal: AIProposal; o
   }
   function openResult() {
     switch (proposal.kind) {
-      case "create_draft": navigate("drafts"); break;
+      case "create_draft": case "set_draft_patch": navigate("drafts"); break;
       case "create_strategy": navigate("strategy"); break;
       case "create_hero": case "update_hero": navigate("heroes", proposal.target_id ?? ""); break;
       case "create_item": navigate("intel", "equipment"); break;
@@ -94,7 +94,8 @@ export function AIProposalCard({ proposal, onChange }: { proposal: AIProposal; o
     {open && <Modal title={labels[proposal.kind]} onClose={() => { if (!busy) setOpen(false); }} wide>
       <div className="space-y-4">
         <p className="text-[12px] text-mute leading-relaxed">{resolved ? "This is the reviewed proposal and its outcome." : "Review every field before confirming. The AI cannot change the platform without your approval."}</p>
-        {(proposal.kind === "create_item" || proposal.kind === "set_patch") && <p className="rounded-lg border border-amber/25 bg-amber/5 p-3 text-[11px] text-mute">This is a team-maintained record, not a verified live game update.</p>}
+        {(proposal.kind === "create_item" || proposal.kind === "set_patch" || proposal.kind === "set_draft_patch") && <p className="rounded-lg border border-amber/25 bg-amber/5 p-3 text-[11px] text-mute">This is a team-maintained record, not a live game update.</p>}
+        {proposal.kind === "set_patch" && <p className="text-[11px] text-mute">This sets the default for new Draft Lab boards. Existing boards keep their own patch.</p>}
         {proposal.kind === "create_hero" && <p className="rounded-lg border border-amber/25 bg-amber/5 p-3 text-[11px] text-mute">A new hero starts with placeholder rates, rating and difficulty until edited.</p>}
         {Object.keys(proposal.before).length > 0 && <section><div className="section-pill mb-2">Current values</div><div className="rounded-lg border border-edge bg-raised/40 p-3 text-[12px]"><Value value={proposal.before} /></div></section>}
         <section><div className="section-pill section-pill--leaf mb-2">Proposed values</div><div className="rounded-lg border border-edge bg-raised/40 p-3 text-[12px]"><Value value={proposal.payload} /></div></section>

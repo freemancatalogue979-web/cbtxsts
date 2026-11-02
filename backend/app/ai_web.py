@@ -28,14 +28,11 @@ MAX_RESULTS = 5
 MAX_RESPONSE_BYTES = 512_000
 SearchMode = Literal["auto", "on", "off"]
 
-# Automatic searches focus on requests where freshness or concrete builds are
-# useful. Members can force one search or turn searches off in the composer.
+# Auto is a freshness/verification check, not a prerequisite for normal MLBB
+# knowledge. Generic meta, build, ranked or admin-edit requests stay local.
 _SEARCH_INTENT = re.compile(
-    r"\b(search|browse|googl(?:e|ing)|web|online|internet|look(?:\s+\w+)?\s+up|find\s+out|latest|current|"
-    r"today|recent|news|patch(?:es)?|updates?|meta|ranked|rank(?:ing|s)?|builds?|items?|emblems?|"
-    r"win[\s-]*rate|pick[\s-]*rate|ban[\s-]*rate|tier|buffs?|nerfs?|guides?|"
-    r"counter(?:s|ing)?|standings|fixtures?|schedule|results?|scores?|playoffs?|finals?|esports|tournaments?|mpl|msc|"
-    r"(?:best|top|strongest)\s+(?:heroes|hero|junglers?|mages?|fighters?|roamers?|assassins?|tanks?|marksmen))\b",
+    r"\b(search|browse|googl(?:e|ing)|web|online|internet|look(?:\s+\w+)?\s+up|"
+    r"latest|current|today|recent|news|live|verify|verification|confirm|cross[\s-]?check)\b",
     re.IGNORECASE,
 )
 _SENSITIVE_QUERY = re.compile(

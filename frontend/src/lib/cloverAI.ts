@@ -50,7 +50,7 @@ export type AISource = {
   published_at?: string | null; auto_selected?: boolean; board_id?: number;
 };
 export type AIProposal = {
-  id: string; kind: "create_draft" | "create_strategy" | "create_hero" | "update_hero" | "set_patch" | "create_item";
+  id: string; kind: "create_draft" | "create_strategy" | "create_hero" | "update_hero" | "set_patch" | "set_draft_patch" | "create_item";
   status: "pending" | "applied" | "discarded"; payload: Record<string, unknown>; before: Record<string, unknown>;
   target_id: number | null; created_at: string; expires_at: string; resolved_at: string | null;
 };
@@ -58,7 +58,7 @@ export type AIMessage = {
   id: number;
   role: "user" | "assistant";
   content: string;
-  mode: "user" | "ai" | "facts";
+  mode: "user" | "ai" | "facts" | "guidance";
   note: string;
   sources: AISource[];
   proposal?: AIProposal | null;

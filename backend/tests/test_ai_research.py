@@ -246,9 +246,13 @@ class ResearchTests(unittest.TestCase):
         )
 
     def test_search_modes_budget_sensitive_queries_and_failures(self):
-        self.assertTrue(ai_web.should_search("Best jungler to climb?", "auto"))
+        self.assertFalse(ai_web.should_search("Best jungler to climb?", "auto"))
+        self.assertFalse(ai_web.should_search("MPL PH S18 meta", "auto"))
+        self.assertFalse(ai_web.should_search("Change the patch in Draft Lab", "auto"))
         self.assertTrue(ai_web.should_search("What are the latest patches?", "auto"))
+        self.assertTrue(ai_web.should_search("Can you verify the S18 patch?", "auto"))
         self.assertFalse(ai_web.should_search("How should I rotate?", "auto"))
+        self.assertTrue(ai_web.should_search("Best jungler to climb?", "on"))
         chat = self.new_chat()
         calls = []
 

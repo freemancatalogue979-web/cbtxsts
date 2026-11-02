@@ -220,8 +220,11 @@ A configured-key badge is not a provider connectivity check.
 
 ### What knowledge is actually available
 
-The assistant retrieves relevant hero names, lanes and skill names from the
-bundled historical hero profiles and keyword-matched, approved community notes.
+The assistant combines its general MLBB knowledge with relevant saved hero data,
+private teachings, approved community notes and esports records. It retrieves
+hero names, lanes, specialties and skill names from the bundled profiles even
+when demo seeding is off, plus saved Rone skill descriptions where available.
+Broad role questions can receive a bounded, unranked roster reference.
 Hero snapshots are imported from [MLBBDex](https://mlbbdex.com/en/api-doc) /
 Mobile Legends Wiki (CC BY-SA); the bundled source describes patch 2.2.16, but
 its import date, server channel and current accuracy are not independently
@@ -243,11 +246,11 @@ not automatically retrain the model.
 
 ### Admin-reviewed platform changes
 
-Only an **admin** can receive and confirm AI-generated platform-change proposals;
+Only an **admin** can receive and confirm assistant platform-change proposals;
 captains, coaches and other roles retain their existing manual permissions but do
 not gain AI write privileges. An explicit request can produce one validated
 proposal to create a Draft Lab board or strategy, create/update a hero, set the
-team patch label, or add a team-maintained equipment entry. The AI cannot run
+team's default patch, change one attached draft board's patch, or add a team-maintained equipment entry. The AI cannot run
 arbitrary code, shell commands or SQL. It may offer troubleshooting guidance, but
 cannot inspect server logs or apply arbitrary fixes. The admin sees all proposed
 fields (including current values when relevant), checks an explicit review box,
@@ -262,7 +265,12 @@ updates from Moonton. Team equipment can also be inspected by signed-in members
 and created, edited or deleted manually by admins in **MLBB Intel → Equipment**,
 separately from the community Rone feed. The app refreshes its displayed patch
 metadata after a confirmed label change. The provider still needs to be configured
-and reachable to generate a proposal; a configured key alone does not prove that.
+and reachable for model-generated proposals; a configured key alone does not prove
+that. An unambiguous patch version supplied by an admin can instead produce a
+reviewable proposal locally without a model or web request. The team default
+changes the starting patch for **new** Draft Lab boards; it does not rewrite
+existing boards. To update an existing board, attach it to the message. Board
+patch and name are checked for intervening changes before confirmation.
 
 ### Esports, team boards and live research in chat
 
@@ -275,7 +283,13 @@ up to three saved Aerena matches explicitly; these override automatic selection.
 A pasted Aerena schedule or match URL is recognized as a reference to the saved
 integration, not automatically fetched as a raw web page. A linked match ID is
 used only if present locally. The picker does not trigger a source refresh.
-Saved detail may be missing or incomplete, and the source is community-compiled, not independently verified.
+For a specified MPL region and season meta/pick-ban question, the AI also receives
+a bounded aggregate across the saved season, not just the selected examples.
+Rates use complete 10-pick/10-ban drafts as their denominator; partial or missing
+drafts, unknown hero names and truncation are reported separately. Stage filters
+use saved stage labels. Explicit match attachments override this automatic season
+aggregate. Saved detail may be missing or incomplete, and the source is
+community-compiled, not independently verified.
 
 For an explicitly named MPL region (PH, ID, MY or KH) and schedule, standings or
 playoff request, chat can also retrieve one public Rone feed. Only the allowlisted
@@ -299,9 +313,11 @@ percentages, sampled paths, steps, chips and zones, not as an image; this does
 not provide visual map recognition. Earlier chat history, backups or provider
 logs can still retain what was shared. Turn off history when necessary.
 
-The composer offers **Live web: Auto / Always / Off**. Auto searches freshness-
-sensitive questions such as current patches, builds, ranked and esports. Always
-searches each question; Off does not perform web searches. The default is Auto,
+The composer offers **Web check: Auto / Always / Off**. The assistant uses its
+MLBB knowledge and saved data first; Auto searches when asked for fresh information
+or verification, not for ordinary meta, ranked, build or admin-edit questions.
+Always searches each model-generated answer; local patch proposals do not use the
+web. Off does not perform web searches. The default is Auto,
 with the privacy and cost notice shown before sending. One bounded search uses
 only the current question, optionally prefixed with "Mobile Legends"; it does
 not append chat history, personal context, or attached boards. Search results are
@@ -436,8 +452,9 @@ install system packages or touch the real app data. The Aerena and member-AI tes
 not call or seed Aerena or an AI provider. AI tests cover owner isolation (including
 admins), per-note and board consent, selected/automatic match evidence, bounded
 web research and search quotas, Rone feeds, minimization, snapshot export,
-private teaching/recall and deletion, research attribution, admin-only proposal
-review and concurrent one-use application, provider failures and legacy branding.
+private teaching/recall and deletion, research attribution, complete-draft season
+aggregation, unseeded hero profiles, admin-only proposal review and concurrent
+one-use application, provider failures and legacy branding.
 Team focus tests cover settings permissions, dashboard visibility and drill target validation. Frontend
 tests also cover match limits, source links and bounded export pagination. Run a separate
 authorized connectivity check and monitor the in-app source status in the
