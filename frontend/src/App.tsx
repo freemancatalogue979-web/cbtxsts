@@ -51,6 +51,12 @@ export default function App() {
   useEffect(() => { saveAIWorkspaceLayout(aiLayoutStorage(), aiLayout); }, [aiLayout]);
 
   useEffect(() => {
+    const refreshMeta = () => { void api.get<Meta>("/meta").then(setMeta).catch(() => undefined); };
+    window.addEventListener("clover:meta-changed", refreshMeta);
+    return () => window.removeEventListener("clover:meta-changed", refreshMeta);
+  }, []);
+
+  useEffect(() => {
     async function boot() {
       if (getToken()) {
         try {
@@ -112,7 +118,7 @@ export default function App() {
       page = <HeroesPage me={user} meta={meta} parts={rest} />;
       break;
     case "intel":
-      page = <IntelPage />;
+      page = <IntelPage me={user} parts={rest} />;
       break;
     case "esports":
       page = <EsportsPage me={user} />;

@@ -32,7 +32,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Draft Lab** | Saved pick/ban boards: 5+5 bans, lane picks both sides, status idea → testing → approved |
 | **Calendar & Events** | Tournaments, scrims, training and review deadlines in one feed |
 | **Esports** | Saved Aerena seasons and matches, source-reported team/player stats and ordered draft coverage when available, plus bounded evidence-based analysis |
-| **9 CLOVER AI** | Private member chats, live web research, saved esports evidence, opt-in team boards and coaching context |
+| **9 CLOVER AI** | Private chats, owner-controlled taught memory, saveable research, saved esports evidence, opt-in boards and reviewed admin change proposals |
 
 ## Roles & permissions
 
@@ -135,8 +135,8 @@ there are more. The file remains on the device even after deleting the chat.
 Search terms are sent in a request body rather than a URL to reduce exposure in
 standard access logs; server operators and custom logging can still see app data.
 The assistant is intended for general MLBB coaching, not just professional teams.
-When a provider is not configured, fails or reaches its limit, a clearly
-labelled **local facts-only snapshot** is shown instead of a fabricated answer.
+When a provider is not configured, fails or reaches its limit, saved details
+are shown as a basic fallback rather than a fabricated generated answer.
 A configured-key badge is not a provider connectivity check.
 
 ### Personal data and conversation privacy
@@ -163,6 +163,30 @@ A configured-key badge is not a provider connectivity check.
   Disconnecting or relinking removes your saved account snapshots and resets this
   consent. Disabling sharing cannot recall information already sent, included in
   chat history, or retained in backups or provider logs.
+- **Taught memory** is a separate owner-private application store. By default,
+  clear teachings such as “Remember this: ...” and “This is how X works: ...”
+  can be saved automatically (up to 200 entries of 1,200 characters each).
+  Ordinary conversation and a bare URL are not saved as facts; common credential
+  patterns and obvious instruction-injection attempts are rejected, but detection
+  is not foolproof. The chat confirms a save only after the database accepts it.
+  The owner can inspect, delete individual or all memories, turn auto-learning off,
+  and independently turn recall off under **Your context**. Disabling recall keeps
+  entries stored. Keyword matching selects at most five relevant entries, capped
+  at 4,000 characters; it is not semantic search, so relevant facts can be missed.
+  Relevant saved memories may be sent to the external AI provider when recall is
+  enabled. The store records the owner/author, topic, source, date, optional chat
+  and message reference, and **unverified** status. Teachings are not promoted to
+  shared community knowledge or independently fact-checked. Deleting a chat
+  removes the references but does not delete the memory; delete that separately.
+  This is application-owned retrieval, not a change to the underlying model weights.
+- In **Sources & research**, a member can preview a search excerpt and explicitly
+  **Save finding to memory**. The app saves the bounded, server-returned excerpt,
+  source title and HTTPS URL, publication date if known, retrieval date, and
+  unverified status; it does not save a model assertion as a verified fact or
+  fetch the source page. Saving research is an explicit action and still works
+  with auto-learning off; recall remains controlled by its separate switch.
+  Bounded web excerpts are also retained with the private message until it is
+  deleted. Source and memory content are untrusted evidence, never instructions.
 - Members may write up to 12 private coaching notes (500 characters each) for
   strengths, focus areas, preferences and goals. Every note starts with sharing
   **off**; its owner may edit, delete or individually enable it. An enabled note
@@ -178,18 +202,18 @@ A configured-key badge is not a provider connectivity check.
   every generated claim is supported. The model cannot run arbitrary SQL, shell
   commands or fetch arbitrary pages; the server may provide bounded search
   excerpts or a public MPL feed for qualifying questions.
-- **Clear saved AI context** deletes the member's coaching notes and optional
-  coaching goal, turns off all five context switches, and removes the current
-  open chat's match and board selections. This affects future requests, not one
-  already sent. It does not erase the underlying profile/pool/scrims or existing chats.
+- **Clear saved AI context** deletes the member's taught/research memories,
+  coaching notes and optional coaching goal, turns off auto-learning, recall and
+  all five context switches, and removes the current open chat's match and board
+  selections. This affects future requests, not one already sent. It does not erase the underlying profile/pool/scrims or existing chats.
   Delete a chat from its header to remove its messages from the live database.
   Deletion cannot erase downloaded files, pre-existing backups or data already
   sent to a provider; consult its retention and commercial-use terms.
-- Owner checks apply to AI conversations, search, exports and coaching notes
-  (including admins); bearer authentication is required even for reads, and
-  responses use `no-store`. This is application-level privacy: messages, coaching
-  goals and notes are stored without AI-specific encryption at rest. Database/backup operators
-  can access them, and existing admin functionality can reset a member's
+- Owner checks apply to AI conversations, search, exports, learned memories and
+  coaching notes (including admins); bearer authentication is required even for
+  reads, and responses use `no-store`. This is application-level privacy:
+  messages, learned memories, coaching goals and notes are stored without
+  AI-specific encryption at rest. Database/backup operators can access them, and existing admin functionality can reset a member's
   password. Restrict those powers, secure database volumes and backups, and use
   HTTPS. Feedback stays private to the conversation; it is not automatically
   published or used to train a model. No automatic chat-retention expiry exists.
@@ -202,7 +226,9 @@ Hero snapshots are imported from [MLBBDex](https://mlbbdex.com/en/api-doc) /
 Mobile Legends Wiki (CC BY-SA); the bundled source describes patch 2.2.16, but
 its import date, server channel and current accuracy are not independently
 verified. Seeded hero win/pick/ban rates, tiers and counters are **not** sent as
-facts. There is no semantic search or live item database in this workspace.
+facts. Team-maintained equipment entries and patch labels are available as
+explicitly unverified context; they are not an official live item or patch feed.
+There is no semantic search in this workspace.
 
 Members can explicitly submit a question, correction, strategy, draft idea or
 feedback to admins. Submissions disclose that approved notes can be visible to
@@ -215,6 +241,29 @@ account is deleted, so ask an admin to remove one if needed. Approval is human
 review, not a claim of independent verification. Contributions and ratings do
 not automatically retrain the model.
 
+### Admin-reviewed platform changes
+
+Only an **admin** can receive and confirm AI-generated platform-change proposals;
+captains, coaches and other roles retain their existing manual permissions but do
+not gain AI write privileges. An explicit request can produce one validated
+proposal to create a Draft Lab board or strategy, create/update a hero, set the
+team patch label, or add a team-maintained equipment entry. The AI cannot run
+arbitrary code, shell commands or SQL. It may offer troubleshooting guidance, but
+cannot inspect server logs or apply arbitrary fixes. The admin sees all proposed
+fields (including current values when relevant), checks an explicit review box,
+and confirms before a transactional, one-use change. Proposals expire after seven
+days, may be discarded, and hero/patch changes are rejected if the target changed
+since proposal. A durable admin-only action history records confirmed changes even
+if the conversation is deleted; private prompts are not part of that history.
+
+Drafts start as ideas. New hero ratings and rates use disclosed placeholders.
+Patch labels and equipment descriptions are manually maintained, not verified
+updates from Moonton. Team equipment can also be inspected by signed-in members
+and created, edited or deleted manually by admins in **MLBB Intel → Equipment**,
+separately from the community Rone feed. The app refreshes its displayed patch
+metadata after a confirmed label change. The provider still needs to be configured
+and reachable to generate a proposal; a configured key alone does not prove that.
+
 ### Esports, team boards and live research in chat
 
 For questions mentioning esports, tournaments, an MPL league, or a team acronym
@@ -223,17 +272,20 @@ Aerena records** to the question. This is a small keyword-matched sample, not a
 complete or necessarily current season; the source chips identify auto-selected
 matches and show their saved dates. **Attach match** instead lets a member select
 up to three saved Aerena matches explicitly; these override automatic selection.
-The picker does not trigger a source refresh. Saved detail may be missing or
-incomplete, and the source is community-compiled, not independently verified.
+A pasted Aerena schedule or match URL is recognized as a reference to the saved
+integration, not automatically fetched as a raw web page. A linked match ID is
+used only if present locally. The picker does not trigger a source refresh.
+Saved detail may be missing or incomplete, and the source is community-compiled, not independently verified.
 
 For an explicitly named MPL region (PH, ID, MY or KH) and schedule, standings or
 playoff request, chat can also retrieve one public Rone feed. Only the allowlisted
 region and feed are sent to Rone, not the member's question, chat or private
 data. Public Rone responses are bounded and saved in the database with retrieval
-dates. The page and AI can use the same saved snapshot; stale page data is
-returned immediately while a refresh is queued, and failures retain the last good
-snapshot. A cold miss may need an initial upstream request. The feed may not
-identify a season; a recent retrieval does not establish that the data describes
+dates. The page and AI can use the same saved snapshot; stale data is
+used immediately while a refresh is queued, and failures retain the last good
+snapshot. Relevant saved hero skills and separately consented account records can
+also queue a bounded refresh after the chat response. A cold miss may need an
+initial upstream request. The feed may not identify a season; a recent retrieval does not establish that the data describes
 the current season. A failure does not fabricate data.
 
 **Attach boards** lets a signed-in member select up to two saved Draft Lab boards
@@ -384,8 +436,9 @@ install system packages or touch the real app data. The Aerena and member-AI tes
 not call or seed Aerena or an AI provider. AI tests cover owner isolation (including
 admins), per-note and board consent, selected/automatic match evidence, bounded
 web research and search quotas, Rone feeds, minimization, snapshot export,
-review, provider failures, legacy branding and deletion. Team focus tests cover
-settings permissions, dashboard visibility and drill target validation. Frontend
+private teaching/recall and deletion, research attribution, admin-only proposal
+review and concurrent one-use application, provider failures and legacy branding.
+Team focus tests cover settings permissions, dashboard visibility and drill target validation. Frontend
 tests also cover match limits, source links and bounded export pagination. Run a separate
 authorized connectivity check and monitor the in-app source status in the
 deployment environment.

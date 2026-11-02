@@ -213,7 +213,7 @@ class CloverAITests(unittest.TestCase):
             "POST", f"/conversations/{chat}/messages", payload={"text": "How does Alice work?"}
         )
         self.assertEqual((status, body["assistant_message"]["mode"]), (201, "facts"))
-        self.assertIn("facts-only", body["assistant_message"]["content"])
+        self.assertIn("rather than a generated answer", body["assistant_message"]["content"])
         self.assertEqual(headers.get(b"cache-control"), b"no-store")
         for who in ("other", "admin"):
             self.assertEqual(self.req("GET", "/conversations", who)[1]["items"], [])

@@ -174,7 +174,18 @@ def search(
         seen.add(url)
         published = _date(candidate.get("date"))
         results.append({"title": title, "url": url, "excerpt": summary, "published_at": published})
-        sources.append({"kind": "web", "label": title, "url": url, "published_at": published, "observed_at": retrieved})
+        # The bounded excerpt travels with this private message so the member
+        # can explicitly save the finding later, without re-fetching a URL.
+        sources.append(
+            {
+                "kind": "web",
+                "label": title,
+                "url": url,
+                "excerpt": summary,
+                "published_at": published,
+                "observed_at": retrieved,
+            }
+        )
         if len(results) >= MAX_RESULTS:
             break
     evidence = {

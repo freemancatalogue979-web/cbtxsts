@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { AIContext, AISettings } from "../lib/cloverAI";
 import { ErrorNote } from "./ui";
 import { AIMemoryNotes } from "./AIMemoryNotes";
+import { AILearnedMemory } from "./AILearnedMemory";
 
 function Toggle({ label, description, checked, disabled, onChange }: {
   label: string; description: string; checked: boolean; disabled: boolean; onChange: () => void;
@@ -28,6 +29,7 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
   const [goal, setGoal] = useState(settings.coaching_goal);
   const [busy, setBusy] = useState(false);
   const [notesBusy, setNotesBusy] = useState(false);
+  const [learningBusy, setLearningBusy] = useState(false);
   const [notesRevision, setNotesRevision] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
@@ -43,11 +45,11 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
     finally { setBusy(false); }
   }
   async function clear() {
-    if (!window.confirm("Delete all your coaching notes and coaching goal, turn off automatic profile, account statistics, pool, scrim and chat-history context, and remove attached matches and boards from this open chat? This affects future requests; anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
+    if (!window.confirm("Delete all your learned memories, coaching notes and coaching goal, turn off learning, memory use and automatic profile, account statistics, pool, scrim and chat-history context, and remove attached matches and boards from this open chat? Anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
     setBusy(true); setError(null); setNotice("");
     try {
       const updated = await api.del<AISettings>("/ai/settings/memory");
-      onChange(updated); onClearAttachments(); setGoal(""); setNotesRevision((value) => value + 1); setNotice("Coaching notes, automatic context and this chat’s attachments are cleared for future requests. Saved chats remain until you delete them.");
+      onChange(updated); onClearAttachments(); setGoal(""); setNotesRevision((value) => value + 1); setNotice("Learned memories, coaching notes, automatic context and this chat’s attachments are cleared for future requests. Saved chats remain until you delete them.");
     } catch (e) { setError(e); }
     finally { setBusy(false); }
   }
@@ -59,7 +61,7 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         <ShieldCheck size={19} className="text-leaf shrink-0 mt-0.5" />
         <div>
           <div className="text-[13px] font-extrabold">Your data, your call.</div>
-          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, account statistics, pool and scrim context are off by default; recent chat history is on by default. Individually enabled notes can also be included in an external AI request. Your current question is sent when the provider is used.</p>
+          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, account statistics, pool and scrim context are off by default; recent chat history, explicit teaching and use of relevant memories are on by default. You can change these below. Relevant memories, individually enabled notes and your current question may be sent to the external AI provider.</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-3 gap-2">
@@ -80,23 +82,24 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         </div>
       </div>
       <div className="rounded-lg border border-edge bg-panel px-4">
-        <Toggle label="Profile & linked account" checked={settings.share_profile} disabled={busy || notesBusy}
+        <Toggle label="Profile & linked account" checked={settings.share_profile} disabled={busy || notesBusy || learningBusy}
           description="Your name, main lane, coaching goal and cached linked-account snapshot. Account ID and server are included only when your question asks about them. Rone login tokens are never pulled automatically."
           onChange={() => save({ share_profile: !settings.share_profile })} />
-        <Toggle label="My MLBB account statistics" checked={!!settings.share_account_stats} disabled={busy || notesBusy}
+        <Toggle label="My MLBB account statistics" checked={!!settings.share_account_stats} disabled={busy || notesBusy || learningBusy}
           description="Separately opt in to sharing a small, filtered sample of your own saved account stats, frequent heroes and match results with the external AI provider when relevant. No login tokens or other players’ details are included. Requires a linked account; disconnecting or relinking turns this off."
           onChange={() => save({ share_account_stats: !settings.share_account_stats })} />
-        <Toggle label="Hero pool" checked={settings.share_pool} disabled={busy || notesBusy}
+        <Toggle label="Hero pool" checked={settings.share_pool} disabled={busy || notesBusy || learningBusy}
           description="Up to 25 of your own recorded picks, confidence and entered game counts. Coach notes are excluded."
           onChange={() => save({ share_pool: !settings.share_pool })} />
-        <Toggle label="Scrim assignments" checked={settings.share_scrims} disabled={busy || notesBusy}
+        <Toggle label="Scrim assignments" checked={settings.share_scrims} disabled={busy || notesBusy || learningBusy}
           description="Up to 5 recent scrims where you’re listed in the lineup or substitutes. Notes, drafts and other players’ records are excluded."
           onChange={() => save({ share_scrims: !settings.share_scrims })} />
-        <Toggle label="Recent conversation history" checked={settings.use_history} disabled={busy || notesBusy}
+        <Toggle label="Recent conversation history" checked={settings.use_history} disabled={busy || notesBusy || learningBusy}
           description="Include up to 8 recent messages (6,500 characters) from this chat. Turning it off does not delete stored conversations."
           onChange={() => save({ use_history: !settings.use_history })} />
       </div>
-      <AIMemoryNotes revision={notesRevision} disabled={busy} onBusyChange={setNotesBusy} />
+      <AILearnedMemory revision={notesRevision} disabled={busy || notesBusy} onBusyChange={setLearningBusy} />
+      <AIMemoryNotes revision={notesRevision} disabled={busy || learningBusy} onBusyChange={setNotesBusy} />
       <label className="block">
         <span className="text-[12px] font-bold">Coaching goal <span className="font-medium text-faint">· optional</span></span>
         <textarea className="input mt-2 min-h-20 !text-[12px]" maxLength={600} value={goal} onChange={(e) => setGoal(e.target.value)}
@@ -104,16 +107,16 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         <span className="text-[11px] text-faint block mt-1">Only shared when Profile & linked account is switched on.</span>
       </label>
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn-primary !text-[12px]" type="button" disabled={busy || notesBusy || goal === settings.coaching_goal} onClick={() => save({ coaching_goal: goal })}>
+        <button className="btn-primary !text-[12px]" type="button" disabled={busy || notesBusy || learningBusy || goal === settings.coaching_goal} onClick={() => save({ coaching_goal: goal })}>
           {busy && <Loader2 className="animate-spin" size={14} />} Save goal
         </button>
-        <button className="btn-ghost !text-[12px]" type="button" disabled={busy || notesBusy} onClick={clear}><RotateCcw size={14} /> Clear saved AI context</button>
+        <button className="btn-ghost !text-[12px]" type="button" disabled={busy || notesBusy || learningBusy} onClick={clear}><RotateCcw size={14} /> Clear saved AI context</button>
       </div>
       {notice && <p role="status" className="text-[11px] text-leaf">{notice}</p>}
       <ErrorNote error={error} />
       <div className="flex gap-2 text-[11px] text-faint leading-relaxed">
         <LockKeyhole size={14} className="shrink-0 mt-0.5" />
-        <p>Other accounts, including admins, have no direct chat access in the AI workspace. Admins can reset account passwords, and server operators can read the app database. Chats, coaching goals and coaching notes aren’t encrypted by this feature. The external AI provider may retain submitted data; deleting a chat doesn’t erase existing backups or provider logs. Avoid sharing passwords or tokens.</p>
+        <p>Other accounts, including admins, have no direct chat access in the AI workspace. Admins can reset account passwords, and server operators can read the app database. Chats, learned memories, coaching goals and coaching notes aren’t encrypted by this feature. The external AI provider may retain submitted data; deleting a chat doesn’t erase existing backups or provider logs. Avoid sharing passwords or tokens.</p>
       </div>
     </div>
   );

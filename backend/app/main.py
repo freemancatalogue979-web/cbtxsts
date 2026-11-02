@@ -19,6 +19,7 @@ from .routers import (
     events,
     heroes,
     intel,
+    items,
     esports,
     map_guide,
     maps,
@@ -53,7 +54,7 @@ app.add_middleware(
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
-               programs, files, tournaments, intel, archive, esports, clover_ai):
+               programs, files, tournaments, intel, items, archive, esports, clover_ai):
     api.include_router(module.router)
 app.include_router(api)
 

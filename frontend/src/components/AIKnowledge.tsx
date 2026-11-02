@@ -37,7 +37,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
         <div>
           <div className="section-pill section-pill--leaf">THE KNOWLEDGE BASE</div>
           <h2 className="text-xl font-extrabold mt-1">A library that grows with the squad.</h2>
-          <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Search hero snapshots and human-reviewed community notes. Only published notes can be retrieved by the assistant; chats are never learned from automatically.</p>
+          <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Search hero records and human-reviewed community notes. Your own taught memories are private and managed separately in chat.</p>
         </div>
         <LibraryBig size={25} className="text-leaf/70 hidden sm:block" />
       </div>

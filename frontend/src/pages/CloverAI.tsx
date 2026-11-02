@@ -8,7 +8,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api, qs } from "../lib/api";
 import { AI_EXPORT_LIMIT, collectAIExport, revealAIComposer, safeExternal, shortDate } from "../lib/cloverAI";
-import type { AIBoardSummary, AIContext, AIConversation, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
+import type { AIBoardSummary, AIContext, AIConversation, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AIProposal, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
 import { teamCode, type EsportsMatch } from "../lib/esports";
 import type { User } from "../lib/types";
 import { navigate } from "../lib/util";
@@ -20,6 +20,7 @@ import { AIBoardPicker } from "../components/AIBoardPicker";
 import { AIWebControls } from "../components/AIWebControls";
 import { AIKnowledge } from "../components/AIKnowledge";
 import { AIContributions, AIReviewQueue } from "../components/AIContributions";
+import { AIActionHistory, AIProposalCard } from "../components/AIProposalCard";
 
 type Tab = "chat" | "knowledge" | "contribute" | "review";
 const SUGGESTIONS = [
@@ -56,10 +57,15 @@ function HistoryPanel({ conversations, searchResults, selected, filter, setFilte
   </div>;
 }
 
-function SourceChips({ sources }: { sources: AISource[] }) {
+function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
+  sources: AISource[]; conversationId: string | null; messageId: number; onManageMemory: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<AIKnowledgeNote | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState<number | null>(null);
+  const [saved, setSaved] = useState<number[]>([]);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
   async function showNote(id: string) {
     setOpen(true); setLoading(true); setNote(null); setError(null);
@@ -67,20 +73,43 @@ function SourceChips({ sources }: { sources: AISource[] }) {
     catch (e) { setError(e); }
     finally { setLoading(false); }
   }
+  async function saveResearch(index: number) {
+    if (!conversationId || saving !== null) return;
+    setSaving(index); setError(null); setNotice("");
+    try {
+      const result = await api.post<{ status: "saved" | "duplicate" }>(`/ai/conversations/${conversationId}/messages/${messageId}/research-memory`, { source_index: index });
+      setSaved((previous) => [...previous, index]);
+      setNotice(result.status === "duplicate" ? "This finding is already in your private memory." : "Finding saved privately with its source. It remains unverified.");
+    } catch (e) { setError(e); }
+    finally { setSaving(null); }
+  }
   if (!sources.length) return null;
   return <div className="mt-4 pt-3 border-t border-edge/70">
-    <div className="section-pill mb-2">Source context supplied</div>
-    <div className="flex flex-wrap gap-1.5">{sources.map((source, index) => {
-      const external = safeExternal(source.url);
-      const isInternal = Boolean(source.knowledge_id || source.route);
-      const text = <><span className="truncate">{source.label}</span>{source.reviewed_at && <span className="text-mute shrink-0">· {shortDate(source.reviewed_at)}</span>}{source.kind === "match" && <span className="text-mute shrink-0">· {source.auto_selected ? "auto · " : ""}saved {shortDate(source.observed_at)}</span>}{source.kind === "web" && <span className="text-mute shrink-0">· {source.published_at ? `published ${shortDate(source.published_at)}` : "date unknown"}</span>}{source.kind === "esports_feed" && <span className="text-mute shrink-0">· retrieved {shortDate(source.observed_at)}</span>}{isInternal ? <ChevronRight size={10} className="shrink-0" /> : external ? <ExternalLink size={10} className="shrink-0" /> : null}</>;
-      const cls = "max-w-full inline-flex items-center gap-1 rounded border border-edge-2 bg-panel/70 px-2 py-1 text-[10px] text-mute font-semibold";
-      if (source.knowledge_id) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => void showNote(source.knowledge_id!)}>{text}</button>;
-      if (source.route) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => navigate(source.route!)}>{text}</button>;
-      if (external) return <a key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} href={external} target="_blank" rel="noreferrer noopener"
-        title={source.kind === "match" ? `Saved ${shortDate(source.observed_at)} · player detail saved ${shortDate(source.detail_fetched_at)} · source-reported and not independently verified` : source.kind === "web" ? `Retrieved ${shortDate(source.observed_at)} · check publication date and server region` : undefined}>{text}</a>;
-      return <span key={`${source.label}-${index}`} className={cls}>{text}</span>;
-    })}</div>
+    <details>
+      <summary className="cursor-pointer text-[11px] font-bold text-mute hover:text-leaf">Sources & research · {sources.length}</summary>
+      <div className="flex flex-wrap gap-1.5 mt-2">{sources.map((source, index) => {
+        const external = safeExternal(source.url);
+        const isInternal = Boolean(source.knowledge_id || source.route || source.memory_id);
+        const text = <><span className="truncate">{source.label}</span>{source.reviewed_at && <span className="text-mute shrink-0">· {shortDate(source.reviewed_at)}</span>}{source.kind === "match" && <span className="text-mute shrink-0">· {source.auto_selected ? "auto · " : ""}saved {shortDate(source.observed_at)}</span>}{source.kind === "web" && <span className="text-mute shrink-0">· {source.published_at ? `published ${shortDate(source.published_at)}` : "date unknown"}</span>}{source.kind === "esports_feed" && <span className="text-mute shrink-0">· retrieved {shortDate(source.observed_at)}</span>}{isInternal ? <ChevronRight size={10} className="shrink-0" /> : external ? <ExternalLink size={10} className="shrink-0" /> : null}</>;
+        const cls = "max-w-full inline-flex items-center gap-1 rounded border border-edge-2 bg-panel/70 px-2 py-1 text-[10px] text-mute font-semibold";
+        if (source.knowledge_id) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => void showNote(source.knowledge_id!)}>{text}</button>;
+        if (source.memory_id) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={onManageMemory}>{text}</button>;
+        if (source.route) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => navigate(source.route!)}>{text}</button>;
+        if (external) return <a key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} href={external} target="_blank" rel="noreferrer noopener"
+          title={source.kind === "match" ? `Saved ${shortDate(source.observed_at)} · player detail saved ${shortDate(source.detail_fetched_at)} · source-reported and not independently verified` : source.kind === "web" ? `Retrieved ${shortDate(source.observed_at)} · check publication date and server region` : undefined}>{text}</a>;
+        return <span key={`${source.label}-${index}`} className={cls}>{text}</span>;
+      })}</div>
+      {sources.map((source, index) => source.kind === "web" && source.excerpt ? <div key={`excerpt-${index}`} className="rounded-lg border border-edge bg-panel/60 p-3 mt-2">
+        <div className="text-[10px] font-extrabold text-mute">{source.label} · unverified excerpt</div>
+        <p className="text-[11px] text-text/90 leading-relaxed break-words mt-1">{source.excerpt}</p>
+        <button type="button" disabled={!conversationId || saving !== null || saved.includes(index)} onClick={() => void saveResearch(index)}
+          className="text-[10px] text-leaf font-bold inline-flex items-center gap-1 mt-2 disabled:opacity-60" aria-label={`Save finding from ${source.label} to memory`}>
+          {saving === index ? <Loader2 size={12} className="animate-spin" /> : <BrainCircuit size={12} />}{saved.includes(index) ? "Saved to memory" : "Save finding to memory"}
+        </button>
+      </div> : null)}
+      {notice && <p role="status" className="text-[11px] text-leaf mt-2">{notice}</p>}
+      {!open && <ErrorNote error={error} />}
+    </details>
     {open && <Modal title="Reviewed community source" onClose={() => setOpen(false)}>
       {loading && <p className="text-[12px] text-faint">Loading source…</p>}
       <ErrorNote error={error} />
@@ -93,7 +122,7 @@ function SourceChips({ sources }: { sources: AISource[] }) {
   </div>;
 }
 
-function MessageBubble({ message, onFeedback }: { message: AIMessage; onFeedback: (id: number, rating: -1 | 0 | 1) => void }) {
+function MessageBubble({ message, conversationId, onFeedback, onManageMemory, onProposal }: { message: AIMessage; conversationId: string | null; onFeedback: (id: number, rating: -1 | 0 | 1) => void; onManageMemory: () => void; onProposal: (id: number, proposal: AIProposal) => void }) {
   if (message.role === "user") return <div className="flex justify-end"><div className="max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{message.content}
     {message.sources.some((source) => ["match", "draft", "map"].includes(source.kind)) && <div className="mt-2 pt-2 border-t border-crim/20 text-[10px] font-semibold text-mute whitespace-normal">Attached: {message.sources.filter((source) => ["match", "draft", "map"].includes(source.kind)).map((source) => source.match_id || source.label).join(" · ")}</div>}
   </div></div>;
@@ -109,12 +138,13 @@ function MessageBubble({ message, onFeedback }: { message: AIMessage; onFeedback
           components={{ a: ({ children }) => <span>{children}</span> }}>{message.content}</ReactMarkdown>
       </div>
       {message.note && <p className="text-[10px] text-faint leading-relaxed mt-3">{message.note}</p>}
-      <SourceChips sources={message.sources} />
+      {message.proposal && <AIProposalCard proposal={message.proposal} onChange={(value) => onProposal(message.id, value)} />}
+      <SourceChips sources={message.sources} conversationId={conversationId} messageId={message.id} onManageMemory={onManageMemory} />
       <div className="flex flex-wrap items-center gap-1 mt-3 text-faint">
         <span className="text-[10px] mr-1">Helpful?</span>
         <button type="button" title="Helpful" aria-label="Mark response helpful" aria-pressed={message.feedback === 1} onClick={() => onFeedback(message.id, message.feedback === 1 ? 0 : 1)} className={`p-1.5 rounded hover:bg-overlay ${message.feedback === 1 ? "text-leaf" : "text-faint"}`}><ThumbsUp size={13} /></button>
         <button type="button" title="Not helpful" aria-label="Mark response not helpful" aria-pressed={message.feedback === -1} onClick={() => onFeedback(message.id, message.feedback === -1 ? 0 : -1)} className={`p-1.5 rounded hover:bg-overlay ${message.feedback === -1 ? "text-crim" : "text-faint"}`}><ThumbsDown size={13} /></button>
-        <span className="text-[10px] w-full sm:w-auto sm:ml-1">Private feedback · no model training.</span>
+        <span className="text-[10px] w-full sm:w-auto sm:ml-1">Feedback is private.</span>
       </div>
     </div>
   </div>;
@@ -314,7 +344,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft); }
   }
   async function removeChat() {
-    if (!selected || !window.confirm("Delete this conversation and all its messages from the app? Existing backups or provider logs may retain copies.")) return;
+    if (!selected || !window.confirm("Delete this conversation and all its messages from the app? Learned memories remain until you delete them in Manage context. Existing backups or provider logs may retain copies.")) return;
     const id = selected;
     try {
       await api.del(`/ai/conversations/${id}`);
@@ -386,7 +416,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
         </div>
         <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-bold ${status?.provider_configured ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`} title={status?.provider_note}>
           <span className={`h-1.5 w-1.5 rounded-full ${status?.provider_configured ? "bg-leaf" : "bg-amber"}`} />
-          {status ? (status.provider_configured ? "Key configured · unverified" : "Local facts mode") : "Checking provider"}
+          {status ? (status.provider_configured ? "AI configured" : "Basic mode") : "Checking AI"}
         </div>
       </div>
       <div className={`flex items-center ${desktopLayout.headerOpen ? "border-t border-edge/70" : "border-t border-edge/70 md:border-t-0"}`}>
@@ -431,7 +461,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           {loadingChat ? <div className="h-full grid place-items-center text-[12px] text-faint"><span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading conversation…</span></div> : messages.length ?
             <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
-              {messages.map((message) => <MessageBubble key={message.id} message={message} onFeedback={giveFeedback} />)}
+              {messages.map((message) => <MessageBubble key={message.id} message={message} conversationId={selected} onFeedback={giveFeedback} onManageMemory={() => setShowControls(true)} onProposal={(id, proposal) => setMessages((previous) => previous.map((item) => item.id === id ? { ...item, proposal } : item))} />)}
               {busy && <div className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin text-leaf" /> 9 Clover AI is working…</div>}
             </div> :
             <div className="min-h-full flex flex-col justify-center max-w-2xl mx-auto py-2">
@@ -480,11 +510,12 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             </div>
           </form>
           <AIWebControls mode={webMode} onChange={setWebMode} enabled={Boolean(status?.web_search_enabled)} disabled={busy || exporting || !workspaceReady} dailyLimit={status?.web_search_daily_limit ?? 10} />
-          <p className="text-[10px] text-mute leading-relaxed mt-2">When configured, the external AI provider receives your question, enabled context, attached boards and relevant esports evidence. Named MPL region/feed questions may also retrieve a public Rone feed (only region and feed are requested), even with web search off. Sources may be incomplete or outdated. Avoid sharing secrets.</p>
+          {me.role === "admin" && <p className="text-[10px] text-leaf mt-2">Drafts, strategies, heroes, patch labels and team equipment can be proposed for admin review — never applied automatically.</p>}
+          <p className="text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Named MPL questions may retrieve a public Rone feed even with web search off. Avoid sharing secrets.</p>
         </div>
       </section>
     </div> : <div className="rounded-xl border border-edge bg-panel p-4 sm:p-6 min-h-[400px]">
-      {tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <AIReviewQueue />}
+      {tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <div className="space-y-5"><AIActionHistory /><AIReviewQueue /></div>}
     </div>}
 
     {showMatchPicker && <Modal title="Attach saved matches" onClose={() => setShowMatchPicker(false)} wide>

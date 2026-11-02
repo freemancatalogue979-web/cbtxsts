@@ -11,6 +11,7 @@ import json
 import math
 import re
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -295,7 +296,78 @@ _ESPORTS_SKIP = {
     "details",
     "related",
     "available",
+    "train",
+    "training",
+    "teach",
+    "learn",
+    "learning",
+    "remember",
+    "understand",
+    "using",
+    "use",
+    "get",
+    "here",
+    "this",
+    "that",
+    "link",
+    "links",
+    "url",
+    "website",
+    "site",
+    "aerena",
+    "bro",
+    "would",
+    "like",
+    "https",
+    "http",
+    "www",
+    "mobile-legends",
+    "please",
+    "want",
+    "wanting",
+    "feed",
+    "teachings",
+    "check",
+    "checking",
+    "look",
+    "looking",
+    "find",
+    "finding",
+    "fetch",
+    "pull",
+    "take",
+    "open",
+    "visit",
+    "page",
+    "should",
+    "some",
+    "our",
+    "more",
+    "think",
+    "read",
+    "help",
 }
+
+
+def aerena_link(question: str) -> tuple[str, str | None] | None:
+    """Recognize an Aerena URL as an app source, never as an arbitrary fetch target."""
+    for match in re.findall(r"https?://[^\s<>\]\[()]+", question, re.I):
+        try:
+            url = urlsplit(match.rstrip(".,!?;"))
+            if url.scheme.lower() != "https" or (url.hostname or "").lower().rstrip(".") not in {
+                "aerena.gg",
+                "www.aerena.gg",
+            }:
+                continue
+            path = unquote(url.path).strip("/")
+            if path == "mobile-legends/schedule":
+                return "schedule", None
+            detail = re.fullmatch(r"mobile-legends/match/([A-Za-z0-9_-]{1,120})", path)
+            if detail:
+                return "match", detail.group(1)
+        except ValueError:
+            continue
+    return None
 
 
 def esports_intent(question: str) -> bool:
@@ -303,14 +375,20 @@ def esports_intent(question: str) -> bool:
     acronym = bool(re.search(r"\b[A-Z]{3,8}\b", question)) and bool(
         re.search(r"\b(matches|match|games?|draft|series|picks?|bans?|results?|scores?)\b", question, re.I)
     )
-    return bool(_ESPORTS_INTENT.search(question) or acronym)
+    return bool(_ESPORTS_INTENT.search(question) or acronym or aerena_link(question))
 
 
 def automatic_match_ids(db: Session, question: str) -> list[str]:
     """Find a small, relevant saved sample; do not invent matches or refresh upstream."""
-    tokens = [word for word in re.findall(r"[\w-]{3,}", question.casefold()) if word not in _ESPORTS_SKIP][:8]
     if not esports_intent(question):
         return []
+    linked = aerena_link(question)
+    if linked and linked[0] == "match":
+        row = db.get(AerenaMatch, linked[1])
+        return [row.id] if row else []
+    # URLs are references to this app's source, not team-name search terms.
+    text = re.sub(r"https?://[^\s]+", " ", question, flags=re.I)
+    tokens = [word for word in re.findall(r"[\w-]{3,}", text.casefold()) if word not in _ESPORTS_SKIP][:8]
     base = db.query(AerenaMatch, AerenaLeague).outerjoin(AerenaLeague, AerenaMatch.league_id == AerenaLeague.id)
     # Never mix another MPL region's saved matches into an explicitly regional question.
     from .ai_rone import requested_region
@@ -327,7 +405,7 @@ def automatic_match_ids(db: Session, question: str) -> list[str]:
                 AerenaLeague.name.ilike(f"%{full_name}%"),
             )
         )
-    upcoming = bool(re.search(r"\b(upcoming|next|schedule|fixtures?)\b", question, re.I))
+    upcoming = bool(re.search(r"\b(upcoming|next|schedule|fixtures?)\b", text, re.I))
     if upcoming:
         base = base.filter(AerenaMatch.has_result.is_(False), AerenaMatch.starts_at >= utcnow())
         order = AerenaMatch.starts_at.asc()

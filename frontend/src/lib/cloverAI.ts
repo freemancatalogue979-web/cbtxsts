@@ -36,11 +36,23 @@ export type AIMemoryNote = {
   created_at: string; updated_at: string;
 };
 
+export type AILearnedMemory = {
+  id: string; topic: string; content: string; source_kind: "teaching" | "research";
+  source_title: string | null; source_url: string | null; published_at: string | null; retrieved_at: string | null;
+  verification: "unverified"; author: "you"; conversation_id: string | null; message_id: number | null; created_at: string;
+};
+export type AILearnedMemoryState = { auto_learn: boolean; use_memory: boolean; limit: number; items: AILearnedMemory[] };
+
 export type AIConversation = { id: string; title: string; created_at: string; updated_at: string };
 export type AISource = {
-  kind: "personal" | "hero" | "community" | "match" | "web" | "draft" | "map" | "esports_feed"; label: string; route?: string; knowledge_id?: string;
-  url?: string | null; reviewed_at?: string; observed_at?: string | null; detail_fetched_at?: string | null; match_id?: string;
+  kind: "personal" | "hero" | "community" | "match" | "web" | "draft" | "map" | "esports_feed" | "learned" | "team_item"; label: string; route?: string; knowledge_id?: string; memory_id?: string;
+  url?: string | null; excerpt?: string; reviewed_at?: string; observed_at?: string | null; detail_fetched_at?: string | null; match_id?: string;
   published_at?: string | null; auto_selected?: boolean; board_id?: number;
+};
+export type AIProposal = {
+  id: string; kind: "create_draft" | "create_strategy" | "create_hero" | "update_hero" | "set_patch" | "create_item";
+  status: "pending" | "applied" | "discarded"; payload: Record<string, unknown>; before: Record<string, unknown>;
+  target_id: number | null; created_at: string; expires_at: string; resolved_at: string | null;
 };
 export type AIMessage = {
   id: number;
@@ -49,6 +61,7 @@ export type AIMessage = {
   mode: "user" | "ai" | "facts";
   note: string;
   sources: AISource[];
+  proposal?: AIProposal | null;
   feedback: -1 | 0 | 1;
   created_at: string;
 };

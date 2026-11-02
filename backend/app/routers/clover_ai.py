@@ -6,17 +6,17 @@ from datetime import timedelta
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from sqlalchemy import func, or_, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .. import ai_context, ai_web
+from .. import ai_context, ai_learning, ai_web
 from .. import clover_ai_service as service
 from ..ai_credentials import key_status
 from ..ai_privacy import public_ai_mode, public_ai_text
-from ..clover_ai_models import AIAccountConsent, AIContribution, AIConversation, AIKnowledge, AIMemoryNote, AIMessage, AISettings
+from ..clover_ai_models import AIAccountConsent, AIActionAudit, AIActionProposal, AIContribution, AIConversation, AIKnowledge, AILearnedMemory, AILearningSettings, AIMemoryNote, AIMessage, AISettings
 from ..deps import get_current_user, get_db
 from ..hero_profiles import profile_for
 from ..models import Hero, User, dumps, loads, utcnow
@@ -58,6 +58,7 @@ def message_json(row: AIMessage) -> dict:
             {**source, "label": public_ai_text(source.get("label", ""))} if isinstance(source, dict) else source
             for source in sources
         ]
+    from ..ai_actions import proposal_json
     return {
         "id": row.id,
         "role": row.role,
@@ -65,6 +66,7 @@ def message_json(row: AIMessage) -> dict:
         "mode": public_ai_mode(row.mode),
         "note": public_ai_text(row.note) if row.role == "assistant" else row.note,
         "sources": sources,
+        "proposal": proposal_json(row.action_proposal) if row.role == "assistant" and row.action_proposal else None,
         "feedback": row.feedback,
         "created_at": iso(row.created_at),
     }
@@ -139,6 +141,7 @@ class MessageIn(BaseModel):
         default_factory=list, max_length=ai_context.MAX_MAPS
     )
     share_board_context: bool = False
+    request_action: bool = False
     auto_esports: bool = True
     # Older clients do not trigger new billable search calls accidentally.
     web_mode: Literal["auto", "on", "off"] = "off"
@@ -158,6 +161,17 @@ class MessageIn(BaseModel):
         if len(set(values)) != len(values):
             raise ValueError("Select each match only once.")
         return values
+
+
+class LearningSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    auto_learn: StrictBool | None = None
+    use_memory: StrictBool | None = None
+
+
+class SaveResearchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_index: int = Field(ge=0, le=100, strict=True)
 
 
 class FeedbackIn(BaseModel):
@@ -272,32 +286,37 @@ def update_settings(data: SettingsIn, user: User = Depends(ai_user), db: Session
     return service.settings_dict(row, service.account_stats_consent(db, user.id))
 
 
+def _clear_learned_context(db: Session, user_id: int) -> None:
+    db.query(AILearnedMemory).filter_by(owner_id=user_id).delete(synchronize_session=False)
+    learned_settings = db.get(AILearningSettings, user_id)
+    if learned_settings is None:
+        learned_settings = AILearningSettings(user_id=user_id, auto_learn=False, use_memory=False)
+        db.add(learned_settings)
+    else:
+        learned_settings.auto_learn = learned_settings.use_memory = False
+        learned_settings.updated_at = utcnow()
+
+
 @router.delete("/settings/memory")
 def clear_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict:
-    row = db.get(AISettings, user.id)
-    if row is None:
-        row = AISettings(user_id=user.id)
-        db.add(row)
-    row.share_profile = row.share_pool = row.share_scrims = row.use_history = False
-    row.coaching_goal = ""
-    row.updated_at = utcnow()
-    db.query(AIMemoryNote).filter_by(user_id=user.id).delete(synchronize_session=False)
-    db.query(AIAccountConsent).filter_by(user_id=user.id).delete(synchronize_session=False)
-    try:
-        db.commit()
-    except IntegrityError:  # Concurrent first-write from another session.
-        db.rollback()
+    for _ in range(3):
         row = db.get(AISettings, user.id)
         if row is None:
-            raise
+            row = AISettings(user_id=user.id)
+            db.add(row)
         row.share_profile = row.share_pool = row.share_scrims = row.use_history = False
         row.coaching_goal = ""
         row.updated_at = utcnow()
         db.query(AIMemoryNote).filter_by(user_id=user.id).delete(synchronize_session=False)
         db.query(AIAccountConsent).filter_by(user_id=user.id).delete(synchronize_session=False)
-        db.commit()
-    db.refresh(row)
-    return service.settings_dict(row, False)
+        _clear_learned_context(db, user.id)
+        try:
+            db.commit()
+            db.refresh(row)
+            return service.settings_dict(row, False)
+        except IntegrityError:  # A concurrent first write created a settings row.
+            db.rollback()
+    raise HTTPException(409, "Your AI settings changed. Please try clearing again.")
 
 
 @router.get("/memory-notes")
@@ -350,6 +369,52 @@ def update_memory(
 @router.delete("/memory-notes/{memory_id}", status_code=204)
 def delete_memory(memory_id: str, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
     row = own_memory(db, user, memory_id)
+    db.delete(row)
+    db.commit()
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/learned-memory")
+def list_learned_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict:
+    prefs = ai_learning.settings(db, user.id)
+    rows = db.query(AILearnedMemory).filter_by(owner_id=user.id).order_by(AILearnedMemory.created_at.desc()).limit(ai_learning.MAX_MEMORIES).all()
+    return {"auto_learn": prefs.auto_learn, "use_memory": prefs.use_memory, "limit": ai_learning.MAX_MEMORIES,
+            "items": [ai_learning.as_json(row) for row in rows]}
+
+
+@router.patch("/learned-memory/settings")
+def update_learning_settings(data: LearningSettingsIn, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict:
+    changes = data.model_dump(exclude_unset=True)
+    if any(value is None for value in changes.values()):
+        raise HTTPException(422, "Learning settings cannot be null.")
+    for _ in range(2):
+        row = db.get(AILearningSettings, user.id)
+        if row is None:
+            row = AILearningSettings(user_id=user.id, auto_learn=True, use_memory=True)
+            db.add(row)
+        for key, value in changes.items():
+            setattr(row, key, value)
+        row.updated_at = utcnow()
+        try:
+            db.commit()
+            return {"auto_learn": row.auto_learn, "use_memory": row.use_memory}
+        except IntegrityError:
+            db.rollback()
+    raise HTTPException(409, "Your memory settings changed. Please try again.")
+
+
+@router.delete("/learned-memory", status_code=204)
+def delete_all_learned_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
+    db.query(AILearnedMemory).filter_by(owner_id=user.id).delete(synchronize_session=False)
+    db.commit()
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/learned-memory/{memory_id}", status_code=204)
+def delete_learned_memory(memory_id: str, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
+    row = db.query(AILearnedMemory).filter_by(owner_id=user.id, id=memory_id).first()
+    if row is None:
+        raise HTTPException(404, "Memory not found.")
     db.delete(row)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -487,12 +552,19 @@ def messages(
 
 @router.post("/conversations/{conversation_id}/messages", status_code=201)
 def send_message(
-    conversation_id: str, data: MessageIn, user: User = Depends(ai_user), db: Session = Depends(get_db)
+    conversation_id: str, data: MessageIn, background_tasks: BackgroundTasks,
+    user: User = Depends(ai_user), db: Session = Depends(get_db)
 ) -> dict:
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
     if (data.draft_ids or data.map_ids) and not data.share_board_context:
         raise HTTPException(status_code=422, detail="Confirm sharing the selected saved boards with the AI provider.")
+    if data.request_action and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can request AI platform-change proposals.")
+    from .. import ai_actions
+    action_kinds = ai_actions.intent(db, question) if user.role == "admin" else []
+    if data.request_action and not action_kinds:
+        raise HTTPException(status_code=422, detail="Specify a draft, strategy, hero, patch label or equipment change to propose.")
     token = uuid4().hex
     now = utcnow()
     lock = db.execute(
@@ -530,6 +602,12 @@ def send_message(
                                                 include_auto_esports=data.auto_esports)
         facts.update(board_facts)
         sources.extend(board_sources)
+        from .. import ai_saved
+        try:
+            ai_saved.queue_relevant_refreshes(db, user.id, question, facts, background_tasks)
+        except SQLAlchemyError:
+            # A best-effort refresh must not prevent use of the already-read data.
+            db.rollback()
         row = own_conversation(db, user, conversation_id)
         if row.title == "New conversation":
             row.title = " ".join(question.split())[:80]
@@ -544,7 +622,11 @@ def send_message(
         db.add(prompt)
         db.commit()  # Save the user's request before any external network operation.
         db.refresh(prompt)
-        output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports)
+        learned, learning_status = ai_learning.learn(db, user.id, question, conversation_id, prompt.id)
+        if learning_status != "none":
+            facts["memory_action"] = {"status": learning_status, "topic": learned.topic if learned else None,
+                                      "notice": "Server-confirmed private memory result; a separate notice is shown to the member."}
+        output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports, action_kinds)
         sources.extend(output.get("sources", []))
         # A deleted chat or expired/replaced lease must never be resurrected.
         db.expire_all()
@@ -556,10 +638,23 @@ def send_message(
         )
         if row is None:
             raise HTTPException(status_code=409, detail="Conversation was removed or the request expired.")
+        memory_notices = {
+            "saved": "Got it, bro — I’ve saved that to your private memory. You can review or delete it in Manage context.",
+            "duplicate": "I’ve already got that in your private memory, bro. You can review it in Manage context.",
+            "disabled": "Auto-learning is switched off, so I haven’t saved that. You can turn it on in Manage context.",
+            "need_details": "Tell me the fact you want me to remember, bro — a link or request by itself isn’t enough to save a teaching.",
+            "too_long": "That teaching is too long to save in one memory. Send it in shorter pieces, bro.",
+            "sensitive": "I haven’t saved that because it looks like it may contain a secret. Please keep passwords and tokens out of chat.",
+            "unsafe": "I haven’t saved that as a memory. Share the game fact itself without instructions for the AI, bro.",
+            "full": "Your private memory is full. Delete an old memory in Manage context to make room, bro.",
+            "unavailable": "I couldn’t save that memory just now. Please try again, bro.",
+        }
+        memory_notice = memory_notices.get(learning_status)
+        reply_content = f"{memory_notice}\n\n{output['content']}" if memory_notice else output["content"]
         reply = AIMessage(
             conversation_id=conversation_id,
             role="assistant",
-            content=output["content"],
+            content=reply_content,
             mode=output["mode"],
             note=output["note"][:600],
             sources_json=dumps(sources),
@@ -567,6 +662,16 @@ def send_message(
         row.updated_at = utcnow()
         row.busy_token = row.busy_until = None
         db.add(reply)
+        db.flush()
+        if action_kinds and output.get("mode") == "ai":
+            if output.get("proposal") is not None:
+                try:
+                    ai_actions.prepare(db, user, reply, output["proposal"], action_kinds)
+                    reply.content += "\n\nThis is a proposal only; nothing changes until you review and confirm it."
+                except ai_actions.ActionError as exc:
+                    reply.content = f"I couldn’t prepare that change: {public_ai_text(str(exc))[:300]} Nothing was changed."
+            elif "nothing" not in reply.content.lower():
+                reply.content += "\n\nNo change was made."
         db.commit()
         db.refresh(reply)
         return {
@@ -588,6 +693,74 @@ def send_message(
             .values(busy_token=None, busy_until=None)
         )
         db.commit()
+
+
+@router.post("/conversations/{conversation_id}/messages/{message_id}/research-memory", status_code=201)
+def save_research_memory(conversation_id: str, message_id: int, data: SaveResearchIn,
+                         user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict:
+    own_conversation(db, user, conversation_id)
+    row = db.query(AIMessage).filter_by(id=message_id, conversation_id=conversation_id, role="assistant").first()
+    if row is None:
+        raise HTTPException(404, "Research source not found.")
+    sources = loads(row.sources_json, [])
+    if not isinstance(sources, list) or data.source_index >= len(sources) or not isinstance(sources[data.source_index], dict):
+        raise HTTPException(404, "Research source not found.")
+    memory, outcome = ai_learning.save_research(db, user.id, sources[data.source_index], conversation_id, message_id)
+    if outcome == "full":
+        raise HTTPException(409, "Your memory is full. Delete an old memory to make room.")
+    if outcome in {"invalid", "unsafe"}:
+        raise HTTPException(422, "This source does not contain a saveable excerpt, or it may include sensitive instructions or secrets.")
+    if memory is None:
+        raise HTTPException(409, "Could not save this finding. Please try again.")
+    return {"status": outcome, "memory": ai_learning.as_json(memory)}
+
+
+class ConfirmActionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewed: StrictBool
+    confirm: StrictBool
+
+
+def action_admin(user: User = Depends(ai_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(403, "Only admins can manage AI platform-change proposals.")
+    return user
+
+
+@router.get("/actions/audit")
+def action_audit(limit: int = Query(default=50, ge=1, le=100), user: User = Depends(action_admin),
+                 db: Session = Depends(get_db)) -> dict:
+    rows = db.query(AIActionAudit).order_by(AIActionAudit.created_at.desc(), AIActionAudit.id.desc()).limit(limit).all()
+    return {"items": [{"id": row.id, "kind": row.kind, "actor_id": row.actor_id, "target_id": row.target_id,
+                       "before": loads(row.before_json, {}), "after": loads(row.after_json, {}),
+                       "created_at": iso(row.created_at)} for row in rows]}
+
+
+@router.post("/actions/{proposal_id}/apply")
+def apply_action(proposal_id: str, data: ConfirmActionIn, user: User = Depends(action_admin),
+                 db: Session = Depends(get_db)) -> dict:
+    if not data.reviewed or not data.confirm:
+        raise HTTPException(422, "Review and explicitly confirm the proposal first.")
+    from ..ai_actions import ActionError, apply, proposal_json
+    try:
+        return proposal_json(apply(db, user, proposal_id))
+    except ActionError as exc:
+        raise HTTPException(409, str(exc)) from None
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "The target changed or already exists; review a new proposal.") from None
+
+
+@router.post("/actions/{proposal_id}/discard")
+def discard_action(proposal_id: str, user: User = Depends(action_admin), db: Session = Depends(get_db)) -> dict:
+    result = db.execute(update(AIActionProposal).where(AIActionProposal.id == proposal_id,
+                        AIActionProposal.owner_id == user.id, AIActionProposal.status == "pending")
+                        .values(status="discarded", resolved_at=utcnow()))
+    db.commit()
+    if not result.rowcount:
+        raise HTTPException(404, "Pending proposal not found.")
+    from ..ai_actions import proposal_json
+    return proposal_json(db.get(AIActionProposal, proposal_id))
 
 
 @router.patch("/conversations/{conversation_id}/messages/{message_id}/feedback")
@@ -654,7 +827,7 @@ def knowledge(
         ],
         "hero_count": db.query(Hero).count(),
         "community_count": db.query(AIKnowledge).filter_by(active=True).count(),
-        "notice": "Keyword search only. No live patch feed, web search or item database is connected here.",
+        "notice": "Shared-library keyword search; private learned memories are managed separately. The chat can use saved team equipment and optional web research. No verified live patch feed is connected.",
     }
 
 

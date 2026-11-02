@@ -80,7 +80,7 @@ export function AIMemoryNotes({ revision, disabled, onBusyChange }: {
       <div className="flex gap-3 min-w-0">
         <div className="rounded-lg bg-leaf/10 text-leaf p-2 h-fit"><BrainCircuit size={16} /></div>
         <div className="min-w-0"><h3 className="text-[13px] font-extrabold">Coaching notes <span className="font-semibold text-faint">{notes ? `· ${notes.length}/12` : ""}</span></h3>
-          <p className="text-[11px] text-mute leading-relaxed mt-1 max-w-xl">Write your own strengths, focus areas and preferences. Nothing is learned automatically from your chats.</p></div>
+          <p className="text-[11px] text-mute leading-relaxed mt-1 max-w-xl">Keep separate notes for your strengths, focus areas and preferences. These are different from your taught memories above.</p></div>
       </div>
       <button type="button" className="btn-ghost !text-[11px]" disabled={blocked || !notes || notes.length >= 12 || Boolean(editor)}
         onClick={() => setEditor({ id: null, category: "focus", content: "", share: false })}><Plus size={13} /> Add note</button>

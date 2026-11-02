@@ -13,7 +13,7 @@
     "test:map": "node --test tests/map-chips.test.mjs tests/map-zones.test.mjs tests/map-elements.test.mjs",
     "clean": "rm -rf dist",
     "test:esports": "node --test tests/esports.test.mjs tests/rone-esports.test.mjs",
-    "test:ai": "node --test tests/clover-ai.test.mjs tests/ai-workspace-layout.test.mjs",
+    "test:ai": "node --test tests/clover-ai.test.mjs tests/ai-workspace-layout.test.mjs tests/ai-learning.test.mjs",
     "test:focus": "node --test tests/team-focus.test.mjs",
     "test:ui": "node --test tests/section-pill.test.mjs"
   },

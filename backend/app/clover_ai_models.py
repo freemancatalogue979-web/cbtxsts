@@ -63,6 +63,44 @@ class AIMemoryNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class AILearningSettings(Base):
+    """Separate switches avoid a column migration on existing AI settings."""
+
+    __tablename__ = "clover_ai_learning_settings"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    auto_learn: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    use_memory: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class AILearnedMemory(Base):
+    """Owner-only facts explicitly taught by a member or saved from research."""
+
+    __tablename__ = "clover_ai_learned_memory"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "slot", name="uq_ai_learned_memory_slot"),
+        UniqueConstraint("owner_id", "fingerprint", name="uq_ai_learned_memory_fingerprint"),
+        CheckConstraint("slot >= 0 AND slot < 200", name="ck_ai_learned_memory_slot"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    slot: Mapped[int] = mapped_column(Integer, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    topic: Mapped[str] = mapped_column(String(120), nullable=False)
+    content: Mapped[str] = mapped_column(String(1200), nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(20), nullable=False)  # teaching | research
+    source_title: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    source_url: Mapped[str] = mapped_column(String(2048), default="", nullable=False)
+    published_at: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    retrieved_at: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    verification: Mapped[str] = mapped_column(String(20), default="unverified", nullable=False)
+    conversation_id: Mapped[str | None] = mapped_column(ForeignKey("clover_ai_conversations.id", ondelete="SET NULL"), nullable=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("clover_ai_messages.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
 class AIWebSearchUsage(Base):
     """A separate daily budget for potentially billable web searches."""
 
@@ -110,6 +148,42 @@ class AIMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     conversation: Mapped[AIConversation] = relationship(back_populates="messages")
+    action_proposal: Mapped["AIActionProposal | None"] = relationship(
+        back_populates="message", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class AIActionProposal(Base):
+    """Owner-private reviewed action; never an executable command or arbitrary query."""
+    __tablename__ = "clover_ai_action_proposals"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("clover_ai_conversations.id", ondelete="CASCADE"), index=True, nullable=False)
+    message_id: Mapped[int] = mapped_column(ForeignKey("clover_ai_messages.id", ondelete="CASCADE"), unique=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    before_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    message: Mapped[AIMessage] = relationship(back_populates="action_proposal")
+
+
+class AIActionAudit(Base):
+    """Durable audit of actually applied changes, independent of chat deletion."""
+    __tablename__ = "clover_ai_action_audit"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    proposal_id: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    before_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    after_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True, nullable=False)
 
 
 class AIContribution(Base):

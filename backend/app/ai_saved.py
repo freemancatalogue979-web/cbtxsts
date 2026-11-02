@@ -109,6 +109,132 @@ def esports_availability(db: Session) -> tuple[dict, list[dict]]:
     return fact, sources
 
 
+def queue_relevant_refreshes(
+    db: Session, user_id: int, question: str, facts: dict, background_tasks
+) -> None:  # noqa: ANN001
+    """Refresh stale saved evidence after the answer, with the shared cache leases.
+
+    The task arguments contain only validated source keys, never a member prompt
+    or account credential. The account task rechecks link/generation before use.
+    """
+    from uuid import uuid4
+    from . import ai_rone
+    from .clover_ai_models import AIAccountConsent
+    from .intel_cache import claim_refresh, snapshot_key
+    from .routers.intel import CACHE_TTL, LONG_TTL, SAFE_PATH, _refresh_account_snapshot, _refresh_public_snapshot
+
+    candidates: list[tuple[IntelSnapshot, int]] = []
+    requested = ai_rone.requested_feed(question)
+    if requested and (facts.get("rone_public_mpl") or {}).get("status") == "saved":
+        region, view = requested
+        row = db.get(IntelSnapshot, snapshot_key("public", f"esports/{region}/{view}"))
+        if row:
+            candidates.append((row, LONG_TTL if view in {"standings", "playoffs"} else CACHE_TTL))
+    for hero in facts.get("hero_library", [])[:4]:
+        kit = hero.get("saved_rone_skills") or {}
+        if not kit.get("stale"):
+            continue
+        name = hero.get("name")
+        if not isinstance(name, str):
+            continue
+        path = f"heroes/{name}"
+        if not SAFE_PATH.fullmatch(path) or any(part in {"", ".", ".."} for part in path.split("/")):
+            continue
+        row = (
+            db.query(IntelSnapshot)
+            .filter(
+                IntelSnapshot.scope == "public",
+                IntelSnapshot.owner_id.is_(None),
+                func.lower(IntelSnapshot.path) == path.lower(),
+            )
+            .order_by(IntelSnapshot.observed_at.desc())
+            .first()
+        )
+        if row:
+            candidates.append((row, CACHE_TTL))
+    account = facts.get("opted_in_own_account")
+    consent = db.get(AIAccountConsent, user_id) if account is not None else None
+    if consent and consent.share_account_stats:
+        rows = (
+            db.query(IntelSnapshot)
+            .filter_by(scope="account", owner_id=user_id, generation_id=consent.generation_id)
+            .filter(IntelSnapshot.path.in_(_ACCOUNT_PATHS))
+            .order_by(IntelSnapshot.observed_at.desc())
+            .limit(30)
+            .all()
+        )
+        seen = set()
+        for row in rows:
+            if row.path in seen or (row.path == "user/matches" and parse_qs(row.query).get("index", ["1"])[0] != "1"):
+                continue
+            seen.add(row.path)
+            candidates.append((row, CACHE_TTL))
+            if len(seen) >= 5:
+                break
+    for row, ttl in candidates[:10]:
+        if row.observed_at + timedelta(seconds=ttl) > utcnow():
+            continue
+        # Query strings come from previously validated cache keys; reject any
+        # credential-like parameters defensively before queuing network work.
+        if any(
+            key.casefold() in {"token", "access_token", "jwt", "authorization", "api_key", "password", "vc"}
+            for key in parse_qs(row.query, keep_blank_values=True)
+        ):
+            continue
+        key, path, query, generation = row.key, row.path, row.query, row.generation_id
+        token = uuid4().hex
+        if not claim_refresh(db, key, token):
+            continue
+        if row.scope == "public":
+            background_tasks.add_task(_refresh_public_snapshot, db.get_bind(), key, path, query, token)
+        elif generation:
+            background_tasks.add_task(
+                _refresh_account_snapshot, db.get_bind(), key, user_id, generation, path, query, token
+            )
+
+
+def equipment_evidence(db: Session, question: str) -> tuple[dict | None, list[dict]]:
+    """Project only a small relevant sample of explicitly team-maintained items."""
+    from .platform_data import TeamEquipment
+
+    words = question.casefold()
+    rows = db.query(TeamEquipment).order_by(TeamEquipment.name).limit(500).all()
+    selected = [row for row in rows if re.search(r"(?<!\w)" + re.escape(row.name.casefold()) + r"(?!\w)", words)]
+    exact = bool(selected)
+    general = bool(re.search(r"\b(items?|equipment|gear|builds?)\b", words))
+    if not selected and not general:
+        return None, []
+    if not selected:
+        selected = rows[:5]
+    if not selected:
+        return {"entries": [], "notice": "No team-maintained equipment is saved; do not invent a record."}, []
+    entries = [
+        {
+            "name": row.name,
+            "category": row.category or None,
+            "description": row.description[:700],
+            "patch_label": row.patch or None,
+            "source_url": row.source_url or None,
+            "updated_at": row.updated_at.isoformat() + "Z",
+        }
+        for row in selected[:5]
+    ]
+    return {
+        "entries": entries,
+        "truncated": len(selected) > 5 or (general and len(rows) > len(selected)),
+        "notice": "Team-maintained and not an official or independently verified game feed; a patch label is not proof of current balance. "
+        + ("Exact item-name matches." if exact else "This is an alphabetical sample, not a recommended build."),
+    }, [
+        {
+            "kind": "team_item",
+            "label": f"Team equipment: {row.name}",
+            "route": "intel/equipment",
+            "observed_at": row.updated_at.isoformat() + "Z",
+        }
+        for row in selected[:5]
+    ]
+
+
 def _plain(value: Any, limit: int) -> str:
     if not isinstance(value, str) or value.startswith("@"):
         return ""

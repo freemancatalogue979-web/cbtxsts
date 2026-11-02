@@ -5,6 +5,8 @@ import { heroRecords, intel, intelRaw, pct, rankRecords, recData, digRecords, st
 import type { AnyRec, IntelHero, RankRecord, Records } from "../lib/mlbb";
 import { HeroImg } from "../components/HeroImg";
 import { navigate } from "../lib/util";
+import type { User } from "../lib/types";
+import { TeamEquipment } from "../components/TeamEquipment";
 
 type SortField = "win_rate" | "pick_rate" | "ban_rate";
 
@@ -263,8 +265,9 @@ function ToolsTab() {
   );
 }
 
-export function IntelPage() {
-  const [tab, setTab] = useState("overview");
+export function IntelPage({ me, parts }: { me: User; parts: string[] }) {
+  const [tab, setTab] = useState(parts[0] === "equipment" ? "equipment" : "overview");
+  useEffect(() => { if (parts[0] === "equipment") setTab("equipment"); }, [parts[0]]);
   const [days, setDays] = useState<number>(7);
   const [rank, setRank] = useState<string>("all");
   const [boards, setBoards] = useState<Record<SortField, RankRecord[]>>({ win_rate: [], pick_rate: [], ban_rate: [] });
@@ -374,7 +377,8 @@ export function IntelPage() {
         </section>
       )}
 
-      {tab === "equipment" && <ReferenceGrid path="academy/equipment/expanded" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["equipskilldesc", "skilldesc", "description", "itemdesc", "desc"]} />}
+      {tab === "equipment" && <div className="space-y-6"><TeamEquipment canEdit={me.role === "admin"} />
+        <section><div className="section-pill mb-3">COMMUNITY EQUIPMENT</div><ReferenceGrid path="academy/equipment/expanded" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["equipskilldesc", "skilldesc", "description", "itemdesc", "desc"]} /></section></div>}
       {tab === "emblems" && <ReferenceGrid path="academy/emblems" searchKeys={["emblemname", "skillname"]} iconKeys={["emblemicon", "skillicon", "icon"]} titleKeys={["emblemname", "skillname", "name"]} descKeys={["skilldesc", "skilldescemblem", "description"]} />}
       {tab === "spells" && <ReferenceGrid path="academy/spells" searchKeys={["skillname", "name"]} iconKeys={["skillicon", "icon"]} titleKeys={["skillname", "name"]} descKeys={["skilldesc", "description"]} />}
       {tab === "ranks" && <ReferenceGrid path="academy/ranks" searchKeys={["bigrank_name", "minrank_name"]} iconKeys={["icon"]} titleKeys={["bigrank_name", "name"]} descKeys={["minrank_name", "description"]} />}
