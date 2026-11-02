@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .aerena_models import AerenaAIUsage
+from .ai_credentials import CredentialStorageError, key_status, resolved_key
 from .models import utcnow
 
 ENDPOINT = "https://api.deepseek.com/chat/completions"
@@ -35,8 +36,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def configured() -> bool:
-    return bool(os.getenv("DEEPSEEK_API_KEY", "").strip())
+def configured(db: Session) -> bool:
+    return bool(key_status(db)["configured"])
+
+
+def _credential(db: Session) -> tuple[str | None, str]:
+    try:
+        return resolved_key(db), "DeepSeek is not configured."
+    except CredentialStorageError:
+        return None, "The saved DeepSeek key cannot be unlocked; an admin can check Team Admin."
 
 
 def _reserve(db: Session, user_id: int) -> bool:
@@ -113,7 +121,7 @@ def factual_fallback(detail: dict) -> str:
     return "\n".join(lines)
 
 
-def _complete(db: Session, user_id: int, question: str, facts: dict) -> str:
+def _complete(db: Session, user_id: int, question: str, facts: dict, api_key: str) -> str:
     if not _reserve(db, user_id):
         raise AnalysisError(f"Daily analysis limit reached ({DAILY_LIMIT} requests per user, UTC).")
     system = (
@@ -130,7 +138,7 @@ def _complete(db: Session, user_id: int, question: str, facts: dict) -> str:
                                     {"role": "user", "content": "Saved match evidence (JSON):\n" + json.dumps(facts, ensure_ascii=False) + "\n\nQuestion: " + question}]},
                       ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(ENDPOINT, data=body, method="POST", headers={
-        "Authorization": "Bearer " + os.environ["DEEPSEEK_API_KEY"].strip(),
+        "Authorization": "Bearer " + api_key,
         "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "9Clover/1.0"})
     try:
         with urllib.request.build_opener(_NoRedirect()).open(req, timeout=35) as response:
@@ -151,11 +159,12 @@ def _complete(db: Session, user_id: int, question: str, facts: dict) -> str:
 
 def ask(db: Session, user_id: int, question: str, detail: dict) -> dict:
     facts = evidence(detail)
-    if not configured():
+    api_key, reason = _credential(db)
+    if not api_key:
         return {"mode": "facts", "answer": factual_fallback(detail), "source_url": facts.get("source_url"),
-                "fetched_at": facts.get("fetched_at"), "note": "DeepSeek is not configured; this is a deterministic facts-only summary, not an AI answer."}
+                "fetched_at": facts.get("fetched_at"), "note": f"{reason} This is a deterministic facts-only summary, not an AI answer."}
     try:
-        answer = _complete(db, user_id, question, facts)
+        answer = _complete(db, user_id, question, facts, api_key)
     except AnalysisError as exc:
         return {"mode": "facts", "answer": factual_fallback(detail), "source_url": facts.get("source_url"),
                 "fetched_at": facts.get("fetched_at"), "note": f"{exc} This is a facts-only summary, not an AI answer."}
@@ -201,10 +210,10 @@ def ask_scene(db: Session, user_id: int, question: str, details: list[dict]) -> 
     facts = scene_evidence(details)
     sources = [{"match_id": d["match"].get("id"), "source_url": d["match"].get("source_url"),
                 "fetched_at": d["match"].get("fetched_at")} for d in details]
-    reason = "DeepSeek is not configured."
-    if configured():
+    api_key, reason = _credential(db)
+    if api_key:
         try:
-            answer = _complete(db, user_id, question, facts)
+            answer = _complete(db, user_id, question, facts, api_key)
             return {"mode": "deepseek", "answer": answer, "sources": sources,
                     "note": "Based only on this selected sample. Interpretations are not recorded coach statements."}
         except AnalysisError as exc:

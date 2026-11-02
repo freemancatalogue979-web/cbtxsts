@@ -96,7 +96,7 @@ export function Modal({ title, onClose, children, wide = false }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
-      role="dialog" aria-modal="true">
+      role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className={`relative card w-full ${wide ? "max-w-3xl" : "max-w-lg"} max-h-[92vh] flex flex-col rounded-b-none sm:rounded-b-md`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-edge">

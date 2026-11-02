@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-import os
 import urllib.parse
 from datetime import timedelta
 from typing import Any
@@ -19,6 +18,7 @@ from ..aerena_service import (ENABLED, SYNC_SECONDS, _id, _state, iso, request_r
                               save_match_detail)
 from ..db import get_db
 from ..deps import can, get_current_user, require
+from ..esports_ai import configured as ai_configured
 from ..models import User, loads, utcnow
 
 router = APIRouter(prefix="/esports", tags=["esports"])
@@ -105,7 +105,7 @@ def source_status(db: Session) -> dict:
         "last_error": state.last_error or None, "refresh_seconds": SYNC_SECONDS,
         "series_count": db.query(AerenaSeries).count(), "league_count": db.query(AerenaLeague).count(),
         "match_count": db.query(AerenaMatch).count(), "draft_events": db.query(AerenaDraftEvent).count(),
-        "ai_configured": bool(os.getenv("DEEPSEEK_API_KEY", "").strip()),
+        "ai_configured": ai_configured(db),
     }
 
 

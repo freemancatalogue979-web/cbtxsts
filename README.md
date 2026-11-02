@@ -32,6 +32,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Draft Lab** | Saved pick/ban boards: 5+5 bans, lane picks both sides, status idea → testing → approved |
 | **Calendar & Events** | Tournaments, scrims, training and review deadlines in one feed |
 | **Esports** | Saved Aerena seasons and matches, source-reported team/player stats and ordered draft coverage when available, plus bounded evidence-based analysis |
+| **9 CLOVER AI** | Member-owned private chats, optional personal coaching context, historical hero lookup and admin-reviewed community knowledge |
 
 ## Roles & permissions
 
@@ -51,17 +52,44 @@ Enforced on the API, not just the UI.
 
 ## Quick start
 
-You need **Python 3.11+** and **Node 18+** once. Then:
+The Linux launcher needs **Python 3.10+** with the `venv` module, network access
+for dependency installation, and either Node.js **20.19+ (20.x)** or **22.12+**
+with npm 9+. If Node/npm is missing or incompatible, it downloads a pinned,
+SHA-256-verified official Node.js 22 runtime into `.arena-run/tools` (Linux
+x86-64/ARM64 and macOS x64/ARM64). It does not modify system packages or require
+sudo. Downloads need access to `nodejs.org`, npm's registry and PyPI. An
+existing compatible Node/npm is reused. The local runtime is pinned rather than
+automatically upgraded; keep the launcher and any system Node.js security-patched.
 
 ```bash
-./start-arena.sh          # installs dependencies, starts API :9000 + web :9009 (survives SSH close)
-./start-arena.sh status   # confirm both are running
-./start-arena.sh logs     # follow logs (Ctrl+C only closes the viewer)
-./start-arena.sh stop     # stop both
+./start-arena.sh            # installs dependencies, starts API :9000 + web :9009 in background
+./start-arena.sh status     # show actual service ports and process state
+./start-arena.sh logs       # follow logs (Ctrl+C only closes the viewer)
+./start-arena.sh restart    # check dependencies, then restart both
+./start-arena.sh stop       # stop the background services
+./start-arena.sh foreground # run both attached to the terminal (Ctrl+C stops them)
 ```
 
+The background services survive SSH logout. On another device use
+`http://<server-ip>:9009`; allow the port through your firewall if needed.
+Override ports with, for example,
+`API_PORT=9100 WEB_PORT=9109 ./start-arena.sh restart`; the web proxy follows
+`API_PORT` unless `VITE_API_TARGET` is explicitly set. Use the same port
+variables when starting again. For an internal
+Node mirror, `CLOVER_NODE_DIST_BASE` can point to a mirror with the identical
+official archives; their pinned checksums are still enforced.
+
+On Ubuntu, if Python or `venv` is missing, install `python3`, `python3-venv`
+and `python3-pip` with apt. If Node's download fails, allow access to
+`nodejs.org` or install a compatible Node.js/npm and retry. The launcher reports
+port conflicts and prints service logs if startup fails.
+
+**These are development servers**, not a hardened production deployment. Before
+public use, change the bootstrap credentials and signing secret, restrict access
+to both ports, and provide HTTPS. Do not run the app as root in production.
+
 ```bat
-start-arena.bat           :: Windows — opens two terminals and your browser
+start-arena.bat             :: Windows — opens two terminals and your browser
 ```
 
 Or by hand:
@@ -96,11 +124,118 @@ the database is first created; changing them later does not change an existing
 account. If example data is opted in, the example accounts use the same initial
 password and must also be changed or removed before real use.
 
-## Aerena Esports and 9 Clover AI
+## 9 CLOVER AI — member workspace
+
+Every signed-in member has a **9 CLOVER AI** tab, private conversations, rename,
+delete, owner-only search across chat titles and messages, paginated older chats,
+optional feedback, suggested prompts and source-context labels. A conversation
+can be downloaded as plaintext JSON: the browser collects a consistent snapshot
+in pages, up to 2,000 messages, and explicitly warns before a partial download if
+there are more. The file remains on the device even after deleting the chat.
+Search terms are sent in a request body rather than a URL to reduce exposure in
+standard access logs; server operators and custom logging can still see app data.
+The assistant is intended for general MLBB coaching, not just professional teams.
+When a provider is not configured, fails or reaches its limit, a clearly
+labelled **local facts-only snapshot** is shown instead of a fabricated answer.
+A configured-key badge is not a provider connectivity check.
+
+### Personal data and conversation privacy
+
+- Profile/linked-account snapshot, the member's own recorded hero pool and their
+  own recent scrim **assignments** are separate opt-ins, off by default. A
+  substitute assignment is not proof the person played. The pool is manually
+  entered, not a verified match history. The AI uses at most 25 pool entries and
+  scans lineup/substitute IDs from at most 200 recent team scrims to find five
+  assignments; only the member's matched scrim details are selected. Coach notes,
+  other members' records, team strategies and private Archive content are not
+  sent to the provider.
+- A linked profile uses cached name/level/rank; it is not asserted current. The
+  linked role/server IDs are included only if the current question asks about
+  them. Rone JWT/refresh tokens are never automatically selected. User-supplied
+  text can still contain sensitive information, so **do not type secrets**.
+- Members may write up to 12 private coaching notes (500 characters each) for
+  strengths, focus areas, preferences and goals. Every note starts with sharing
+  **off**; its owner may edit, delete or individually enable it. An enabled note
+  can be sent with each future DeepSeek request independently of the profile
+  switch. Notes are member-supplied claims, not verified performance or automatic
+  learning from chat. Turning a note off stops direct inclusion, but earlier
+  messages containing the same information may still be sent as chat history;
+  switch off history or delete those chats as appropriate.
+- The current question and, by default, up to eight recent messages (at most
+  6,500 characters) are sent to DeepSeek when it is used. Recent history can be
+  turned off separately. Enabling a personal category also permits that data to
+  be sent. Each answer shows the sources supplied to it, not a guarantee that
+  every generated claim is supported. No autonomous SQL, shell or general web
+  tools are available to the model.
+- **Clear saved AI context** deletes the member's coaching notes and optional
+  coaching goal, turns off all four context switches, and removes the current
+  open chat's match selection. This affects future requests, not one already
+  sent. It does not erase the underlying profile/pool/scrims or existing chats.
+  Delete a chat from its header to remove its messages from the live database.
+  Deletion cannot erase downloaded files, pre-existing backups or data already
+  sent to a provider; consult DeepSeek's retention and commercial-use terms.
+- Owner checks apply to AI conversations, search, exports and coaching notes
+  (including admins); bearer authentication is required even for reads, and
+  responses use `no-store`. This is application-level privacy: messages, coaching
+  goals and notes are stored without AI-specific encryption at rest. Database/backup operators
+  can access them, and existing admin functionality can reset a member's
+  password. Restrict those powers, secure database volumes and backups, and use
+  HTTPS. Feedback stays private to the conversation; it is not automatically
+  published or used to train a model. No automatic chat-retention expiry exists.
+
+### What knowledge is actually available
+
+The assistant retrieves relevant hero names, lanes and skill names from the
+bundled historical hero profiles and keyword-matched, approved community notes.
+Hero snapshots are imported from [MLBBDex](https://mlbbdex.com/en/api-doc) /
+Mobile Legends Wiki (CC BY-SA); the bundled source describes patch 2.2.16, but
+its import date, server channel and current accuracy are not independently
+verified. Seeded hero win/pick/ban rates, tiers and counters are **not** sent as
+facts. There is no semantic search or live item database in this workspace.
+
+Members can explicitly submit a question, correction, strategy, draft idea or
+feedback to admins. Submissions disclose that approved notes can be visible to
+all members and sent to DeepSeek. Admins must review and write a note before
+publishing; questions and feedback are acknowledged rather than published as
+facts. Exact duplicates are detected, but source URLs are not fetched or
+fact-checked automatically. Members can withdraw a pending submission; admins
+can remove individual published notes. Published notes may remain after an
+account is deleted, so ask an admin to remove one if needed. Approval is human
+review, not a claim of independent verification. Contributions and ratings do
+not retrain DeepSeek.
+
+### Using saved pro matches in chat
+
+**Attach match** lets a member explicitly select up to three public Aerena matches
+already saved by the Esports integration. The picker searches the local feed and
+shows up to 40 results per search; it does not trigger a source refresh. The
+selection is included with each new message in the open chat until removed,
+switching chats or reloading. Removing it does not erase earlier chat messages;
+those may still be included if recent history is enabled. Selected IDs are kept
+with each message for source attribution, but selection is not restored after a
+reload. The provider receives a bounded sample (at most 18,000 characters,
+including up to seven games per match), source and detail timestamps, coverage
+indicators and only allowlisted public fields. Missing or omitted games, drafts
+and statistics remain unknown. Aerena is community-compiled and can be stale or
+unverified; a selected sample is not a complete season. Without a provider the
+chat shows recorded facts and source links, not an invented analysis.
+
+The member chat does **not** yet retrieve personal account match history,
+tournament participation, private drafts or live web results. It does not scan
+all Aerena matches automatically: a member must select them. Verified
+Original/Advanced Server patch monitoring, citations from live search, prediction
+models, evaluation and consent-based training pipelines are later phases, not
+running services. Deployment needs a persistent database, a running backend, a
+valid DeepSeek key and outbound HTTPS for generated answers; providers were not
+reachable from this development sandbox, so live connectivity is unverified.
+
+## Aerena Esports
 
 The Esports page reads match data from the app's own database, not an Aerena
 API from the browser. Team logos, when available, load directly from Aerena's
-media host (without a referrer), so that host can see the viewer's IP. A backend
+media host (without a referrer), so that host can see the viewer's IP. In the
+separate Rone view, team logos, equipment icons and bracket images are likewise
+loaded from Rone's public image hosts, which can see the viewer's IP. A backend
 worker tries to discover the read-only actions used by
 Aerena's public site, save its series/season/hero catalog, and refresh matches
 in the latest dated season of each series. Changed match and detail observations
@@ -130,11 +265,29 @@ player stats. Searching and AI analysis use saved public records only.
   lease, but a sleeping/serverless deployment will not run continuously. Do not
   claim 24/7 freshness without monitoring the actual service.
 
-### Optional DeepSeek match analysis
+### DeepSeek provider and optional match analysis
 
-Set `DEEPSEEK_API_KEY` in the **backend environment** (see
-`backend/.env.example`); never put it in frontend variables, source control or
-chat. With no key, provider failure, or an exhausted quota, the UI returns a
+Admins can save, update or remove a DeepSeek key in **Team Admin → AI provider**.
+Use HTTPS (or local loopback for development), change the bootstrap admin
+password and signing secret before exposure, and never put keys in chat or source
+control. The key is encrypted in the database and the API never returns it; saving
+a key does not verify it or provider access. Alternatively, set `DEEPSEEK_API_KEY`
+in the backend environment (see `backend/.env.example`); a key saved in Team
+Admin takes precedence. Removing it falls back to the environment key, if set.
+
+The encryption key is separate from the database: set `CLOVER_CREDENTIAL_ENCRYPTION_KEY`
+to the same Fernet key in every worker's secret manager, or let a single host
+create `backend/data/credential-encryption.key` (owner-only permissions on POSIX;
+on Windows, restrict the data directory's inherited ACL to the service account).
+Keep the database and encryption key on persistent storage and back them up securely
+and separately; losing or changing the encryption key locks existing saved
+credentials until it is restored or a replacement API key is saved. Hosts or
+processes that can read both the encryption key and database can decrypt it;
+restrict server access. For multi-host deployments, use the same protected
+environment key on every worker. Neither the database nor generated key belongs
+in Git.
+
+With no key, provider failure, or an exhausted quota, the UI returns a
 labelled facts-only summary rather than pretending to answer the question. A
 submitted match question sends that explicit question and bounded saved public Aerena
 match evidence to DeepSeek. Scene analysis uses at most the first eight matches
@@ -142,7 +295,8 @@ shown by the current filter, not a complete season. Neither path automatically
 retrieves private Archive items, team boards, credentials or chat history; do not
 put secrets or private notes in the question. Provider requests are limited by
 `CLOVER_DEEPSEEK_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
-failed requests count). The key, provider access, quotas and outbound HTTPS to
+failed requests count). This quota is shared by the member workspace and Esports
+analysis. The key, provider access, quotas and outbound HTTPS to
 `api.deepseek.com` must all work on the deployed backend.
 
 Responses are interpretations, not recorded coach reasoning, and should be
@@ -155,13 +309,20 @@ recommendations. It cannot establish why a decision was made without evidence.
 ## Tests
 
 ```bash
+python3 -m unittest discover -s tests -p 'test_start_arena.py' -v
 cd backend && CLOVER_AERENA_ENABLED=0 python -m unittest discover -s tests -v
-cd ../frontend && npm run typecheck && npm run test:map && npm run test:esports && npm run build
+cd ../frontend && npm run typecheck && npm run test:map && npm run test:esports && npm run test:ai && npm run test:focus && npm run build
 ```
 
-The Aerena tests use fixtures and mocked provider responses; they do not call or
-seed Aerena or DeepSeek. Run a separate authorized connectivity check and monitor
-the in-app source status in the deployment environment.
+The launcher tests use isolated fake runtimes and HTTP services; they do not
+install system packages or touch the real app data. The Aerena and member-AI tests use fixtures and mocked provider responses; they do
+not call or seed Aerena or DeepSeek. AI tests cover owner isolation (including
+admins), per-note consent, selected-match evidence and minimization, search and
+snapshot export, review, provider failures and deletion. Team focus tests cover
+settings permissions, dashboard visibility and drill target validation. Frontend
+tests also cover match limits, source links and bounded export pagination. Run a separate
+authorized connectivity check and monitor the in-app source status in the
+deployment environment.
 
 ---
 

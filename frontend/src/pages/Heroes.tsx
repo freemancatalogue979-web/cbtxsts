@@ -152,7 +152,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         <div className="flex flex-wrap items-start gap-6">
           <HeroImg name={h.name} size={96} eager className="rounded-lg border border-edge-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)]" />
           <div className="flex-1 min-w-56">
-            <PageTitle title={h.name} sub={`${p ? `${p.title} · ` : ""}${h.role} · ${h.hero_class} · difficulty ${h.difficulty}/10 · patch ${h.patch}`} />
+            <PageTitle title={h.name} sub={`${p ? `${p.title} · ` : ""}${h.role} · ${h.hero_class} · difficulty ${h.difficulty}/10 · saved patch ${h.patch || "unknown"}`} />
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className={`chip ${HERO_STATUS_STYLE[h.meta_status] ?? "text-mute"}`}>{h.meta_status}</span>
               <span className={`chip ${TIER_TONE[h.tier] ?? ""}`}>Tier {h.tier}</span>
@@ -161,6 +161,9 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           </div>
         </div>
 
+        <div className="rounded-lg border border-amber/25 bg-amber/5 p-3 text-[11px] leading-relaxed text-mute">
+          Hero details combine older community snapshots and local entries. Some rates, tiers and counters may be placeholders or edited values; they are not a verified live patch feed.
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[["Win rate", `${h.win_rate.toFixed(1)}%`], ["Pick rate", `${h.pick_rate.toFixed(1)}%`],
             ["Ban rate", `${h.ban_rate.toFixed(1)}%`], ["9 CLOVER rating", `${h.clover_rating.toFixed(1)}/10`]].map(([l, v]) => (
@@ -271,7 +274,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
   return (
     <div className="space-y-8">
-      <PageTitle title="Hero Database" sub={`Patch ${meta.season_patch} meta. Win/pick/ban rates: MLBBDex public stats (Oct 2026, CC BY-SA, Mobile Legends Wiki).`}
+      <PageTitle title="Hero Database" sub="Saved hero records include older community snapshots and local entries. Rates, tiers and counters may be placeholders and are not verified live meta."
         right={canAdd && <button className="btn-primary" onClick={() => setForm({})}><Plus size={15} /> Add hero</button>} />
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">

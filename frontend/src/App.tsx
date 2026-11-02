@@ -14,6 +14,7 @@ import { ReviewsPage } from "./pages/Reviews";
 import { HeroesPage } from "./pages/Heroes";
 import { IntelPage } from "./pages/Intel";
 import { EsportsPage } from "./pages/Esports";
+import { CloverAIPage } from "./pages/CloverAI";
 import { AccountMLBBPage } from "./pages/AccountMLBB";
 import { PlayersPage } from "./pages/Players";
 import { BansPage } from "./pages/Bans";
@@ -83,6 +84,9 @@ export default function App() {
 
   let page: React.ReactNode;
   switch (section) {
+    case "ai":
+      page = <CloverAIPage me={user} />;
+      break;
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;
       break;

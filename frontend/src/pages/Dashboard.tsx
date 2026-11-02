@@ -54,7 +54,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageTitle
-        title="Competitive Operations"
+        title="The Hub"
         sub={dash.weakness?.season_name || "PLAY → RECORD → REVIEW → IDENTIFY → TRAIN → APPLY → IMPROVE"}
       />
 

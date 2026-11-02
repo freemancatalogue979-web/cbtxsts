@@ -1,10 +1,15 @@
 """Admin: user management + team settings."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from pydantic import BaseModel, SecretStr
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..ai_credentials import CredentialStorageError, key_status, remove_key, save_key
 from ..deps import can, get_current_user, get_db, require
 from ..models import TeamSettings, User
 from ..schemas import SettingsPatch, UserIn, UserPatch
@@ -99,10 +104,69 @@ def update_settings(payload: SettingsPatch, db: Session = Depends(get_db), user=
 
 
 # ---------------------------------------------------------------------------
+# DeepSeek credential: write-only, admin-only, encrypted on the server.
+# ---------------------------------------------------------------------------
+class DeepSeekKeyIn(BaseModel):
+    key: SecretStr
+
+
+def _require_secret_write(request: Request, authorization: str | None) -> None:
+    # Cookie-only browser requests must not be able to rotate credentials.
+    scheme, _, token = (authorization or "").partition(" ")
+    require(scheme.lower() == "bearer" and bool(token.strip()), "change provider credentials without a bearer session")
+    origin = request.headers.get("origin")
+    if origin:
+        try:
+            parsed = urlsplit(origin)
+            secure = parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
+        except ValueError:
+            secure = False
+        require(secure, "send a provider key over an insecure connection")
+    elif request.url.scheme != "https" and (not request.client or request.client.host not in {"localhost", "127.0.0.1", "::1"}):
+        raise HTTPException(403, "Use HTTPS to change a provider key.")
+
+
+@router.get("/integrations/deepseek")
+def deepseek_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    response.headers["Cache-Control"] = "no-store"
+    return key_status(db)
+
+
+@router.post("/integrations/deepseek")
+def update_deepseek_key(payload: DeepSeekKeyIn, request: Request, response: Response,
+                        authorization: str | None = Header(default=None), db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    value = payload.key.get_secret_value().strip()
+    if not value or len(value) > 512 or any(ord(char) < 33 or ord(char) > 126 for char in value):
+        raise HTTPException(422, "Enter an API key of at most 512 printable ASCII characters without spaces.")
+    try:
+        save_key(db, value)
+    except CredentialStorageError as exc:
+        raise HTTPException(503, str(exc)) from None
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Another update was saved at the same time. Please try again.") from None
+    response.headers["Cache-Control"] = "no-store"
+    return key_status(db)
+
+
+@router.delete("/integrations/deepseek")
+def remove_deepseek_key(request: Request, response: Response, authorization: str | None = Header(default=None),
+                        db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    remove_key(db)
+    response.headers["Cache-Control"] = "no-store"
+    return key_status(db)
+
+
+# ---------------------------------------------------------------------------
 # Data management: admin can wipe table groups. Accounts, heroes and the
 # battlefield map guide are never wipeable from here.
 # ---------------------------------------------------------------------------
-from pydantic import BaseModel  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 WIPEABLE: dict[str, str] = {

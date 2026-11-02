@@ -2,6 +2,7 @@ import {
   Archive,
   Bell,
   BookOpenText,
+  BrainCircuit,
   Gamepad2,
   Radar,
   RadioTower,
@@ -32,6 +33,7 @@ import { ErrorNote, Field } from "./ui";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: Home },
+  { id: "ai", label: "9 CLOVER AI", icon: BrainCircuit },
   { id: "training", label: "Training Center", icon: Dumbbell },
   { id: "scrims", label: "Scrims", icon: Swords },
     { id: "tournaments", label: "Tournaments", icon: Trophy },
@@ -288,15 +290,20 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
 
       {/* Mobile bottom quick bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-edge">
-        <div className="grid grid-cols-5">
-          {[NAV[0], NAV[1], NAV[2], NAV[3], NAV[4]].map((item) => {
+        <div className="grid grid-cols-6">
+          {[
+            { id: "dashboard", short: "Home" }, { id: "ai", short: "AI" },
+            { id: "training", short: "Train" }, { id: "scrims", short: "Scrims" },
+            { id: "tournaments", short: "Cups" }, { id: "esports", short: "Esports" },
+          ].map(({ id, short }) => {
+            const item = NAV.find((entry) => entry.id === id)!;
             const active = current === item.id;
             const Icon = item.icon;
             return (
-              <button key={item.id} onClick={() => navigate(item.id)}
-                className={`flex flex-col items-center gap-1 py-2 text-[9px] font-bold uppercase tracking-wide ${active ? "text-crim" : "text-faint"}`}>
+              <button key={item.id} onClick={() => navigate(item.id)} aria-label={item.label}
+                className={`flex flex-col items-center gap-1 py-2 text-[8px] font-bold uppercase tracking-wide ${active ? "text-crim" : "text-faint"}`}>
                 <Icon size={17} />
-                {item.label.split(" ")[0]}
+                {short}
               </button>
             );
           })}

@@ -45,6 +45,9 @@ npm-debug.log*
 frontend/test-results/
 backend/data/ai_keys.json
 backend/data/ai_keys.tmp
+# Encryption material for server-stored provider credentials; keep it off Git.
+backend/data/credential-encryption.key
+backend/data/.credential-key-*
 
 image-search/
 
