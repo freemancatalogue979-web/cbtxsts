@@ -8,8 +8,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api, ApiError, qs } from "../lib/api";
 import { AI_EXPORT_LIMIT, collectAIExport, readAISelectedChat, revealAIComposer, safeExternal, saveAISelectedChat, shortDate } from "../lib/cloverAI";
-import type { AIBoardSummary, AIContext, AIConversation, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AIProgressStage, AIProposal, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
-import { teamCode, type EsportsMatch } from "../lib/esports";
+import type { AIBoardSummary, AIContext, AIConversation, AIEsportsAttachment, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AIProgressStage, AIProposal, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
 import type { User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { BrandImg } from "../components/Logo";
@@ -32,6 +31,7 @@ const SUGGESTIONS = [
 
 const THINK_STAGES: Record<AIProgressStage, string> = {
   preparing: "Preparing your context…",
+  loading_matches: "Loading match games…",
   checking: "Checking the available context…",
   connecting: "Starting deeper analysis…",
   thinking: "Clover is thinking deeply…",
@@ -39,7 +39,7 @@ const THINK_STAGES: Record<AIProgressStage, string> = {
   finishing: "Finishing your reply…",
 };
 
-function ThinkingIndicator({ stage, startedAt }: { stage: AIProgressStage | null; startedAt: number | null }) {
+function ThinkingIndicator({ stage, startedAt, isThink = true, loadProgress = "" }: { stage: AIProgressStage | null; startedAt: number | null; isThink?: boolean; loadProgress?: string }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     if (startedAt === null) return;
@@ -53,9 +53,9 @@ function ThinkingIndicator({ stage, startedAt }: { stage: AIProgressStage | null
       <BrainCircuit size={16} className="motion-safe:animate-pulse" />
     </span>
     <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-extrabold text-text">
-      <span>{stage ? THINK_STAGES[stage] : "Clover is still working on your analysis…"}</span>
+      <span>{stage === "loading_matches" && loadProgress ? `Loading match ${loadProgress}…` : stage ? THINK_STAGES[stage] : "Clover is still working on your analysis…"}</span>
       {startedAt !== null && <span aria-hidden="true" className="text-[10px] font-semibold text-mute tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
-    </span><span className="block text-[10px] leading-relaxed text-mute mt-1">Deep analysis can take a few minutes. Reopen this conversation to check the reply.</span></span>
+    </span><span className="block text-[10px] leading-relaxed text-mute mt-1">{isThink ? "Deep analysis can take a few minutes." : "Clover is checking the available games."} Reopen this conversation to check the reply.</span></span>
   </div>;
 }
 
@@ -153,7 +153,7 @@ function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
 
 function MessageBubble({ message, conversationId, onFeedback, onManageMemory, onProposal }: { message: AIMessage; conversationId: string | null; onFeedback: (id: number, rating: -1 | 0 | 1) => void; onManageMemory: () => void; onProposal: (id: number, proposal: AIProposal) => void }) {
   if (message.role === "user") return <div className="flex justify-end"><div className="max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{message.content}
-    {message.sources.some((source) => ["match", "draft", "map"].includes(source.kind)) && <div className="mt-2 pt-2 border-t border-crim/20 text-[10px] font-semibold text-mute whitespace-normal">Attached: {message.sources.filter((source) => ["match", "draft", "map"].includes(source.kind)).map((source) => source.match_id || source.label).join(" · ")}</div>}
+    {message.sources.some((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection) && <div className="mt-2 pt-2 border-t border-crim/20 text-[10px] font-semibold text-mute whitespace-normal">Attached: {message.sources.filter((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection).map((source) => source.match_id || source.label).join(" · ")}</div>}
   </div></div>;
   return <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
     <div className="rounded-lg bg-raised border border-edge p-1 shrink-0"><BrandImg size={24} /></div>
@@ -204,12 +204,14 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   const [busy, setBusy] = useState(false);
   const [think, setThink] = useState(false);
   const [activeThink, setActiveThink] = useState(false);
+  const [activeMatchLoad, setActiveMatchLoad] = useState(false);
+  const [loadProgress, setLoadProgress] = useState("");
   const [thinkStage, setThinkStage] = useState<AIProgressStage>("preparing");
   const [thinkStarted, setThinkStarted] = useState<number | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState<{ text: string; afterId: number } | null>(null);
   const [remoteBusy, setRemoteBusy] = useState<{ think: boolean } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [attachedMatches, setAttachedMatches] = useState<EsportsMatch[]>([]);
+  const [attachedMatches, setAttachedMatches] = useState<AIEsportsAttachment[]>([]);
   const [attachedDrafts, setAttachedDrafts] = useState<AIBoardSummary[]>([]);
   const [attachedMaps, setAttachedMaps] = useState<AIBoardSummary[]>([]);
   const [webMode, setWebMode] = useState<AIWebMode>("auto");
@@ -382,7 +384,11 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     const matches = attachedMatches, drafts = attachedDrafts, maps = attachedMaps;
     const submittedDraft = draft.trim() === question ? draft : "";
     const useThink = think && Boolean(status?.provider_configured);
-    setActiveThink(useThink); setThinkStage("preparing"); setThinkStarted(useThink ? Date.now() : null);
+    const priorMatchScope = messages.some((message) => message.role === "user" && message.sources.some((source) => source.esports_selection));
+    const useMatchLoad = matches.length > 0 || (/\b(?:rone|mpl|aerena)\b/i.test(question) && /\bweeks?\s*[-:#]?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(question))
+      || (priorMatchScope && /\b(?:games?|picks?|picked|heroes|hero|matches|match)\b/i.test(question));
+    setActiveThink(useThink); setActiveMatchLoad(useMatchLoad); setLoadProgress(""); setThinkStage("preparing");
+    setThinkStarted(useThink || useMatchLoad ? Date.now() : null);
     setPendingQuestion({ text: question, afterId: messages.at(-1)?.id ?? 0 });
     // Attachments are one-message-only. Capture them before clearing the composer.
     if (submittedDraft) setDraft("");
@@ -397,13 +403,15 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
         setConversations((prev) => [chat, ...prev]);
       }
       const payload = {
-        text: question, match_ids: matches.map((match) => match.id),
+        text: question, esports_selection: matches[0]?.selection ?? null,
         draft_ids: drafts.map((board) => board.id), map_ids: maps.map((board) => board.id),
         share_board_context: drafts.length + maps.length > 0, web_mode: webMode, think: useThink,
       };
       const endpoint = `/ai/conversations/${chatId}/messages`;
-      const result = useThink ? await api.postStream<AISendResult>(`${endpoint}/stream`, payload, (stage) => {
-        if (Object.prototype.hasOwnProperty.call(THINK_STAGES, stage)) setThinkStage(stage as AIProgressStage);
+      const result = useThink || useMatchLoad ? await api.postStream<AISendResult>(`${endpoint}/stream`, payload, (stage) => {
+        const progress = /^loading_matches:(\d+):(\d+)$/.exec(stage);
+        if (progress) { setThinkStage("loading_matches"); setLoadProgress(`${progress[1]} of ${progress[2]}`); }
+        else if (Object.prototype.hasOwnProperty.call(THINK_STAGES, stage)) { setThinkStage(stage as AIProgressStage); if (stage !== "loading_matches") setLoadProgress(""); }
       }) : await api.post<AISendResult>(endpoint, payload);
       if (selectedRef.current === chatId) {
         requestVersion.current++;
@@ -426,7 +434,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           setRemoteBusy(result.processing ? { think: Boolean(result.processing_think) } : null);
         } catch { /* Keep the original error and the unsent text. */ }
       }
-    } finally { sendingRef.current = false; setBusy(false); setActiveThink(false); setPendingQuestion(null); setThinkStarted(null); }
+    } finally { sendingRef.current = false; setBusy(false); setActiveThink(false); setActiveMatchLoad(false); setLoadProgress(""); setPendingQuestion(null); setThinkStarted(null); }
   }
   function submit(e: FormEvent) { e.preventDefault(); void send(draft); }
   function keyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -552,7 +560,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
               {messages.map((message) => <MessageBubble key={message.id} message={message} conversationId={selected} onFeedback={giveFeedback} onManageMemory={() => setShowControls(true)} onProposal={(id, proposal) => setMessages((previous) => previous.map((item) => item.id === id ? { ...item, proposal } : item))} />)}
               {showPending && pendingQuestion && <div className="flex justify-end"><div className="max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{pendingQuestion.text}</div></div>}
-              {waiting && (waitingForThink ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>)}
+              {waiting && ((waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>)}
             </div> :
             <div className="min-h-full flex flex-col justify-center max-w-2xl mx-auto py-2">
               <div className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-leaf uppercase"><Sparkles size={13} /> Made for your game</div>
@@ -562,7 +570,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
                 <span className="flex items-center gap-2"><Icon size={15} className="text-leaf" /><span className="text-[12px] font-extrabold flex-1">{label}</span><ArrowDownRight size={13} className="text-faint group-hover:text-leaf" /></span>
                 <span className="text-[10px] text-faint block mt-2">{hint}</span>
               </button>)}</div>
-              {waiting && <div className="mt-4">{waitingForThink ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>}</div>}
+              {waiting && <div className="mt-4">{(waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>}</div>}
             </div>}
         </div>
         <div className="px-3 sm:px-4 pb-3 pt-2 border-t border-edge/70">
@@ -572,10 +580,10 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           <ErrorNote error={error} />
           {!workspaceReady && Boolean(error) && <button type="button" className="text-[11px] text-leaf underline mt-2" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry loading AI controls</button>}
           {attachedMatches.length > 0 && <div className="mt-2 rounded-lg border border-leaf/20 bg-leaf/5 p-2.5" aria-label="Attached match context">
-            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Saved matches</span>{attachedMatches.map((match) => <button type="button" key={match.id} disabled={waiting || exporting}
-              aria-label={`Remove ${teamCode(match.team1)} vs ${teamCode(match.team2)} from chat`} onClick={() => setAttachedMatches((previous) => previous.filter((item) => item.id !== match.id))}
-              className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">{teamCode(match.team1)} vs {teamCode(match.team2)}</span><X size={11} className="shrink-0" /></button>)}</div>
-            <p className="text-[10px] text-faint mt-1.5 leading-relaxed">Included with your next message only, then cleared. Earlier chat history may still mention them.</p>
+            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Esports context</span>{attachedMatches.map((match) => <button type="button" key={match.label} disabled={waiting || exporting}
+              aria-label={`Remove ${match.label} from chat`} onClick={() => setAttachedMatches([])}
+              className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">{match.label}</span><X size={11} className="shrink-0" /></button>)}</div>
+            <p className="text-[10px] text-mute mt-1.5 leading-relaxed">Clover loads missing games when you send. Short follow-ups may reuse this public selection when chat history is enabled.</p>
           </div>}
           {(attachedDrafts.length > 0 || attachedMaps.length > 0) && <div className="mt-2 rounded-lg border border-leaf/20 bg-leaf/5 p-2.5" aria-label="Attached board context">
             <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Saved boards</span>
@@ -595,7 +603,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
                   disabled={waiting || exporting || !workspaceReady || !status?.provider_configured}
                   title={status?.provider_configured ? "Use deeper analysis for your questions" : "Configure the AI provider to use Think mode"}
                   className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[10px] font-extrabold transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-leaf disabled:opacity-50 ${think ? "border-leaf/60 bg-leaf/15 text-leaf" : "border-edge-2 bg-panel text-mute hover:border-leaf/40 hover:text-text"}`}><BrainCircuit size={13} /> Think</button>
-                <button type="button" onClick={() => setShowMatchPicker(true)} disabled={waiting || exporting || !workspaceReady} className="text-[10px] text-faint hover:text-leaf inline-flex items-center gap-1.5 disabled:opacity-50"><Paperclip size={12} /> Attach match</button>
+                <button type="button" onClick={() => setShowMatchPicker(true)} disabled={waiting || exporting || !workspaceReady} className="text-[10px] text-faint hover:text-leaf inline-flex items-center gap-1.5 disabled:opacity-50"><Paperclip size={12} /> Attach esports</button>
                 <button type="button" onClick={() => setShowBoardPicker(true)} disabled={waiting || exporting || !workspaceReady} className="text-[10px] text-faint hover:text-leaf inline-flex items-center gap-1.5 disabled:opacity-50"><Paperclip size={12} /> Attach boards</button>
                 <button type="button" onClick={() => setShowControls(true)} className="text-[10px] text-faint hover:text-leaf inline-flex items-center gap-1.5"><LockKeyhole size={12} /> Manage context</button>
               </div>
@@ -613,8 +621,8 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
       {tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <div className="space-y-5"><AIActionHistory /><AIReviewQueue /></div>}
     </div>}
 
-    {showMatchPicker && <Modal title="Attach saved matches" onClose={() => setShowMatchPicker(false)} wide>
-      <AIMatchPicker initial={attachedMatches} onCancel={() => setShowMatchPicker(false)} onApply={(items) => { setAttachedMatches(items); setShowMatchPicker(false); }} />
+    {showMatchPicker && <Modal title="Attach esports matches" onClose={() => setShowMatchPicker(false)} wide>
+      <AIMatchPicker initial={attachedMatches[0] ?? null} onCancel={() => setShowMatchPicker(false)} onApply={(item) => { setAttachedMatches(item ? [item] : []); setShowMatchPicker(false); }} />
     </Modal>}
     {showBoardPicker && <Modal title="Attach saved boards" onClose={() => setShowBoardPicker(false)} wide>
       <AIBoardPicker initialDrafts={attachedDrafts} initialMaps={attachedMaps} onCancel={() => setShowBoardPicker(false)} onApply={(drafts, maps) => { setAttachedDrafts(drafts); setAttachedMaps(maps); setShowBoardPicker(false); }} />

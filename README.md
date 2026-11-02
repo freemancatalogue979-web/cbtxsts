@@ -394,10 +394,10 @@ Aerena's public site, save its series/season/hero catalog, and refresh matches
 in the latest dated season of each series. Changed match and detail observations
 are retained with source timestamps and snapshots; source errors do not erase the
 last successful data. A staff member (admin, captain or coach) can queue a full
-refresh or load an older season; viewing a match can fetch its additional
-player stats. Aerena-specific analysis uses saved public records only; member
-chat can additionally use the explicitly named Rone feed and web search described
-above.
+refresh or load an older season from Esports; viewing a match can fetch its
+additional player stats. In Clover chat, any signed-in member can also request
+bounded, read-only loading of a public season or missing match details through
+the match picker. This does not grant permission to modify team data.
 
 - This is an **undocumented website integration**, not an official or stable
   Aerena API. Deployments may change the action IDs, format or access rules.
@@ -443,12 +443,38 @@ environment key on every worker. Neither the database nor generated key belongs
 in Git.
 
 With no key, provider failure, or an exhausted quota, the UI returns a
-labelled facts-only summary rather than pretending to answer the question. A
-submitted match question sends that explicit question and bounded saved public
-Aerena match evidence to the external AI provider. Scene analysis uses at most
-the first eight matches shown by the current filter, not a complete season. Neither path automatically
-retrieves private Archive items, team boards, credentials or chat history; do not
-put secrets or private notes in the question. Provider requests are limited by
+labelled facts-only summary rather than pretending to generate an AI answer. The
+Esports page's separate scene analysis uses at most the first eight saved matches
+shown by its filter, not a complete season. Clover chat can instead analyze a
+chosen source week or up to 24 individual matches using the **Attach esports**
+picker. Source, MPL region, season (where available), and week are filters;
+search is optional. For example, ask “Rone MPL ID week 1, most picked heroes in
+game 2?” or “Aerena MPL PH season 18 week 1, most picked heroes?” Clover waits
+for missing public source records, displays loading progress, and reuses saved
+snapshots. A short follow-up can reuse the public selection when chat history
+is enabled. Public source requests contain only the selected source identifiers,
+not the question, private boards, account credentials or chat history.
+
+Pick counts are computed server-side for all available game numbers and across
+the selected scope, independently of the model. Rankings include only complete
+10-distinct-hero lineups; missing match IDs, incomplete games, score/detail gaps,
+stale records, duplicate schedule entries and bounded-context omissions are
+reported rather than guessed. Rone does not identify a season in its schedule
+or provide verified bans or draft order, so historical seasons cannot be inferred.
+Aerena week filters use explicit source week fields/labels or its source match-ID
+week label; unlabelled or conflicting records are excluded and disclosed. A week
+with more than 24 listed matches must be narrowed to individual matches. The
+public integrations may be unavailable or incomplete, and neither source is a
+guarantee of full season coverage. Rone requests are cached, serialized across
+workers and subject to retry cooldowns; Aerena requests use the existing shared
+worker. Review the hosted Rone terms, including attribution and commercial-use
+arrangements, before deployment.
+
+The question and bounded public evidence are sent to the external AI provider
+when a model is configured. Private Archive items and credentials are never
+retrieved; board and personal context remain separately consent-controlled, and
+chat history is used only if enabled. Do not put secrets or private notes in the
+question. Provider requests are limited by
 `CLOVER_AI_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
 failed requests count). This quota is shared by the member workspace and Esports
 analysis. The key, provider access, quotas and outbound HTTPS must all work on
@@ -481,7 +507,8 @@ not call or seed Aerena or an AI provider. AI tests cover owner isolation (inclu
 admins), per-note and board consent, selected/automatic match evidence, bounded
 web research and search quotas, Rone feeds, minimization, snapshot export,
 private teaching/recall and deletion, research attribution, complete-draft season
-aggregation, unseeded hero profiles, admin-only proposal review and concurrent
+aggregation, source/week selection, all-game pick counts, incomplete data, shared
+source-load leases and Think integration, unseeded hero profiles, admin-only proposal review and concurrent
 one-use application, provider failures and legacy branding.
 Team focus tests cover settings permissions, dashboard visibility and drill target validation. Frontend
 tests also cover match limits, source links and bounded export pagination. Run a separate

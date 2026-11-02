@@ -11,12 +11,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .. import ai_context, ai_learning, ai_web
+from .. import ai_context, ai_esports_analysis, ai_learning, ai_web
 from .. import clover_ai_service as service
 from ..ai_credentials import key_status
 from ..ai_privacy import public_ai_mode, public_ai_text
@@ -135,8 +135,42 @@ class TitleIn(BaseModel):
     title: str = Field(min_length=1, max_length=120)
 
 
+class EsportsSelectionIn(BaseModel):
+    """Only source identifiers and filters, never client-supplied match facts."""
+    model_config = ConfigDict(extra="forbid")
+    source: Literal["aerena", "rone"]
+    mode: Literal["week", "matches"]
+    region: Literal["id", "ph", "my", "kh"] | None = None
+    league_id: str | None = Field(default=None, max_length=80)
+    week: int | None = Field(default=None, ge=1, le=99, strict=True)
+    match_ids: list[str] = Field(default_factory=list, max_length=24)
+
+    @model_validator(mode="after")
+    def valid_scope(self):  # noqa: ANN201
+        from ..ai_esports_analysis import rone_id
+        from ..aerena_service import _id
+        if self.source == "rone" and (not self.region or self.league_id):
+            raise ValueError("Choose a Rone MPL region; the source does not identify a season.")
+        if self.source == "aerena" and self.league_id is not None and not _id(self.league_id):
+            raise ValueError("Invalid Aerena season identifier.")
+        if self.source == "aerena" and self.mode == "week" and not _id(self.league_id):
+            raise ValueError("Choose an Aerena season.")
+        if self.mode == "week" and (self.week is None or self.match_ids):
+            raise ValueError("Choose one source week without individual matches.")
+        if self.mode == "matches" and (self.week is not None or not self.match_ids):
+            raise ValueError("Choose one or more individual matches.")
+        if len(set(self.match_ids)) != len(self.match_ids):
+            raise ValueError("Select each match only once.")
+        for match_id in self.match_ids:
+            valid = rone_id(self.region or "", match_id) if self.source == "rone" else _id(match_id, 120)
+            if not valid:
+                raise ValueError("Invalid source match identifier.")
+        return self
+
+
 class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+    esports_selection: EsportsSelectionIn | None = None
     match_ids: list[str] = Field(default_factory=list, max_length=service.MAX_SELECTED_MATCHES)
     draft_ids: list[Annotated[int, Field(gt=0, strict=True)]] = Field(
         default_factory=list, max_length=ai_context.MAX_DRAFTS
@@ -151,6 +185,12 @@ class MessageIn(BaseModel):
     think: StrictBool = False
     # Older clients do not trigger new billable search calls accidentally.
     web_mode: Literal["auto", "on", "off"] = "off"
+
+    @model_validator(mode="after")
+    def no_mixed_match_sources(self):  # noqa: ANN201
+        if self.esports_selection and self.match_ids:
+            raise ValueError("Choose one match selection at a time.")
+        return self
 
     @field_validator("draft_ids", "map_ids")
     @classmethod
@@ -209,6 +249,65 @@ def nonblank(value: str, label: str) -> str:
     if not result:
         raise HTTPException(status_code=422, detail=f"{label} cannot be blank.")
     return result
+
+
+@router.get("/esports/rone/{region}/schedule")
+def ai_rone_schedule(region: str, refresh: bool = False, user: User = Depends(ai_user),
+                     db: Session = Depends(get_db)) -> dict:
+    from .. import ai_esports_analysis as analysis
+    if region not in analysis.REGIONS:
+        raise HTTPException(404, "MPL region not found.")
+    payload, observed, state = analysis.rone_schedule(db, region, refresh=refresh)
+    if payload is None:
+        return {"status": "unavailable", "matches": [], "weeks": [], "observed_at": None,
+                "notice": "Rone could not load this schedule. Try again shortly."}
+    rows, duplicates = analysis.rone_schedule_rows(payload, region)
+    return {"status": state, "matches": rows, "weeks": sorted({row["week"] for row in rows}),
+            "observed_at": iso(observed), "duplicate_rows_removed": duplicates, "season": None,
+            "notice": "Rone labels weeks but does not identify the season in this schedule."}
+
+
+@router.get("/esports/aerena/{league_id}/matches")
+def ai_aerena_matches(league_id: str, week: int | None = Query(default=None, ge=1, le=99),
+                      q: str = Query(default="", max_length=100), offset: int = Query(default=0, ge=0, le=5000),
+                      limit: int = Query(default=50, ge=1, le=100), user: User = Depends(ai_user),
+                      db: Session = Depends(get_db)) -> dict:
+    from ..aerena_models import AerenaLeague, AerenaMatch
+    from ..ai_esports_analysis import aerena_week
+    from .esports import match_row
+    league = db.get(AerenaLeague, league_id)
+    if not league:
+        raise HTTPException(404, "Aerena season not found.")
+    rows = (db.query(AerenaMatch).filter_by(league_id=league_id)
+            .order_by(AerenaMatch.starts_at.desc().nullslast(), AerenaMatch.id).limit(5001).all())
+    if len(rows) > 5000:
+        raise HTTPException(422, "This season is too large to browse safely. Choose a narrower source.")
+    weeks: dict[int, int] = {}
+    for row in rows:
+        number = aerena_week(row)
+        if number is not None:
+            weeks[number] = weeks.get(number, 0) + 1
+    unknown = sum(aerena_week(row) is None for row in rows)
+    term = q.strip().casefold()
+    filtered = [row for row in rows if (week is None or aerena_week(row) == week) and (
+        not term or term in " ".join((row.id, row.team1_name or "", row.team2_name or "",
+                                       row.team1_json or "", row.team2_json or "")).casefold())]
+    return {"matches": [dict(match_row(row, league), week=aerena_week(row)) for row in filtered[offset:offset + limit]],
+            "total": len(filtered), "has_more": offset + limit < len(filtered), "offset": offset,
+            "weeks": [{"number": n, "matches": weeks[n]} for n in sorted(weeks)],
+            "unlabeled_matches": unknown, "season_loaded": bool(league.matches_fetched_at),
+            "season_observed_at": iso(league.matches_fetched_at), "season_error": bool(league.matches_error)}
+
+
+@router.post("/esports/aerena/{league_id}/load")
+def ai_load_aerena_season(league_id: str, refresh: bool = False, user: User = Depends(ai_user),
+                          db: Session = Depends(get_db)) -> dict:
+    from ..ai_esports_analysis import ensure_aerena_season
+    try:
+        loaded, notice = ensure_aerena_season(db, league_id, refresh=refresh)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    return {"loaded": loaded, "notice": notice}
 
 
 @router.get("/status")
@@ -572,7 +671,7 @@ def _send_message(
     db: Session,
     on_progress: Callable[[str], None] | None = None,
 ) -> dict:
-    from .. import ai_thinking
+    from .. import ai_esports_analysis as match_analysis, ai_thinking
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
     if (data.draft_ids or data.map_ids) and not data.share_board_context:
@@ -581,6 +680,28 @@ def _send_message(
         raise HTTPException(status_code=403, detail="Only admins can request AI platform-change proposals.")
     from .. import ai_actions
     action_kinds = ai_actions.intent(db, question) if user.role == "admin" else []
+    scope = data.esports_selection.model_dump() if data.esports_selection else (
+        match_analysis.requested_scope(question, db) if data.auto_esports and not data.match_ids else None
+    )
+    # A short follow-up may reuse the last public selection only when the
+    # member has enabled chat history. It never retrieves another member's data.
+    if scope is None and data.auto_esports and not data.match_ids and len(question) < 180 and re.search(
+        r"\b(games?|picks?|picked|bans?|banned|heroes|hero|matches|match)\b", question, re.I
+    ):
+        prefs = service.settings_for(db, user.id)
+        if prefs.use_history:
+            latest = (db.query(AIMessage).filter_by(conversation_id=conversation_id, role="user")
+                      .order_by(AIMessage.id.desc()).first())
+            for item in loads(latest.sources_json, []) if latest else []:
+                candidate = item.get("esports_selection") if isinstance(item, dict) else None
+                if isinstance(candidate, dict):
+                    try:
+                        scope = EsportsSelectionIn.model_validate(candidate).model_dump()
+                    except ValueError:
+                        scope = None
+                    break
+    auto_ids = ai_context.automatic_match_ids(db, question) if data.auto_esports and not data.match_ids and not scope else []
+    will_load_matches = bool(scope or data.match_ids or (auto_ids and re.search(r"\b(pick|picks|picked|games?)\b", question, re.I)))
     token = uuid4().hex
     now = utcnow()
     lock = db.execute(
@@ -592,7 +713,8 @@ def _send_message(
         )
         .values(
             busy_token=token,
-            busy_until=now + timedelta(seconds=ai_thinking.THINK_LEASE_SECONDS if data.think else 90),
+            busy_until=now + timedelta(seconds=(ai_thinking.THINK_LEASE_SECONDS if data.think else 90)
+                                 + (match_analysis.LOAD_DEADLINE_SECONDS + 240 if will_load_matches else 0)),
         )
     )
     db.commit()
@@ -600,7 +722,20 @@ def _send_message(
         own_conversation(db, user, conversation_id)
         raise HTTPException(status_code=409, detail="Another message is still processing in this conversation.")
     try:
-        auto_ids = ai_context.automatic_match_ids(db, question) if data.auto_esports and not data.match_ids else []
+        if data.esports_selection and scope and scope["source"] == "aerena":
+            from ..aerena_models import AerenaLeague, AerenaMatch
+            league = db.get(AerenaLeague, scope["league_id"]) if scope.get("league_id") else None
+            if scope.get("league_id") and not league:
+                raise HTTPException(404, "That Aerena season is no longer available.")
+            if league and scope.get("region") and not match_analysis.aerena_league_matches_region(league, scope["region"]):
+                raise HTTPException(422, "That Aerena season does not match the chosen region.")
+            for match_id in scope.get("match_ids") or []:
+                match = db.get(AerenaMatch, match_id)
+                if not match or (scope.get("league_id") and match.league_id != scope["league_id"]):
+                    raise HTTPException(404, "A selected match is not in the chosen Aerena season.")
+                match_league = league or db.get(AerenaLeague, match.league_id)
+                if scope.get("region") and (not match_league or not match_analysis.aerena_league_matches_region(match_league, scope["region"])):
+                    raise HTTPException(422, "A selected match does not match the chosen region.")
         try:
             match_facts, match_sources = service.selected_match_evidence(db, data.match_ids or auto_ids)
             board_facts, board_sources = ai_context.selected_boards(db, user, data.draft_ids, data.map_ids)
@@ -628,7 +763,7 @@ def _send_message(
             raise HTTPException(status_code=422, detail="Specify a draft, strategy, hero, patch label or equipment change to propose.")
         facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources,
                                                 include_auto_esports=data.auto_esports,
-                                                include_season_aggregate=not bool(data.match_ids))
+                                                include_season_aggregate=not bool(data.match_ids or scope))
         facts.update(board_facts)
         sources.extend(board_sources)
         from .. import ai_saved
@@ -641,16 +776,42 @@ def _send_message(
         if row.title == "New conversation":
             row.title = " ".join(question.split())[:80]
         row.updated_at = utcnow()
+        scope_source = []
+        if scope and not scope.get("season_requested") and not scope.get("selection_error"):
+            stored_scope = {key: value for key, value in scope.items() if key not in {"season_requested", "season_number"}}
+            label = f"{scope['source'].title()} esports selection"
+            if scope.get("region"):
+                label += f" · MPL {scope['region'].upper()}"
+            if scope.get("week"):
+                label += f" · Week {scope['week']}"
+            scope_source = [{"kind": "esports_feed", "label": label, "route": "esports",
+                             "esports_selection": stored_scope}]
         prompt = AIMessage(
             conversation_id=conversation_id,
             role="user",
             content=question,
             mode="user_think" if data.think else "user",
-            sources_json=dumps((match_sources if data.match_ids else []) + board_sources),
+            sources_json=dumps((match_sources if data.match_ids else []) + scope_source + board_sources),
         )
         db.add(prompt)
         db.commit()  # Save the user's request before any external network operation.
         db.refresh(prompt)
+        try:
+            pick_facts, pick_sources = None, []
+            if scope:
+                if scope["source"] == "rone":
+                    pick_facts, pick_sources = match_analysis.analyze_rone(db, scope, on_progress)
+                else:
+                    pick_facts, pick_sources = match_analysis.analyze_aerena_scope(db, scope, on_progress)
+            elif data.match_ids or (auto_ids and re.search(r"\b(pick|picks|picked|games?)\b", question, re.I)):
+                pick_facts, pick_sources = match_analysis.analyze_aerena(db, data.match_ids or auto_ids,
+                                                                         on_progress=on_progress)
+            if pick_facts is not None:
+                facts["match_pick_analysis"] = pick_facts
+                if scope:  # Legacy saved-match citations were already included.
+                    sources.extend(pick_sources)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
         learned, learning_status = ai_learning.learn(db, user.id, question, conversation_id, prompt.id)
         if learning_status != "none":
             facts["memory_action"] = {"status": learning_status, "topic": learned.topic if learned else None,
