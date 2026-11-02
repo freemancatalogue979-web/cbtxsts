@@ -396,14 +396,15 @@ class PersistenceTests(unittest.TestCase):
         for number in range(8):
             copy = json.loads(json.dumps(detail))
             copy["match"]["id"] = f"MATCH-{number}"
-            copy["games"] = [copy["games"][0]] * 7
+            copy["games"] = [{**copy["games"][0], "number": game_number} for game_number in range(1, 8)]
             sample.append(copy)
         facts = scene_evidence(sample)
         self.assertEqual(len(facts["matches"]), 8)
         self.assertEqual([row["match_id"] for row in facts["matches"]], [f"MATCH-{n}" for n in range(8)])
         self.assertLessEqual(len(json.dumps(facts, ensure_ascii=False)), MAX_CONTEXT_CHARS)
-        self.assertTrue(any(row["games_omitted"] for row in facts["matches"]))
-        self.assertGreater(sum(bool(row["games"]) for row in facts["matches"]), 1)
+        self.assertTrue(all(not row["games_omitted"] for row in facts["matches"]))
+        self.assertTrue(all([game["number"] for game in row["games"]] == list(range(1, 8)) for row in facts["matches"]))
+        self.assertTrue(all(row["game_detail_level"] in {"full", "draft_summary", "game_index"} for row in facts["matches"]))
 
     def test_player_detail_is_optional_persisted_and_bound_to_match(self):
         stats = [{"_id": "stat1", "match": MATCH_SOURCE_ID, "gameNumber": 1, "ign": "NATHZZ",

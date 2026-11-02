@@ -474,10 +474,15 @@ search is optional. Rone has separate regular-season and playoff feeds, and
 individual selections may include matches from both. For example, ask “Rone MPL
 ID playoffs, most picked heroes?” or “Aerena MPL PH season 18 week 1, most picked
 heroes?” Select individual matches when asking about a specific playoff round.
-Clover waits for missing public source records, displays loading progress, and reuses saved
-snapshots. A short follow-up can reuse the public selection when chat history
-is enabled. Public source requests contain only the selected source identifiers,
-not the question, private boards, account credentials or chat history.
+Clover treats each match as a series and checks all available games in every
+selected match, rather than only the first game or the open game tab. It loads
+missing public details on demand, displays progress and reuses saved snapshots.
+If a newer Aerena response is shorter and cannot be reconciled with a final
+score, previously saved games are retained and marked potentially stale. Score
+gaps, including games already scored in an ongoing series, are disclosed. A
+short follow-up can reuse the public selection when chat history is enabled.
+Public source requests contain only the selected source identifiers, not the
+question, private boards, account credentials or chat history.
 
 Pick counts are computed server-side for all available game numbers and across
 the selected scope, independently of the model. Rankings include only complete
@@ -492,11 +497,14 @@ finals are not assumed to be playoffs. Aerena week filters use explicit source
 week fields/labels or its source match-ID week label; unlabelled or conflicting
 records are excluded and disclosed. A week or playoff stage with more than 500
 listed matches must be narrowed to individual matches. The
-500-match ceiling, bounded response/context sizes and loading deadline are
-technical safeguards, not daily usage limits. Broad-scope counts include every
-complete game even when match cards, player details or some tied rankings are
-omitted from the model's context; those omissions are reported. Public
-integrations may be unavailable or incomplete, and neither source guarantees full
+500-match ceiling, 30-game-per-match source limit, bounded response/context
+sizes and loading deadline are technical safeguards, not daily usage limits.
+Very broad selections may retain a per-match game index and aggregate counts
+instead of every game's full detail in the model context; Clover discloses this
+and can analyze a narrower selection for individual game details. Complete-game
+counts still cover the available selection even when player details or some tied
+rankings are omitted. Public integrations may be unavailable or incomplete,
+and neither source guarantees full
 season coverage. Rone requests are cached, serialized across workers and subject
 to retry cooldowns; Aerena requests use the existing shared worker. Review hosted
 Rone terms, including attribution and commercial-use arrangements, before deployment.

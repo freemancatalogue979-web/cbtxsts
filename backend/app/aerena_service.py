@@ -265,6 +265,16 @@ def save_match(db: Session, data: dict, league: AerenaLeague) -> AerenaMatch:
         valid_games.append((game, gid, number))
     db.flush()
     old_by_number = {game.number: game for game in db.query(AerenaGame).filter_by(match_id=match_id).all()}
+    scores = (team1.get("teamScore"), team2.get("teamScore"))
+    scored_games = sum(scores) if all(isinstance(score, int) and not isinstance(score, bool) and 0 <= score <= 30 for score in scores) else None
+    score_consistent_correction = row.has_result and scored_games is not None and scored_games > 0 and len(valid_games) == scored_games
+    keep_missing = len(valid_games) < len(old_by_number) and not score_consistent_correction
+    # A shorter list is not proof that the source removed old games, especially
+    # while a series is still in progress. Retain observations unless a final,
+    # score-consistent correction confirms the shorter result.
+    if keep_missing:
+        row.detail_fetched_at = None
+        row.detail_error = "The latest source list was incomplete; previously saved games were retained and may be stale."
     for game, gid, number in valid_games:
         game_row = db.get(AerenaGame, gid)
         if game_row and game_row.match_id != match_id:
@@ -306,15 +316,21 @@ def save_match(db: Session, data: dict, league: AerenaLeague) -> AerenaMatch:
     # An explicit games list is authoritative for the latest view. Snapshots
     # above preserve previous source revisions, including removed games.
     old_games = db.query(AerenaGame).filter_by(match_id=match_id).all()
+    retained_ids = []
     for old in old_games:
         if old.id not in seen_games:
+            if keep_missing and old.number not in seen_numbers:
+                retained_ids.append(old.id)
+                continue
             db.query(AerenaDraftEvent).filter_by(game_id=old.id).delete(synchronize_session=False)
             db.query(AerenaPlayerGameStat).filter_by(match_id=match_id, game_number=old.number).delete(synchronize_session=False)
             row.detail_fetched_at = None
             row.detail_attempted_at = None
             row.detail_error = "Game data changed; player details need a fresh source check."
             db.delete(old)
-    row.game_count = len(valid_games)
+    if retained_ids:
+        draft_count += db.query(AerenaDraftEvent).filter(AerenaDraftEvent.game_id.in_(retained_ids)).count()
+    row.game_count = len(valid_games) + len(retained_ids)
     row.draft_event_count = draft_count
     return row
 
@@ -341,7 +357,20 @@ def save_match_detail(db: Session, detail: dict, league: AerenaLeague) -> Aerena
     incoming = parse_date(data.get("updatedAt"))
     if existing and existing.source_updated_at and incoming and incoming < existing.source_updated_at:
         raise AerenaError("Aerena returned older match details; the newer local record was kept.")
-    game_numbers = {game.get("gameNumber") for game in data.get("games", []) if isinstance(game, dict)}
+    games = data.get("games")
+    if not isinstance(games, list):
+        raise AerenaError("Aerena returned an incomplete match-detail record; saved data was kept.")
+    if existing:
+        saved_count = db.query(AerenaGame).filter_by(match_id=match_id).count()
+        scores = (_object(data.get("team1")).get("teamScore"), _object(data.get("team2")).get("teamScore"))
+        scored_games = sum(scores) if all(isinstance(score, int) and not isinstance(score, bool) and 0 <= score <= 30 for score in scores) else None
+        has_result = bool(_id(_object(data.get("matchWinner")).get("team"))) or data.get("isDraw") is True
+        score_consistent_correction = has_result and scored_games is not None and scored_games > 0 and len(games) == scored_games
+        if len(games) < saved_count and not score_consistent_correction:
+            # Do not replace player stats for previously saved games with stats
+            # from an incomplete response. The caller rolls back safely.
+            raise AerenaError("The source returned an incomplete series; the more complete saved games and player details were kept.")
+    game_numbers = {game.get("gameNumber") for game in games if isinstance(game, dict)}
     if any(stat["gameNumber"] not in game_numbers for stat in valid):
         raise AerenaError("Aerena returned player stats for an unknown game.")
     row = save_match(db, data, league)

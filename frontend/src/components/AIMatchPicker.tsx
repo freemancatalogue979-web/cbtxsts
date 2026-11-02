@@ -5,7 +5,7 @@ import { AI_ESPORTS_MATCH_LIMIT, type AIEsportsAttachment, type AIEsportsRegion,
 import { esportsDate, esportsNumber, teamName, type EsportsCatalog, type EsportsLeague, type EsportsMatch } from "../lib/esports";
 import { ErrorNote } from "./ui";
 
-type PickerMatch = { id: string | null; week: number | null; team1: string; team2: string; score1: number | null; score2: number | null; status: string; starts_at: string | null; day?: string; stage?: string; round?: string; phase?: "regular" | "playoffs"; id_conflict?: boolean };
+type PickerMatch = { id: string | null; week: number | null; team1: string; team2: string; score1: number | null; score2: number | null; status: string; starts_at: string | null; game_count?: number; day?: string; stage?: string; round?: string; phase?: "regular" | "playoffs"; id_conflict?: boolean };
 type RoneSchedule = { status: string; weeks: number[]; matches: PickerMatch[]; observed_at: string | null; notice: string };
 type AerenaPage = { matches: (EsportsMatch & { week: number | null })[]; weeks: { number: number; matches: number }[]; total: number; has_more: boolean; unlabeled_matches: number; playoff_matches: number; unlabeled_stages: number; season_loaded: boolean; season_observed_at: string | null; season_error: boolean };
 const REGIONS: { id: AIEsportsRegion; label: string }[] = [
@@ -119,7 +119,7 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
   const rows: PickerMatch[] = source === "rone" ? (rone?.matches || []).filter((item) => (week === null || item.week === week) &&
     (!search.trim() || `${item.team1} ${item.team2} ${item.id || ""} ${item.round || ""} ${item.day || ""}`.toLowerCase().includes(search.trim().toLowerCase()))) :
     (aerena?.matches || []).map((item) => ({ id: item.id, week: item.week, stage: item.stage, team1: teamName(item.team1), team2: teamName(item.team2),
-      score1: item.team1.teamScore ?? null, score2: item.team2.teamScore ?? null, status: item.status, starts_at: item.starts_at }));
+      score1: item.team1.teamScore ?? null, score2: item.team2.teamScore ?? null, status: item.status, starts_at: item.starts_at, game_count: item.game_count }));
   const weeks = source === "rone" ? (rone?.weeks || []).map((n) => ({ number: n, matches: rone?.matches.filter((m) => m.week === n).length || 0 })) : (aerena?.weeks || []);
   const weekCount = weeks.find((item) => item.number === week)?.matches || 0;
   const playoffCount = source === "rone" ? (phase === "playoffs" ? rone?.matches.length || 0 : 0) : aerena?.playoff_matches || 0;
@@ -138,7 +138,7 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
     <div className="rounded-xl border border-leaf/20 bg-leaf/[0.05] p-3 flex gap-3">
       <span className="grid place-items-center h-9 w-9 shrink-0 rounded-lg border border-leaf/20 bg-leaf/10 text-leaf"><Database size={17} /></span>
       <div><p className="text-[12px] font-extrabold text-text">Bring the matches to Clover.</p>
-        <p className="text-[11px] leading-relaxed text-mute mt-1">Choose a week, the playoffs, or individual matches. Clover loads available public games and counts picks by game number.</p></div>
+        <p className="text-[11px] leading-relaxed text-mute mt-1">A match is the whole series. Choose a week, playoffs or individual matches; Clover checks every available game in each one.</p></div>
     </div>
     <div className="grid sm:grid-cols-2 gap-3">
       <div><div className="label mb-1.5 !text-mute">Data source</div><div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Data source">
@@ -207,11 +207,15 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
       {rows.map((match, index) => {
         const active = !!match.id && chosen.some((item) => item.id === match.id);
         const stageLabel = match.phase === "playoffs" ? `Playoffs${match.round ? ` · ${match.round}` : ""}` : match.week ? `Week ${match.week}${match.stage ? ` · ${match.stage}` : ""}` : match.stage || "Stage unknown";
+        const scoreTotal = (match.score1 ?? 0) + (match.score2 ?? 0);
+        const scoredGames = Number.isInteger(match.score1) && Number.isInteger(match.score2) && (match.score1 ?? -1) >= 0 && (match.score2 ?? -1) >= 0 && (/^(completed|finished)$/i.test(match.status) || scoreTotal > 0) ? scoreTotal : null;
+        const savedGames = source === "aerena" && Number.isInteger(match.game_count) && (match.game_count ?? -1) >= 0 ? match.game_count! : null;
         return <button key={`${match.id || "no-detail"}-${match.week}-${index}`} type="button" aria-pressed={active} onClick={() => toggle(match)} disabled={!match.id || (!active && chosen.length >= AI_ESPORTS_MATCH_LIMIT)}
           className={`w-full text-left rounded-lg border p-3 min-w-0 transition-colors disabled:opacity-60 ${active ? "border-leaf/45 bg-leaf/5" : "border-edge bg-raised/40 hover:border-edge-2"}`}>
           <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><div className="flex flex-wrap gap-1.5 text-[9px] uppercase tracking-wider text-mute font-extrabold"><span className="text-leaf">{stageLabel}</span><span>·</span><span>{match.status || "unknown"}</span></div>
             <div className="text-[12px] font-extrabold text-text mt-1 break-words">{match.team1} <span className="text-mute">vs</span> {match.team2} {match.score1 !== null && match.score2 !== null && <span className="text-mute tabular-nums">· {esportsNumber(match.score1)}–{esportsNumber(match.score2)}</span>}</div>
-            <div className="text-[10px] text-mute mt-1">{match.starts_at ? esportsDate(match.starts_at, false) : match.day || "Date TBC"}{!match.id && (match.id_conflict ? " · Conflicting source record" : source === "rone" && region === "kh" ? " · Match details unavailable for MPL KH" : " · Details not published")}</div></div>
+            <div className="text-[10px] text-mute mt-1">{match.starts_at ? esportsDate(match.starts_at, false) : match.day || "Date TBC"}{!match.id && (match.id_conflict ? " · Conflicting source record" : source === "rone" && region === "kh" ? " · Match details unavailable for MPL KH" : " · Details not published")}</div>
+            {(savedGames !== null || (scoredGames !== null && scoredGames > 0)) && <div className="text-[10px] text-mute mt-1">{savedGames !== null ? `${savedGames} saved game${savedGames === 1 ? "" : "s"}` : `${scoredGames} game${scoredGames === 1 ? "" : "s"} played`}{savedGames !== null && scoredGames !== null && scoredGames > savedGames ? ` · score indicates ${scoredGames} played` : source === "rone" ? " · details load on demand" : ""}</div>}</div>
             <span className={`rounded-full border p-1 shrink-0 ${active ? "border-leaf/50 bg-leaf text-ink" : "border-edge-2 text-mute"}`}>{active ? <Check size={13} /> : <CirclePlus size={13} />}</span></div>
         </button>;
       })}

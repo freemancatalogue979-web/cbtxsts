@@ -699,7 +699,7 @@ def _send_message(
     db: Session,
     on_progress: Callable[[str], None] | None = None,
 ) -> dict:
-    from .. import ai_esports_analysis as match_analysis, ai_game_sources, ai_thinking
+    from .. import ai_esports_analysis as match_analysis, ai_game_sources, ai_rone, ai_thinking
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
     if (data.draft_ids or data.map_ids) and not data.share_board_context:
@@ -713,9 +713,14 @@ def _send_message(
     )
     # A short follow-up may reuse the last public selection only when the
     # member has enabled chat history. It never retrieves another member's data.
-    if scope is None and data.auto_esports and not data.match_ids and len(question) < 180 and re.search(
-        r"\b(games?|picks?|picked|bans?|banned|heroes|hero|matches|match)\b", question, re.I
-    ):
+    named_sources = {name for name in ("rone", "aerena") if re.search(rf"\b{name}\b", question, re.I)}
+    named_region = ai_rone.requested_region(question)
+    if (scope is None and data.auto_esports and not data.match_ids and len(question) < 180
+            and not ai_context.aerena_link(question)
+            and not re.search(r"\b(vs\.?|versus|against|upcoming|next match|playoffs?)\b|"
+                              r"\b(?:season\s*[-:#]?\s*|s\s*)0*[1-9]\d{0,2}\b|\bweek\s*[-:#]?\s*\d{1,2}\b",
+                              question, re.I)
+            and re.search(r"\b(games?|picks?|picked|bans?|banned|heroes|hero|matches|match)\b", question, re.I)):
         prefs = service.settings_for(db, user.id)
         if prefs.use_history:
             latest = (db.query(AIMessage).filter_by(conversation_id=conversation_id, role="user")
@@ -724,12 +729,28 @@ def _send_message(
                 candidate = item.get("esports_selection") if isinstance(item, dict) else None
                 if isinstance(candidate, dict):
                     try:
-                        scope = EsportsSelectionIn.model_validate(candidate).model_dump()
+                        previous_scope = EsportsSelectionIn.model_validate(candidate).model_dump()
+                        same_source = not named_sources or named_sources == {previous_scope["source"]}
+                        same_region = not named_region or named_region == previous_scope.get("region")
+                        if same_source and same_region:
+                            scope = previous_scope
                     except ValueError:
                         scope = None
                     break
-    auto_ids = ai_context.automatic_match_ids(db, question) if data.auto_esports and not data.match_ids and not scope else []
-    will_load_matches = bool(scope or data.match_ids or (auto_ids and re.search(r"\b(pick|picks|picked|games?)\b", question, re.I)))
+    # An explicitly Rone-only question must not silently substitute Aerena's
+    # saved matches when there is no matching prior Rone scope.
+    auto_ids = (ai_context.automatic_match_ids(db, question)
+                if data.auto_esports and not data.match_ids and not scope and "rone" not in named_sources else [])
+    linked_match = ai_context.aerena_link(question)
+    single_match_reference = bool((linked_match and linked_match[0] == "match") or re.search(
+        r"\b(?:vs\.?|versus|against|match)\b|\b(?:this|that|specific|last|latest)\s+(?:game|series)\b",
+        question, re.I
+    ))
+    broad_season = bool(re.search(r"\b(?:season\s*[-:#]?\s*|s\s*)0*[1-9]\d{0,2}\b", question, re.I))
+    auto_series_requested = bool(auto_ids and (single_match_reference or (
+        not broad_season and re.search(r"\b(matches|games?|series|results?|scores?)\b", question, re.I)
+    )))
+    will_load_matches = bool(scope or data.match_ids or auto_series_requested)
     will_load_game = bool(ai_game_sources.PATCH_INTENT.search(question) or ai_game_sources.GAME_DATA_INTENT.search(question)
                           or re.search(r"\b(skills?|kit|abilities|ability|hero(?:es)?)\b", question, re.I)
                           or service._matching_heroes(db, question, []))
@@ -795,7 +816,12 @@ def _send_message(
             raise HTTPException(status_code=422, detail="Specify a draft, strategy, hero, patch label or equipment change to propose.")
         facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources,
                                                 include_auto_esports=data.auto_esports,
-                                                include_season_aggregate=not bool(data.match_ids or scope))
+                                                include_season_aggregate=not bool(data.match_ids or auto_series_requested or scope))
+        if data.auto_esports and named_sources == {"rone", "aerena"} and not scope and not data.match_ids:
+            facts["esports_source_notice"] = (
+                "Both Rone and Aerena were named, but match series were not combined automatically. "
+                "Select the matches for each source separately to compare them."
+            )
         facts.update(board_facts)
         sources.extend(board_sources)
         from .. import ai_saved
@@ -825,12 +851,22 @@ def _send_message(
                     label += " · Selected stages"
             scope_source = [{"kind": "esports_feed", "label": label, "route": "esports",
                              "esports_selection": stored_scope}]
+        prompt_match_sources = [dict(source) for source in match_sources] if data.match_ids else []
+        if not scope and (data.match_ids or auto_series_requested):
+            # Persist only public IDs, so a short follow-up can reload the same
+            # whole series when the member has enabled chat history.
+            remembered = {"source": "aerena", "mode": "matches", "match_ids": data.match_ids or auto_ids}
+            if prompt_match_sources:
+                prompt_match_sources[0]["esports_selection"] = remembered
+            else:
+                scope_source = [{"kind": "esports_feed", "label": "Aerena matched series", "route": "esports",
+                                 "esports_selection": remembered}]
         prompt = AIMessage(
             conversation_id=conversation_id,
             role="user",
             content=question,
             mode="user_think" if data.think else "user",
-            sources_json=dumps((match_sources if data.match_ids else []) + scope_source + board_sources),
+            sources_json=dumps(prompt_match_sources + scope_source + board_sources),
         )
         db.add(prompt)
         db.commit()  # Save the user's request before any external network operation.
@@ -851,11 +887,37 @@ def _send_message(
                     pick_facts, pick_sources = match_analysis.analyze_rone(db, scope, on_progress)
                 else:
                     pick_facts, pick_sources = match_analysis.analyze_aerena_scope(db, scope, on_progress)
-            elif data.match_ids or (auto_ids and re.search(r"\b(pick|picks|picked|games?)\b", question, re.I)):
+            elif data.match_ids or auto_series_requested:
                 pick_facts, pick_sources = match_analysis.analyze_aerena(db, data.match_ids or auto_ids,
                                                                          on_progress=on_progress)
             if pick_facts is not None:
                 facts["match_pick_analysis"] = pick_facts
+                # Build detailed series context *after* on-demand loading, not
+                # from the stale snapshot captured before the refresh. Small
+                # scoped selections get the same complete game evidence.
+                detailed_ids = data.match_ids or auto_ids
+                if scope and scope.get("source") == "aerena":
+                    rows = pick_facts.get("matches") or []
+                    # Large, compact selections may use indexed positional rows.
+                    # Full match evidence is only duplicated for small samples.
+                    if len(rows) <= 8 and all(isinstance(row, dict) for row in rows):
+                        detailed_ids = [row["match_id"] for row in rows if row.get("match_id")]
+                        if len(rows) != len(detailed_ids):
+                            detailed_ids = []
+                    else:
+                        detailed_ids = []
+                if detailed_ids and len(detailed_ids) <= 8:
+                    refreshed_facts, refreshed_sources = service.selected_match_evidence(db, detailed_ids)
+                    if refreshed_facts:
+                        if auto_ids:
+                            refreshed_facts["sample_notice"] = (
+                                "Automatically matched saved Aerena records; this is not a complete team or season history. "
+                                "Each match is a series; check game coverage and source limitations."
+                            )
+                        facts["selected_aerena_matches"] = refreshed_facts
+                        if not scope:
+                            for source, updated in zip(match_sources, refreshed_sources):
+                                source.update(updated)
                 chart = match_analysis.pick_chart(pick_facts, question)
                 target_sources = pick_sources if scope else match_sources
                 if chart and target_sources:

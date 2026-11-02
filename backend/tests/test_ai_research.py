@@ -339,7 +339,7 @@ class ResearchTests(unittest.TestCase):
             self.assertTrue(
                 next(s for s in result["assistant_message"]["sources"] if s["kind"] == "match")["auto_selected"]
             )
-            self.assertEqual(result["user_message"]["sources"], [])
+            self.assertEqual(result["user_message"]["sources"][0]["esports_selection"]["match_ids"], ["MATCH-0"])
             self.req(
                 "POST",
                 f"/conversations/{chat}/messages",

@@ -31,7 +31,7 @@ test('chat sends source identifiers, renders load progress and clears the one-me
   const chat = await readFile(new URL('../src/pages/CloverAI.tsx', import.meta.url), 'utf8');
   assert.match(chat, /esports_selection: matches\[0\]\?\.selection/);
   assert.match(chat, /loading_matches:\(\\d\+\):\(\\d\+\)/);
-  assert.match(chat, /Loading match \$\{loadProgress\}/);
+  assert.match(chat, /Loading games for match \$\{loadProgress\}/);
   assert.match(chat, /setAttachedMatches\(\[\]\); setAttachedDrafts\(\[\]\); setAttachedMaps\(\[\]\)/);
   assert.match(chat, /Short follow-ups may reuse this public selection when chat history is enabled/);
 });

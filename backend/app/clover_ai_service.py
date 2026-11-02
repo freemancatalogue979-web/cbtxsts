@@ -49,7 +49,7 @@ SYSTEM = """You are 9 Clover AI: a knowledgeable, friendly Mobile Legends: Bang 
 
 Use your existing MLBB knowledge to explain general mechanics, hero roles, skills, matchups, drafting and strategy. Check the supplied hero library, its ability ratings and saved or loaded Rone skills first for named heroes; use relevant Rone item descriptions, aggregate stats and community build guides where provided. Team ratings and tiers are team-maintained estimates, not official statistics. Rone's game-version list is not necessarily full patch notes: mention actual changes only when the supplied source contains them. Work with the member's remembered teachings and the available esports data. Treat the member's teaching as useful context and build on it; briefly attribute or resolve a genuine conflict when that matters. Use the local hero catalog even when it is not a complete current patch feed. Offer concrete, sensible gameplay and build ideas as advice rather than refusing just because a live source was not checked. Do not pretend you know an exact current patch, changed ability, win rate or tournament result if it is not actually supported. Give a short, relevant qualification only when a missing or conflicting fact would change the answer.
 
-Use supplied context as the only evidence of this member's profile, pool, scrims, attached team boards, private account data, and saved match records. Do not infer personal stats or participation, invent draft order, coach statements, sources or probabilities, or confuse a scrim assignment with a game played. Pool counts are member-recorded, and coaching notes are the member's own claims. Attached Draft Lab and Map Lab boards are team plans, not match results; map coordinates are percentages and paths may be sampled, not an image. Do not invent missing map timings or locations. Do not treat an alphabetical equipment or hero roster as a ranked recommendation. For esports, match_pick_analysis is a deterministic count over the member's selected matches or source week; use its all_games or by_game_number figures for the scope asked. Never substitute a season aggregate for a selected week. Keep playoffs, regular-season weeks, sources and seasons distinct; say when source stage labels or match details are missing. The aggregate counts complete ten-hero games only, so mention missing matches, scored games, score/game conflicts, partial games or unlabeled weeks when relevant. Its hero lists are not pick order. Rone does not provide bans or an identified season; do not invent either. Broader season aggregates are separate from the selected scope. Pick/ban rates must use their stated denominator; describe incomplete coverage briefly when it affects the answer. You may give a reasoned meta or draft recommendation even when data is limited, but do not present a guess as a measured season-wide statistic or claim an automated prediction engine.
+Use supplied context as the only evidence of this member's profile, pool, scrims, attached team boards, private account data, and saved match records. Do not infer personal stats or participation, invent draft order, coach statements, sources or probabilities, or confuse a scrim assignment with a game played. Pool counts are member-recorded, and coaching notes are the member's own claims. Attached Draft Lab and Map Lab boards are team plans, not match results; map coordinates are percentages and paths may be sampled, not an image. Do not invent missing map timings or locations. Do not treat an alphabetical equipment or hero roster as a ranked recommendation. For esports, one match is a whole multi-game series, not just its first game: inspect each recorded numbered game in every selected match, and distinguish each game from the series score. match_pick_analysis is a deterministic count over the member's selected matches or source week; use its all_games or by_game_number figures for the scope asked. If game_detail_level is an index or details were compacted, say the specific game facts need a narrower selection; never pretend indexed or missing games were fully analyzed. Never substitute a season aggregate for a selected week. Keep playoffs, regular-season weeks, sources and seasons distinct; say when source stage labels or match details are missing. The aggregate counts complete ten-hero games only, so mention missing matches, scored games, score/game conflicts, partial games or unlabeled weeks when relevant. Its hero lists are not pick order. Rone does not provide bans or an identified season; do not invent either. Broader season aggregates are separate from the selected scope. Pick/ban rates must use their stated denominator; describe incomplete coverage briefly when it affects the answer. You may give a reasoned meta or draft recommendation even when data is limited, but do not present a guess as a measured season-wide statistic or claim an automated prediction engine.
 
 When a simple flow would make a combo, rotation, draft plan or comparison clearer, add a compact visual diagram after the explanation using a fenced `clover-diagram` JSON block: {"title":"short title","steps":[{"label":"short step","detail":"optional explanation","hero":"optional named hero"}]}. Use 2–6 steps in order, do not embed URLs or HTML, and never invent statistics for a diagram. For normal questions a diagram is optional; actual hero artwork and verified pick charts may be supplied separately by the app.
 
@@ -651,16 +651,41 @@ def _fallback(facts: dict) -> str:
         elif scope.get("phase") == "all":
             title += " · Selected matches across stages"
         coverage = match_analysis.get("coverage") or {}
+        matches = match_analysis.get("matches") or []
+        columns = match_analysis.get("match_index_columns") or []
+        if columns and matches and isinstance(matches[0], list):
+            matches = [dict(zip(columns, row)) for row in matches if isinstance(row, list)]
         lines.append(f"**{title} · recorded hero picks**")
-        for match in match_analysis.get("matches", []):
+        for match in matches:
             has_games = bool(match.get("games") or match.get("games_recorded"))
             match_stage = match.get("round") or match.get("stage")
             stage_label = f" ({match_stage})" if match_stage else (" (Playoffs)" if match.get("phase") == "playoffs" else "")
+            if match.get("match_id"):
+                stage_label += f" · {match['match_id']}"
             if match.get("score1") is not None and match.get("score2") is not None:
                 lines.append(f"- {match.get('team1') or 'TBD'} {match['score1']}–{match['score2']} {match.get('team2') or 'TBD'}{stage_label}." +
                              (" Match details are not available." if not has_games else ""))
             elif not has_games:
                 lines.append(f"- {match.get('team1') or 'TBD'} vs {match.get('team2') or 'TBD'}{stage_label}: match details are not available.")
+            else:
+                lines.append(f"- {match.get('team1') or 'TBD'} vs {match.get('team2') or 'TBD'}{stage_label}: result not recorded.")
+            if match.get("detail_error"):
+                lines.append(f"  - Source detail notice: {match['detail_error']}")
+            # Facts-only replies still show each game in a small selection,
+            # including a hero or winner that appears only in a later game.
+            if len(matches) <= 8:
+                for game in match.get("games", []):
+                    winner = game.get("winner")
+                    if not winner:
+                        winners = [team.get("team") for team in game.get("teams", []) if team.get("won") is True and team.get("team")]
+                        winner = winners[0] if len(winners) == 1 else None
+                    summary = f"  - Game {game.get('number')}: " + (f"{winner} won" if winner else "winner not recorded")
+                    picks = game.get("picks") or []
+                    if picks:
+                        summary += "; recorded picks: " + ", ".join(picks)
+                    lines.append(summary + ".")
+                if match.get("game_numbers"):
+                    lines.append(f"  - Recorded game numbers: {match['game_numbers']} (detailed facts compacted).")
         def leaders(rows: list[dict], omitted: int = 0) -> str:
             if not rows:
                 return "Complete pick lineups are not available"

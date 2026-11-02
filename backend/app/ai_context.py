@@ -375,7 +375,13 @@ def esports_intent(question: str) -> bool:
     acronym = bool(re.search(r"\b[A-Z]{3,8}\b", question)) and bool(
         re.search(r"\b(matches|match|games?|draft|series|picks?|bans?|results?|scores?)\b", question, re.I)
     )
-    return bool(_ESPORTS_INTENT.search(question) or acronym or aerena_link(question))
+    # Named matchups such as "analyze Aurora vs Onic match" need not contain
+    # an all-caps team acronym or an explicit source name. A bare hero matchup
+    # is not enough; require a match/series question as well.
+    matchup = bool(re.search(r"\b(?:vs\.?|versus|against)\b", question, re.I)) and bool(
+        re.search(r"\b(?:matches|match(?!\s+up\b)|series|games?)\b", question, re.I)
+    )
+    return bool(_ESPORTS_INTENT.search(question) or acronym or matchup or aerena_link(question))
 
 
 def automatic_match_ids(db: Session, question: str) -> list[str]:
@@ -435,6 +441,31 @@ def automatic_match_ids(db: Session, question: str) -> list[str]:
             )
         base = base.filter(or_(*filters))
     rows = base.order_by(order, AerenaMatch.id).limit(80).all()
+    matchup = re.search(r"\b(?:vs\.?|versus|against)\b", text, re.I)
+    if matchup:
+        def terms(part: str) -> list[str]:
+            return [word.casefold() for word in re.findall(r"[\w-]{2,}", part)
+                    if word.casefold() not in _ESPORTS_SKIP and (len(word) >= 3 or word.isupper())][:8]
+        left_words, right_words = terms(text[:matchup.start()]), terms(text[matchup.end():])
+        if not left_words or not right_words:
+            return []
+        def side_has(words: list[str], name: str, raw: str) -> bool:
+            try:
+                team = json.loads(raw or "{}")
+            except (TypeError, ValueError):
+                team = {}
+            team = team if isinstance(team, dict) else {}
+            value = " ".join(_text(item, 200) for item in (name, team.get("teamName"), team.get("teamCode"))).casefold()
+            return any(word in value for word in words)
+        # Match both named sides, in either order; do not mix another opponent
+        # into a specifically requested matchup merely because one team fits.
+        rows = [(match, league) for match, league in rows if (
+            side_has(left_words, match.team1_name, match.team1_json)
+            and side_has(right_words, match.team2_name, match.team2_json)
+        ) or (
+            side_has(left_words, match.team2_name, match.team2_json)
+            and side_has(right_words, match.team1_name, match.team1_json)
+        )]
 
     def score(pair: tuple[AerenaMatch, AerenaLeague | None]) -> int:
         match, league = pair

@@ -35,6 +35,9 @@ from .models import loads, utcnow
 # Broad enough for a full season, but still bounded against runaway requests.
 MAX_MATCHES = 500
 MAX_GAMES_PER_MATCH = 30
+# Broad enough for per-game facts from ordinary large selections, still below
+# the upstream model's context window alongside the rest of the chat context.
+MAX_MATCH_CONTEXT_CHARS = 180_000
 MAX_SCHEDULE_ROWS = 1_000
 LOAD_DEADLINE_SECONDS = 900
 RETRY_SECONDS = 90
@@ -727,8 +730,28 @@ def _rone_games(payload: Any) -> tuple[list[dict], int]:
                         "kills": _int(player.get("kills"), low=0, high=200),
                         "deaths": _int(player.get("deaths"), low=0, high=200),
                         "assists": _int(player.get("assists"), low=0, high=200),
+                        "gold": _int(player.get("gold"), low=0, high=1_000_000_000),
+                        "damage_dealt": _int(
+                            player.get("damage_dealt"), low=0, high=1_000_000_000
+                        ),
+                        "damage_taken": _int(
+                            player.get("damage_taken"), low=0, high=1_000_000_000
+                        ),
+                        "tower_damage": _int(
+                            player.get("tower_damage"), low=0, high=1_000_000_000
+                        ),
+                        "item_ids": (
+                            [
+                                _text(_obj(item).get("id"), 40)
+                                for item in (player.get("items") or [])[:10]
+                                if isinstance(item, dict) and _text(item.get("id"), 40)
+                            ]
+                            if isinstance(player.get("items"), list)
+                            else []
+                        ),
                     }
                 )
+            stats = _obj(team.get("stats"))
             projected.append(
                 {
                     "team": _text(_obj(team.get("team")).get("name"), 80) or None,
@@ -737,6 +760,21 @@ def _rone_games(payload: Any) -> tuple[list[dict], int]:
                         if isinstance(team.get("winner"), bool)
                         else None
                     ),
+                    "kills": _int(team.get("kills"), low=0, high=1000),
+                    "stats": {
+                        key: value
+                        for key in (
+                            "total_gold",
+                            "total_damage",
+                            "red_buff",
+                            "blue_buff",
+                            "lord_kill",
+                            "tortoise_kill",
+                            "tower_destroy",
+                        )
+                        if (value := _int(stats.get(key), low=0, high=1_000_000_000))
+                        is not None
+                    },
                     "heroes": names,
                     "players": player_rows,
                 }
@@ -753,7 +791,13 @@ def _rone_games(payload: Any) -> tuple[list[dict], int]:
                 "picks": all_names,
                 "complete_picks": complete,
                 "bans": None,
-                "duration": _text(item.get("duration"), 24) or None,
+                "duration": _text(
+                    item.get("duration") or item.get("duration_estimate"), 24
+                )
+                or None,
+                "duration_estimated": bool(
+                    not item.get("duration") and item.get("duration_estimate")
+                ),
             }
         )
     return sorted(games, key=lambda game: game["number"]), ambiguous
@@ -801,27 +845,79 @@ def _aerena_games(detail: dict) -> tuple[list[dict], int]:
         players = [
             {
                 "name": _text(row.get("ign"), 60) or None,
+                "team_id": _text(row.get("team_id"), 80) or None,
+                "position": _text(row.get("position"), 30) or None,
                 "hero": _hero(row.get("hero_name")) or None,
                 "kills": _int(row.get("kills"), low=0, high=200),
                 "deaths": _int(row.get("deaths"), low=0, high=200),
                 "assists": _int(row.get("assists"), low=0, high=200),
+                "gold": _int(row.get("gold"), low=0, high=1_000_000_000),
+                "damage_dealt": _int(row.get("dmgDealt"), low=0, high=1_000_000_000),
+                "damage_taken": _int(row.get("dmgTaken"), low=0, high=1_000_000_000),
             }
             for row in stats[:10]
             if isinstance(row, dict)
         ]
+        draft = [
+            {
+                "kind": event.get("kind"),
+                "sequence": _int(event.get("sequence"), high=20),
+                "side": _text(event.get("side"), 8) or None,
+                "hero": _hero(event.get("hero_name")) or None,
+                "player": _text(event.get("player_ign"), 60) or None,
+            }
+            for event in events[:20]
+            if isinstance(event, dict) and event.get("kind") in {"Pick", "Ban"}
+        ]
+        team_values = (_obj(game.get("team1")), _obj(game.get("team2")))
+        team_stats = [
+            {
+                key: value
+                for key in ("teamName", "teamCode", "side")
+                if (value := _text(team.get(key), 80))
+            }
+            | {
+                key: value
+                for key in (
+                    "teamScore",
+                    "teamKills",
+                    "teamDeaths",
+                    "teamAssists",
+                    "teamGold",
+                    "teamDmgDealt",
+                    "teamDmgTaken",
+                    "teamTurtles",
+                    "teamLords",
+                    "teamObjectives",
+                )
+                if (value := _int(team.get(key), low=0, high=1_000_000_000)) is not None
+            }
+            for team in team_values
+        ]
+        winning = _obj(game.get("winner"))
+        winner_name = _text(winning.get("teamName") or winning.get("teamCode"), 80)
+        if not winner_name and winning.get("team"):
+            winning_teams = [
+                team for team in team_values if team.get("team") == winning["team"]
+            ]
+            if len(winning_teams) == 1:
+                winner_name = _text(
+                    winning_teams[0].get("teamName")
+                    or winning_teams[0].get("teamCode"),
+                    80,
+                )
         result.append(
             {
                 "number": number,
                 "picks": [name for name in picks if name],
                 "complete_picks": complete,
                 "bans": [name for name in bans if name] if bans else None,
+                "draft_coverage": _text(game.get("draft_coverage"), 20) or None,
+                "draft": draft,
+                "teams": team_stats,
                 "players": players,
-                "winner": _text(
-                    _obj(game.get("winner")).get("teamName")
-                    or _obj(game.get("winner")).get("teamCode"),
-                    80,
-                )
-                or None,
+                "players_omitted": max(0, len(stats) - 10),
+                "winner": winner_name or None,
                 "duration_seconds": (
                     game.get("duration_seconds")
                     if isinstance(game.get("duration_seconds"), int)
@@ -849,6 +945,7 @@ def aggregate(
     missing: int = 0,
     duplicate_rows: int = 0,
     notice: str = "",
+    player_details_omitted: bool = False,
 ) -> dict:
     all_picks: Counter = Counter()
     by_number: dict[int, Counter] = {}
@@ -912,83 +1009,193 @@ def aggregate(
             "Community records may be stale or incomplete. " + notice
         ).strip(),
     }
-    # Counts are computed first over all saved games. Compact bulky player
-    # details only after counting, so context limits never change the ranking.
-    if len(json.dumps(result, ensure_ascii=False)) > 90_000:
-        for match in matches:
-            for game in match.get("games", []):
-                game.pop("players", None)
-                for team in game.get("teams", []):
-                    team.pop("players", None)
-        result[
-            "notice"
-        ] += " Player detail was omitted from the bounded context; pick counts still include every complete game."
-    if len(json.dumps(result, ensure_ascii=False)) > 90_000:
-        for match in matches:
-            for game in match.get("games", []):
-                game.pop("picks", None)
-                game.pop("bans", None)
-                for team in game.get("teams", []):
-                    team.pop("heroes", None)
-        for bucket in [result["all_games"], *result["by_game_number"]]:
+    # Compute counts before compacting. Retain every match and game identity,
+    # rather than allocating the budget to the first few match cards.
+    result["coverage"]["game_records"] = complete + partial
+    result["coverage"]["match_detail_cards_omitted"] = 0
+    result["coverage"]["game_detail_level"] = (
+        "without_players" if player_details_omitted else "full"
+    )
+    size = lambda: len(json.dumps(result, ensure_ascii=False))  # noqa: E731
+    buckets = [result["all_games"], *result["by_game_number"]]
+
+    def limit_rankings(limit: int) -> None:
+        for bucket in buckets:
             ranked = bucket["top_picks"]
-            if len(ranked) > 40:
-                leaders = sum(row["picks"] == ranked[0]["picks"] for row in ranked)
-                bucket["additional_heroes_not_listed"] = len(ranked) - 40
-                bucket["tied_leaders_omitted"] = max(0, leaders - 40)
-                bucket["top_picks"] = ranked[:40]
-        result[
-            "notice"
-        ] += " Per-game hero detail and some ranked heroes were compacted for context; counts are unchanged. If tied_leaders_omitted is nonzero, say more heroes are tied rather than claiming the displayed leaders are exhaustive."
-    if len(json.dumps(result, ensure_ascii=False)) > 120_000:
-        for match in matches:
-            match["games"] = [
-                {"number": game["number"], "complete_picks": game["complete_picks"]}
-                for game in match.get("games", [])
-            ]
-        for bucket in [result["all_games"], *result["by_game_number"]]:
-            ranked = bucket["top_picks"]
-            if len(ranked) > 10:
+            if len(ranked) > limit:
                 leaders = sum(row["picks"] == ranked[0]["picks"] for row in ranked)
                 bucket["additional_heroes_not_listed"] = (
-                    bucket.get("additional_heroes_not_listed", 0) + len(ranked) - 10
+                    bucket.get("additional_heroes_not_listed", 0) + len(ranked) - limit
                 )
                 bucket["tied_leaders_omitted"] = bucket.get(
                     "tied_leaders_omitted", 0
-                ) + max(0, leaders - 10)
-                bucket["top_picks"] = ranked[:10]
+                ) + max(0, leaders - limit)
+                bucket["top_picks"] = ranked[:limit]
+
+    if size() > 140_000:
+        for match in matches:
+            _drop_player_details(match.get("games", []))
+        result["coverage"]["game_detail_level"] = "without_players"
         result[
             "notice"
-        ] += " Only game numbers and pick completeness fit in detailed context; summary counts remain full-scope."
-    if len(json.dumps(result, ensure_ascii=False)) > 120_000:
-        # Very large selections retain exact counts but only a bounded sample
-        # of match summaries. Never claim the detailed sample is the full set.
+        ] += " Player detail was omitted from the bounded context; pick counts still include every complete game."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        # Keep per-game hero lists and winner for every series before dropping
+        # individual game cards or truncating ranked ties.
+        for match in matches:
+            compacted = []
+            for game in match.get("games", []):
+                winner = game.get("winner")
+                if not winner:
+                    winners = [
+                        team.get("team")
+                        for team in game.get("teams", [])
+                        if team.get("won") is True and team.get("team")
+                    ]
+                    winner = winners[0] if len(winners) == 1 else None
+                compacted.append(
+                    {
+                        "number": game["number"],
+                        "complete_picks": game.get("complete_picks", False),
+                        "picks": game.get("picks", []),
+                        "bans": game.get("bans"),
+                        "winner": winner,
+                    }
+                )
+            match["games"] = compacted
+        limit_rankings(40)
+        result["coverage"]["game_detail_level"] = "heroes_and_winner"
+        result[
+            "notice"
+        ] += " Per-game stats and draft order were compacted; recorded picks and bans remain for every listed game. Some ranked heroes may be omitted; counts are unchanged."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        # The model cannot fit a whole large season's detailed drafts at once.
+        # Keep a complete game index for every match and be explicit about what
+        # needs a narrower selection; never present a first-75 sample as all.
+        for match in matches:
+            games = match.pop("games", [])
+            match["games_recorded"] = len(games)
+            match["game_numbers"] = [game["number"] for game in games]
+            match["partial_pick_game_numbers"] = [
+                game["number"] for game in games if not game.get("complete_picks")
+            ]
+        limit_rankings(10)
+        result["coverage"]["game_detail_level"] = "game_index"
+        result[
+            "notice"
+        ] += " Per-game hero lists were compacted; every available game number remains indexed by match. Narrow the selection for game-by-game hero or player analysis. Summary counts still include all complete games."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+
+        def ranges(values: list[int]) -> str:
+            ordered = sorted(set(values))
+            groups: list[str] = []
+            while ordered:
+                first = last = ordered.pop(0)
+                while ordered and ordered[0] == last + 1:
+                    last = ordered.pop(0)
+                groups.append(str(first) if first == last else f"{first}-{last}")
+            return ",".join(groups)
+
         result["matches"] = [
             {
                 key: match.get(key)
                 for key in (
                     "match_id",
+                    "season_id",
+                    "season",
+                    "region",
                     "week",
                     "phase",
                     "stage",
                     "round",
                     "team1",
                     "team2",
-                    "status",
                     "score1",
                     "score2",
                     "load_status",
                     "missing_scored_games",
-                    "ambiguous_games",
                 )
             }
-            | {"games_recorded": len(match.get("games", []))}
-            for match in matches[:75]
+            | {
+                "games_recorded": match["games_recorded"],
+                "game_numbers": ranges(match["game_numbers"]),
+                "partial_pick_game_numbers": ranges(match["partial_pick_game_numbers"]),
+            }
+            for match in matches
         ]
-        result["coverage"]["match_detail_cards_omitted"] = max(0, len(matches) - 75)
+        result["coverage"]["game_number_format"] = "inclusive comma-separated ranges"
         result[
             "notice"
-        ] += " Detailed match cards are a bounded sample, but all complete games are included in the summary counts."
+        ] += " Game numbers are compact inclusive ranges, not scores; some match metadata was omitted."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        # A pathological full-season sample with maximum-length names still
+        # keeps each source ID and every game number. The narrowed metadata is
+        # disclosed and users can select a smaller set for exact stage labels.
+        result["matches"] = [
+            {
+                "match_id": match.get("match_id"),
+                "season_id": match.get("season_id"),
+                "region": match.get("region"),
+                "week": match.get("week"),
+                "phase": match.get("phase"),
+                "stage": _text(match.get("stage"), 40) or None,
+                "round": _text(match.get("round"), 40) or None,
+                "games_recorded": match["games_recorded"],
+                "game_numbers": match["game_numbers"],
+                "partial_pick_game_numbers": match["partial_pick_game_numbers"],
+            }
+            for match in result["matches"]
+        ]
+        result[
+            "notice"
+        ] += " Team names, scores and portions of unusually long stage labels were omitted; narrow the selection for them."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        for match in result["matches"]:
+            match.pop("stage", None)
+            match.pop("round", None)
+            match.pop("partial_pick_game_numbers", None)
+        result[
+            "notice"
+        ] += " Detailed stage labels and per-game completeness were also omitted; overall coverage and all game numbers remain."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        # Deduplicate long season/region labels across large selections while
+        # retaining their association with each individual match.
+        season_keys: list[list[str | None]] = []
+        indexes: dict[tuple[str | None, str | None], int] = {}
+        for match in result["matches"]:
+            key = (match.pop("season_id", None), match.pop("region", None))
+            if any(key):
+                if key not in indexes:
+                    indexes[key] = len(season_keys)
+                    season_keys.append(list(key))
+                match["season_region_ref"] = indexes[key]
+        result["coverage"]["season_region_index"] = season_keys
+        result[
+            "notice"
+        ] += " season_region_ref indexes the [season ID, region] table in coverage."
+    if size() > MAX_MATCH_CONTEXT_CHARS:
+        # Positional rows avoid repeating field names 500 times. The columns
+        # are supplied explicitly and every match/game remains recoverable.
+        columns = [
+            "match_id",
+            "week",
+            "phase",
+            "games_recorded",
+            "game_numbers",
+            "season_region_ref",
+        ]
+        result["match_index_columns"] = columns
+        result["matches"] = [
+            [match.get(key) for key in columns] for match in result["matches"]
+        ]
+        result[
+            "notice"
+        ] += " Each compact match row follows match_index_columns; game numbers remain associated with their match."
+        if size() > MAX_MATCH_CONTEXT_CHARS:
+            limit_rankings(3)
+            result[
+                "notice"
+            ] += " Additional ranked heroes and ties are counted but omitted; do not call the displayed leaders exhaustive."
     return result
 
 
@@ -1253,6 +1460,7 @@ def analyze_rone(
                     else None
                 ),
                 "score_game_conflict": score_total is not None
+                and row["status"].casefold() in {"completed", "finished"}
                 and len(games) > score_total,
                 "ambiguous_games": ambiguous,
                 "games": games,
@@ -1339,9 +1547,105 @@ def analyze_rone(
             missing=missing,
             duplicate_rows=duplicates,
             notice=notice,
+            player_details_omitted=len(rows) + len(unavailable_rows) > 50,
         ),
         sources,
     )
+
+
+def load_aerena_detail(
+    db: Session,
+    row: AerenaMatch,
+    *,
+    deadline: float | None = None,
+    load_missing: bool = True,
+) -> tuple[dict, AerenaMatch]:
+    """Read every saved game, then refresh an incomplete public series if possible.
+
+    Share the match-detail endpoint's cross-worker lease and retry cooldown.
+    A source failure, disabled integration, or peer timeout never discards the
+    locally saved games; their missing/partial coverage is reported downstream.
+    """
+    from .routers.esports import (
+        DETAIL_RETRY,
+        DETAIL_TTL,
+        ENABLED,
+        _claim_detail_refresh,
+        _refresh_detail_in_background,
+        detail_for,
+    )
+
+    detail = detail_for(db, row)
+    if not load_missing or not ENABLED:
+        return detail, row
+    if deadline is not None and time.monotonic() >= deadline:
+        return detail, row
+    games, _ambiguous = _aerena_games(detail)
+    match = detail["match"]
+    left, right = _obj(match.get("team1")), _obj(match.get("team2"))
+    scores = [
+        _int(left.get("teamScore"), low=0, high=30),
+        _int(right.get("teamScore"), low=0, high=30),
+    ]
+    expected = sum(scores) if all(score is not None for score in scores) else None
+    raw_games = detail.get("games") if isinstance(detail.get("games"), list) else []
+    # An in-progress series can already have games even before a final winner
+    # is recorded. Avoid fetching genuinely upcoming 0–0 fixtures.
+    if not row.has_result and not raw_games and not expected:
+        return detail, row
+    incomplete = bool(
+        not games
+        or any(not game["complete_picks"] for game in games)
+        or (expected is not None and len(games) < expected)
+        or any(
+            game.get("draft_coverage") != "complete"
+            for game in raw_games
+            if isinstance(game, dict)
+        )
+    )
+    # Match-list records can contain complete picks but no player statistics.
+    # Obtain the public detail once even when every saved draft looks complete.
+    if (
+        not incomplete
+        and row.detail_fetched_at is not None
+        and row.detail_fetched_at + DETAIL_TTL >= utcnow()
+        and (
+            row.source_updated_at is None
+            or row.source_updated_at <= row.detail_fetched_at
+        )
+    ):
+        return detail, row
+    attempted = _claim_detail_refresh(db, row, incomplete=incomplete)
+    mid = row.id
+    if attempted:
+        db.rollback()
+        _refresh_detail_in_background(db.get_bind(), mid, attempted)
+        db.expire_all()
+        row = db.get(AerenaMatch, mid)
+    else:
+        # Another worker may already be fetching this match. Wait for that
+        # existing request, but never block indefinitely or bypass its cooldown.
+        db.refresh(row)
+        peer_deadline = min(deadline or float("inf"), time.monotonic() + 25)
+        while (
+            row.detail_attempted_at
+            and not row.detail_error
+            and (
+                not row.detail_fetched_at
+                or row.detail_attempted_at > row.detail_fetched_at
+            )
+            and row.detail_attempted_at + DETAIL_RETRY > utcnow()
+            and time.monotonic() < peer_deadline
+        ):
+            db.rollback()
+            time.sleep(0.5)
+            db.expire_all()
+            row = db.get(AerenaMatch, mid)
+            if row is None:
+                raise LookupError("A selected Aerena match is no longer available.")
+    if row is None:
+        raise LookupError("A selected Aerena match is no longer available.")
+    return detail_for(db, row), row
 
 
 def analyze_aerena(
@@ -1352,16 +1656,12 @@ def analyze_aerena(
     on_progress: Callable[[str], None] | None = None,
     load_missing: bool = True,
 ) -> tuple[dict, list[dict]]:
-    from .routers.esports import (
-        ENABLED,
-        _claim_detail_refresh,
-        _refresh_detail_in_background,
-        detail_for,
-    )
-
     matches = []
     sources = []
     deadline = time.monotonic() + LOAD_DEADLINE_SECONDS
+    consecutive_failures = 0
+    skipped_after_failures = False
+    skipped_after_timeout = False
     for index, mid in enumerate(ids[:MAX_MATCHES]):
         row = db.get(AerenaMatch, mid)
         if row is None:
@@ -1370,51 +1670,27 @@ def analyze_aerena(
             )
         if on_progress:
             on_progress(f"loading_matches:{index + 1}:{len(ids)}")
-        if load_missing and ENABLED and row.has_result and time.monotonic() < deadline:
-            # Season snapshots already include drafts. Only request detail when
-            # games/picks are missing; share the existing cross-worker cooldown.
-            current = detail_for(db, row)
-            saved_games, _ = _aerena_games(current)
-            if not saved_games or any(
-                not game["complete_picks"] for game in saved_games
-            ):
-                attempted = _claim_detail_refresh(db, row)
-                if attempted:
-                    db.rollback()
-                    _refresh_detail_in_background(db.get_bind(), mid, attempted)
-                    db.expire_all()
-                    row = db.get(AerenaMatch, mid)
-                else:
-                    # Another worker may already be fetching the same missing
-                    # detail. Wait briefly rather than analyzing its old state.
-                    db.refresh(row)
-                    pending = (
-                        row.detail_attempted_at
-                        and not row.detail_error
-                        and (
-                            not row.detail_fetched_at
-                            or row.detail_attempted_at > row.detail_fetched_at
-                        )
-                    )
-                    peer_deadline = min(deadline, time.monotonic() + 25)
-                    while pending and time.monotonic() < peer_deadline:
-                        db.rollback()
-                        time.sleep(0.5)
-                        db.expire_all()
-                        row = db.get(AerenaMatch, mid)
-                        if row is None:
-                            raise LookupError(
-                                "A selected Aerena match is no longer available."
-                            )
-                        pending = (
-                            row.detail_attempted_at
-                            and not row.detail_error
-                            and (
-                                not row.detail_fetched_at
-                                or row.detail_attempted_at > row.detail_fetched_at
-                            )
-                        )
-        detail = detail_for(db, row)
+        allow_load = (
+            load_missing and consecutive_failures < 3 and time.monotonic() < deadline
+        )
+        skipped_after_failures |= (
+            load_missing and not allow_load and consecutive_failures >= 3
+        )
+        skipped_after_timeout |= (
+            load_missing and not allow_load and time.monotonic() >= deadline
+        )
+        previous_attempt = getattr(row, "detail_attempted_at", None)
+        detail, row = load_aerena_detail(
+            db, row, deadline=deadline, load_missing=allow_load
+        )
+        if allow_load and getattr(row, "detail_attempted_at", None) != previous_attempt:
+            if getattr(row, "detail_error", ""):
+                consecutive_failures += 1
+            else:
+                consecutive_failures = 0
+            # Do not burst public source calls for a whole season selection.
+            if index + 1 < len(ids):
+                time.sleep(0.25)
         games, ambiguous = _aerena_games(detail)
         if len(ids) > 50:
             _drop_player_details(games)
@@ -1432,6 +1708,12 @@ def analyze_aerena(
         matches.append(
             {
                 "match_id": mid,
+                "season_id": _text(match.get("league_id"), 80) or None,
+                "season": _text(
+                    match.get("league_code") or match.get("league_name"), 100
+                )
+                or None,
+                "region": _text(match.get("league_region"), 30) or None,
                 "week": aerena_week(row),
                 "stage": row.stage or None,
                 "phase": (
@@ -1450,7 +1732,9 @@ def analyze_aerena(
                 "missing_scored_games": (
                     max(0, expected - len(games)) if expected is not None else None
                 ),
-                "score_game_conflict": expected is not None and len(games) > expected,
+                "score_game_conflict": expected is not None
+                and match.get("status") == "completed"
+                and len(games) > expected,
                 "ambiguous_games": ambiguous,
                 "games": games,
             }
@@ -1478,11 +1762,22 @@ def analyze_aerena(
             matches,
             source="Aerena",
             scope=scope or {"mode": "matches"},
+            player_details_omitted=len(ids) > 50,
             notice=(
                 "Aerena match IDs and source week labels are used where available; unlabeled games are not assigned a week. "
                 + (
-                    "Player detail was omitted for this large selection; pick totals include all complete games."
+                    "Player detail was omitted for this large selection; pick totals include all complete games. "
                     if len(ids) > 50
+                    else ""
+                )
+                + (
+                    "Further public detail requests were paused after repeated failures; saved games are still included. "
+                    if skipped_after_failures
+                    else ""
+                )
+                + (
+                    "The loading time limit was reached; remaining matches use saved games only. "
+                    if skipped_after_timeout
                     else ""
                 )
             ),

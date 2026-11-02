@@ -81,6 +81,8 @@ export function RoneMatchDetails({ region, match, onClose }: { region: string; m
   }
 
   const game = games?.[gameIndex];
+  const scoreTotal = (match.score1 ?? 0) + (match.score2 ?? 0);
+  const scoredGames = Number.isInteger(match.score1) && Number.isInteger(match.score2) && (match.score1 ?? -1) >= 0 && (match.score2 ?? -1) >= 0 && (/^(completed|finished)$/i.test(match.status) || scoreTotal > 0) ? scoreTotal : null;
   return <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="rone-match-title">
     <div className="absolute inset-0 bg-black/75" onClick={onClose} />
     <div className="relative w-full max-w-4xl max-h-[94dvh] flex flex-col rounded-t-xl sm:rounded-xl border border-edge-2 bg-panel shadow-2xl">
@@ -90,9 +92,11 @@ export function RoneMatchDetails({ region, match, onClose }: { region: string; m
         <RoneMatchCard match={match} compact />
         {games === null && !error && <Spinner label="Loading Rone match details" />}
         <ErrorNote error={error} />
+        {games && scoredGames !== null && scoredGames > games.length && <div role="status" className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber">The score indicates {scoredGames} games, but Rone provides {games.length} game breakdown{games.length === 1 ? "" : "s"}. Missing details are not guessed.</div>}
+        {games && /^(completed|finished)$/i.test(match.status) && scoredGames !== null && scoredGames < games.length && <div role="status" className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber">The game count conflicts with the match score; the source may be incomplete or inconsistent.</div>}
         {games && games.length === 0 && <div className="rounded-lg border border-dashed border-edge-2 p-4 text-[11px] text-mute">No per-game statistics are available for this match in the Rone feed.</div>}
         {games && games.length > 0 && <>
-          <div className="flex flex-wrap justify-between items-center gap-3"><div><h3 className="section-pill">Game breakdown</h3><p className="text-[10px] text-faint mt-1">Player and team numbers as supplied by Rone.</p></div>
+          <div className="flex flex-wrap justify-between items-center gap-3"><div><h3 className="section-pill">Game breakdown</h3><p className="text-[10px] text-faint mt-1">{games.length} available game{games.length === 1 ? "" : "s"} in this series · choose a tab to view it.</p></div>
             <div className="flex flex-wrap gap-1">{games.map((entry, index) => <button key={index} type="button" onClick={() => setGameIndex(index)} className={`rounded-md px-3 py-1.5 text-[10px] font-extrabold border ${gameIndex === index ? "border-crim/50 bg-crim/10 text-text" : "border-edge text-faint hover:text-text"}`}>GAME {entry.number ?? index + 1}</button>)}</div></div>
           {game && <div className="space-y-3"><div className="text-[10px] text-faint">Duration: <strong className="text-mute">{game.duration || "Not provided"}</strong>{game.durationEstimated ? " (estimated by source)" : ""}</div>
             {game.teams.length ? game.teams.map((side, index) => <GameTeam key={`${side.team.name}-${index}`} side={side} onItem={(selected) => void openItem(selected)} />)

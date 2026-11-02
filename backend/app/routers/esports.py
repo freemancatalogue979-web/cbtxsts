@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import time
 import urllib.parse
 from datetime import timedelta
 from typing import Any, Literal
@@ -72,7 +73,8 @@ def _match_status(row: AerenaMatch) -> str:
 def match_row(row: AerenaMatch, league: AerenaLeague | None = None) -> dict:
     return {
         "id": row.id, "league_id": row.league_id, "league_code": league.code if league else None,
-        "league_name": league.name if league else None, "stage": row.stage, "format": row.format,
+        "league_name": league.name if league else None, "league_region": league.region if league else None,
+        "stage": row.stage, "format": row.format,
         "starts_at": iso(row.starts_at), "status": _match_status(row),
         "team1": _team(row.team1_json), "team2": _team(row.team2_json), "winner": _winner(row.winner_json),
         "is_draw": row.is_draw, "source_verified": row.source_verified, "game_count": row.game_count,
@@ -169,11 +171,14 @@ def list_matches(league_id: str = "", series_id: str = "", q: str = Query(defaul
             "limit": limit, "has_more": len(rows) > limit}
 
 
-def _claim_detail_refresh(db: Session, row: AerenaMatch):  # noqa: ANN201
+def _claim_detail_refresh(db: Session, row: AerenaMatch, *, incomplete: bool = False):  # noqa: ANN201
     if not ENABLED:
         return None
     now = utcnow()
-    needs_detail = row.detail_fetched_at is None or row.detail_fetched_at + DETAIL_TTL < now or (
+    # A recently fetched response can still be incomplete: e.g. a 2–1 series
+    # has only game 1 saved. Retry after the same cross-worker cooldown rather
+    # than treating the timestamp as proof that the whole series was fetched.
+    needs_detail = incomplete or row.detail_fetched_at is None or row.detail_fetched_at + DETAIL_TTL < now or (
         row.source_updated_at is not None and row.detail_fetched_at is not None and row.source_updated_at > row.detail_fetched_at
     )
     if not needs_detail:
@@ -194,6 +199,10 @@ def _refresh_detail_in_background(bind, match_id: str, attempted_at) -> None:  #
             row = db.get(AerenaMatch, match_id)
             if not row or row.detail_attempted_at != attempted_at:
                 return
+            returned = detail.get("match") if isinstance(detail, dict) else None
+            if (not isinstance(returned, dict) or _id(returned.get("matchId"), 120) != row.id
+                    or _id(returned.get("_id")) != row.source_id):
+                raise AerenaError("The source returned details for a different match; saved data was kept.")
             league = db.get(AerenaLeague, row.league_id)
             if not league:
                 raise AerenaError("This match's season is missing from the catalog.")
@@ -289,6 +298,7 @@ class AnalysisIn(BaseModel):
 
 @router.post("/matches/{match_id}/analysis")
 def analyze_match(match_id: str, body: AnalysisIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    from ..ai_esports_analysis import LOAD_DEADLINE_SECONDS, load_aerena_detail
     from ..esports_ai import AnalysisError, ask
 
     question = body.question.strip()
@@ -298,8 +308,12 @@ def analyze_match(match_id: str, body: AnalysisIn, db: Session = Depends(get_db)
     if row is None:
         raise HTTPException(404, "Match not found in the local Aerena database.")
     try:
-        # Only saved public evidence and the explicitly typed question leave the server.
-        return ask(db, user.id, question, detail_for(db, row))
+        # Refresh only the public match identifier when its saved series is
+        # incomplete. Only the resulting public evidence and question reach AI.
+        detail, _ = load_aerena_detail(db, row, deadline=time.monotonic() + LOAD_DEADLINE_SECONDS)
+        return ask(db, user.id, question, detail)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
     except AnalysisError as exc:
         raise HTTPException(429 if "limit reached" in str(exc) else 502, str(exc)) from exc
 
@@ -312,6 +326,7 @@ class SceneAnalysisIn(AnalysisIn):
 
 @router.post("/analysis")
 def analyze_scene(body: SceneAnalysisIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+    from ..ai_esports_analysis import LOAD_DEADLINE_SECONDS, load_aerena_detail
     from ..esports_ai import AnalysisError, ask_scene
 
     question = body.question.strip()
@@ -319,15 +334,24 @@ def analyze_scene(body: SceneAnalysisIn, db: Session = Depends(get_db), user: Us
         raise HTTPException(400, "Enter a question about the selected matches.")
     if len(set(body.match_ids)) != len(body.match_ids) or any(not _id(value, 120) for value in body.match_ids):
         raise HTTPException(400, "Invalid or duplicate match identifiers.")
+    # Validate the entire selection before starting any public requests.
+    rows = [db.get(AerenaMatch, match_id) for match_id in body.match_ids]
+    if any(row is None for row in rows):
+        raise HTTPException(404, "A selected match is not in the local Aerena database.")
     details = []
-    for match_id in body.match_ids:
-        row = db.get(AerenaMatch, match_id)
-        if row is None:
-            raise HTTPException(404, "A selected match is not in the local Aerena database.")
-        # Read only saved facts; scene questions do not trigger an upstream
-        # request per match or pull private Archive/team data.
-        details.append(detail_for(db, row))
+    deadline = time.monotonic() + LOAD_DEADLINE_SECONDS
+    failures = 0
     try:
+        for row in rows:
+            previous_attempt = row.detail_attempted_at
+            detail, refreshed = load_aerena_detail(db, row, deadline=deadline, load_missing=failures < 3)
+            if refreshed.detail_attempted_at != previous_attempt:
+                failures = failures + 1 if refreshed.detail_error else 0
+                if len(details) + 1 < len(rows):
+                    time.sleep(0.25)
+            details.append(detail)
         return ask_scene(db, user.id, question, details)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
     except AnalysisError as exc:
         raise HTTPException(429 if "limit reached" in str(exc) else 502, str(exc)) from exc

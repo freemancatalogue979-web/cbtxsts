@@ -31,7 +31,7 @@ const SUGGESTIONS = [
 const THINK_STAGES: Record<AIProgressStage, string> = {
   preparing: "Preparing your context…",
   loading_game_data: "Checking hero and game references…",
-  loading_matches: "Loading match games…",
+  loading_matches: "Loading every available game…",
   checking: "Checking the available context…",
   connecting: "Starting the analysis…",
   thinking: "Clover is thinking deeply…",
@@ -53,7 +53,7 @@ function ThinkingIndicator({ stage, startedAt, isThink = true, loadProgress = ""
       <BrainCircuit size={16} className="motion-safe:animate-pulse" />
     </span>
     <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-extrabold text-text">
-      <span>{stage === "loading_matches" && loadProgress ? `Loading match ${loadProgress}…` : stage ? THINK_STAGES[stage] : "Clover is still working on your analysis…"}</span>
+      <span>{stage === "loading_matches" && loadProgress ? `Loading games for match ${loadProgress}…` : stage ? THINK_STAGES[stage] : "Clover is still working on your analysis…"}</span>
       {startedAt !== null && <span aria-hidden="true" className="text-[10px] font-semibold text-mute tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
     </span><span className="block text-[10px] leading-relaxed text-mute mt-1">{isThink ? "Deep analysis can take a few minutes." : "Clover is checking the available information."} Reopen this conversation to check the reply.</span></span>
   </div>;

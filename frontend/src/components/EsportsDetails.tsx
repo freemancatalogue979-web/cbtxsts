@@ -18,14 +18,14 @@ function DraftTimeline({ game }: { game: EsportsGame }) {
   if (game.draft_coverage === "none") return <div className="rounded-lg border border-dashed border-edge-2 p-4 text-xs text-mute">No draft events are available for this game in Aerena.</div>;
   if (game.draft_coverage === "ambiguous") return <div className="rounded-lg border border-amber/25 bg-amber/5 p-4 text-xs text-amber">The source draft contains conflicting or incomplete slots. Its sequence is not displayed as fact.</div>;
   return <div>
-    <p className="text-[11px] text-faint leading-relaxed mb-3">{game.draft_coverage === "complete" ? "Sequence and sides follow Aerena’s reported draft configuration." : "Partial source data. Pick and ban order are shown separately; a combined sequence is unknown."}{game.draft_fetched_at ? ` Draft saved ${esportsDate(game.draft_fetched_at)}.` : ""}</p>
+    <p className="text-[11px] text-mute leading-relaxed mb-3">{game.draft_coverage === "complete" ? "Sequence and sides follow Aerena’s reported draft configuration." : "Partial source data. Pick and ban order are shown separately; a combined sequence is unknown."}{game.draft_fetched_at ? ` Draft saved ${esportsDate(game.draft_fetched_at)}.` : ""}</p>
     <div className="grid sm:grid-cols-2 gap-1.5">{game.draft.map((event) => <div key={`${event.kind}-${event.source_order}`} className="flex items-center gap-2.5 rounded-lg bg-raised/70 border border-edge/70 px-2.5 py-2 min-w-0">
-      <span className="w-5 text-center text-[10px] font-black tabular-nums text-faint">{event.sequence ?? `${event.kind === "Ban" ? "B" : "P"}${event.source_order}`}</span>
+      <span className="w-5 text-center text-[10px] font-black tabular-nums text-mute">{event.sequence ?? `${event.kind === "Ban" ? "B" : "P"}${event.source_order}`}</span>
       {event.hero_name ? <HeroImg key={`${event.hero_id}-${event.hero_name}`} name={event.hero_name} size={32} className="rounded-full" />
-        : <span className="h-8 w-8 rounded-full bg-overlay border border-edge flex items-center justify-center text-faint"><CircleSlash2 size={14} /></span>}
-      <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold truncate">{event.hero_name || "Unknown hero"}</span><span className="block text-[9px] text-faint truncate">{event.player_ign || (event.kind === "Ban" ? "Ban" : "Player not listed")}</span></span>
-      <span className={`text-[9px] uppercase font-extrabold tracking-wide ${event.kind === "Ban" ? "text-crim" : "text-leaf"}`}>{event.kind}</span>
-      <span className="text-[9px] uppercase font-bold text-faint w-8 text-right">{event.side || "—"}</span>
+        : <span className="h-8 w-8 rounded-full bg-overlay border border-edge flex items-center justify-center text-mute"><CircleSlash2 size={14} /></span>}
+      <span className="min-w-0 flex-1"><span className="block text-[11px] font-bold truncate">{event.hero_name || "Unknown hero"}</span><span className="block text-[9px] text-mute truncate">{event.player_ign || (event.kind === "Ban" ? "Ban" : "Player not listed")}</span></span>
+      <span className={`text-[9px] uppercase font-extrabold tracking-wide ${event.kind === "Ban" ? "text-rose-300" : "text-leaf"}`}>{event.kind}</span>
+      <span className="text-[9px] uppercase font-bold text-mute w-8 text-right">{event.side || "—"}</span>
     </div>)}</div>
   </div>;
 }
@@ -33,12 +33,12 @@ function DraftTimeline({ game }: { game: EsportsGame }) {
 function Comparison({ game }: { game: EsportsGame }) {
   const metrics: [string, keyof EsportsTeam][] = [["Kills", "teamKills"], ["Gold", "teamGold"], ["Turtles", "teamTurtles"], ["Lords", "teamLords"], ["Damage dealt", "teamDmgDealt"]];
   return <div className="rounded-xl border border-edge bg-raised/40 overflow-hidden">
-    <div className="grid grid-cols-[1fr_92px_1fr] gap-2 items-center px-3 py-2.5 border-b border-edge text-[10px] font-extrabold uppercase tracking-wide"><span className="truncate text-sky">{teamCode(game.team1)}</span><span className="text-center text-faint">Game {game.number}</span><span className="truncate text-right text-crim">{teamCode(game.team2)}</span></div>
-    {metrics.map(([label, key]) => <div key={key} className="grid grid-cols-[1fr_92px_1fr] gap-2 px-3 py-2 text-[11px] border-b last:border-0 border-edge/50 tabular-nums"><strong>{esportsNumber(game.team1[key] as number | null)}</strong><span className="text-center text-faint">{label}</span><strong className="text-right">{esportsNumber(game.team2[key] as number | null)}</strong></div>)}
+    <div className="grid grid-cols-[1fr_92px_1fr] gap-2 items-center px-3 py-2.5 border-b border-edge text-[10px] font-extrabold uppercase tracking-wide"><span className="truncate text-sky">{teamCode(game.team1)}</span><span className="text-center text-mute">Game {game.number}</span><span className="truncate text-right text-rose-300">{teamCode(game.team2)}</span></div>
+    {metrics.map(([label, key]) => <div key={key} className="grid grid-cols-[1fr_92px_1fr] gap-2 px-3 py-2 text-[11px] border-b last:border-0 border-edge/50 tabular-nums"><strong>{esportsNumber(game.team1[key] as number | null)}</strong><span className="text-center text-mute">{label}</span><strong className="text-right">{esportsNumber(game.team2[key] as number | null)}</strong></div>)}
   </div>;
 }
 
-function MatchAnalysis({ matchId, configured }: { matchId: string; configured: boolean }) {
+function MatchAnalysis({ matchId, configured, onAnalyzed }: { matchId: string; configured: boolean; onAnalyzed: () => void }) {
   const [question, setQuestion] = useState("What stands out in this match, and what can we actually infer?");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,19 +47,22 @@ function MatchAnalysis({ matchId, configured }: { matchId: string; configured: b
     event.preventDefault();
     if (!question.trim() || busy) return;
     setBusy(true); setError(null); setResult(null);
-    try { setResult(await api.post<EsportsAnalysis>(`/esports/matches/${encodeURIComponent(matchId)}/analysis`, { question: question.trim() })); }
+    try {
+      setResult(await api.post<EsportsAnalysis>(`/esports/matches/${encodeURIComponent(matchId)}/analysis`, { question: question.trim() }));
+      onAnalyzed();
+    }
     catch (err) { setError(err instanceof Error ? err.message : "Analysis failed."); }
     finally { setBusy(false); }
   }
   return <section className="rounded-xl border border-leaf/20 bg-gradient-to-br from-leaf/[0.07] via-panel to-panel p-4 sm:p-5">
-    <div className="flex items-start gap-3 mb-3"><div className="rounded-lg bg-leaf/10 p-2 text-leaf"><Sparkles size={16} /></div><div><h3 className="font-extrabold text-sm">Ask 9 Clover AI</h3><p className="text-[11px] text-mute mt-1">Match analysis grounded in saved Aerena evidence, not invented coach quotes.</p></div></div>
+    <div className="flex items-start gap-3 mb-3"><div className="rounded-lg bg-leaf/10 p-2 text-leaf"><Sparkles size={16} /></div><div><h3 className="font-extrabold text-sm">Ask 9 Clover AI</h3><p className="text-[11px] text-mute mt-1">Analyzes the whole match series, including every available game—not just the tab above.</p></div></div>
     <form onSubmit={submit} className="space-y-2.5"><label className="sr-only" htmlFor="match-question">Your match question</label><textarea id="match-question" className="input min-h-[72px] resize-y !text-xs" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={500} />
-      <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[10px] text-faint leading-relaxed max-w-[520px]">{configured ? "Your question and this public match’s saved facts are sent to the external AI provider. No private Archive or team data is included automatically." : "The AI provider is not configured. You can still generate a facts-only summary; no question is sent externally."}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[10px] text-mute leading-relaxed max-w-[520px]">{configured ? "Missing public game details may be loaded first. Your question and available match facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured. You can still generate a facts-only summary; no question is sent externally."}</span>
         <button type="submit" className="btn-leaf shrink-0 !text-[11px]" disabled={busy || !question.trim()}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {configured ? "Analyze match" : "Show facts"}</button></div>
     </form>
     <ErrorNote error={error} />
     {result && <div className="mt-4 rounded-lg bg-ink/50 border border-edge p-3.5"><div className="section-pill section-pill--leaf mb-2">{result.mode === "ai" ? "Grounded analysis" : "Facts only"}</div><div className="text-xs text-text/90 leading-relaxed whitespace-pre-wrap">{result.answer}</div>
-      <div className="mt-3 pt-3 border-t border-edge text-[10px] text-faint leading-relaxed">{result.note} <a href={result.source_url} target="_blank" rel="noreferrer" className="text-mute hover:text-leaf underline">Source: Aerena <ArrowUpRight size={10} className="inline" /></a>{result.fetched_at ? ` · saved ${esportsDate(result.fetched_at)}` : ""}</div></div>}
+      <div className="mt-3 pt-3 border-t border-edge text-[10px] text-mute leading-relaxed">{result.note} <a href={result.source_url} target="_blank" rel="noreferrer" className="text-mute hover:text-leaf underline">Source: Aerena <ArrowUpRight size={10} className="inline" /></a>{result.fetched_at ? ` · saved ${esportsDate(result.fetched_at)}` : ""}</div></div>}
   </section>;
 }
 
@@ -67,58 +70,68 @@ export function EsportsMatchModal({ matchId, aiConfigured, onClose }: { matchId:
   const [detail, setDetail] = useState<EsportsDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gameNumber, setGameNumber] = useState<number | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const loadedMatch = useRef<string | null>(null);
   useEffect(() => {
     let alive = true;
     let timer: number | undefined;
-    setDetail(null); setError(null); setGameNumber(null);
+    if (loadedMatch.current !== matchId) {
+      loadedMatch.current = matchId;
+      setDetail(null); setError(null); setGameNumber(null);
+    }
     const load = (attempt = 0) => {
       api.get<EsportsDetail>(`/esports/matches/${encodeURIComponent(matchId)}`).then((data) => {
         if (!alive) return;
-        setDetail(data); setGameNumber((current) => current ?? data.games[0]?.number ?? null);
+        setDetail(data); setGameNumber((current) => current !== null && data.games.some((item) => item.number === current) ? current : data.games[0]?.number ?? null);
         if (data.detail_refreshing && attempt < 5) timer = window.setTimeout(() => load(attempt + 1), 4000);
       }).catch((err) => { if (alive && attempt === 0) setError(err instanceof Error ? err.message : "Could not load match."); });
     };
     load();
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [matchId]);
+  }, [matchId, refreshVersion]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [onClose]);
   const game = detail?.games.find((item) => item.number === gameNumber);
+  const score1 = detail?.match.team1.teamScore, score2 = detail?.match.team2.teamScore;
+  const scoreTotal = (score1 ?? 0) + (score2 ?? 0);
+  const scoredGames = Number.isInteger(score1) && Number.isInteger(score2) && (score1 ?? -1) >= 0 && (score2 ?? -1) >= 0 && (detail?.match.status === "completed" || scoreTotal > 0) ? scoreTotal : null;
   const winnerName = game?.winner.teamName || game?.winner.teamCode ||
     (game?.winner.team && game.winner.team === game.team1.team ? teamCode(game.team1) :
       game?.winner.team && game.winner.team === game.team2.team ? teamCode(game.team2) : "Not recorded");
   return <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true" aria-label="Match details">
     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
     <div className="relative w-full sm:max-w-4xl max-h-[94dvh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-edge-2 bg-panel shadow-2xl overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-edge"><div className="min-w-0"><div className="section-pill">Match intelligence</div><div className="text-[11px] text-faint truncate mt-0.5">{detail?.match.league_name || matchId}</div></div><button onClick={onClose} className="btn-ghost !p-2" aria-label="Close match details"><X size={16} /></button></div>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-edge"><div className="min-w-0"><div className="section-pill">Match intelligence</div><div className="text-[11px] text-mute truncate mt-0.5">{detail?.match.league_name || matchId}</div></div><button onClick={onClose} className="btn-ghost !p-2" aria-label="Close match details"><X size={16} /></button></div>
       <div className="overflow-y-auto p-4 sm:p-6 space-y-5">
         {!detail && !error && <Spinner label="Loading match details" />}
         <ErrorNote error={error} />
         {detail && <>
           <div className="rounded-xl border border-edge bg-gradient-to-r from-sky/[0.07] via-raised to-crim/[0.08] px-4 py-5">
-            <div className="text-center text-[10px] text-faint font-bold uppercase tracking-[0.14em] mb-4">{detail.match.stage || "Match"} · {detail.match.format || "Format TBC"} · {esportsDate(detail.match.starts_at)}</div>
+            <div className="text-center text-[10px] text-mute font-bold uppercase tracking-[0.14em] mb-4">{detail.match.stage || "Match"} · {detail.match.format || "Format TBC"} · {esportsDate(detail.match.starts_at)}</div>
             <div className="flex items-center justify-center gap-3 sm:gap-6"><div className="flex items-center gap-2.5 min-w-0 flex-1 justify-end"><span className="font-extrabold text-right text-xs sm:text-base truncate">{teamCode(detail.match.team1)}</span><TeamMark team={detail.match.team1} size={50} /></div>
-              <div className="text-center font-black tabular-nums text-xl sm:text-2xl min-w-[65px]">{detail.match.status === "completed" ? <>{esportsNumber(detail.match.team1.teamScore)} <span className="text-faint text-sm">:</span> {esportsNumber(detail.match.team2.teamScore)}</> : <span className="text-faint text-xs tracking-widest">VS</span>}</div>
+              <div className="text-center font-black tabular-nums text-xl sm:text-2xl min-w-[65px]">{detail.match.status === "completed" ? <>{esportsNumber(detail.match.team1.teamScore)} <span className="text-mute text-sm">:</span> {esportsNumber(detail.match.team2.teamScore)}</> : <span className="text-mute text-xs tracking-widest">VS</span>}</div>
               <div className="flex items-center gap-2.5 min-w-0 flex-1"><TeamMark team={detail.match.team2} size={50} /><span className="font-extrabold text-xs sm:text-base truncate">{teamCode(detail.match.team2)}</span></div></div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-faint"><span>Match saved {esportsDate(detail.match.fetched_at)}{detail.match.detail_fetched_at ? ` · Player details saved ${esportsDate(detail.match.detail_fetched_at)}` : ""} · {detail.match.source_verified ? "Marked verified by source" : "Not independently verified"}</span><a href={detail.match.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-mute hover:text-crim">View on Aerena <ArrowUpRight size={12} /></a></div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-mute"><span>Match saved {esportsDate(detail.match.fetched_at)}{detail.match.detail_fetched_at ? ` · Player details saved ${esportsDate(detail.match.detail_fetched_at)}` : ""} · {detail.match.source_verified ? "Marked verified by source" : "Not independently verified"}</span><a href={detail.match.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-mute hover:text-rose-300">View on Aerena <ArrowUpRight size={12} /></a></div>
           {detail.detail_refreshing && <div className="rounded-lg border border-sky/25 bg-sky/5 px-3 py-2 text-[11px] text-sky" role="status">Showing saved match data while details refresh in the background.</div>}
           {detail.detail_error && <div className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber">{detail.detail_error} Showing the saved match data.</div>}
+          {scoredGames !== null && scoredGames > detail.games.length && <div className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber" role="status">The score indicates {scoredGames} games, but {detail.games.length} {detail.games.length === 1 ? "game is" : "games are"} saved. Missing game details will not be guessed.</div>}
+          {detail.match.status === "completed" && scoredGames !== null && scoredGames < detail.games.length && <div className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber" role="status">The saved game count conflicts with the match score. The source may be incomplete or inconsistent.</div>}
           {detail.games.length > 0 ? <>
-            <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="section-pill">Game breakdown</div><div className="text-[10px] text-faint mt-1">Drafts and stats when the source provides them</div></div><div className="flex flex-wrap gap-1">{detail.games.map((item) => <button key={item.id} onClick={() => setGameNumber(item.number)} className={`rounded-md px-3 py-1.5 text-[10px] font-extrabold border ${gameNumber === item.number ? "border-crim/50 bg-crim/10 text-text" : "border-edge text-faint hover:text-text"}`}>GAME {item.number}</button>)}</div></div>
+            <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="section-pill">Game breakdown</div><div className="text-[10px] text-mute mt-1">{detail.games.length} saved game{detail.games.length === 1 ? "" : "s"} · choose a tab to view its draft and stats</div></div><div className="flex flex-wrap gap-1">{detail.games.map((item) => <button key={item.id} onClick={() => setGameNumber(item.number)} className={`rounded-md px-3 py-1.5 text-[10px] font-extrabold border ${gameNumber === item.number ? "border-crim/50 bg-crim/10 text-text" : "border-edge text-mute hover:text-text"}`}>GAME {item.number}</button>)}</div></div>
             {game && <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4"><Comparison game={game} /><div className="rounded-xl border border-edge bg-raised/30 p-4"><div className="flex items-center justify-between"><div className="section-pill">Game notes</div><Clock3 size={14} className="text-faint" /></div>
-                <div className="mt-4 flex items-center justify-between text-xs"><span className="text-faint">Duration</span><strong>{gameDuration(game.duration_seconds)}</strong></div><div className="mt-3 flex items-center justify-between text-xs"><span className="text-faint">Winner</span><strong>{winnerName}</strong></div><div className="mt-3 flex items-center justify-between text-xs"><span className="text-faint">Draft coverage</span><strong className={game.draft_coverage === "complete" ? "text-leaf" : "text-amber"}>{game.draft_coverage === "complete" ? "20 source slots" : game.draft_coverage === "none" ? "Not available" : game.draft_coverage === "ambiguous" ? "Unclear" : "Partial"}</strong></div></div></div>
-              <div><div className="mb-3"><h3 className="section-pill"><Swords size={14} className="text-crim" />Draft sequence</h3></div><DraftTimeline game={game} /></div>
-              <div><div className="mb-3"><h3 className="section-pill"><Activity size={14} className="text-crim" />Player statistics</h3></div>
-                {game.player_stats.length ? <div className="overflow-x-auto rounded-xl border border-edge"><table className="w-full text-left text-[11px]"><thead className="bg-raised text-faint uppercase tracking-wider"><tr><th className="p-3">Player</th><th className="p-3">Team</th><th className="p-3">Hero</th><th className="p-3">Role</th><th className="p-3 text-right whitespace-nowrap">K / D / A</th><th className="p-3 text-right">Gold</th><th className="p-3 text-right whitespace-nowrap">Dmg dealt</th><th className="p-3 text-right">KP</th></tr></thead><tbody>{game.player_stats.map((stat) => <tr key={stat.id} className="border-t border-edge/70"><td className="p-3 font-bold whitespace-nowrap">{stat.ign || "Unknown"} {stat.isMVP && <span className="text-[9px] text-leaf">MVP</span>}</td><td className="p-3 whitespace-nowrap text-mute">{stat.team_id && stat.team_id === game.team1.team ? teamCode(game.team1) : stat.team_id && stat.team_id === game.team2.team ? teamCode(game.team2) : "—"}</td><td className="p-3 whitespace-nowrap">{stat.hero_name || "Unknown"}</td><td className="p-3 text-mute">{stat.position || "—"}</td><td className="p-3 text-right tabular-nums whitespace-nowrap">{esportsNumber(stat.kills)} / {esportsNumber(stat.deaths)} / {esportsNumber(stat.assists)}</td><td className="p-3 text-right tabular-nums">{esportsNumber(stat.gold)}</td><td className="p-3 text-right tabular-nums">{esportsNumber(stat.dmgDealt)}</td><td className="p-3 text-right tabular-nums">{stat.killParticipation != null ? `${Math.round(stat.killParticipation * 100)}%` : "—"}</td></tr>)}</tbody></table></div>
+              <div className="grid md:grid-cols-2 gap-4"><Comparison game={game} /><div className="rounded-xl border border-edge bg-raised/30 p-4"><div className="flex items-center justify-between"><div className="section-pill">Game notes</div><Clock3 size={14} className="text-mute" /></div>
+                <div className="mt-4 flex items-center justify-between text-xs"><span className="text-mute">Duration</span><strong>{gameDuration(game.duration_seconds)}</strong></div><div className="mt-3 flex items-center justify-between text-xs"><span className="text-mute">Winner</span><strong>{winnerName}</strong></div><div className="mt-3 flex items-center justify-between text-xs"><span className="text-mute">Draft coverage</span><strong className={game.draft_coverage === "complete" ? "text-leaf" : "text-amber"}>{game.draft_coverage === "complete" ? "20 source slots" : game.draft_coverage === "none" ? "Not available" : game.draft_coverage === "ambiguous" ? "Unclear" : "Partial"}</strong></div></div></div>
+              <div><div className="mb-3"><h3 className="section-pill"><Swords size={14} className="text-rose-300" />Draft sequence</h3></div><DraftTimeline game={game} /></div>
+              <div><div className="mb-3"><h3 className="section-pill"><Activity size={14} className="text-rose-300" />Player statistics</h3></div>
+                {game.player_stats.length ? <div className="overflow-x-auto rounded-xl border border-edge"><table className="w-full text-left text-[11px]"><thead className="bg-raised text-mute uppercase tracking-wider"><tr><th className="p-3">Player</th><th className="p-3">Team</th><th className="p-3">Hero</th><th className="p-3">Role</th><th className="p-3 text-right whitespace-nowrap">K / D / A</th><th className="p-3 text-right">Gold</th><th className="p-3 text-right whitespace-nowrap">Dmg dealt</th><th className="p-3 text-right">KP</th></tr></thead><tbody>{game.player_stats.map((stat) => <tr key={stat.id} className="border-t border-edge/70"><td className="p-3 font-bold whitespace-nowrap">{stat.ign || "Unknown"} {stat.isMVP && <span className="text-[9px] text-leaf">MVP</span>}</td><td className="p-3 whitespace-nowrap text-mute">{stat.team_id && stat.team_id === game.team1.team ? teamCode(game.team1) : stat.team_id && stat.team_id === game.team2.team ? teamCode(game.team2) : "—"}</td><td className="p-3 whitespace-nowrap">{stat.hero_name || "Unknown"}</td><td className="p-3 text-mute">{stat.position || "—"}</td><td className="p-3 text-right tabular-nums whitespace-nowrap">{esportsNumber(stat.kills)} / {esportsNumber(stat.deaths)} / {esportsNumber(stat.assists)}</td><td className="p-3 text-right tabular-nums">{esportsNumber(stat.gold)}</td><td className="p-3 text-right tabular-nums">{esportsNumber(stat.dmgDealt)}</td><td className="p-3 text-right tabular-nums">{stat.killParticipation != null ? `${Math.round(stat.killParticipation * 100)}%` : "—"}</td></tr>)}</tbody></table></div>
                   : <div className="rounded-lg border border-dashed border-edge-2 p-4 text-xs text-mute">Player statistics are not available in the saved match detail.</div>}</div>
             </div>}
           </> : <div className="rounded-xl border border-dashed border-edge-2 p-5 text-center text-xs text-mute">No game breakdown is available for this match yet.</div>}
-          <MatchAnalysis matchId={matchId} configured={aiConfigured} /><p className="text-[10px] text-faint leading-relaxed">{detail.source_note}</p>
+          <MatchAnalysis matchId={matchId} configured={aiConfigured} onAnalyzed={() => setRefreshVersion((value) => value + 1)} /><p className="text-[10px] text-mute leading-relaxed">{detail.source_note}</p>
         </>}
       </div>
     </div>
@@ -154,12 +167,12 @@ export function SceneAnalysisPanel({ matches, configured }: { matches: EsportsMa
     }
   }
   return <details className="group rounded-xl border border-leaf/20 bg-gradient-to-r from-leaf/[0.06] to-panel overflow-hidden">
-    <summary className="cursor-pointer list-none flex items-center gap-3 p-3.5"><span className="rounded-lg bg-leaf/10 text-leaf p-2"><Sparkles size={15} /></span><span className="flex-1 min-w-0"><span className="block text-xs font-extrabold">Ask 9 Clover AI</span><span className="block text-[10px] text-faint mt-1">Analyze a small sample of the matches shown below</span></span><span className="text-[10px] font-bold text-mute group-open:hidden">OPEN +</span><span className="text-[10px] font-bold text-mute hidden group-open:block">CLOSE −</span></summary>
+    <summary className="cursor-pointer list-none flex items-center gap-3 p-3.5"><span className="rounded-lg bg-leaf/10 text-leaf p-2"><Sparkles size={15} /></span><span className="flex-1 min-w-0"><span className="block text-xs font-extrabold">Ask 9 Clover AI</span><span className="block text-[10px] text-mute mt-1">Analyze a small sample of the matches shown below</span></span><span className="text-[10px] font-bold text-mute group-open:hidden">OPEN +</span><span className="text-[10px] font-bold text-mute hidden group-open:block">CLOSE −</span></summary>
     <div className="border-t border-edge/80 p-3.5 sm:p-4"><form onSubmit={submit} className="space-y-2.5"><label htmlFor="scene-question" className="sr-only">Question about the visible matches</label><textarea id="scene-question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={500} className="input min-h-[68px] resize-y !text-xs" />
-      <p className="text-[10px] text-faint leading-relaxed">Uses up to the first 8 matches in the current filter ({ids.length} selected), not a complete season. {configured ? "Your question and their saved public Aerena facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured; only a facts-only summary is available and no question is sent externally."}</p>
+      <p className="text-[10px] text-mute leading-relaxed">Uses up to the first 8 matches in the current filter ({ids.length} selected), including all available games in each series—not a complete season. Large samples may have compacted detail. {configured ? "Your question and their public Aerena facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured; only a facts-only summary is available and no question is sent externally."}</p>
       <button className="btn-leaf !text-[11px]" type="submit" disabled={busy || !ids.length || !question.trim()}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{configured ? "Analyze selected matches" : "Show saved facts"}</button></form>
       <ErrorNote error={error} />
-      {result && <div className="mt-4 rounded-lg border border-edge bg-ink/50 p-3.5"><div className="section-pill section-pill--leaf mb-2">{result.mode === "ai" ? "Grounded sample analysis" : "Facts only"}</div><div className="text-xs leading-relaxed text-text/90 whitespace-pre-wrap">{result.answer}</div><p className="mt-3 pt-3 border-t border-edge text-[10px] leading-relaxed text-faint">{result.note}</p><div className="flex flex-wrap gap-2 mt-2">{result.sources.map((source) => <a key={source.match_id} href={source.source_url} target="_blank" rel="noreferrer" className="text-[10px] text-mute underline hover:text-leaf">{source.match_id} <ArrowUpRight size={10} className="inline" /></a>)}</div></div>}
+      {result && <div className="mt-4 rounded-lg border border-edge bg-ink/50 p-3.5"><div className="section-pill section-pill--leaf mb-2">{result.mode === "ai" ? "Grounded sample analysis" : "Facts only"}</div><div className="text-xs leading-relaxed text-text/90 whitespace-pre-wrap">{result.answer}</div><p className="mt-3 pt-3 border-t border-edge text-[10px] leading-relaxed text-mute">{result.note}</p><div className="flex flex-wrap gap-2 mt-2">{result.sources.map((source) => <a key={source.match_id} href={source.source_url} target="_blank" rel="noreferrer" className="text-[10px] text-mute underline hover:text-leaf">{source.match_id} <ArrowUpRight size={10} className="inline" /></a>)}</div></div>}
     </div>
   </details>;
 }

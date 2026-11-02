@@ -459,7 +459,9 @@ class SourceAnalysisTests(unittest.TestCase):
         self.assertEqual(facts["coverage"]["complete_pick_games"], 720)
         self.assertIn("compacted", facts["notice"])
         self.assertGreater(facts["all_games"].get("tied_leaders_omitted", 0), 0)
-        self.assertLess(len(json.dumps(facts)), 120_000)
+        self.assertLessEqual(
+            len(json.dumps(facts, ensure_ascii=False)), analysis.MAX_MATCH_CONTEXT_CHARS
+        )
 
     def test_near_500_matches_keep_exact_all_game_counts_and_honest_coverage(self):
         from datetime import datetime
@@ -519,10 +521,19 @@ class SourceAnalysisTests(unittest.TestCase):
             ],
             499,
         )
-        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 425)
+        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 0)
+        self.assertEqual(len(facts["matches"]), 500)
+        last = facts["matches"][-1]
+        self.assertEqual(last["match_id"], "500")
+        numbers = last.get("game_numbers") or [
+            game["number"] for game in last.get("games", [])
+        ]
+        self.assertIn(numbers, ([1, 2], "1-2"))
         self.assertIn("all complete games", facts["notice"])
         self.assertIn("loading_matches:500:500", stages)
-        self.assertLess(len(json.dumps(facts)), 120_000)
+        self.assertLessEqual(
+            len(json.dumps(facts, ensure_ascii=False)), analysis.MAX_MATCH_CONTEXT_CHARS
+        )
         chart = analysis.pick_chart(facts, "most picked in game 2")
         self.assertEqual(chart["complete_games"], 499)
         self.assertTrue(chart["incomplete_data"])
@@ -664,8 +675,16 @@ class SourceAnalysisTests(unittest.TestCase):
         self.assertTrue(
             all(row["picks"] == 14_999 for row in facts["all_games"]["top_picks"])
         )
-        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 425)
-        self.assertLess(len(json.dumps(facts)), 120_000)
+        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 0)
+        self.assertEqual(len(facts["matches"]), 500)
+        self.assertEqual(facts["matches"][-1]["match_id"], "499")
+        self.assertIn(
+            facts["matches"][-1]["game_numbers"], (list(range(1, 31)), "1-30")
+        )
+        self.assertEqual(facts["coverage"]["game_detail_level"], "game_index")
+        self.assertLessEqual(
+            len(json.dumps(facts, ensure_ascii=False)), analysis.MAX_MATCH_CONTEXT_CHARS
+        )
         self.assertLess(peak, 200_000_000)
 
     def test_public_source_singleflight_and_global_serialization(self):

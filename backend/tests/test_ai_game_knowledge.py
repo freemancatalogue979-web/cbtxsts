@@ -170,6 +170,34 @@ class GameKnowledgeTests(unittest.TestCase):
             disabled = json.loads(calls[-1]["messages"][-1]["content"])["available_context"]
             self.assertNotIn("saved_season_draft_trends", disabled)
 
+    def test_season_games_question_keeps_season_trends_instead_of_a_small_series_sample(self):
+        self.seed_seasons()
+        chat = self.new_chat()
+        calls = []
+
+        def upstream(req, timeout):
+            calls.append(json.loads(req.data))
+            return io.BytesIO(b'{"choices":[{"message":{"content":"Season trends."}}]}')
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "synthetic-key"}), patch(
+            "app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=upstream)
+        ):
+            previous = self.req(
+                "POST", f"/conversations/{chat}/messages",
+                payload={"text": "Analyze this match", "match_ids": ["PH18-final"], "web_mode": "off"},
+            )
+            self.assertEqual(previous[0], 201)
+            status, result, _ = self.req(
+                "POST", f"/conversations/{chat}/messages",
+                payload={"text": "MPL PH S18 games: which heroes were most picked?", "web_mode": "off"},
+            )
+        self.assertEqual(status, 201)
+        context = json.loads(calls[-1]["messages"][-1]["content"])["available_context"]
+        self.assertEqual(context["saved_season_draft_trends"]["matches_saved"], 3)
+        self.assertEqual(context["saved_season_draft_trends"]["complete_draft_games"], 2)
+        self.assertNotIn("match_pick_analysis", context)
+        self.assertFalse(any(source.get("esports_selection") for source in result["user_message"]["sources"]))
+
     def test_season_trends_remain_useful_when_the_provider_is_unavailable(self):
         self.seed_seasons()
         chat = self.new_chat()
