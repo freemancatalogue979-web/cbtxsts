@@ -74,6 +74,10 @@ class CloverAITests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {"CLOVER_AI_API_KEY": "", "DEEPSEEK_API_KEY": "", "CLOVER_CREDENTIAL_ENCRYPTION_KEY": ""})
         self.env.start()
+        # General API/security tests must not contact a community source. The
+        # source-integration suite exercises the real enrichment with fixtures.
+        self.game_sources = patch("app.ai_game_sources.enrich", return_value=[])
+        self.game_sources.start()
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 
         @event.listens_for(self.engine, "connect")
@@ -194,6 +198,7 @@ class CloverAITests(unittest.TestCase):
     def tearDown(self):
         app.dependency_overrides.pop(get_db, None)
         self.engine.dispose()
+        self.game_sources.stop()
         self.env.stop()
 
     def req(self, method, path, who="owner", payload=None):
@@ -203,6 +208,13 @@ class CloverAITests(unittest.TestCase):
         status, body, _ = self.req("POST", "/conversations", who)
         self.assertEqual(status, 201)
         return body["id"]
+
+    def test_status_reports_no_application_web_daily_cap(self):
+        with patch.dict(os.environ, {"CLOVER_AI_WEB_DAILY_LIMIT": "1"}):
+            status, result, _ = self.req("GET", "/status")
+        self.assertEqual(status, 200)
+        self.assertIsNone(result["web_search_daily_limit"])
+        self.assertIn("version", result["patch_feed"].lower())
 
     def test_chats_are_owner_only_even_for_admin_and_cookie_only_cannot_read(self):
         self.assertEqual(request("GET", "/api/ai/conversations")[0], 401)
@@ -368,7 +380,7 @@ class CloverAITests(unittest.TestCase):
         ):
             status, result, _ = self.req("POST", f"/conversations/{chat}/messages", payload={"text": "hi"})
         self.assertEqual((status, result["assistant_message"]["mode"]), (201, "facts"))
-        self.assertIn("daily", result["assistant_message"]["note"])
+        self.assertIn("record", result["assistant_message"]["note"])
         mid = result["assistant_message"]["id"]
         self.assertEqual(
             self.req("PATCH", f"/conversations/{chat}/messages/{mid}/feedback", payload={"rating": 1})[1]["feedback"], 1
@@ -407,7 +419,8 @@ class CloverAITests(unittest.TestCase):
             self.assertIsNone(db.get(AIConversation, chat))
             self.assertEqual(db.query(AIMessage).filter_by(conversation_id=chat).count(), 0)
 
-    def test_member_chat_and_esports_share_the_same_daily_provider_quota(self):
+    def test_member_chat_and_esports_share_accounting_without_a_daily_cap(self):
+        from app.aerena_models import AerenaAIUsage
         from app.esports_ai import ask
         from app.security import verify_token
 
@@ -416,16 +429,17 @@ class CloverAITests(unittest.TestCase):
         def provider(_req, timeout):
             return io.BytesIO(b'{"choices":[{"message":{"content":"Synthetic answer."}}]}')
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "synthetic-key"}), patch(
-            "app.esports_ai.DAILY_LIMIT", 1
-        ), patch("app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=provider)):
+        # An old deployment setting must no longer enforce an artificial cap.
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "synthetic-key", "CLOVER_AI_DAILY_LIMIT": "1"}), patch(
+            "app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=provider)
+        ):
             status, result, _ = self.req("POST", f"/conversations/{chat}/messages", payload={"text": "Hello MLBB"})
             self.assertEqual((status, result["assistant_message"]["mode"]), (201, "ai"))
             with self.factory() as db:
                 detail = {"match": {"id": "fixture", "status": "completed", "team1": {}, "team2": {}}, "games": []}
                 other = ask(db, verify_token(self.tokens["owner"]).subject, "What happened?", detail)
-                self.assertEqual(other["mode"], "facts")
-                self.assertIn("daily", other["note"].lower())
+                self.assertEqual(other["mode"], "ai")
+                self.assertEqual(db.query(AerenaAIUsage).one().calls, 2)
 
     def test_expired_request_does_not_save_a_late_response(self):
         chat = self.new_chat()

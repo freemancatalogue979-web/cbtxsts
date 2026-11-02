@@ -29,6 +29,7 @@ const localModules = {
   "../components/AIKnowledge": { AIKnowledge: emptyComponent },
   "../components/AIContributions": { AIContributions: emptyComponent, AIReviewQueue: emptyComponent },
   "../components/AIProposalCard": { AIActionHistory: emptyComponent, AIProposalCard: emptyComponent },
+  "../components/AIVisuals": { AIMarkdown: emptyComponent, AIVisuals: emptyComponent },
   "react-markdown": { __esModule: true, default: emptyComponent },
   "remark-gfm": { __esModule: true, default: () => {} },
 };

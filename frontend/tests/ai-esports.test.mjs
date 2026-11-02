@@ -8,7 +8,7 @@ const {outputText} = ts.transpileModule(source, {compilerOptions:{target:ts.Scri
 const {AI_ESPORTS_MATCH_LIMIT, AI_MATCH_LIMIT, AI_BOARD_LIMIT} = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 test('week analysis has its own bounded match limit without changing board or legacy selection limits', () => {
-  assert.equal(AI_ESPORTS_MATCH_LIMIT, 24);
+  assert.equal(AI_ESPORTS_MATCH_LIMIT, 500);
   assert.equal(AI_MATCH_LIMIT, 3);
   assert.equal(AI_BOARD_LIMIT, 2);
 });

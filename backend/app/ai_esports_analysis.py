@@ -32,10 +32,11 @@ from .intel_cache import (
 )
 from .models import loads, utcnow
 
-MAX_MATCHES = 24
+# Broad enough for a full season, but still bounded against runaway requests.
+MAX_MATCHES = 500
 MAX_GAMES_PER_MATCH = 30
 MAX_SCHEDULE_ROWS = 1_000
-LOAD_DEADLINE_SECONDS = 180
+LOAD_DEADLINE_SECONDS = 900
 RETRY_SECONDS = 90
 LEASE_SECONDS = 75
 DETAIL_TTL = timedelta(hours=12)
@@ -151,9 +152,9 @@ def _valid_detail(payload: Any, match_id: str) -> bool:
 
 
 def _saved(
-    db: Session, path: str, validate: Callable[[Any], bool]
+    db: Session, path: str, validate: Callable[[Any], bool], query: str = ""
 ) -> tuple[Any | None, datetime | None]:
-    row = db.get(IntelSnapshot, snapshot_key("public", path))
+    row = db.get(IntelSnapshot, snapshot_key("public", path, query))
     if not row:
         return None, None
     try:
@@ -218,16 +219,17 @@ def load_rone(
     ttl: timedelta,
     refresh: bool = False,
     wait_for_peer: bool = True,
+    query: str = "",
 ) -> tuple[Any | None, datetime | None, str]:
     """Read or fetch one allowlisted public path; retain saved data on failure.
 
-    Caller constructs the path from a validated region and source match ID.
+    Caller constructs the path and query from fixed public-source identifiers.
     No user questions, credentials or private data go to the public source.
     """
-    saved, observed = _saved(db, path, validate)
+    saved, observed = _saved(db, path, validate, query)
     if saved is not None and not refresh and observed and observed + ttl > utcnow():
         return saved, observed, "saved"
-    key, token = _claim(db, path)
+    key, token = _claim(db, f"{path}?{query}" if query else path)
     if token is None:
         if saved is not None and not refresh:
             return saved, observed, "saved_stale"
@@ -238,7 +240,7 @@ def load_rone(
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline:
                 db.expire_all()
-                current, current_at = _saved(db, path, validate)
+                current, current_at = _saved(db, path, validate, query)
                 if current is not None and (
                     previous_at is None or (current_at and current_at > previous_at)
                 ):
@@ -267,11 +269,11 @@ def load_rone(
     try:
         from .routers.intel import _public_fetch
 
-        status, payload = _public_fetch(path, "")
+        status, payload = _public_fetch(path, query)
         if status != 200 or not validate(payload):
             raise ValueError("Unrecognized or unavailable source data.")
         cache_payload(payload)
-        row = save_snapshot(db, "public", path, "", payload)
+        row = save_snapshot(db, "public", path, query, payload)
         _finish(db, key, token)
         return payload, row.observed_at, "loaded"
     except Exception:  # No upstream error text, prompt or secrets in logs/context.
@@ -786,7 +788,112 @@ def aggregate(
         result[
             "notice"
         ] += " Only game numbers and pick completeness fit in detailed context; summary counts remain full-scope."
+    if len(json.dumps(result, ensure_ascii=False)) > 120_000:
+        # Very large selections retain exact counts but only a bounded sample
+        # of match summaries. Never claim the detailed sample is the full set.
+        result["matches"] = [
+            {
+                key: match.get(key)
+                for key in (
+                    "match_id",
+                    "week",
+                    "team1",
+                    "team2",
+                    "status",
+                    "score1",
+                    "score2",
+                    "load_status",
+                    "missing_scored_games",
+                    "ambiguous_games",
+                )
+            }
+            | {"games_recorded": len(match.get("games", []))}
+            for match in matches[:75]
+        ]
+        result["coverage"]["match_detail_cards_omitted"] = max(0, len(matches) - 75)
+        result[
+            "notice"
+        ] += " Detailed match cards are a bounded sample, but all complete games are included in the summary counts."
     return result
+
+
+def pick_chart(facts: dict, question: str) -> dict | None:
+    """Create a bounded, deterministic picture of the already-computed counts."""
+    words = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+    }
+    mentions = re.findall(
+        r"\bgame\s*(?:number\s*)?(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+        question.casefold(),
+    )
+    numbers = {int(value) if value.isdigit() else words[value] for value in mentions}
+    bucket = facts.get("all_games") or {}
+    title = "Most-picked heroes · all recorded games"
+    if len(numbers) == 1:
+        number = next(iter(numbers))
+        match = next(
+            (
+                row
+                for row in facts.get("by_game_number", [])
+                if row.get("game_number") == number
+            ),
+            None,
+        )
+        if match is None:
+            return None
+        bucket, title = match, f"Most-picked heroes · game {number}"
+    ranked = bucket.get("top_picks") or []
+    if not ranked:
+        return None
+    bars = [{"label": row["hero"], "value": row["picks"]} for row in ranked[:6]]
+    coverage = facts.get("coverage") or {}
+    omitted = max(0, len(ranked) - len(bars)) + int(
+        bucket.get("additional_heroes_not_listed") or 0
+    )
+    excluded = sum(
+        int(coverage.get(key) or 0)
+        for key in (
+            "partial_pick_games",
+            "missing_scored_games",
+            "ambiguous_or_omitted_games",
+        )
+    )
+    return {
+        "kind": "picks_chart",
+        "title": title,
+        "bars": bars,
+        "complete_games": int(
+            bucket.get("complete_picks", bucket.get("complete_pick_games", 0))
+        ),
+        "omitted_heroes": omitted,
+        "incomplete_data": bool(
+            excluded
+            or coverage.get("missing_matches")
+            or coverage.get("score_game_conflicts")
+        ),
+        "notice": (
+            "Counts use complete games only; more heroes may be tied or ranked below."
+            if omitted
+            else "Counts use complete games only."
+        ),
+    }
+
+
+def _drop_player_details(games: list[dict]) -> None:
+    """Conserve memory for broad selections; hero picks remain for counting."""
+    for game in games:
+        game.pop("players", None)
+        for team in game.get("teams", []):
+            team.pop("players", None)
 
 
 def analyze_rone(
@@ -890,6 +997,8 @@ def analyze_rone(
             skipped_after_failures |= consecutive_failures >= 3
             skipped_after_timeout |= time.monotonic() >= deadline
         games, ambiguous = _rone_games(detail) if detail is not None else ([], 0)
+        if len(rows) + len(unavailable_rows) > 50:
+            _drop_player_details(games)
         if detail_state == "unavailable":
             consecutive_failures += 1
         elif detail_state == "loaded":
@@ -947,6 +1056,10 @@ def analyze_rone(
             }
         )
     notice = "Rone does not report a season, bans or draft order. " "Games missing from a series score are not assumed to be present. " + (
+        "Player detail was omitted for this large selection; pick totals include all complete games. "
+        if len(rows) + len(unavailable_rows) > 50
+        else ""
+    ) + (
         "The saved schedule or details may be stale. "
         if state == "saved_stale"
         or any(m["load_status"] == "saved_stale" for m in matches)
@@ -1058,6 +1171,8 @@ def analyze_aerena(
                         )
         detail = detail_for(db, row)
         games, ambiguous = _aerena_games(detail)
+        if len(ids) > 50:
+            _drop_player_details(games)
         match = detail["match"]
         left, right = _obj(match.get("team1")), _obj(match.get("team2"))
 
@@ -1098,12 +1213,28 @@ def analyze_aerena(
                 "observed_at": match.get("fetched_at"),
             }
         )
+    if len(sources) > 50:
+        omitted = len(sources) - 50
+        sources = sources[:50] + [
+            {
+                "kind": "esports_feed",
+                "label": f"Aerena: {omitted} more selected matches included",
+                "route": "esports",
+            }
+        ]
     return (
         aggregate(
             matches,
             source="Aerena",
             scope=scope or {"mode": "matches"},
-            notice="Aerena match IDs and source week labels are used where available; unlabeled games are not assigned a week.",
+            notice=(
+                "Aerena match IDs and source week labels are used where available; unlabeled games are not assigned a week. "
+                + (
+                    "Player detail was omitted for this large selection; pick totals include all complete games."
+                    if len(ids) > 50
+                    else ""
+                )
+            ),
         ),
         sources,
     )

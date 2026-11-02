@@ -4,8 +4,6 @@ import {
   Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { api, ApiError, qs } from "../lib/api";
 import { AI_EXPORT_LIMIT, collectAIExport, readAISelectedChat, revealAIComposer, safeExternal, saveAISelectedChat, shortDate } from "../lib/cloverAI";
 import type { AIBoardSummary, AIContext, AIConversation, AIEsportsAttachment, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AIProgressStage, AIProposal, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
@@ -20,6 +18,7 @@ import { AIWebControls } from "../components/AIWebControls";
 import { AIKnowledge } from "../components/AIKnowledge";
 import { AIContributions, AIReviewQueue } from "../components/AIContributions";
 import { AIActionHistory, AIProposalCard } from "../components/AIProposalCard";
+import { AIMarkdown, AIVisuals } from "../components/AIVisuals";
 
 type Tab = "chat" | "knowledge" | "contribute" | "review";
 const SUGGESTIONS = [
@@ -31,9 +30,10 @@ const SUGGESTIONS = [
 
 const THINK_STAGES: Record<AIProgressStage, string> = {
   preparing: "Preparing your context…",
+  loading_game_data: "Checking hero and game references…",
   loading_matches: "Loading match games…",
   checking: "Checking the available context…",
-  connecting: "Starting deeper analysis…",
+  connecting: "Starting the analysis…",
   thinking: "Clover is thinking deeply…",
   writing: "Putting the analysis together…",
   finishing: "Finishing your reply…",
@@ -55,7 +55,7 @@ function ThinkingIndicator({ stage, startedAt, isThink = true, loadProgress = ""
     <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-extrabold text-text">
       <span>{stage === "loading_matches" && loadProgress ? `Loading match ${loadProgress}…` : stage ? THINK_STAGES[stage] : "Clover is still working on your analysis…"}</span>
       {startedAt !== null && <span aria-hidden="true" className="text-[10px] font-semibold text-mute tabular-nums">{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
-    </span><span className="block text-[10px] leading-relaxed text-mute mt-1">{isThink ? "Deep analysis can take a few minutes." : "Clover is checking the available games."} Reopen this conversation to check the reply.</span></span>
+    </span><span className="block text-[10px] leading-relaxed text-mute mt-1">{isThink ? "Deep analysis can take a few minutes." : "Clover is checking the available information."} Reopen this conversation to check the reply.</span></span>
   </div>;
 }
 
@@ -119,10 +119,14 @@ function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
       <div className="flex flex-wrap gap-1.5 mt-2">{sources.map((source, index) => {
         const external = safeExternal(source.url);
         const isInternal = Boolean(source.knowledge_id || source.route || source.memory_id);
-        const text = <><span className="truncate">{source.label}</span>{source.reviewed_at && <span className="text-mute shrink-0">· {shortDate(source.reviewed_at)}</span>}{source.kind === "match" && <span className="text-mute shrink-0">· {source.auto_selected ? "auto · " : ""}saved {shortDate(source.observed_at)}</span>}{source.kind === "web" && <span className="text-mute shrink-0">· {source.published_at ? `published ${shortDate(source.published_at)}` : "date unknown"}</span>}{source.kind === "esports_feed" && <span className="text-mute shrink-0">· retrieved {shortDate(source.observed_at)}</span>}{isInternal ? <ChevronRight size={10} className="shrink-0" /> : external ? <ExternalLink size={10} className="shrink-0" /> : null}</>;
+        const text = <><span className="truncate">{source.label}</span>{source.reviewed_at && <span className="text-mute shrink-0">· {shortDate(source.reviewed_at)}</span>}{source.kind === "match" && <span className="text-mute shrink-0">· {source.auto_selected ? "auto · " : ""}saved {shortDate(source.observed_at)}</span>}{source.kind === "web" && <span className="text-mute shrink-0">· {source.published_at ? `published ${shortDate(source.published_at)}` : "date unknown"}</span>}{source.kind === "esports_feed" && <span className="text-mute shrink-0">· retrieved {shortDate(source.observed_at)}</span>}{(source.kind === "hero" || source.kind === "team_item") && source.observed_at && <span className="text-mute shrink-0">· saved {shortDate(source.observed_at)}</span>}{isInternal ? <ChevronRight size={10} className="shrink-0" /> : external ? <ExternalLink size={10} className="shrink-0" /> : null}</>;
         const cls = "max-w-full inline-flex items-center gap-1 rounded border border-edge-2 bg-panel/70 px-2 py-1 text-[10px] text-mute font-semibold";
         if (source.knowledge_id) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => void showNote(source.knowledge_id!)}>{text}</button>;
         if (source.memory_id) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={onManageMemory}>{text}</button>;
+        if (source.route && external) return <span key={`${source.label}-${index}`} className={`${cls} !p-0`}>
+          <button type="button" className="inline-flex min-w-0 items-center gap-1 px-2 py-1 hover:text-leaf" onClick={() => navigate(source.route!)}>{text}</button>
+          <a href={external} target="_blank" rel="noreferrer noopener" aria-label={`Open original source: ${source.label}`} className="border-l border-edge px-2 py-1 hover:text-leaf"><ExternalLink size={11} aria-hidden="true" /></a>
+        </span>;
         if (source.route) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => navigate(source.route!)}>{text}</button>;
         if (external) return <a key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} href={external} target="_blank" rel="noreferrer noopener"
           title={source.kind === "match" ? `Saved ${shortDate(source.observed_at)} · player detail saved ${shortDate(source.detail_fetched_at)} · source-reported and not independently verified` : source.kind === "web" ? `Retrieved ${shortDate(source.observed_at)} · check publication date and server region` : undefined}>{text}</a>;
@@ -163,9 +167,9 @@ function MessageBubble({ message, conversationId, onFeedback, onManageMemory, on
         <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-bold uppercase ${message.mode === "ai" || message.mode === "think" || message.mode === "guidance" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : message.mode === "think" ? "Deep analysis" : message.mode === "guidance" ? "Next step" : "Local facts only"}</span>
       </div>
       <div className="ai-markdown text-[12px] sm:text-[13px] text-text/90 leading-relaxed break-words">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml disallowedElements={["img"]}
-          components={{ a: ({ children }) => <span>{children}</span> }}>{message.content}</ReactMarkdown>
+        <AIMarkdown content={message.content} />
       </div>
+      <AIVisuals sources={message.sources} />
       {message.note && <p className="text-[10px] text-faint leading-relaxed mt-3">{message.note}</p>}
       {message.proposal && <AIProposalCard proposal={message.proposal} onChange={(value) => onProposal(message.id, value)} />}
       <SourceChips sources={message.sources} conversationId={conversationId} messageId={message.id} onManageMemory={onManageMemory} />
@@ -384,11 +388,8 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     const matches = attachedMatches, drafts = attachedDrafts, maps = attachedMaps;
     const submittedDraft = draft.trim() === question ? draft : "";
     const useThink = think && Boolean(status?.provider_configured);
-    const priorMatchScope = messages.some((message) => message.role === "user" && message.sources.some((source) => source.esports_selection));
-    const useMatchLoad = matches.length > 0 || (/\b(?:rone|mpl|aerena)\b/i.test(question) && /\bweeks?\s*[-:#]?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(question))
-      || (priorMatchScope && /\b(?:games?|picks?|picked|heroes|hero|matches|match)\b/i.test(question));
-    setActiveThink(useThink); setActiveMatchLoad(useMatchLoad); setLoadProgress(""); setThinkStage("preparing");
-    setThinkStarted(useThink || useMatchLoad ? Date.now() : null);
+    setActiveThink(useThink); setActiveMatchLoad(true); setLoadProgress(""); setThinkStage("preparing");
+    setThinkStarted(Date.now());
     setPendingQuestion({ text: question, afterId: messages.at(-1)?.id ?? 0 });
     // Attachments are one-message-only. Capture them before clearing the composer.
     if (submittedDraft) setDraft("");
@@ -408,11 +409,11 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
         share_board_context: drafts.length + maps.length > 0, web_mode: webMode, think: useThink,
       };
       const endpoint = `/ai/conversations/${chatId}/messages`;
-      const result = useThink || useMatchLoad ? await api.postStream<AISendResult>(`${endpoint}/stream`, payload, (stage) => {
+      const result = await api.postStream<AISendResult>(`${endpoint}/stream`, payload, (stage) => {
         const progress = /^loading_matches:(\d+):(\d+)$/.exec(stage);
         if (progress) { setThinkStage("loading_matches"); setLoadProgress(`${progress[1]} of ${progress[2]}`); }
         else if (Object.prototype.hasOwnProperty.call(THINK_STAGES, stage)) { setThinkStage(stage as AIProgressStage); if (stage !== "loading_matches") setLoadProgress(""); }
-      }) : await api.post<AISendResult>(endpoint, payload);
+      });
       if (selectedRef.current === chatId) {
         requestVersion.current++;
         setLoadingChat(false); setRemoteBusy(null); shouldScroll.current = true;
@@ -612,9 +613,9 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             </div>
           </form>
           {think && <p className="text-[10px] text-mute leading-relaxed mt-2">Think stays on until you switch it off or reload. Deeper analysis can take minutes and may use more credits; closing the tab won’t stop an active request.</p>}
-          <AIWebControls mode={webMode} onChange={setWebMode} enabled={Boolean(status?.web_search_enabled)} disabled={waiting || exporting || !workspaceReady} dailyLimit={status?.web_search_daily_limit ?? 10} />
+          <AIWebControls mode={webMode} onChange={setWebMode} enabled={Boolean(status?.web_search_enabled)} disabled={waiting || exporting || !workspaceReady} dailyLimit={status?.web_search_daily_limit ?? null} />
           {me.role === "admin" && <p className="text-[10px] text-leaf mt-2">Ask Clover to prepare drafts, strategies, heroes, patch labels or equipment changes for your review. Attach an existing draft to change its patch.</p>}
-          <p className="text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Named MPL questions may retrieve a public Rone feed even with web search off. Avoid sharing secrets.</p>
+          <p className="text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Game and MPL questions may load public Rone references even with web search off; AI does not request Rone player accounts. Avoid sharing secrets.</p>
         </div>
       </section>
     </div> : <div className="rounded-xl border border-edge bg-panel p-4 sm:p-6 min-h-[400px]">

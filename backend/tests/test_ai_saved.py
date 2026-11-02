@@ -255,7 +255,7 @@ class SavedEvidenceTests(unittest.TestCase):
         self.assertFalse(attached_facts["aerena_link_request"]["selected_records_available"])
         self.assertEqual(attached_facts["selected_aerena_matches"]["matches"][0]["match_id"], "PH-MATCH")
 
-    def test_ai_queues_stale_saved_public_and_consented_account_refresh_without_secrets(self):
+    def test_ai_refreshes_public_only_and_uses_consented_saved_account_without_player_calls(self):
         self.account_seed()
         with self.factory() as db:
             row = save_snapshot(
@@ -295,15 +295,15 @@ class SavedEvidenceTests(unittest.TestCase):
             self.assertEqual(refresh.call_args.args[2], "heroes/Alice")
         self.req("PATCH", "/settings", payload={"share_account_stats": True})
         with patch("app.routers.intel._refresh_account_snapshot") as refresh:
-            self.req(
+            response = self.req(
                 "POST",
                 f"/conversations/{chat}/messages",
                 payload={"text": "Analyze my recent matches", "web_mode": "off"},
             )
-            self.assertEqual(refresh.call_count, 1)
-            self.assertEqual(refresh.call_args.args[4], "user/matches")
-            for secret in ("SECRET_OWN_JWT", "SECRET_OWN_REFRESH", "Analyze my recent matches"):
-                self.assertNotIn(secret, repr(refresh.call_args))
+            self.assertEqual(refresh.call_count, 0)
+            self.assertTrue(any(source["kind"] == "personal" for source in response[1]["assistant_message"]["sources"]))
+            for secret in ("SECRET_OWN_JWT", "SECRET_OWN_REFRESH"):
+                self.assertNotIn(secret, json.dumps(response[1]))
         with patch("app.routers.intel._refresh_account_snapshot") as refresh:
             self.req("PATCH", "/settings", payload={"share_account_stats": False})
             self.req(

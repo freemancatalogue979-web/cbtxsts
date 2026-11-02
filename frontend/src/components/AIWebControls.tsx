@@ -2,7 +2,7 @@ import { Globe2 } from "lucide-react";
 import type { AIWebMode } from "../lib/cloverAI";
 
 export function AIWebControls({ mode, onChange, enabled, disabled, dailyLimit }: {
-  mode: AIWebMode; onChange: (mode: AIWebMode) => void; enabled: boolean; disabled: boolean; dailyLimit: number;
+  mode: AIWebMode; onChange: (mode: AIWebMode) => void; enabled: boolean; disabled: boolean; dailyLimit: number | null;
 }) {
   const options: { value: AIWebMode; label: string }[] = [
     { value: "auto", label: "Auto" }, { value: "on", label: "Always" }, { value: "off", label: "Off" },
@@ -17,7 +17,7 @@ export function AIWebControls({ mode, onChange, enabled, disabled, dailyLimit }:
     </div>
     <p className="text-[10px] text-mute leading-relaxed max-w-xl">
       {!enabled ? "Web checks are disabled on this server." : mode === "off" ? "No web checks for your messages." : mode === "on" ? "Check the web for each AI-generated reply." : "Use game knowledge and saved data first; check the web when you ask for current info or verification."}
-      {enabled && mode !== "off" && ` Only your current question is used as the search query; searches may incur costs (up to ${dailyLimit} attempts per member per UTC day).`}
+      {enabled && mode !== "off" && ` Only your current question is used as the search query; searches may incur costs.${dailyLimit !== null ? ` Server limit: ${dailyLimit} attempts per member per UTC day.` : " No app daily cap; provider limits may apply."}`}
     </p>
   </div>;
 }

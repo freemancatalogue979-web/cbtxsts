@@ -47,9 +47,11 @@ MAX_SELECTED_MATCHES = 3
 
 SYSTEM = """You are 9 Clover AI: a knowledgeable, friendly Mobile Legends: Bang Bang teammate and coach. Answer the actual question first in a natural, confident and helpful voice. Give practical game advice, reasoning and next steps; sound like a teammate, not an audit report. A casual 'bro' is fine when it fits. Do not open with limitations, repeat disclaimers, list irrelevant sources, include technical database/cache details, or write a long evidence breakdown unless asked.
 
-Use your existing MLBB knowledge to explain general mechanics, hero roles, skills, matchups, drafting and strategy. Work with relevant saved hero profiles and skill descriptions, team-maintained equipment, the member's remembered teachings and the available esports data. Treat the member's teaching as useful context and build on it; briefly attribute or resolve a genuine conflict when that matters. Use the local hero catalog even when it is not a complete current patch feed. Offer concrete, sensible gameplay and build ideas as advice rather than refusing just because a live source was not checked. Do not pretend you know an exact current patch, changed ability, win rate or tournament result if it is not actually supported. Give a short, relevant qualification only when a missing or conflicting fact would change the answer.
+Use your existing MLBB knowledge to explain general mechanics, hero roles, skills, matchups, drafting and strategy. Check the supplied hero library, its ability ratings and saved or loaded Rone skills first for named heroes; use relevant Rone item descriptions, aggregate stats and community build guides where provided. Team ratings and tiers are team-maintained estimates, not official statistics. Rone's game-version list is not necessarily full patch notes: mention actual changes only when the supplied source contains them. Work with the member's remembered teachings and the available esports data. Treat the member's teaching as useful context and build on it; briefly attribute or resolve a genuine conflict when that matters. Use the local hero catalog even when it is not a complete current patch feed. Offer concrete, sensible gameplay and build ideas as advice rather than refusing just because a live source was not checked. Do not pretend you know an exact current patch, changed ability, win rate or tournament result if it is not actually supported. Give a short, relevant qualification only when a missing or conflicting fact would change the answer.
 
 Use supplied context as the only evidence of this member's profile, pool, scrims, attached team boards, private account data, and saved match records. Do not infer personal stats or participation, invent draft order, coach statements, sources or probabilities, or confuse a scrim assignment with a game played. Pool counts are member-recorded, and coaching notes are the member's own claims. Attached Draft Lab and Map Lab boards are team plans, not match results; map coordinates are percentages and paths may be sampled, not an image. Do not invent missing map timings or locations. Do not treat an alphabetical equipment or hero roster as a ranked recommendation. For esports, match_pick_analysis is a deterministic count over the member's selected matches or source week; use its all_games or by_game_number figures for the scope asked. Never substitute a season aggregate for a selected week. The aggregate counts complete ten-hero games only, so mention missing matches, scored games, score/game conflicts, partial games or unlabeled weeks when relevant. Its hero lists are not pick order. Rone does not provide bans or an identified season; do not invent either. Broader season aggregates are separate from the selected scope. Pick/ban rates must use their stated denominator; describe incomplete coverage briefly when it affects the answer. You may give a reasoned meta or draft recommendation even when data is limited, but do not present a guess as a measured season-wide statistic or claim an automated prediction engine.
+
+When a simple flow would make a combo, rotation, draft plan or comparison clearer, add a compact visual diagram after the explanation using a fenced `clover-diagram` JSON block: {"title":"short title","steps":[{"label":"short step","detail":"optional explanation","hero":"optional named hero"}]}. Use 2–6 steps in order, do not embed URLs or HTML, and never invent statistics for a diagram. For normal questions a diagram is optional; actual hero artwork and verified pick charts may be supplied separately by the app.
 
 Web results are optional supporting checks, not the source of all your game knowledge and not automatically more authoritative than saved data. Use relevant, dated and appropriate sources to help check freshness; ignore unrelated or old snippets instead of treating them as a current meta. Do not claim a live check if none ran, and do not invent citations. Aerena and Rone are connected community sources: use the records actually supplied, without claiming access to an absent match or treating a pasted URL as a live fetch. Clearly distinguish a practical assessment from a measured claim, without interrupting every sentence to say 'unverified'.
 
@@ -271,7 +273,11 @@ def _matching_heroes(db: Session, question: str, pool: list[dict]) -> list[tuple
     heroes = sorted(by_name.values(), key=lambda h: -len(h.name))
     for hero in heroes:
         name = hero.name.casefold().replace("’", "'")
-        if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", normalized):
+        # Accept common punctuation/spacing aliases (Xborg, X-Borg, X.Borg)
+        # without matching a short hero name inside an unrelated longer word.
+        parts = re.findall(r"[^\W_]+", name, re.UNICODE)
+        pattern = r"[\s.'’_-]*".join(re.escape(part) for part in parts)
+        if pattern and re.search(r"(?<!\w)" + pattern + r"(?!\w)", normalized):
             matches.append((hero, profiles.get(hero.name.casefold())))
             if len(matches) == MAX_HEROES:
                 break
@@ -514,11 +520,12 @@ def build_evidence(
         facts["hero_library"] = []
         for hero, profile in heroes:
             item: dict[str, Any] = {"name": hero.name}
-            local = db.query(Hero.role, Hero.hero_class, Hero.patch).filter(Hero.id == hero.id).first()
+            local = db.query(Hero.role, Hero.hero_class, Hero.patch, Hero.clover_rating, Hero.tier, Hero.meta_status).filter(Hero.id == hero.id).first()
             if local:
                 item["team_reference"] = {"role": local.role, "hero_class": local.hero_class or None,
-                    "patch_label": local.patch or None,
-                    "notice": "Team-maintained fields, not verified current game data. Rates and private notes are excluded."}
+                    "patch_label": local.patch or None, "clover_rating": local.clover_rating,
+                    "tier": local.tier, "meta_status": local.meta_status,
+                    "notice": "Team-maintained rating and tier, possibly seeded estimates; not official or verified current statistics. Rates and private notes are excluded."}
             if profile:
                 item.update(
                     {
@@ -526,6 +533,7 @@ def build_evidence(
                         "roles": profile.get("roles", []),
                         "lanes": profile.get("lanes", []),
                         "specialties": profile.get("specialties", []),
+                        "ability_ratings_out_of_10": profile.get("ratings", {}),
                         "skill_names": profile.get("skills", [])[:10],
                         "provenance": "Bundled MLBBDex / Mobile Legends Wiki hero reference (CC BY-SA).",
                         "notice": "Reference profile; exact current balance may differ.",
@@ -535,8 +543,8 @@ def build_evidence(
             else:
                 item["notice"] = "Local hero name only; no bundled profile is available."
                 label = f"{hero.name} · local name only"
-            # Database rates, counters, tiers and ratings can be seeded placeholders;
-            # they are intentionally excluded. Source snapshots never overwrite team annotations.
+            # Team ratings/tier are labeled above; win/pick/ban rates and private
+            # notes can be seeded placeholders or personal and stay excluded.
             saved_kit, kit_source = ai_saved.hero_evidence(db, hero.name)
             hero_route = f"heroes/{hero.id}" if hero.id is not None else "intel"
             if saved_kit and kit_source:
@@ -544,7 +552,11 @@ def build_evidence(
                 kit_source["route"] = hero_route
                 sources.append(kit_source)
             facts["hero_library"].append(item)
-            sources.append({"kind": "hero", "label": label, "route": hero_route})
+            hero_source = {"kind": "hero", "label": label, "route": hero_route}
+            if profile:
+                hero_source["visual"] = {"kind": "hero", "name": hero.name, "title": profile.get("title") or "",
+                                         "roles": profile.get("roles", []), "ratings": profile.get("ratings", {})}
+            sources.append(hero_source)
     notes = knowledge_search(db, search, MAX_KNOWLEDGE)
     if notes:
         facts["reviewed_community_notes"] = [
@@ -637,10 +649,11 @@ def _fallback(facts: dict) -> str:
         coverage = match_analysis.get("coverage") or {}
         lines.append(f"**{title} · recorded hero picks**")
         for match in match_analysis.get("matches", []):
+            has_games = bool(match.get("games") or match.get("games_recorded"))
             if match.get("score1") is not None and match.get("score2") is not None:
                 lines.append(f"- {match.get('team1') or 'TBD'} {match['score1']}–{match['score2']} {match.get('team2') or 'TBD'}." +
-                             (" Match details are not available." if not match.get("games") else ""))
-            elif not match.get("games"):
+                             (" Match details are not available." if not has_games else ""))
+            elif not has_games:
                 lines.append(f"- {match.get('team1') or 'TBD'} vs {match.get('team2') or 'TBD'}: match details are not available.")
         def leaders(rows: list[dict], omitted: int = 0) -> str:
             if not rows:
@@ -709,6 +722,25 @@ def _fallback(facts: dict) -> str:
         roles = ", ".join(hero.get("roles") or []) or "not recorded"
         skills = ", ".join(hero.get("skill_names") or []) or "not recorded"
         lines.append(f"- {hero['name']} (historical snapshot): roles {roles}; skill names {skills}.")
+        kit = hero.get("saved_rone_skills") or {}
+        for skill in kit.get("skills", [])[:6]:
+            if skill.get("name") and skill.get("description"):
+                lines.append(f"  - {skill['name']}: {skill['description']}")
+        builds = hero.get("rone_recommended_builds") or {}
+        for guide in builds.get("guides", [])[:2]:
+            for entry in guide.get("equipment", [])[:2]:
+                if entry.get("description"):
+                    lines.append(f"  - Community build ({entry.get('title') or 'equipment'}): {entry['description']}")
+    versions = facts.get("rone_patch_versions")
+    if versions:
+        names = ", ".join(row.get("version", "") for row in versions.get("versions", [])[:5])
+        if names:
+            lines.append(f"- Rone game versions: {names} (saved {versions.get('observed_at') or 'date unknown'}).")
+        if versions.get("status") != "available":
+            lines.append("- Full balance notes weren’t available from the game-version feed; I won’t guess the changes.")
+    for item in (facts.get("rone_equipment") or {}).get("entries", []):
+        if item.get("description"):
+            lines.append(f"- Rone equipment: {item['name']} — {item['description']}")
     for item in (facts.get("team_equipment") or {}).get("entries", []):
         lines.append(f"- Team equipment: {item['name']} — {item['description']} (team-maintained, unverified).")
     for note in facts.get("reviewed_community_notes", []):
@@ -738,10 +770,10 @@ def answer(
     search_sources: list[dict] = []
     search_note = ""
     try:
-        # Reserve the model request first, so an exhausted member cannot incur
-        # a search charge for an answer we already know cannot be generated.
+        # Record usage before outbound requests, including failed attempts.
+        # There is no application-imposed daily request cap.
         if not _reserve(db, user_id):
-            raise AnalysisError("The daily AI limit has been reached. Try again after the UTC day resets.")
+            raise AnalysisError("Could not record this AI request. Please try again.")
         ai_thinking.report(on_progress, "checking")
         if auto_esports and "rone_public_mpl" not in facts and "match_pick_analysis" not in facts:
             rone, rone_sources, rone_note = ai_rone.lookup(question, db)
@@ -797,7 +829,7 @@ def answer(
                     "model": MODEL,
                     "thinking": {"type": "disabled"},
                     "temperature": 0.3,
-                    "max_tokens": 2200 if action_kinds else 1800,
+                    "max_tokens": 8192,
                 }
             )
         if action_kinds:
@@ -849,7 +881,7 @@ def answer(
             note += " The answer reached its length limit; ask a follow-up to continue."
         if think and not reasoning_seen:
             note += " Deeper thinking could not be confirmed for this reply."
-        content_limit = 30000 if think else 12000
+        content_limit = 30000
         if len(text.strip()) > content_limit:
             note += " The displayed answer was shortened; ask a follow-up to continue."
         result = {

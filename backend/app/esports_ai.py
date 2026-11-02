@@ -25,10 +25,6 @@ ENDPOINT = "https://api.deepseek.com/chat/completions"
 # The former chat alias was retired. Keep the model configurable for operators;
 # the default is the provider's current supported, lower-cost Flash model.
 MODEL = os.getenv("CLOVER_AI_MODEL", "deepseek-flash").strip() or "deepseek-flash"
-try:
-    DAILY_LIMIT = max(1, min(100, int(os.getenv("CLOVER_AI_DAILY_LIMIT") or os.getenv("CLOVER_DEEPSEEK_DAILY_LIMIT", "20"))))
-except ValueError:
-    DAILY_LIMIT = 20
 MAX_CONTEXT_CHARS = 18000
 
 
@@ -64,8 +60,7 @@ def _reserve(db: Session, user_id: int) -> bool:
         except IntegrityError:
             db.rollback()  # Another worker created today's row.
     result = db.execute(update(AerenaAIUsage).where(AerenaAIUsage.user_id == user_id,
-                         AerenaAIUsage.day == today, AerenaAIUsage.calls < DAILY_LIMIT)
-                        .values(calls=AerenaAIUsage.calls + 1))
+                         AerenaAIUsage.day == today).values(calls=AerenaAIUsage.calls + 1))
     db.commit()
     return bool(result.rowcount)
 
@@ -129,7 +124,7 @@ def factual_fallback(detail: dict) -> str:
 
 def _complete(db: Session, user_id: int, question: str, facts: dict, api_key: str) -> str:
     if not _reserve(db, user_id):
-        raise AnalysisError(f"Daily analysis limit reached ({DAILY_LIMIT} requests per user, UTC).")
+        raise AnalysisError("Could not record this AI request. Please try again.")
     system = (
         "You are 9 Clover's esports analyst, limited to MLBB teams, tournaments, draft and match analysis. "
         "Identify as 9 Clover AI, not the underlying model or provider. "

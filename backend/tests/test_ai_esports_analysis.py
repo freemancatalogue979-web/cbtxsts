@@ -461,6 +461,213 @@ class SourceAnalysisTests(unittest.TestCase):
         self.assertGreater(facts["all_games"].get("tied_leaders_omitted", 0), 0)
         self.assertLess(len(json.dumps(facts)), 120_000)
 
+    def test_near_500_matches_keep_exact_all_game_counts_and_honest_coverage(self):
+        from datetime import datetime
+
+        synthetic = {
+            "weeks": [
+                {
+                    "week": 1,
+                    "days": [
+                        {
+                            "matches": [
+                                schedule_match(str(i)) for i in range(start, start + 50)
+                            ]
+                        }
+                        for start in range(1, 501, 50)
+                    ],
+                }
+            ]
+        }
+        self.assertTrue(analysis._valid_schedule(synthetic))
+        stages = []
+
+        def fake_load(db, path, validate, **kwargs):
+            mid = path.rsplit("/", 1)[-1]
+            games = [game(1, BASE), game(2, BASE, missing=mid == "500")]
+            if mid != "500":
+                games.append(game(3, BASE))
+            payload = detail(mid, games)
+            self.assertTrue(validate(payload))
+            return payload, datetime(2026, 1, 1), "saved"
+
+        with patch.object(
+            analysis,
+            "rone_schedule",
+            return_value=(synthetic, datetime(2026, 1, 1), "saved"),
+        ), patch.object(analysis, "_saved", return_value=(None, None)), patch.object(
+            analysis, "load_rone", side_effect=fake_load
+        ):
+            facts, sources = analysis.analyze_rone(
+                self.db,
+                {"source": "rone", "mode": "week", "region": "id", "week": 1},
+                stages.append,
+            )
+        self.assertEqual(facts["coverage"]["matches_listed"], 500)
+        self.assertEqual(facts["coverage"]["complete_pick_games"], 1498)
+        self.assertEqual(facts["coverage"]["partial_pick_games"], 1)
+        self.assertEqual(facts["coverage"]["missing_scored_games"], 1)
+        self.assertEqual(
+            next(r for r in facts["all_games"]["top_picks"] if r["hero"] == "Alice")[
+                "picks"
+            ],
+            1498,
+        )
+        self.assertEqual(
+            next(r for r in facts["by_game_number"] if r["game_number"] == 2)[
+                "complete_picks"
+            ],
+            499,
+        )
+        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 425)
+        self.assertIn("all complete games", facts["notice"])
+        self.assertIn("loading_matches:500:500", stages)
+        self.assertLess(len(json.dumps(facts)), 120_000)
+        chart = analysis.pick_chart(facts, "most picked in game 2")
+        self.assertEqual(chart["complete_games"], 499)
+        self.assertTrue(chart["incomplete_data"])
+        self.assertEqual(chart["bars"][0]["value"], 499)
+        self.assertTrue(sources)
+
+    def test_loading_deadline_reports_unfetched_matches_without_claiming_full_coverage(
+        self,
+    ):
+        from datetime import datetime
+        from types import SimpleNamespace
+
+        source = {
+            "weeks": [
+                {
+                    "week": 1,
+                    "days": [
+                        {
+                            "matches": [
+                                schedule_match(str(n), score1=1, score2=0)
+                                for n in range(1, 4)
+                            ]
+                        }
+                    ],
+                }
+            ]
+        }
+        calls = []
+        ticks = iter([0, 0, 901, 901, 901, 901, 901])
+        clock = SimpleNamespace(
+            monotonic=lambda: next(ticks, 901), sleep=lambda _n: None
+        )
+
+        def fake_load(db, path, validate, **kwargs):
+            mid = path.rsplit("/", 1)[-1]
+            calls.append(mid)
+            return detail(mid, [game(1, BASE)]), datetime(2026, 1, 1), "loaded"
+
+        with patch.object(analysis, "time", clock), patch.object(
+            analysis,
+            "rone_schedule",
+            return_value=(source, datetime(2026, 1, 1), "saved"),
+        ), patch.object(analysis, "_saved", return_value=(None, None)), patch.object(
+            analysis, "load_rone", side_effect=fake_load
+        ):
+            facts, _ = analysis.analyze_rone(
+                self.db, {"source": "rone", "mode": "week", "region": "id", "week": 1}
+            )
+        self.assertEqual(calls, ["1"])
+        self.assertEqual(facts["coverage"]["complete_pick_games"], 1)
+        self.assertEqual(facts["coverage"]["missing_matches"], 2)
+        self.assertIn("loading time limit was reached", facts["notice"])
+
+    def test_aerena_500_matches_keep_counts_and_bounded_citations(self):
+        from types import SimpleNamespace
+
+        class FakeDB:
+            def get(self, _model, mid):
+                return SimpleNamespace(
+                    id=mid, stage="Week 1", raw_json="{}", has_result=False
+                )
+
+        def detail_for(_db, row):
+            return {
+                "match": {
+                    "id": row.id,
+                    "team1": {"teamName": "Alpha", "teamScore": 1},
+                    "team2": {"teamName": "Bravo", "teamScore": 0},
+                },
+                "games": [
+                    {
+                        "number": 1,
+                        "draft": [{"kind": "Pick", "hero_name": hero} for hero in BASE],
+                        "player_stats": [{"ign": "not needed", "hero_name": "Alice"}],
+                    }
+                ],
+            }
+
+        ids = [f"match-{n}" for n in range(500)]
+        with patch("app.routers.esports.detail_for", side_effect=detail_for):
+            facts, sources = analysis.analyze_aerena(FakeDB(), ids, load_missing=False)
+        self.assertEqual(facts["coverage"]["complete_pick_games"], 500)
+        self.assertTrue(
+            all(row["picks"] == 500 for row in facts["all_games"]["top_picks"])
+        )
+        self.assertEqual(len(sources), 51)
+        self.assertIn("450 more selected matches included", sources[-1]["label"])
+        self.assertNotIn("not needed", json.dumps(facts))
+        self.assertIn("Player detail was omitted", facts["notice"])
+
+    def test_selection_accepts_500_unique_ids_but_rejects_larger_payloads(self):
+        from pydantic import ValidationError
+        from app.routers.clover_ai import EsportsSelectionIn
+
+        selected = {
+            "source": "rone",
+            "mode": "matches",
+            "region": "id",
+            "match_ids": [str(i) for i in range(1, 501)],
+        }
+        self.assertEqual(
+            len(EsportsSelectionIn.model_validate(selected).match_ids), 500
+        )
+        with self.assertRaises(ValidationError):
+            EsportsSelectionIn.model_validate(
+                {**selected, "match_ids": selected["match_ids"] + ["501"]}
+            )
+        with self.assertRaises(ValidationError):
+            EsportsSelectionIn.model_validate(
+                {**selected, "match_ids": selected["match_ids"] + ["../bad"]}
+            )
+
+    def test_full_500_by_30_aggregation_has_bounded_context_and_keeps_ties(self):
+        import tracemalloc
+
+        huge = [
+            {
+                "match_id": str(i),
+                "ambiguous_games": 0,
+                "games": [
+                    {
+                        "number": n,
+                        "complete_picks": not (i == 499 and n == 30),
+                        "picks": list(BASE),
+                    }
+                    for n in range(1, 31)
+                ],
+            }
+            for i in range(500)
+        ]
+        tracemalloc.start()
+        try:
+            facts = analysis.aggregate(huge, source="Rone", scope={"week": 1})
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(facts["coverage"]["complete_pick_games"], 14_999)
+        self.assertEqual(facts["coverage"]["partial_pick_games"], 1)
+        self.assertTrue(
+            all(row["picks"] == 14_999 for row in facts["all_games"]["top_picks"])
+        )
+        self.assertEqual(facts["coverage"]["match_detail_cards_omitted"], 425)
+        self.assertLess(len(json.dumps(facts)), 120_000)
+        self.assertLess(peak, 200_000_000)
+
     def test_public_source_singleflight_and_global_serialization(self):
         import tempfile
         import threading

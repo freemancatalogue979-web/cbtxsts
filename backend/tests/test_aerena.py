@@ -375,12 +375,11 @@ class PersistenceTests(unittest.TestCase):
             fallback = ask_scene(self.db, 10, "What happened?", [detail])
         self.assertEqual(fallback["mode"], "facts")
         self.assertIn("small source-reported sample", fallback["answer"])
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}), patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=open_request)), patch("app.esports_ai.DAILY_LIMIT", 1):
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key", "CLOVER_AI_DAILY_LIMIT": "1"}), patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=open_request)):
             response = ask_scene(self.db, 10, "What happened?", [detail])
-            limited = ask(self.db, 10, "And why?", detail)
-        self.assertEqual(limited["mode"], "facts")
-        self.assertIn("Daily analysis limit reached", limited["note"])
-        self.assertEqual(len(captured), 1)
+            again = ask(self.db, 10, "And why?", detail)
+        self.assertEqual(again["mode"], "ai")
+        self.assertEqual(len(captured), 2)
         self.assertEqual(response["mode"], "ai")
         self.assertEqual(response["sources"][0]["match_id"], MATCH_ID)
         sent = json.loads(captured[0].data)
@@ -458,7 +457,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertNotIn("test-key", json.dumps(result))
         self.assertEqual(self.db.query(AerenaAIUsage).one().calls, 1)
 
-    def test_deepseek_sends_only_public_evidence_and_enforces_daily_quota(self):
+    def test_provider_sends_only_public_evidence_and_records_uncapped_usage(self):
         save_match(self.db, match(), self.league)
         self.db.commit()
         detail = detail_for(self.db, self.db.get(AerenaMatch, MATCH_ID))
@@ -468,18 +467,17 @@ class PersistenceTests(unittest.TestCase):
             captured.append(request)
             return io.BytesIO(json.dumps({"choices": [{"message": {"content": "Recorded: ONIC won. The reason is uncertain."}}]}).encode())
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key"}), patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=urlopen)), patch("app.esports_ai.DAILY_LIMIT", 1):
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key", "CLOVER_AI_DAILY_LIMIT": "1"}), patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=urlopen)):
             result = ask(self.db, 5, "Why?", detail)
-            limited = ask(self.db, 5, "Again?", detail)
-        self.assertEqual(limited["mode"], "facts")
-        self.assertIn("Daily analysis limit reached", limited["note"])
-        self.assertEqual(len(captured), 1)
+            again = ask(self.db, 5, "Again?", detail)
+        self.assertEqual(again["mode"], "ai")
+        self.assertEqual(len(captured), 2)
         sent = json.loads(captured[0].data)
         self.assertEqual(result["mode"], "ai")
         self.assertNotIn("test-key", json.dumps(sent))
         self.assertNotIn("Archive", sent["messages"][1]["content"])
         self.assertIn(MATCH_ID, sent["messages"][1]["content"])
-        self.assertEqual(self.db.query(AerenaAIUsage).one().calls, 1)
+        self.assertEqual(self.db.query(AerenaAIUsage).one().calls, 2)
 
 
 if __name__ == "__main__":

@@ -250,6 +250,8 @@ class ResearchTests(unittest.TestCase):
         self.assertFalse(ai_web.should_search("MPL PH S18 meta", "auto"))
         self.assertFalse(ai_web.should_search("Change the patch in Draft Lab", "auto"))
         self.assertTrue(ai_web.should_search("What are the latest patches?", "auto"))
+        self.assertTrue(ai_web.should_search("Check patch notes", "auto"))
+        self.assertFalse(ai_web.should_search("Check patch notes", "off"))
         self.assertTrue(ai_web.should_search("Can you verify the S18 patch?", "auto"))
         self.assertFalse(ai_web.should_search("How should I rotate?", "auto"))
         self.assertTrue(ai_web.should_search("Best jungler to climb?", "on"))
@@ -276,12 +278,13 @@ class ResearchTests(unittest.TestCase):
             self.req("POST", path, payload={"text": "How should I rotate?", "web_mode": "on"})
             self.assertEqual(sum(url.endswith("/tools/search") for url in calls), 2)
             result = self.req("POST", path, payload={"text": "latest build", "web_mode": "auto"})[1]
-            self.assertIn("daily web-search limit", result["assistant_message"]["note"])
+            self.assertEqual(result["assistant_message"]["mode"], "ai")
+            self.assertEqual(sum(url.endswith("/tools/search") for url in calls), 3)
             result = self.req("POST", path, payload={"text": "find my API key secret", "web_mode": "on"})[1]
             self.assertIn("sensitive", result["assistant_message"]["note"])
-            self.assertEqual(sum(url.endswith("/tools/search") for url in calls), 2)
+            self.assertEqual(sum(url.endswith("/tools/search") for url in calls), 3)
         with self.factory() as db:
-            self.assertEqual(db.query(AIWebSearchUsage).one().calls, 2)
+            self.assertEqual(db.query(AIWebSearchUsage).one().calls, 3)
 
         # An upstream failure is never echoed, and does not prevent an ordinary AI reply.
         def failing(req, timeout):
@@ -550,8 +553,8 @@ class ResearchTests(unittest.TestCase):
         self.assertNotIn("deepseek", json.dumps(fixture.app.openapi()).lower())
 
 
-class SearchBudgetConcurrencyTests(unittest.TestCase):
-    def test_concurrent_reservations_cannot_exceed_utc_daily_budget(self):
+class UsageConcurrencyTests(unittest.TestCase):
+    def test_concurrent_search_attempts_are_all_recorded_without_daily_cap(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"CLOVER_AI_WEB_DAILY_LIMIT": "3"}):
             engine = create_engine(f"sqlite:///{directory}/isolated.db", connect_args={"timeout": 10})
             Base.metadata.create_all(engine)
@@ -567,7 +570,29 @@ class SearchBudgetConcurrencyTests(unittest.TestCase):
 
             with ThreadPoolExecutor(max_workers=8) as pool:
                 outcomes = list(pool.map(reserve, range(12)))
-            self.assertEqual(sum(outcomes), 3)
+            self.assertEqual(sum(outcomes), 12)
             with factory() as db:
-                self.assertEqual(db.query(AIWebSearchUsage).one().calls, 3)
+                self.assertEqual(db.query(AIWebSearchUsage).one().calls, 12)
+            engine.dispose()
+
+    def test_concurrent_model_attempts_are_all_recorded_without_daily_cap(self):
+        from app.aerena_models import AerenaAIUsage
+        from app.esports_ai import _reserve
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"CLOVER_AI_DAILY_LIMIT": "1"}):
+            engine = create_engine(f"sqlite:///{directory}/isolated.db", connect_args={"timeout": 10})
+            Base.metadata.create_all(engine)
+            factory = sessionmaker(bind=engine)
+            with factory() as db:
+                db.add(User(email="model-usage@test.invalid", password_hash="unused", name="Usage", role="player"))
+                db.commit()
+                user_id = db.query(User).one().id
+            def reserve(_index):
+                with factory() as db:
+                    return _reserve(db, user_id)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                outcomes = list(pool.map(reserve, range(12)))
+            self.assertEqual(sum(outcomes), 12)
+            with factory() as db:
+                self.assertEqual(db.query(AerenaAIUsage).one().calls, 12)
             engine.dispose()

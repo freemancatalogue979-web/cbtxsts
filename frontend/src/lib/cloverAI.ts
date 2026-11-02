@@ -5,7 +5,7 @@ export type AIStatus = {
   patch_feed: string;
   web_search: string;
   web_search_enabled: boolean;
-  web_search_daily_limit: number;
+  web_search_daily_limit: number | null;
   account_match_history: string;
   tournament_participation: string;
   prediction_engine: string;
@@ -44,10 +44,13 @@ export type AILearnedMemory = {
 export type AILearnedMemoryState = { auto_learn: boolean; use_memory: boolean; limit: number; items: AILearnedMemory[] };
 
 export type AIConversation = { id: string; title: string; created_at: string; updated_at: string };
+export type AIVisual =
+  | { kind: "hero"; name: string; title: string; roles: string[]; ratings: Record<string, number> }
+  | { kind: "picks_chart"; title: string; bars: { label: string; value: number }[]; complete_games: number; omitted_heroes: number; incomplete_data: boolean; notice: string };
 export type AISource = {
   kind: "personal" | "hero" | "community" | "match" | "web" | "draft" | "map" | "esports_feed" | "learned" | "team_item"; label: string; route?: string; knowledge_id?: string; memory_id?: string;
   url?: string | null; excerpt?: string; reviewed_at?: string; observed_at?: string | null; detail_fetched_at?: string | null; match_id?: string;
-  published_at?: string | null; auto_selected?: boolean; board_id?: number; esports_selection?: AIEsportsSelection;
+  published_at?: string | null; auto_selected?: boolean; board_id?: number; esports_selection?: AIEsportsSelection; visual?: AIVisual;
 };
 export type AIProposal = {
   id: string; kind: "create_draft" | "create_strategy" | "create_hero" | "update_hero" | "set_patch" | "set_draft_patch" | "create_item";
@@ -67,14 +70,14 @@ export type AIMessage = {
 };
 export type AIList<T> = { items: T[]; has_more: boolean };
 export type AIMessagePage = { messages: AIMessage[]; has_more: boolean; conversation?: AIConversation; processing?: boolean; processing_think?: boolean };
-export type AIProgressStage = "preparing" | "loading_matches" | "checking" | "connecting" | "thinking" | "writing" | "finishing";
+export type AIProgressStage = "preparing" | "loading_game_data" | "loading_matches" | "checking" | "connecting" | "thinking" | "writing" | "finishing";
 export type AIEsportsRegion = "id" | "ph" | "my" | "kh";
 export type AIEsportsSelection = {
   source: "rone" | "aerena"; mode: "week" | "matches"; region?: AIEsportsRegion;
   league_id?: string; week?: number; match_ids?: string[];
 };
 export type AIEsportsAttachment = { selection: AIEsportsSelection; label: string; chosen: { id: string; label: string }[] };
-export const AI_ESPORTS_MATCH_LIMIT = 24;
+export const AI_ESPORTS_MATCH_LIMIT = 500;
 export type AISendResult = { conversation: AIConversation; user_message: AIMessage; assistant_message: AIMessage };
 export type AIExport = {
   format: string; exported_at: string; conversation: AIConversation; messages: AIMessage[];

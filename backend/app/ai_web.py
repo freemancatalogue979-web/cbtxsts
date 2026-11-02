@@ -35,6 +35,10 @@ _SEARCH_INTENT = re.compile(
     r"latest|current|today|recent|news|live|verify|verification|confirm|cross[\s-]?check)\b",
     re.IGNORECASE,
 )
+_PATCH_NOTES_INTENT = re.compile(
+    r"\bpatch[\s-]+notes?\b|\b(?:patch|version)\b[^.!?]{0,80}\b(?:changes|notes|buffs?|nerfs?)\b",
+    re.IGNORECASE,
+)
 _SENSITIVE_QUERY = re.compile(
     r"\b(password|passcode|credential|secret|api[\s_-]*key|access[\s_-]*token|"
     r"private[\s_-]*key|seed\s+phrase|session\s+cookie)\b|\b(?:sk|ghp|gho|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{10,}|\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}",
@@ -46,16 +50,13 @@ def enabled() -> bool:
     return os.getenv("CLOVER_AI_WEB_SEARCH", "1").strip().lower() not in {"0", "false", "no", "off"}
 
 
-def daily_limit() -> int:
-    try:
-        value = int(os.getenv("CLOVER_AI_WEB_DAILY_LIMIT", "10"))
-    except ValueError:
-        value = 10
-    return max(0, min(value, 100))
+def daily_limit() -> None:
+    """No application-imposed daily search cap; provider billing still applies."""
+    return None
 
 
 def should_search(question: str, mode: SearchMode) -> bool:
-    return mode == "on" or (mode == "auto" and bool(_SEARCH_INTENT.search(question)))
+    return mode == "on" or (mode == "auto" and bool(_SEARCH_INTENT.search(question) or _PATCH_NOTES_INTENT.search(question)))
 
 
 def search_query(question: str) -> str:
@@ -68,10 +69,7 @@ def search_query(question: str) -> str:
 
 
 def reserve_search(db: Session, user_id: int) -> bool:
-    """Atomically reserve one of a member's per-UTC-day search attempts."""
-    limit = daily_limit()
-    if limit <= 0:
-        return False
+    """Atomically record a search attempt, without imposing a daily cap."""
     day = utcnow().date().isoformat()
     row = db.query(AIWebSearchUsage).filter_by(user_id=user_id, day=day).first()
     if row is None:
@@ -82,7 +80,7 @@ def reserve_search(db: Session, user_id: int) -> bool:
             db.rollback()
     result = db.execute(
         update(AIWebSearchUsage)
-        .where(AIWebSearchUsage.user_id == user_id, AIWebSearchUsage.day == day, AIWebSearchUsage.calls < limit)
+        .where(AIWebSearchUsage.user_id == user_id, AIWebSearchUsage.day == day)
         .values(calls=AIWebSearchUsage.calls + 1)
     )
     db.commit()
@@ -121,9 +119,9 @@ def search(
         )
     if not reserve_search(db, user_id):
         return (
-            {"status": "limit"},
+            {"status": "unavailable"},
             [],
-            "The daily web-search limit has been reached. Try again after the UTC day resets.",
+            "The search attempt could not be recorded. Please try again.",
         )
     query = search_query(question)
     payload = json.dumps({"query": query, "count": MAX_RESULTS, "need_content": False}, ensure_ascii=False).encode(

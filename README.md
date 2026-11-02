@@ -350,13 +350,15 @@ untrusted, may be outdated, and are displayed as labelled HTTPS source links wit
 publication dates where available and retrieval dates. The server does not fetch
 arbitrary result pages. Queries that appear to contain credentials are skipped,
 but detection is not foolproof: **do not enter secrets**. Named public Rone MPL
-lookups are separate from web search and can still happen with Web Off.
+and game-reference lookups are separate from web search and can still happen with
+Web Off. Auto also searches when explicitly asked for patch notes or balance
+changes, subject to the configured provider and availability.
 
 Search uses the configured server-side AI key and may be billed separately from
-model calls. `CLOVER_AI_WEB_SEARCH=0` disables it server-wide;
-`CLOVER_AI_WEB_DAILY_LIMIT` defaults to 10 attempts per member per UTC day
-(range 0–100; failures count). The shared model-request budget is independent.
-Search/provider access, billing and HTTPS connectivity have not been verified in
+model calls. `CLOVER_AI_WEB_SEARCH=0` disables it server-wide. The app imposes
+no daily search or AI-request cap; usage attempts are still recorded, and provider
+rate limits, service availability and billing still apply. Old daily-limit
+environment settings no longer restrict use. Search/provider access, billing and HTTPS connectivity have not been verified in
 the development sandbox: an operator must test them from the deployment. A
 configured-key badge is not a connectivity test. Saved personal account data is
 available to AI only with separate consent and only when a usable snapshot exists;
@@ -369,6 +371,26 @@ messages, but this is not a secrecy boundary: server operators, source code and
 public repository history can still reveal implementation details.
 
 ### Saved MLBB snapshots
+
+Clover resolves named heroes (including aliases such as `xborg` → `X.Borg`)
+against local profiles before loading relevant public Rone skills, aggregate
+hero stats, equipment, battle spells, emblems and community build recommendations
+when needed. Outbound hero identifiers come from the bundled public roster rather
+than arbitrary team-created names; an unknown new hero may need a roster update.
+It uses fixed game-reference endpoints only; the AI does not make separate Rone
+player or account calls. Already-saved member account context still requires consent.
+Community author/account fields are excluded from the AI's build evidence, and
+source retrieval dates and stale/unavailable status are preserved. The Rone
+game-version endpoint may list version labels without detailed MLBB balance notes;
+its website's own release changelog is not a substitute for game patch notes.
+Clover must not invent missing changes. Optional web checks can help find other
+sources, but their claims require verification.
+
+Chat can show local hero artwork, historical reference ratings, deterministic pick
+charts, and bounded structured diagrams for plans or rotations. Model-supplied
+remote images are not loaded, preventing hidden tracking requests; hero images
+use the app's bundled art and existing Rone backup. Historical community profiles,
+community build recommendations and aggregate statistics may be stale.
 
 Public hero/reference and Rone esports responses are stored separately from the
 team's editable hero annotations. Private My MLBB snapshots are scoped to the
@@ -442,11 +464,11 @@ restrict server access. For multi-host deployments, use the same protected
 environment key on every worker. Neither the database nor generated key belongs
 in Git.
 
-With no key, provider failure, or an exhausted quota, the UI returns a
-labelled facts-only summary rather than pretending to generate an AI answer. The
-Esports page's separate scene analysis uses at most the first eight saved matches
-shown by its filter, not a complete season. Clover chat can instead analyze a
-chosen source week or up to 24 individual matches using the **Attach esports**
+With no key or a provider failure, the UI returns a labelled facts-only summary
+rather than pretending to generate an AI answer. The Esports page's separate
+scene analysis uses at most the first eight saved matches shown by its filter,
+not a complete season. Clover chat can instead analyze a chosen source week or
+up to 500 individual matches using the **Attach esports**
 picker. Source, MPL region, season (where available), and week are filters;
 search is optional. For example, ask “Rone MPL ID week 1, most picked heroes in
 game 2?” or “Aerena MPL PH season 18 week 1, most picked heroes?” Clover waits
@@ -463,25 +485,27 @@ reported rather than guessed. Rone does not identify a season in its schedule
 or provide verified bans or draft order, so historical seasons cannot be inferred.
 Aerena week filters use explicit source week fields/labels or its source match-ID
 week label; unlabelled or conflicting records are excluded and disclosed. A week
-with more than 24 listed matches must be narrowed to individual matches. The
-public integrations may be unavailable or incomplete, and neither source is a
-guarantee of full season coverage. Rone requests are cached, serialized across
-workers and subject to retry cooldowns; Aerena requests use the existing shared
-worker. Review the hosted Rone terms, including attribution and commercial-use
-arrangements, before deployment.
+with more than 500 listed matches must be narrowed to individual matches. The
+500-match ceiling, bounded response/context sizes and loading deadline are
+technical safeguards, not daily usage limits. Broad-scope counts include every
+complete game even when match cards, player details or some tied rankings are
+omitted from the model's context; those omissions are reported. Public
+integrations may be unavailable or incomplete, and neither source guarantees full
+season coverage. Rone requests are cached, serialized across workers and subject
+to retry cooldowns; Aerena requests use the existing shared worker. Review hosted
+Rone terms, including attribution and commercial-use arrangements, before deployment.
 
 The question and bounded public evidence are sent to the external AI provider
 when a model is configured. Private Archive items and credentials are never
 retrieved; board and personal context remain separately consent-controlled, and
 chat history is used only if enabled. Do not put secrets or private notes in the
-question. Provider requests are limited by
-`CLOVER_AI_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
-failed requests count). This quota is shared by the member workspace and Esports
-analysis. The key, provider access, quotas and outbound HTTPS must all work on
-the deployed backend. `CLOVER_AI_MODEL` optionally overrides the normal-chat
-model; `CLOVER_AI_THINK_MODEL` separately overrides the stronger Think-mode model.
-Think shares the same per-member request quota and uses up to 32,768 output tokens
-for reasoning and the final answer. Legacy environment variable names remain
+question. Usage accounting is shared by the member workspace and Esports
+analysis, without an app-imposed daily request cap. Provider rate limits and
+charges remain, so the operator should monitor usage and billing. The key,
+provider access and outbound HTTPS must work on the deployed backend.
+`CLOVER_AI_MODEL` optionally overrides the normal-chat model;
+`CLOVER_AI_THINK_MODEL` separately overrides the stronger Think-mode model.
+Think uses up to 32,768 output tokens for reasoning and the final answer. Legacy environment variable names remain
 supported for existing deployments. The admin credential endpoint is now
 provider-neutral; reload older browser tabs
 after deploying the updated frontend and backend together.
@@ -505,10 +529,11 @@ The launcher tests use isolated fake runtimes and HTTP services; they do not
 install system packages or touch the real app data. The Aerena and member-AI tests use fixtures and mocked provider responses; they do
 not call or seed Aerena or an AI provider. AI tests cover owner isolation (including
 admins), per-note and board consent, selected/automatic match evidence, bounded
-web research and search quotas, Rone feeds, minimization, snapshot export,
-private teaching/recall and deletion, research attribution, complete-draft season
-aggregation, source/week selection, all-game pick counts, incomplete data, shared
-source-load leases and Think integration, unseeded hero profiles, admin-only proposal review and concurrent
+web research and uncapped concurrent usage accounting, Rone game-reference feeds,
+minimization, snapshot export, private teaching/recall and deletion, research
+attribution, complete-draft season aggregation, large source/week selections,
+all-game pick counts, incomplete data, shared source-load leases, safe visuals
+and Think integration, unseeded hero profiles, admin-only proposal review and concurrent
 one-use application, provider failures and legacy branding.
 Team focus tests cover settings permissions, dashboard visibility and drill target validation. Frontend
 tests also cover match limits, source links and bounded export pagination. Run a separate

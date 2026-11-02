@@ -143,7 +143,7 @@ class EsportsSelectionIn(BaseModel):
     region: Literal["id", "ph", "my", "kh"] | None = None
     league_id: str | None = Field(default=None, max_length=80)
     week: int | None = Field(default=None, ge=1, le=99, strict=True)
-    match_ids: list[str] = Field(default_factory=list, max_length=24)
+    match_ids: list[str] = Field(default_factory=list, max_length=500)
 
     @model_validator(mode="after")
     def valid_scope(self):  # noqa: ANN201
@@ -321,13 +321,13 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
             else "The AI provider is not configured or the saved key cannot be unlocked."
         ),
         "knowledge": "MLBB game knowledge, saved hero and esports records, private memory and reviewed community notes.",
-        "patch_feed": "not connected",
+        "patch_feed": "Rone game-version feed; full balance notes depend on source availability",
         "web_search": (
             "available when enabled and the provider is configured; connectivity not verified"
-            if ai_web.enabled() and ai_web.daily_limit()
+            if ai_web.enabled()
             else "disabled"
         ),
-        "web_search_enabled": ai_web.enabled() and ai_web.daily_limit() > 0,
+        "web_search_enabled": ai_web.enabled(),
         "web_search_daily_limit": ai_web.daily_limit(),
         "account_match_history": "Own saved account snapshots only, when separately opted in; coverage depends on the upstream feed.",
         "tournament_participation": "not connected",
@@ -671,7 +671,7 @@ def _send_message(
     db: Session,
     on_progress: Callable[[str], None] | None = None,
 ) -> dict:
-    from .. import ai_esports_analysis as match_analysis, ai_thinking
+    from .. import ai_esports_analysis as match_analysis, ai_game_sources, ai_thinking
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
     if (data.draft_ids or data.map_ids) and not data.share_board_context:
@@ -702,6 +702,11 @@ def _send_message(
                     break
     auto_ids = ai_context.automatic_match_ids(db, question) if data.auto_esports and not data.match_ids and not scope else []
     will_load_matches = bool(scope or data.match_ids or (auto_ids and re.search(r"\b(pick|picks|picked|games?)\b", question, re.I)))
+    will_load_game = bool(ai_game_sources.PATCH_INTENT.search(question) or ai_game_sources.GAME_DATA_INTENT.search(question)
+                          or re.search(r"\b(skills?|kit|abilities|ability|hero(?:es)?)\b", question, re.I)
+                          or service._matching_heroes(db, question, []))
+    extra_seconds = max(match_analysis.LOAD_DEADLINE_SECONDS + 240 if will_load_matches else 0,
+                        540 if will_load_game else 0)
     token = uuid4().hex
     now = utcnow()
     lock = db.execute(
@@ -713,8 +718,7 @@ def _send_message(
         )
         .values(
             busy_token=token,
-            busy_until=now + timedelta(seconds=(ai_thinking.THINK_LEASE_SECONDS if data.think else 90)
-                                 + (match_analysis.LOAD_DEADLINE_SECONDS + 240 if will_load_matches else 0)),
+            busy_until=now + timedelta(seconds=(ai_thinking.THINK_LEASE_SECONDS if data.think else 90) + extra_seconds),
         )
     )
     db.commit()
@@ -767,11 +771,6 @@ def _send_message(
         facts.update(board_facts)
         sources.extend(board_sources)
         from .. import ai_saved
-        try:
-            ai_saved.queue_relevant_refreshes(db, user.id, question, facts, background_tasks)
-        except SQLAlchemyError:
-            # A best-effort refresh must not prevent use of the already-read data.
-            db.rollback()
         row = own_conversation(db, user, conversation_id)
         if row.title == "New conversation":
             row.title = " ".join(question.split())[:80]
@@ -796,6 +795,15 @@ def _send_message(
         db.add(prompt)
         db.commit()  # Save the user's request before any external network operation.
         db.refresh(prompt)
+        clarification = ai_actions.patch_clarification(question, action_kinds, data.draft_ids)
+        direct_patch = ai_actions.direct_patch_proposal(question, action_kinds, data.draft_ids) if not clarification else None
+        try:
+            if not clarification and not direct_patch:
+                sources.extend(ai_game_sources.enrich(db, question, facts, on_progress))
+            ai_saved.queue_relevant_refreshes(db, user.id, question, facts, background_tasks)
+        except SQLAlchemyError:
+            # Saved local context remains usable if a best-effort refresh fails.
+            db.rollback()
         try:
             pick_facts, pick_sources = None, []
             if scope:
@@ -808,6 +816,10 @@ def _send_message(
                                                                          on_progress=on_progress)
             if pick_facts is not None:
                 facts["match_pick_analysis"] = pick_facts
+                chart = match_analysis.pick_chart(pick_facts, question)
+                target_sources = pick_sources if scope else match_sources
+                if chart and target_sources:
+                    target_sources[0]["visual"] = chart
                 if scope:  # Legacy saved-match citations were already included.
                     sources.extend(pick_sources)
         except LookupError as exc:
@@ -816,8 +828,6 @@ def _send_message(
         if learning_status != "none":
             facts["memory_action"] = {"status": learning_status, "topic": learned.topic if learned else None,
                                       "notice": "Server-confirmed private memory result; a separate notice is shown to the member."}
-        clarification = ai_actions.patch_clarification(question, action_kinds, data.draft_ids)
-        direct_patch = ai_actions.direct_patch_proposal(question, action_kinds, data.draft_ids) if not clarification else None
         if clarification:
             output = {"mode": "guidance", "content": clarification, "note": "", "sources": []}
             sources = []  # No model or web search was used for this clarification.

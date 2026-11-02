@@ -114,14 +114,14 @@ def queue_relevant_refreshes(
 ) -> None:  # noqa: ANN001
     """Refresh stale saved evidence after the answer, with the shared cache leases.
 
-    The task arguments contain only validated source keys, never a member prompt
-    or account credential. The account task rechecks link/generation before use.
+    Only public game-source keys are refreshed; chat never requests Rone player
+    or account endpoints. Opted-in member information is read from app data.
     """
     from uuid import uuid4
     from . import ai_rone
-    from .clover_ai_models import AIAccountConsent
+    from .ai_game_sources import _public_hero_slug
     from .intel_cache import claim_refresh, snapshot_key
-    from .routers.intel import CACHE_TTL, LONG_TTL, SAFE_PATH, _refresh_account_snapshot, _refresh_public_snapshot
+    from .routers.intel import CACHE_TTL, LONG_TTL, SAFE_PATH, _refresh_public_snapshot
 
     candidates: list[tuple[IntelSnapshot, int]] = []
     requested = ai_rone.requested_feed(question)
@@ -135,8 +135,8 @@ def queue_relevant_refreshes(
         if not kit.get("stale"):
             continue
         name = hero.get("name")
-        if not isinstance(name, str):
-            continue
+        if not isinstance(name, str) or not _public_hero_slug(name):
+            continue  # Never send an arbitrary team-created name upstream.
         path = f"heroes/{name}"
         if not SAFE_PATH.fullmatch(path) or any(part in {"", ".", ".."} for part in path.split("/")):
             continue
@@ -152,25 +152,6 @@ def queue_relevant_refreshes(
         )
         if row:
             candidates.append((row, CACHE_TTL))
-    account = facts.get("opted_in_own_account")
-    consent = db.get(AIAccountConsent, user_id) if account is not None else None
-    if consent and consent.share_account_stats:
-        rows = (
-            db.query(IntelSnapshot)
-            .filter_by(scope="account", owner_id=user_id, generation_id=consent.generation_id)
-            .filter(IntelSnapshot.path.in_(_ACCOUNT_PATHS))
-            .order_by(IntelSnapshot.observed_at.desc())
-            .limit(30)
-            .all()
-        )
-        seen = set()
-        for row in rows:
-            if row.path in seen or (row.path == "user/matches" and parse_qs(row.query).get("index", ["1"])[0] != "1"):
-                continue
-            seen.add(row.path)
-            candidates.append((row, CACHE_TTL))
-            if len(seen) >= 5:
-                break
     for row, ttl in candidates[:10]:
         if row.observed_at + timedelta(seconds=ttl) > utcnow():
             continue
@@ -181,16 +162,10 @@ def queue_relevant_refreshes(
             for key in parse_qs(row.query, keep_blank_values=True)
         ):
             continue
-        key, path, query, generation = row.key, row.path, row.query, row.generation_id
+        key, path, query = row.key, row.path, row.query
         token = uuid4().hex
-        if not claim_refresh(db, key, token):
-            continue
-        if row.scope == "public":
+        if claim_refresh(db, key, token) and row.scope == "public":
             background_tasks.add_task(_refresh_public_snapshot, db.get_bind(), key, path, query, token)
-        elif generation:
-            background_tasks.add_task(
-                _refresh_account_snapshot, db.get_bind(), key, user_id, generation, path, query, token
-            )
 
 
 def equipment_evidence(db: Session, question: str) -> tuple[dict | None, list[dict]]:
@@ -398,12 +373,14 @@ def _resolve(value: Any, roots: list[dict]) -> str:
 
 
 def hero_evidence(db: Session, hero_name: str) -> tuple[dict | None, dict | None]:
+    canonical = re.sub(r"[^a-z0-9]", "", hero_name.casefold())
+    paths = {f"heroes/{hero_name}".lower(), f"heroes/{canonical}"}
     row = (
         db.query(IntelSnapshot)
         .filter(
             IntelSnapshot.scope == "public",
             IntelSnapshot.owner_id.is_(None),
-            func.lower(IntelSnapshot.path) == f"heroes/{hero_name}".lower(),
+            func.lower(IntelSnapshot.path).in_(paths),
         )
         .order_by(IntelSnapshot.observed_at.desc())
         .first()
