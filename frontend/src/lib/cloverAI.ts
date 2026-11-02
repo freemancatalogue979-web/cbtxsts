@@ -58,7 +58,7 @@ export type AIMessage = {
   id: number;
   role: "user" | "assistant";
   content: string;
-  mode: "user" | "ai" | "facts" | "guidance";
+  mode: "user" | "ai" | "think" | "facts" | "guidance";
   note: string;
   sources: AISource[];
   proposal?: AIProposal | null;
@@ -66,7 +66,8 @@ export type AIMessage = {
   created_at: string;
 };
 export type AIList<T> = { items: T[]; has_more: boolean };
-export type AIMessagePage = { messages: AIMessage[]; has_more: boolean };
+export type AIMessagePage = { messages: AIMessage[]; has_more: boolean; conversation?: AIConversation; processing?: boolean; processing_think?: boolean };
+export type AIProgressStage = "preparing" | "checking" | "connecting" | "thinking" | "writing" | "finishing";
 export type AISendResult = { conversation: AIConversation; user_message: AIMessage; assistant_message: AIMessage };
 export type AIExport = {
   format: string; exported_at: string; conversation: AIConversation; messages: AIMessage[];
@@ -78,6 +79,20 @@ export type AIBoardSummary = { id: number; name: string; opponent: string; updat
 export const AI_MATCH_LIMIT = 3;
 export const AI_BOARD_LIMIT = 2;
 export const AI_EXPORT_LIMIT = 2000;
+
+// A tab remembers only its open conversation ID, not chat text or attachments.
+export function readAISelectedChat(storage: Pick<Storage, "getItem"> | null, userId: number): string | null {
+  try {
+    const id = storage?.getItem(`clover_ai_open_chat_${userId}`) ?? null;
+    return id && /^[a-f0-9]{32}$/i.test(id) ? id : null;
+  } catch { return null; }
+}
+export function saveAISelectedChat(storage: Pick<Storage, "setItem" | "removeItem"> | null, userId: number, id: string | null): void {
+  try {
+    if (id && /^[a-f0-9]{32}$/i.test(id)) storage?.setItem(`clover_ai_open_chat_${userId}`, id);
+    else storage?.removeItem(`clover_ai_open_chat_${userId}`);
+  } catch { /* Browser storage may be blocked. */ }
+}
 
 // Display preferences stay on this browser; they contain no chat content or personal context.
 export type AIWorkspaceLayout = { navigationOpen: boolean; historyOpen: boolean; headerOpen: boolean };

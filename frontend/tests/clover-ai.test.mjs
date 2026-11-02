@@ -7,7 +7,7 @@ const source = await readFile(new URL("../src/lib/cloverAI.ts", import.meta.url)
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 });
-const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, toggleBoardSelection, AI_BOARD_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer, readAIWorkspaceLayout, saveAIWorkspaceLayout, AI_WORKSPACE_LAYOUT_KEY } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, toggleBoardSelection, AI_BOARD_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer, readAISelectedChat, saveAISelectedChat, readAIWorkspaceLayout, saveAIWorkspaceLayout, AI_WORKSPACE_LAYOUT_KEY } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
 test("source links require HTTPS and reject credentials and private hosts", () => {
   for (const value of [null, "", "javascript:alert(1)", "http://example.com", "https://a:b@example.com", "https://localhost/a", "https://foo.local/a", "https://127.1/a", "https://10.0.0.1", "https://192.168.1.4", "https://[::1]/"]) {
@@ -95,6 +95,20 @@ test("mobile composer is revealed above fixed navigation while desktop stays put
   revealAIComposer(element, 767);
   revealAIComposer(element, 768);
   assert.deepEqual(calls, [{ block: "center", behavior: "auto" }, { block: "center", behavior: "auto" }]);
+});
+
+test("the open chat survives a tab reload without storing prompts or sharing between members", () => {
+  const rows = new Map();
+  const storage = { getItem: (key) => rows.get(key) ?? null, setItem: (key, value) => rows.set(key, value), removeItem: (key) => rows.delete(key) };
+  const chatId = "0123456789abcdef0123456789abcdef";
+  saveAISelectedChat(storage, 12, chatId);
+  assert.equal(readAISelectedChat(storage, 12), chatId);
+  assert.equal(readAISelectedChat(storage, 13), null);
+  assert.deepEqual([...rows.values()], [chatId]);
+  saveAISelectedChat(storage, 12, "../../bad");
+  assert.equal(readAISelectedChat(storage, 12), null);
+  assert.doesNotThrow(() => saveAISelectedChat({ setItem: () => { throw Error("blocked"); }, removeItem: () => { throw Error("blocked"); } }, 12, chatId));
+  assert.equal(readAISelectedChat({ getItem: () => { throw Error("blocked"); } }, 12), null);
 });
 
 test("desktop layout preferences persist safely and reject malformed values", () => {

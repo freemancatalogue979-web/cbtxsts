@@ -313,6 +313,31 @@ percentages, sampled paths, steps, chips and zones, not as an image; this does
 not provide visual map recognition. Earlier chat history, backups or provider
 logs can still retain what was shared. Turn off history when necessary.
 
+The composer also has an opt-in **Think** button for deeper analysis, including
+questions with explicitly attached matches or boards. It uses the stronger
+reasoning model with maximum effort and a larger output budget; it can take
+several minutes and incur higher provider charges, including for reasoning tokens.
+The toggle applies to following messages until switched off or the page reloads.
+The progress card shows actual preparation and provider-stream stages, not
+fabricated percentages, and the final answer is asked to explain key factors
+and trade-offs.
+The app does not expose, store or replay raw internal reasoning; the provider's
+own retention policy still applies. Local patch clarification/proposals bypass
+the model and are not labelled as deep analysis. A provider failure or an exhausted
+reasoning budget yields a clearly labelled local-facts fallback, not a silent
+switch to a cheaper model. The separate embedded Esports analysis controls do
+not currently use this chat toggle.
+
+Long Think requests use stream keepalives and can continue after a browser
+connection drops, so charges may continue even if the tab is closed. Reopen the
+same conversation to see its progress and saved reply; the browser tab remembers
+only the conversation ID in session storage, not the message or attachments.
+There is no cancellation control yet. Processing is bounded to roughly eight
+minutes plus connection/idle and lookup time, and a longer database lease prevents
+overlapping messages in the same chat. A process restart can interrupt work.
+Reverse proxies must allow streaming and have a read timeout longer than the
+eight-second keepalive interval.
+
 The composer offers **Web check: Auto / Always / Off**. The assistant uses its
 MLBB knowledge and saved data first; Auto searches when asked for fresh information
 or verification, not for ordinary meta, ranked, build or admin-edit questions.
@@ -427,9 +452,12 @@ put secrets or private notes in the question. Provider requests are limited by
 `CLOVER_AI_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
 failed requests count). This quota is shared by the member workspace and Esports
 analysis. The key, provider access, quotas and outbound HTTPS must all work on
-the deployed backend. `CLOVER_AI_MODEL` optionally overrides the default model.
-Legacy environment variable names remain supported for existing deployments. The
-admin credential endpoint is now provider-neutral; reload older browser tabs
+the deployed backend. `CLOVER_AI_MODEL` optionally overrides the normal-chat
+model; `CLOVER_AI_THINK_MODEL` separately overrides the stronger Think-mode model.
+Think shares the same per-member request quota and uses up to 32,768 output tokens
+for reasoning and the final answer. Legacy environment variable names remain
+supported for existing deployments. The admin credential endpoint is now
+provider-neutral; reload older browser tabs
 after deploying the updated frontend and backend together.
 
 Responses are interpretations, not recorded coach reasoning, and should be

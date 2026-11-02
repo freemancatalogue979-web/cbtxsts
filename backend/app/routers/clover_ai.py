@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+import asyncio
+import json
 import re
-from typing import Annotated, Literal
+from datetime import timedelta
+from typing import Annotated, Callable, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -64,7 +67,7 @@ def message_json(row: AIMessage) -> dict:
         "id": row.id,
         "role": row.role,
         "content": public_ai_text(row.content) if row.role == "assistant" else row.content,
-        "mode": public_ai_mode(row.mode),
+        "mode": "user" if row.role == "user" else public_ai_mode(row.mode),
         "note": public_ai_text(row.note) if row.role == "assistant" else row.note,
         "sources": sources,
         "proposal": proposal_json(row.action_proposal) if row.role == "assistant" and row.action_proposal else None,
@@ -144,6 +147,8 @@ class MessageIn(BaseModel):
     share_board_context: bool = False
     request_action: bool = False
     auto_esports: bool = True
+    # Opt-in only: older clients keep their existing cost and response behavior.
+    think: StrictBool = False
     # Older clients do not trigger new billable search calls accidentally.
     web_mode: Literal["auto", "on", "off"] = "off"
 
@@ -543,19 +548,31 @@ def messages(
     user: User = Depends(ai_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    own_conversation(db, user, conversation_id)
+    conversation = own_conversation(db, user, conversation_id)
     query = db.query(AIMessage).filter_by(conversation_id=conversation_id)
     if before is not None:
         query = query.filter(AIMessage.id < before)
     rows = query.order_by(AIMessage.id.desc()).limit(limit + 1).all()
-    return {"messages": [message_json(row) for row in reversed(rows[:limit])], "has_more": len(rows) > limit}
+    processing = bool(conversation.busy_until and conversation.busy_until >= utcnow())
+    latest = rows[0] if before is None and rows else None
+    return {
+        "conversation": conversation_json(conversation),
+        "messages": [message_json(row) for row in reversed(rows[:limit])],
+        "has_more": len(rows) > limit,
+        "processing": processing,
+        "processing_think": bool(processing and latest and latest.role == "user" and latest.mode == "user_think"),
+    }
 
 
-@router.post("/conversations/{conversation_id}/messages", status_code=201)
-def send_message(
-    conversation_id: str, data: MessageIn, background_tasks: BackgroundTasks,
-    user: User = Depends(ai_user), db: Session = Depends(get_db)
+def _send_message(
+    conversation_id: str,
+    data: MessageIn,
+    background_tasks: BackgroundTasks,
+    user: User,
+    db: Session,
+    on_progress: Callable[[str], None] | None = None,
 ) -> dict:
+    from .. import ai_thinking
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
     if (data.draft_ids or data.map_ids) and not data.share_board_context:
@@ -573,7 +590,10 @@ def send_message(
             AIConversation.owner_id == user.id,
             or_(AIConversation.busy_until.is_(None), AIConversation.busy_until < now),
         )
-        .values(busy_token=token, busy_until=now + timedelta(seconds=90))
+        .values(
+            busy_token=token,
+            busy_until=now + timedelta(seconds=ai_thinking.THINK_LEASE_SECONDS if data.think else 90),
+        )
     )
     db.commit()
     if not lock.rowcount:
@@ -625,7 +645,7 @@ def send_message(
             conversation_id=conversation_id,
             role="user",
             content=question,
-            mode="user",
+            mode="user_think" if data.think else "user",
             sources_json=dumps((match_sources if data.match_ids else []) + board_sources),
         )
         db.add(prompt)
@@ -645,8 +665,12 @@ def send_message(
                       "note": "", "sources": [], "proposal": direct_patch}
             sources = []
         else:
-            output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports, action_kinds)
+            output = service.answer(
+                db, user.id, question, facts, history, data.web_mode, data.auto_esports, action_kinds,
+                think=data.think, on_progress=on_progress,
+            )
             sources.extend(output.get("sources", []))
+        ai_thinking.report(on_progress, "finishing")
         # A deleted chat or expired/replaced lease must never be resurrected.
         db.expire_all()
         row = (
@@ -682,7 +706,7 @@ def send_message(
         row.busy_token = row.busy_until = None
         db.add(reply)
         db.flush()
-        if action_kinds and output.get("mode") in {"ai", "guidance"}:
+        if action_kinds and output.get("mode") in {"ai", "think", "guidance"}:
             if output.get("proposal") is not None:
                 try:
                     ai_actions.prepare(db, user, reply, output["proposal"], action_kinds,
@@ -690,7 +714,7 @@ def send_message(
                     reply.content += "\n\nThis is a proposal only; nothing changes until you review and confirm it."
                 except ai_actions.ActionError as exc:
                     reply.content = f"I couldn’t prepare that change: {public_ai_text(str(exc))[:300]} Nothing was changed."
-            elif output.get("mode") == "ai" and "nothing" not in reply.content.lower():
+            elif output.get("mode") in {"ai", "think"} and "nothing" not in reply.content.lower():
                 reply.content += "\n\nNo change was made."
         db.commit()
         db.refresh(reply)
@@ -713,6 +737,105 @@ def send_message(
             .values(busy_token=None, busy_until=None)
         )
         db.commit()
+
+
+@router.post("/conversations/{conversation_id}/messages", status_code=201)
+def send_message(
+    conversation_id: str,
+    data: MessageIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(ai_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    return _send_message(conversation_id, data, background_tasks, user, db)
+
+
+# Keep detached work alive when a browser disconnects; the result is saved to the
+# owner's chat and a reload can observe the processing lease. Request data remains
+# in process memory while the task runs. This is not a cross-worker lock.
+_stream_jobs: set[asyncio.Task] = set()
+
+
+@router.post("/conversations/{conversation_id}/messages/stream")
+async def send_message_stream(
+    conversation_id: str,
+    data: MessageIn,
+    user: User = Depends(ai_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream truthful stages and heartbeats while the usual guarded send runs."""
+    nonblank(data.text, "Message")
+    own_conversation(db, user, conversation_id)
+    if (data.draft_ids or data.map_ids) and not data.share_board_context:
+        raise HTTPException(status_code=422, detail="Confirm sharing the selected saved boards with the AI provider.")
+    if data.request_action and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can request AI platform-change proposals.")
+    user_id, bind = user.id, db.get_bind()
+    db.rollback()  # Do not hold a request-scoped transaction for a long analysis.
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    def publish(event: dict) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, event)
+        except RuntimeError:
+            pass  # The app is shutting down; never log private data.
+
+    def worker() -> None:
+        background = BackgroundTasks()
+        try:
+            # This session belongs solely to the worker and survives a client
+            # disconnect; request dependencies may already have been closed.
+            with Session(bind=bind, autoflush=False) as worker_db:
+                owner = worker_db.get(User, user_id)
+                if owner is None or not owner.active:
+                    raise HTTPException(status_code=401, detail="Sign in again to use the AI workspace.")
+                output = _send_message(
+                    conversation_id,
+                    data,
+                    background,
+                    owner,
+                    worker_db,
+                    on_progress=lambda stage: publish({"type": "status", "stage": stage}),
+                )
+            publish({"type": "result", "result": output})
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "The request could not be completed."
+            publish({"type": "error", "status": exc.status_code, "detail": public_ai_text(detail)[:500]})
+        except Exception:
+            # Exceptions can contain prompts, board contents or credentials.
+            publish({"type": "error", "status": 500, "detail": "The request could not be completed. Please try again."})
+        finally:
+            if background.tasks:
+                try:
+                    asyncio.run(background())
+                except Exception:
+                    pass  # Refreshes are best-effort and never block the answer.
+
+    job = asyncio.create_task(asyncio.to_thread(worker))
+    _stream_jobs.add(job)
+    job.add_done_callback(_stream_jobs.discard)
+
+    async def events():  # noqa: ANN202
+        def frame(value: dict) -> bytes:
+            return (json.dumps(value, ensure_ascii=False) + "\n").encode("utf-8")
+
+        yield frame({"type": "status", "stage": "preparing"})
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=8)
+            except asyncio.TimeoutError:
+                yield frame({"type": "heartbeat"})
+                continue
+            yield frame(event)
+            if event["type"] in {"result", "error"}:
+                return
+
+    return StreamingResponse(
+        events(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/conversations/{conversation_id}/messages/{message_id}/research-memory", status_code=201)

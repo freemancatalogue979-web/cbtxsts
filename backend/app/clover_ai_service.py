@@ -13,8 +13,8 @@ import json
 import re
 import urllib.error
 import urllib.request
-from typing import Any
 from types import SimpleNamespace
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from sqlalchemy import or_
@@ -584,7 +584,7 @@ def recent_history(db: Session, conversation_id: str, enabled: bool) -> tuple[li
     remaining = MAX_HISTORY_CHARS
     previous_user = ""
     for row in rows:  # newest first, preserve most recent content
-        if row.role not in {"user", "assistant"} or (row.role == "assistant" and row.mode not in {"deepseek", "ai", "guidance"}):
+        if row.role not in {"user", "assistant"} or (row.role == "assistant" and row.mode not in {"deepseek", "ai", "think", "guidance"}):
             continue
         content = public_ai_text(row.content) if row.role == "assistant" else row.content
         text = content[: min(remaining, 2000)]
@@ -688,8 +688,11 @@ def answer(
     web_mode: str = "off",
     auto_esports: bool = True,
     action_kinds: list[str] | None = None,
+    *,
+    think: bool = False,
+    on_progress: Callable[[str], None] | None = None,
 ) -> dict:
-    from . import ai_rone, ai_web
+    from . import ai_rone, ai_thinking, ai_web
 
     api_key, reason = _credential(db)
     if not api_key:
@@ -701,6 +704,7 @@ def answer(
         # a search charge for an answer we already know cannot be generated.
         if not _reserve(db, user_id):
             raise AnalysisError("The daily AI limit has been reached. Try again after the UTC day resets.")
+        ai_thinking.report(on_progress, "checking")
         if auto_esports and "rone_public_mpl" not in facts:
             rone, rone_sources, rone_note = ai_rone.lookup(question, db)
             if rone is not None:
@@ -721,6 +725,11 @@ def answer(
             }
         )
         system = SYSTEM
+        if think:
+            system += (
+                "\n\nFor this deeper analysis, explain the key factors, trade-offs and practical recommendation "
+                "in your final answer when relevant. Stay grounded in the supplied evidence and game knowledge."
+            )
         if action_kinds:
             from . import ai_actions
             hero_names = [name for (name,) in db.query(Hero.name).order_by(Hero.name).limit(300).all()]
@@ -733,13 +742,26 @@ def answer(
                 "content": json.dumps({"question": question, "available_context": facts}, ensure_ascii=False),
             },
         ]
-        request_data: dict[str, Any] = {
-            "model": MODEL,
-            "thinking": {"type": "disabled"},
-            "messages": messages,
-            "temperature": 0.3,
-            "max_tokens": 2200 if action_kinds else 1800,
-        }
+        request_data: dict[str, Any] = {"messages": messages}
+        if think:
+            request_data.update(
+                {
+                    "model": ai_thinking.THINK_MODEL,
+                    "thinking": {"type": "enabled"},
+                    "reasoning_effort": ai_thinking.THINK_EFFORT,
+                    "max_tokens": ai_thinking.THINK_MAX_TOKENS,
+                    "stream": True,
+                }
+            )
+        else:
+            request_data.update(
+                {
+                    "model": MODEL,
+                    "thinking": {"type": "disabled"},
+                    "temperature": 0.3,
+                    "max_tokens": 2200 if action_kinds else 1800,
+                }
+            )
         if action_kinds:
             request_data["response_format"] = {"type": "json_object"}
         payload = json.dumps(request_data, ensure_ascii=False).encode("utf-8")
@@ -750,17 +772,26 @@ def answer(
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "Accept": "application/json",
+                "Accept": "text/event-stream" if think else "application/json",
             },
         )
+        ai_thinking.report(on_progress, "connecting")
         opener = urllib.request.build_opener(_NoRedirect())
-        with opener.open(req, timeout=40) as resp:
-            raw = resp.read(100_001)
-        if len(raw) > 100_000:
-            raise ValueError("oversized answer")
-        result = json.loads(raw)
-        choice = result["choices"][0]
-        text = choice["message"]["content"]
+        with opener.open(req, timeout=ai_thinking.THINK_IDLE_TIMEOUT if think else 40) as resp:
+            if think:
+                completion = ai_thinking.read_completion(resp, on_progress)
+                text = completion["text"]
+                finish_reason = completion["finish_reason"]
+                reasoning_seen = completion["reasoning_seen"]
+            else:
+                raw = resp.read(100_001)
+                if len(raw) > 100_000:
+                    raise ValueError("oversized answer")
+                result = json.loads(raw)
+                choice = result["choices"][0]
+                text = choice["message"]["content"]
+                finish_reason = choice.get("finish_reason")
+                reasoning_seen = False
         if not isinstance(text, str) or not text.strip():
             raise AnalysisError("The AI returned no answer.")
         proposal = None
@@ -776,13 +807,23 @@ def answer(
                 text = "I couldn’t format a reviewable proposal. Please restate the change and try again. Nothing was changed."
                 proposal = None
         note = search_note
-        if choice.get("finish_reason") == "length":
+        if finish_reason == "length":
             note += " The answer reached its length limit; ask a follow-up to continue."
-        result = {"mode": "ai", "content": public_ai_text(text.strip()[:12000]), "note": note, "sources": search_sources}
+        if think and not reasoning_seen:
+            note += " Deeper thinking could not be confirmed for this reply."
+        content_limit = 30000 if think else 12000
+        if len(text.strip()) > content_limit:
+            note += " The displayed answer was shortened; ask a follow-up to continue."
+        result = {
+            "mode": "think" if think and reasoning_seen else "ai",
+            "content": public_ai_text(text.strip()[:content_limit]),
+            "note": note.strip(),
+            "sources": search_sources,
+        }
         if action_kinds:
             result["proposal"] = proposal
         return result
-    except AnalysisError as exc:
+    except (AnalysisError, ai_thinking.ThinkingError) as exc:
         reason = public_ai_text(str(exc))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError):
         # Never relay upstream response bodies, prompt text or credentials.

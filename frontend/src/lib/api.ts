@@ -52,6 +52,55 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return payload as T;
 }
 
+// A bounded newline-delimited stream keeps long AI analysis connections active.
+// The server sends actual progress stages, heartbeats and one result or error;
+// it never sends raw model reasoning or credentials.
+async function postStream<T>(path: string, body: unknown, onStage: (stage: string) => void): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`/api${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const text = await res.text();
+    let payload: unknown;
+    try { payload = text ? JSON.parse(text) : undefined; } catch { payload = text; }
+    if (res.status === 401) { setToken(null); window.dispatchEvent(new Event("clover:unauthorized")); }
+    throw new ApiError(res.status, payload);
+  }
+  if (!res.body) throw new Error("The analysis connection is unavailable. Check the conversation before retrying.");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      if (buffer.length > 1_000_000) throw new Error("The analysis response was too large.");
+      let newline = buffer.indexOf("\n");
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (line) {
+          let event: { type?: string; stage?: unknown; result?: T; status?: number; detail?: string };
+          try { event = JSON.parse(line); } catch { throw new Error("The analysis response was interrupted."); }
+          if (!event || typeof event !== "object") throw new Error("The analysis response was interrupted.");
+          if (event.type === "status" && typeof event.stage === "string") onStage(event.stage);
+          else if (event.type === "error") {
+            if (event.status === 401) { setToken(null); window.dispatchEvent(new Event("clover:unauthorized")); }
+            throw new ApiError(event.status ?? 500, { detail: event.detail ?? "The analysis could not be completed." });
+          } else if (event.type === "result" && event.result && typeof event.result === "object") return event.result;
+          else if (event.type !== "heartbeat") throw new Error("The analysis response was interrupted.");
+        }
+        newline = buffer.indexOf("\n");
+      }
+      if (done) throw new Error("The analysis connection ended before the reply arrived. Check the conversation before retrying.");
+    }
+  } finally {
+    try { await reader.cancel(); } catch { /* The server may have already closed the stream. */ }
+    reader.releaseLock();
+  }
+}
+
 async function uploadForm<T>(path: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -70,6 +119,7 @@ async function uploadForm<T>(path: string, form: FormData): Promise<T> {
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  postStream: <T>(path: string, body: unknown, onStage: (stage: string) => void) => postStream<T>(path, body, onStage),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
   upload: <T>(path: string, form: FormData) => uploadForm<T>(path, form),
