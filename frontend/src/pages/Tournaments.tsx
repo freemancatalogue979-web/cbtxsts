@@ -383,7 +383,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
           const ms = byStage.get(stage)!;
           return (
             <section key={stage}>
-              <SectionTitle>{stage} <span className="text-faint normal-case">· {ms.length} {ms.length === 1 ? "match" : "matches"}</span></SectionTitle>
+              <SectionTitle>{stage} <span className="text-mute normal-case">· {ms.length} {ms.length === 1 ? "match" : "matches"}</span></SectionTitle>
               <div className="space-y-2">
                 {ms.map((m) => (
                   <div key={m.id} className="card p-3.5">
@@ -509,7 +509,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
       {/* review queue */}
       {queue.length > 0 && (
         <section className="card border-amber/40 p-4 space-y-2">
-          <div className="label !text-amber">Review queue ({queue.length})</div>
+          <div className="section-pill">Review queue ({queue.length})</div>
           {queue.map((m) => (
             <div key={m.id} className="flex items-center gap-3 flex-wrap rounded-lg border border-edge bg-raised/40 px-3 py-2">
               <Trophy size={13} className="text-amber shrink-0" />

@@ -32,7 +32,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Draft Lab** | Saved pick/ban boards: 5+5 bans, lane picks both sides, status idea → testing → approved |
 | **Calendar & Events** | Tournaments, scrims, training and review deadlines in one feed |
 | **Esports** | Saved Aerena seasons and matches, source-reported team/player stats and ordered draft coverage when available, plus bounded evidence-based analysis |
-| **9 CLOVER AI** | Member-owned private chats, optional personal coaching context, historical hero lookup and admin-reviewed community knowledge |
+| **9 CLOVER AI** | Private member chats, live web research, saved esports evidence, opt-in team boards and coaching context |
 
 ## Roles & permissions
 
@@ -147,8 +147,9 @@ A configured-key badge is not a provider connectivity check.
   entered, not a verified match history. The AI uses at most 25 pool entries and
   scans lineup/substitute IDs from at most 200 recent team scrims to find five
   assignments; only the member's matched scrim details are selected. Coach notes,
-  other members' records, team strategies and private Archive content are not
-  sent to the provider.
+  other members' records and private Archive content are not automatically
+  sent to the provider. Saved team boards are included only when attached and
+  explicitly confirmed by the member.
 - A linked profile uses cached name/level/rank; it is not asserted current. The
   linked role/server IDs are included only if the current question asks about
   them. Rone JWT/refresh tokens are never automatically selected. User-supplied
@@ -156,24 +157,25 @@ A configured-key badge is not a provider connectivity check.
 - Members may write up to 12 private coaching notes (500 characters each) for
   strengths, focus areas, preferences and goals. Every note starts with sharing
   **off**; its owner may edit, delete or individually enable it. An enabled note
-  can be sent with each future DeepSeek request independently of the profile
+  can be sent with each future AI provider request independently of the profile
   switch. Notes are member-supplied claims, not verified performance or automatic
   learning from chat. Turning a note off stops direct inclusion, but earlier
   messages containing the same information may still be sent as chat history;
   switch off history or delete those chats as appropriate.
 - The current question and, by default, up to eight recent messages (at most
-  6,500 characters) are sent to DeepSeek when it is used. Recent history can be
-  turned off separately. Enabling a personal category also permits that data to
+  6,500 characters) are sent to the external AI provider when it is used. Recent
+  history can be turned off separately. Enabling a personal category permits that data to
   be sent. Each answer shows the sources supplied to it, not a guarantee that
-  every generated claim is supported. No autonomous SQL, shell or general web
-  tools are available to the model.
+  every generated claim is supported. The model cannot run arbitrary SQL, shell
+  commands or fetch arbitrary pages; the server may provide bounded search
+  excerpts or a public MPL feed for qualifying questions.
 - **Clear saved AI context** deletes the member's coaching notes and optional
   coaching goal, turns off all four context switches, and removes the current
-  open chat's match selection. This affects future requests, not one already
-  sent. It does not erase the underlying profile/pool/scrims or existing chats.
+  open chat's match and board selections. This affects future requests, not one
+  already sent. It does not erase the underlying profile/pool/scrims or existing chats.
   Delete a chat from its header to remove its messages from the live database.
   Deletion cannot erase downloaded files, pre-existing backups or data already
-  sent to a provider; consult DeepSeek's retention and commercial-use terms.
+  sent to a provider; consult its retention and commercial-use terms.
 - Owner checks apply to AI conversations, search, exports and coaching notes
   (including admins); bearer authentication is required even for reads, and
   responses use `no-store`. This is application-level privacy: messages, coaching
@@ -195,39 +197,69 @@ facts. There is no semantic search or live item database in this workspace.
 
 Members can explicitly submit a question, correction, strategy, draft idea or
 feedback to admins. Submissions disclose that approved notes can be visible to
-all members and sent to DeepSeek. Admins must review and write a note before
-publishing; questions and feedback are acknowledged rather than published as
+all members and sent to the external AI provider. Admins must review and write a
+note before publishing; questions and feedback are acknowledged rather than published as
 facts. Exact duplicates are detected, but source URLs are not fetched or
 fact-checked automatically. Members can withdraw a pending submission; admins
 can remove individual published notes. Published notes may remain after an
 account is deleted, so ask an admin to remove one if needed. Approval is human
 review, not a claim of independent verification. Contributions and ratings do
-not retrain DeepSeek.
+not automatically retrain the model.
 
-### Using saved pro matches in chat
+### Esports, team boards and live research in chat
 
-**Attach match** lets a member explicitly select up to three public Aerena matches
-already saved by the Esports integration. The picker searches the local feed and
-shows up to 40 results per search; it does not trigger a source refresh. The
-selection is included with each new message in the open chat until removed,
-switching chats or reloading. Removing it does not erase earlier chat messages;
-those may still be included if recent history is enabled. Selected IDs are kept
-with each message for source attribution, but selection is not restored after a
-reload. The provider receives a bounded sample (at most 18,000 characters,
-including up to seven games per match), source and detail timestamps, coverage
-indicators and only allowlisted public fields. Missing or omitted games, drafts
-and statistics remain unknown. Aerena is community-compiled and can be stale or
-unverified; a selected sample is not a complete season. Without a provider the
-chat shows recorded facts and source links, not an invented analysis.
+For questions mentioning esports, tournaments, an MPL league, or a team acronym
+and match/draft, the server can automatically match up to three **saved public
+Aerena records** to the question. This is a small keyword-matched sample, not a
+complete or necessarily current season; the source chips identify auto-selected
+matches and show their saved dates. **Attach match** instead lets a member select
+up to three saved Aerena matches explicitly; these override automatic selection.
+The picker does not trigger a source refresh. Saved detail may be missing or
+incomplete, and the source is community-compiled, not independently verified.
 
-The member chat does **not** yet retrieve personal account match history,
-tournament participation, private drafts or live web results. It does not scan
-all Aerena matches automatically: a member must select them. Verified
-Original/Advanced Server patch monitoring, citations from live search, prediction
-models, evaluation and consent-based training pipelines are later phases, not
-running services. Deployment needs a persistent database, a running backend, a
-valid DeepSeek key and outbound HTTPS for generated answers; providers were not
-reachable from this development sandbox, so live connectivity is unverified.
+For an explicitly named MPL region (PH, ID, MY or KH) and schedule, standings or
+playoff request, chat can also retrieve one public Rone feed. Only the allowlisted
+region and feed are sent to Rone, not the member's question, chat or private
+data. Responses are bounded, cached briefly and labelled with retrieval time.
+The feed may not identify a season; a recent retrieval does not establish that
+the data describes the current season. A failure does not fabricate data.
+
+**Attach boards** lets a signed-in member select up to two saved Draft Lab boards
+and two saved Map Lab boards that the member can already read, then explicitly
+confirm sending their contents and notes to the external AI provider. The latest
+saved versions are read for every message while attached, so changes made by
+others after selection can also be included. Unsaved edits and Archive content
+are excluded. Maps are sent as bounded structured tokens, percentages, sampled
+paths, steps, chips and zones, not as an image; this does not provide visual map
+recognition. Selections reset on chat switch or reload; earlier chat history,
+backups or provider logs can still retain what was shared. Turn off history when
+necessary.
+
+The composer offers **Live web: Auto / Always / Off**. Auto searches freshness-
+sensitive questions such as current patches, builds, ranked and esports. Always
+searches each question; Off does not perform web searches. The default is Auto,
+with the privacy and cost notice shown before sending. One bounded search uses
+only the current question, optionally prefixed with "Mobile Legends"; it does
+not append chat history, personal context, or attached boards. Search results are
+untrusted, may be outdated, and are displayed as labelled HTTPS source links with
+publication dates where available and retrieval dates. The server does not fetch
+arbitrary result pages. Queries that appear to contain credentials are skipped,
+but detection is not foolproof: **do not enter secrets**. Named public Rone MPL
+lookups are separate from web search and can still happen with Web Off.
+
+Search uses the configured server-side AI key and may be billed separately from
+model calls. `CLOVER_AI_WEB_SEARCH=0` disables it server-wide;
+`CLOVER_AI_WEB_DAILY_LIMIT` defaults to 10 attempts per member per UTC day
+(range 0–100; failures count). The shared model-request budget is independent.
+Search/provider access, billing and HTTPS connectivity have not been verified in
+the development sandbox: an operator must test them from the deployment. A
+configured-key badge is not a connectivity test. The app does not yet retrieve
+personal account match history or tournament participation, provide a verified
+Original/Advanced patch feed or run a prediction model or training pipeline.
+
+The application presents provider-neutral labels and normalizes old assistant
+messages, but this is not a secrecy boundary: server operators, source code and
+public repository history can still reveal implementation details.
 
 ## Aerena Esports
 
@@ -242,7 +274,9 @@ in the latest dated season of each series. Changed match and detail observations
 are retained with source timestamps and snapshots; source errors do not erase the
 last successful data. A staff member (admin, captain or coach) can queue a full
 refresh or load an older season; viewing a match can fetch its additional
-player stats. Searching and AI analysis use saved public records only.
+player stats. Aerena-specific analysis uses saved public records only; member
+chat can additionally use the explicitly named Rone feed and web search described
+above.
 
 - This is an **undocumented website integration**, not an official or stable
   Aerena API. Deployments may change the action IDs, format or access rules.
@@ -265,13 +299,13 @@ player stats. Searching and AI analysis use saved public records only.
   lease, but a sleeping/serverless deployment will not run continuously. Do not
   claim 24/7 freshness without monitoring the actual service.
 
-### DeepSeek provider and optional match analysis
+### AI provider and optional match analysis
 
-Admins can save, update or remove a DeepSeek key in **Team Admin → AI provider**.
+Admins can save, update or remove an AI provider key in **Team Admin → AI provider**.
 Use HTTPS (or local loopback for development), change the bootstrap admin
 password and signing secret before exposure, and never put keys in chat or source
 control. The key is encrypted in the database and the API never returns it; saving
-a key does not verify it or provider access. Alternatively, set `DEEPSEEK_API_KEY`
+a key does not verify it or provider access. Alternatively, set `CLOVER_AI_API_KEY`
 in the backend environment (see `backend/.env.example`); a key saved in Team
 Admin takes precedence. Removing it falls back to the environment key, if set.
 
@@ -289,15 +323,18 @@ in Git.
 
 With no key, provider failure, or an exhausted quota, the UI returns a
 labelled facts-only summary rather than pretending to answer the question. A
-submitted match question sends that explicit question and bounded saved public Aerena
-match evidence to DeepSeek. Scene analysis uses at most the first eight matches
-shown by the current filter, not a complete season. Neither path automatically
+submitted match question sends that explicit question and bounded saved public
+Aerena match evidence to the external AI provider. Scene analysis uses at most
+the first eight matches shown by the current filter, not a complete season. Neither path automatically
 retrieves private Archive items, team boards, credentials or chat history; do not
 put secrets or private notes in the question. Provider requests are limited by
-`CLOVER_DEEPSEEK_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
+`CLOVER_AI_DAILY_LIMIT` (default 20 per user per UTC day, range 1–100;
 failed requests count). This quota is shared by the member workspace and Esports
-analysis. The key, provider access, quotas and outbound HTTPS to
-`api.deepseek.com` must all work on the deployed backend.
+analysis. The key, provider access, quotas and outbound HTTPS must all work on
+the deployed backend. `CLOVER_AI_MODEL` optionally overrides the default model.
+Legacy environment variable names remain supported for existing deployments. The
+admin credential endpoint is now provider-neutral; reload older browser tabs
+after deploying the updated frontend and backend together.
 
 Responses are interpretations, not recorded coach reasoning, and should be
 checked against the linked source. They are not stored as verified facts, and
@@ -316,9 +353,10 @@ cd ../frontend && npm run typecheck && npm run test:map && npm run test:esports 
 
 The launcher tests use isolated fake runtimes and HTTP services; they do not
 install system packages or touch the real app data. The Aerena and member-AI tests use fixtures and mocked provider responses; they do
-not call or seed Aerena or DeepSeek. AI tests cover owner isolation (including
-admins), per-note consent, selected-match evidence and minimization, search and
-snapshot export, review, provider failures and deletion. Team focus tests cover
+not call or seed Aerena or an AI provider. AI tests cover owner isolation (including
+admins), per-note and board consent, selected/automatic match evidence, bounded
+web research and search quotas, Rone feeds, minimization, snapshot export,
+review, provider failures, legacy branding and deletion. Team focus tests cover
 settings permissions, dashboard visibility and drill target validation. Frontend
 tests also cover match limits, source links and bounded export pagination. Run a separate
 authorized connectivity check and monitor the in-app source status in the

@@ -72,7 +72,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
             const draftId = fd.get("draft") ? Number(fd.get("draft")) : null;
             create(String(fd.get("kind")), String(fd.get("name") || ""), String(fd.get("opponent") || ""), draftId);
           }}>
-            <div className="label">New map board</div>
+            <div className="section-pill">New map board</div>
             <Field label="Name"><input name="name" className="input" autoFocus placeholder="Turtle traps vs Team X" /></Field>
             <Field label="Kind">
               <select name="kind" className="input">
@@ -186,7 +186,7 @@ function MapGuideView({ onBack }: { onBack: () => void }) {
             </div>
             {pin.tips.length > 0 && (
               <div>
-                <div className="label !text-[9.5px]">How we use it</div>
+                <div className="section-pill">How we use it</div>
                 <ul className="space-y-1.5 mt-1">
                   {pin.tips.map((t, i) => (
                     <li key={i} className="text-[12px] text-mute leading-relaxed flex gap-2">

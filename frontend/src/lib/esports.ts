@@ -37,8 +37,8 @@ export interface EsportsGame {
   draft: EsportsDraftEvent[]; player_stats: EsportsPlayerStat[];
 }
 export interface EsportsDetail { match: EsportsMatch; games: EsportsGame[]; detail_error: string | null; source_note: string }
-export interface EsportsAnalysis { mode: "facts" | "deepseek"; answer: string; note: string; source_url: string; fetched_at: string | null }
-export interface EsportsSceneAnalysis { mode: "facts" | "deepseek"; answer: string; note: string; sources: { match_id: string; source_url: string; fetched_at: string | null }[] }
+export interface EsportsAnalysis { mode: "facts" | "ai"; answer: string; note: string; source_url: string; fetched_at: string | null }
+export interface EsportsSceneAnalysis { mode: "facts" | "ai"; answer: string; note: string; sources: { match_id: string; source_url: string; fetched_at: string | null }[] }
 export type EsportsView = "upcoming" | "results" | "all";
 
 export function esportsDate(value: string | null, withTime = true): string {

@@ -649,7 +649,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
     <div className="border-b border-edge bg-raised/35 px-3.5 py-3 space-y-2.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 min-w-32">
-          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.13em] text-amber">
+          <div className="section-pill">
             <CirclePlus size={14} /> {selectedChip ? "Edit chip" : "Place chips"}
           </div>
           <p className="text-[11px] text-mute mt-1">
@@ -775,7 +775,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
 
           {canManage && <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
             <div className="map-quick-chips-heading flex items-center justify-between gap-3 mb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-amber whitespace-nowrap">Quick chips</span>
+              <span className="section-pill !py-0.5 whitespace-nowrap">Quick chips</span>
               <span role="status" aria-live="polite" className="text-[10px] text-mute truncate text-right">
                 {addedNotice || "Click to add · drag to position"}
               </span>
@@ -993,7 +993,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
         </div>
 
         {canManage && <div className="card p-4 lg:sticky lg:top-6">
-          <div className="label mb-2.5">Place a hero</div>
+          <div className="section-pill mb-2.5">Place a hero</div>
           <div className="flex gap-1.5 mb-3">
             {(["ours", "theirs", "neutral"] as Side[]).map((s) => <button key={s}
               className={`chip !cursor-pointer uppercase !text-[9.5px] ${newSide === s ? (s === "ours" ? "text-leaf border-leaf/50 bg-leaf/10" : s === "theirs" ? "text-crim border-crim/50 bg-crim/10" : "text-amber border-amber/50 bg-amber/10") : "text-faint border-edge"}`}

@@ -202,7 +202,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           <StatTile label="Coach rating" value={p.avg_rating != null ? `${p.avg_rating}/10` : "—"} tone="accent" />
           <StatTile label="Pool size" value={Object.values(p.pool).flat().length} />
           <div className="card px-3.5 py-3">
-            <div className="label mb-1.5">Recent form</div>
+            <div className="section-pill mb-1.5">Recent form</div>
             <div className="flex gap-1 mt-1">
               {stats.form.length === 0 && <span className="text-faint text-sm">—</span>}
               {stats.form.map((r, i) => <ResultBadge key={i} result={r} />)}
@@ -220,7 +220,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {POOL_ORDER.map((cat) => (
               <div key={cat} className="card p-3.5">
-                <div className="label mb-2.5">{POOL_LABEL[cat]}</div>
+                <div className="section-pill mb-2.5">{POOL_LABEL[cat]}</div>
                 <div className="space-y-2.5">
                   {(p.pool[cat] ?? []).map((e: PoolEntry) => (
                     <div key={e.id} className="bg-raised border border-edge/60 rounded-lg p-3">
@@ -355,7 +355,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="card p-4 col-span-1 sm:col-span-2">
           <div className="flex items-baseline justify-between mb-2.5">
-            <span className="label !mb-0">Scrim win rate · last 12 weeks</span>
+            <span className="section-pill">Scrim win rate · last 12 weeks</span>
             <span className="text-[10px] text-faint">{weeks.reduce((a, w) => a + w.games, 0)} games</span>
           </div>
           <div className="flex items-end gap-1 h-16">
@@ -375,7 +375,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
         </div>
 
         <div className="card p-4">
-          <div className="label !mb-2">Dev rating trend</div>
+          <div className="section-pill mb-2">Dev rating trend</div>
           {ratings.length < 2 ? (
             <div className="text-faint text-sm pt-4 text-center">{ratings.length ? "1 entry so far" : "No ratings yet"}</div>
           ) : (
@@ -393,7 +393,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
         </div>
 
         <div className="card p-4">
-          <div className="label !mb-2">Meta readiness</div>
+          <div className="section-pill mb-2">Meta readiness</div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-extrabold text-leaf tabular-nums">{prog.meta_ready_picks}</span>
             <span className="text-[11px] text-mute">heroes meta-ready</span>

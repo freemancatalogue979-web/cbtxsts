@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -12,8 +12,10 @@ from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .. import ai_context, ai_web
 from .. import clover_ai_service as service
 from ..ai_credentials import key_status
+from ..ai_privacy import public_ai_mode, public_ai_text
 from ..clover_ai_models import AIContribution, AIConversation, AIKnowledge, AIMemoryNote, AIMessage, AISettings
 from ..deps import get_current_user, get_db
 from ..hero_profiles import profile_for
@@ -50,13 +52,19 @@ def conversation_json(row: AIConversation) -> dict:
 
 
 def message_json(row: AIMessage) -> dict:
+    sources = loads(row.sources_json, [])
+    if row.role == "assistant" and isinstance(sources, list):
+        sources = [
+            {**source, "label": public_ai_text(source.get("label", ""))} if isinstance(source, dict) else source
+            for source in sources
+        ]
     return {
         "id": row.id,
         "role": row.role,
-        "content": row.content,
-        "mode": row.mode,
-        "note": row.note,
-        "sources": loads(row.sources_json, []),
+        "content": public_ai_text(row.content) if row.role == "assistant" else row.content,
+        "mode": public_ai_mode(row.mode),
+        "note": public_ai_text(row.note) if row.role == "assistant" else row.note,
+        "sources": sources,
         "feedback": row.feedback,
         "created_at": iso(row.created_at),
     }
@@ -123,6 +131,23 @@ class TitleIn(BaseModel):
 class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     match_ids: list[str] = Field(default_factory=list, max_length=service.MAX_SELECTED_MATCHES)
+    draft_ids: list[Annotated[int, Field(gt=0, strict=True)]] = Field(
+        default_factory=list, max_length=ai_context.MAX_DRAFTS
+    )
+    map_ids: list[Annotated[int, Field(gt=0, strict=True)]] = Field(
+        default_factory=list, max_length=ai_context.MAX_MAPS
+    )
+    share_board_context: bool = False
+    auto_esports: bool = True
+    # Older clients do not trigger new billable search calls accidentally.
+    web_mode: Literal["auto", "on", "off"] = "off"
+
+    @field_validator("draft_ids", "map_ids")
+    @classmethod
+    def unique_boards(cls, values: list[int]) -> list[int]:
+        if len(set(values)) != len(values):
+            raise ValueError("Select each board only once.")
+        return values
 
     @field_validator("match_ids")
     @classmethod
@@ -173,11 +198,17 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
         "provider_note": (
             "A key is configured; live connectivity has not been verified here."
             if state["configured"]
-            else "DeepSeek is not configured or the saved key cannot be unlocked."
+            else "The AI provider is not configured or the saved key cannot be unlocked."
         ),
         "knowledge": "Bundled historical hero profiles and approved community notes; keyword retrieval.",
         "patch_feed": "not connected",
-        "web_search": "not connected",
+        "web_search": (
+            "available when enabled and the provider is configured; connectivity not verified"
+            if ai_web.enabled() and ai_web.daily_limit()
+            else "disabled"
+        ),
+        "web_search_enabled": ai_web.enabled() and ai_web.daily_limit() > 0,
+        "web_search_daily_limit": ai_web.daily_limit(),
         "account_match_history": "not connected",
         "tournament_participation": "not connected",
         "prediction_engine": "not available",
@@ -435,6 +466,8 @@ def send_message(
 ) -> dict:
     question = nonblank(data.text, "Message")
     own_conversation(db, user, conversation_id)
+    if (data.draft_ids or data.map_ids) and not data.share_board_context:
+        raise HTTPException(status_code=422, detail="Confirm sharing the selected saved boards with the AI provider.")
     token = uuid4().hex
     now = utcnow()
     lock = db.execute(
@@ -451,15 +484,26 @@ def send_message(
         own_conversation(db, user, conversation_id)
         raise HTTPException(status_code=409, detail="Another message is still processing in this conversation.")
     try:
+        auto_ids = ai_context.automatic_match_ids(db, question) if data.auto_esports and not data.match_ids else []
         try:
-            match_facts, match_sources = service.selected_match_evidence(db, data.match_ids)
+            match_facts, match_sources = service.selected_match_evidence(db, data.match_ids or auto_ids)
+            board_facts, board_sources = ai_context.selected_boards(db, user, data.draft_ids, data.map_ids)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
-        except service.AnalysisError as exc:
+        except (service.AnalysisError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
+        if auto_ids and match_facts:
+            match_facts["sample_notice"] = (
+                "Automatically matched saved Aerena records; only a small, potentially stale and incomplete sample, "
+                "not a complete team or season history. Game details may be omitted."
+            )
+            for source in match_sources:
+                source["auto_selected"] = True
         prefs = service.settings_for(db, user.id)
         history, previous_user = service.recent_history(db, conversation_id, prefs.use_history)
         facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources)
+        facts.update(board_facts)
+        sources.extend(board_sources)
         row = own_conversation(db, user, conversation_id)
         if row.title == "New conversation":
             row.title = " ".join(question.split())[:80]
@@ -469,12 +513,13 @@ def send_message(
             role="user",
             content=question,
             mode="user",
-            sources_json=dumps(match_sources),
+            sources_json=dumps((match_sources if data.match_ids else []) + board_sources),
         )
         db.add(prompt)
         db.commit()  # Save the user's request before any external network operation.
         db.refresh(prompt)
-        output = service.answer(db, user.id, question, facts, history)
+        output = service.answer(db, user.id, question, facts, history, data.web_mode, data.auto_esports)
+        sources.extend(output.get("sources", []))
         # A deleted chat or expired/replaced lease must never be resurrected.
         db.expire_all()
         row = (

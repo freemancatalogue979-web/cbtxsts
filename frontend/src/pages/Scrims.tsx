@@ -227,21 +227,21 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
           <Field label="Duration (min)"><input className="input" value={f.duration_min} onChange={(e) => set("duration_min", e.target.value)} /></Field>
         </div>
         <div>
-          <div className="label mb-2 text-leaf/80">9 CLOVER</div>
+          <div className="section-pill section-pill--leaf mb-2">9 CLOVER</div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {num("kills", "Kills")}{num("deaths", "Deaths")}{num("gold", "Gold")}
             {num("turrets", "Turrets")}{num("turtles", "Turtles")}{num("lords", "Lords")}
           </div>
         </div>
         <div>
-          <div className="label mb-2">Fights & early game</div>
+          <div className="section-pill mb-2">Fights & early game</div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {num("teamfights_won", "TF won")}{num("teamfights_total", "TF total")}{num("gold_diff_10", "Gold±@10")}
             {num("kills_10", "Kills@10")}{num("deaths_10", "Deaths@10")}
           </div>
         </div>
         <div>
-          <div className="label mb-2 text-crim/80">{scrim.opponent}</div>
+          <div className="section-pill mb-2">{scrim.opponent}</div>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {num("enemy_kills", "Kills")}{num("enemy_deaths", "Deaths")}
             {num("enemy_turrets", "Turrets")}{num("enemy_turtles", "Turtles")}{num("enemy_lords", "Lords")}
@@ -319,7 +319,7 @@ function AttachmentForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: ()
 
         {staged.length > 0 && (
           <div className="space-y-1.5">
-            <div className="label">Ready to attach ({staged.length})</div>
+            <div className="section-pill">Ready to attach ({staged.length})</div>
             {staged.map((a, i) => {
               const Icon = EVID_ICON[a.kind] ?? Link2;
               return (
@@ -455,7 +455,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="card p-3.5">
-            <div className="label mb-2">Lineup</div>
+            <div className="section-pill mb-2">Lineup</div>
             <div className="space-y-1">
               {meta.lanes.map((lane) => (
                 <div key={lane} className="flex justify-between text-[13px]">
@@ -467,12 +467,12 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             {s.substitutes.length > 0 && <div className="mt-2 text-[11px] text-faint">Subs: {s.substitutes.map(userName).join(", ")}</div>}
           </div>
           <div className="card p-3.5 lg:col-span-2">
-            <div className="label mb-2">Expected strategy</div>
+            <div className="section-pill mb-2">Expected strategy</div>
             <p className="text-[13px] text-text/85 whitespace-pre-wrap">{s.expected_strategy || "—"}</p>
-            {s.notes && <><div className="label mb-2 mt-4">Notes</div><p className="text-[13px] text-text/85 whitespace-pre-wrap">{s.notes}</p></>}
+            {s.notes && <><div className="section-pill mb-2 mt-4">Notes</div><p className="text-[13px] text-text/85 whitespace-pre-wrap">{s.notes}</p></>}
           </div>
           <div className="card p-3.5">
-            <div className="label mb-2">Evidence</div>
+            <div className="section-pill mb-2">Evidence</div>
             <div className="space-y-2">
               {s.attachments.filter((a) => a.kind === "screenshot" && (a.url ?? "").startsWith("/api/files/")).length > 0 && (
                 <div className="grid grid-cols-2 gap-1.5">

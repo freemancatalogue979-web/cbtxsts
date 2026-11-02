@@ -72,7 +72,7 @@ def request(method, path, token="", payload=None, cookie=""):
 
 class CloverAITests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, {"DEEPSEEK_API_KEY": "", "CLOVER_CREDENTIAL_ENCRYPTION_KEY": ""})
+        self.env = patch.dict(os.environ, {"CLOVER_AI_API_KEY": "", "DEEPSEEK_API_KEY": "", "CLOVER_CREDENTIAL_ENCRYPTION_KEY": ""})
         self.env.start()
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 
@@ -244,7 +244,7 @@ class CloverAITests(unittest.TestCase):
             "app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=provider)
         ):
             status, result, _ = self.req("POST", f"/conversations/{chat}/messages", payload={"text": "Explain Alice."})
-            self.assertEqual((status, result["assistant_message"]["mode"]), (201, "deepseek"))
+            self.assertEqual((status, result["assistant_message"]["mode"]), (201, "ai"))
             first = json.loads(captured[-1]["messages"][-1]["content"])["available_context"]
             self.assertEqual(first["hero_library"][0]["name"], "Alice")
             for key in ("member_profile", "member_hero_pool", "assigned_scrims"):
@@ -419,7 +419,7 @@ class CloverAITests(unittest.TestCase):
             "app.esports_ai.DAILY_LIMIT", 1
         ), patch("app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=provider)):
             status, result, _ = self.req("POST", f"/conversations/{chat}/messages", payload={"text": "Hello MLBB"})
-            self.assertEqual((status, result["assistant_message"]["mode"]), (201, "deepseek"))
+            self.assertEqual((status, result["assistant_message"]["mode"]), (201, "ai"))
             with self.factory() as db:
                 detail = {"match": {"id": "fixture", "status": "completed", "team1": {}, "team2": {}}, "games": []}
                 other = ask(db, verify_token(self.tokens["owner"]).subject, "What happened?", detail)

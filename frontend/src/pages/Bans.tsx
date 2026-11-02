@@ -165,7 +165,7 @@ export function BansPage({ me, meta }: { me: User; meta: Meta }) {
         <div className="space-y-4">
           {Object.entries(groupedOpponents).map(([opp, list]) => (
             <div key={opp}>
-              <div className="label mb-2 flex items-center gap-2"><ShieldBan size={12} className="text-crim" /> {opp}</div>
+              <div className="section-pill mb-2"><ShieldBan size={12} className="text-crim" /> {opp}</div>
               <div className="grid sm:grid-cols-3 gap-3">
                 {list.map((b) => <BanCard key={b.id} {...cardProps(b)} />)}
               </div>
@@ -183,7 +183,7 @@ export function BansPage({ me, meta }: { me: User; meta: Meta }) {
         </div>
         {bans && (byScope.standard ?? []).some((b) => !b.active) && (
           <div className="mt-4">
-            <div className="label mb-2">Inactive</div>
+            <div className="section-pill mb-2">Inactive</div>
             <div className="grid sm:grid-cols-3 gap-3">
               {(bans ?? []).filter((b) => !b.active).map((b) => <BanCard key={b.id} {...cardProps(b)} />)}
             </div>

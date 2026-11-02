@@ -181,12 +181,12 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           ))}
         </div>
 
-        {h.notes && <div className="card p-5"><div className="label mb-2.5">Notes</div><p className="text-sm text-text/85 leading-relaxed whitespace-pre-wrap">{h.notes}</p></div>}
+        {h.notes && <div className="card p-5"><div className="section-pill mb-2.5">Notes</div><p className="text-sm text-text/85 leading-relaxed whitespace-pre-wrap">{h.notes}</p></div>}
 
         <div className="grid sm:grid-cols-3 gap-4">
           {([["Strong against", h.strong_against, "text-leaf"], ["Weak against", h.weak_against, "text-crim"], ["Team synergy", h.synergy, "text-sky"]] as [string, string[], string][]).map(([label, list, cls]) => (
             <div key={label} className="card p-5">
-              <div className="label mb-3">{label}</div>
+              <div className="section-pill mb-3">{label}</div>
               <div className="flex flex-wrap gap-2">
                 {list.length === 0 && <span className="text-faint text-sm">—</span>}
                 {list.map((x) => <HeroChip key={x} name={x} tone={cls} />)}
@@ -197,7 +197,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="card p-5">
-            <div className="label mb-4 flex items-center gap-1.5"><Users2 size={12} /> Player specialists</div>
+            <div className="section-pill mb-4"><Users2 size={12} /> Player specialists</div>
             {(h.specialists ?? []).length === 0 && <div className="text-sm text-faint">Nobody has {h.name} in their pool.</div>}
             <div className="space-y-1">
               {(h.specialists ?? []).map((s) => (
@@ -209,7 +209,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             </div>
           </div>
           <div className="card p-5">
-            <div className="label mb-4 flex items-center gap-1.5"><ShieldBan size={12} /> On the ban board</div>
+            <div className="section-pill mb-4"><ShieldBan size={12} /> On the ban board</div>
             {(h.on_ban_board ?? []).length === 0 && <div className="text-sm text-faint">Not currently banned by us.</div>}
             <div className="space-y-2.5">
               {(h.on_ban_board ?? []).map((b, i) => (
@@ -227,7 +227,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             {/* Full profile: identity, ratings, skills */}
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="card p-5">
-                <div className="label mb-3">Identity</div>
+                <div className="section-pill mb-3">Identity</div>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between gap-3"><span className="text-faint">Title</span><span className="font-semibold text-right">{p.title}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-faint">Roles</span>
@@ -241,7 +241,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                 </div>
               </div>
               <div className="card p-5">
-                <div className="label mb-3">Power profile</div>
+                <div className="section-pill mb-3">Power profile</div>
                 <div className="space-y-4">
                   {([["Offense", p.ratings.offense], ["Durability", p.ratings.durability],
                      ["Ability effects", p.ratings.ability_effects], ["Difficulty", p.ratings.difficulty]] as [string, number][]).map(([label, v]) => (
@@ -294,7 +294,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         {Object.entries(grouped).map(([lane, list]) => (
           <section key={lane}>
             <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-[13px] font-extrabold uppercase tracking-[0.22em]">{lane}</h2>
+              <h2 className="section-pill">{lane}</h2>
               <span className="text-[11px] font-bold text-faint tabular-nums">{list.length}</span>
               <span className="h-px flex-1 bg-edge/70" />
             </div>
@@ -457,7 +457,7 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
   // Offline fallback: plain names, never fabricate icons/descriptions.
   const fallbackCard = (withRetry: boolean) => (
     <div className="card p-5">
-      <div className="label mb-4 flex items-center justify-between">Skills
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4"><span className="section-pill">Skills</span>
         {withRetry && <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry live kit</button>}
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
@@ -474,15 +474,15 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
   );
   if (!sets) {
     if (err) return fallbackNames.length > 0 ? fallbackCard(true)
-      : <div className="card p-5"><div className="label mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Live kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
-    return <div className="card p-5"><div className="label">Skills</div><Spinner label="Loading official kit" /></div>;
+      : <div className="card p-5"><div className="section-pill mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Live kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
+    return <div className="card p-5"><div className="section-pill">Skills</div><Spinner label="Loading official kit" /></div>;
   }
   if (sets.length === 0) return fallbackNames.length > 0 ? fallbackCard(true) : null;
 
   const multiForm = sets.length > 1;
   return (
     <div className="card p-5">
-      <div className="label mb-4">Skills · official kit</div>
+      <div className="section-pill mb-4">Skills · official kit</div>
       <div className="space-y-5">
         {sets.map((kit, ki) => (
           <div key={kit.listid ?? ki} className={multiForm ? "space-y-2" : ""}>
@@ -544,13 +544,13 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
   useEffect(load, [load]);
   if (err) return (
     <div className="card p-5">
-      <div className="label mb-2">Skill combos · live game data</div>
+      <div className="section-pill mb-2">Skill combos · live game data</div>
       <div className="text-[11.5px] text-faint flex items-center justify-between gap-2">
         Data service unreachable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button>
       </div>
     </div>
   );
-  if (!rows) return <div className="card p-5"><div className="label">Skill combos · live game data</div><Spinner label="Loading combos" /></div>;
+  if (!rows) return <div className="card p-5"><div className="section-pill">Skill combos · live game data</div><Spinner label="Loading combos" /></div>;
   if (rows.length === 0) return null; // upstream simply has none for this hero
   const skills: { icon?: string; id?: number }[] = [];
   // dedupe icons in order of first appearance across all combos
@@ -561,7 +561,7 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
   }
   return (
     <div className="card p-5">
-      <div className="label mb-4">Skill combos · live game data</div>
+      <div className="section-pill mb-4">Skill combos · live game data</div>
       {skills.length > 0 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {skills.map((s, i) => (
@@ -631,17 +631,17 @@ function SkillGuideCard({ heroName }: { heroName: string }) {
   if (!loaded || (!strength && !weakness)) return null; // no guide upstream — stay silent, never fabricate
   return (
     <div className="card p-5">
-      <div className="label mb-4">Coach notes · official guide</div>
+      <div className="section-pill mb-4">Coach notes · official guide</div>
       <div className="grid sm:grid-cols-2 gap-3">
         {strength && (
           <div className="bg-leaf/5 border border-leaf/30 rounded-lg px-4 py-3">
-            <div className="label !text-leaf mb-1.5">Strengths</div>
+            <div className="section-pill section-pill--leaf mb-1.5">Strengths</div>
             <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(strength).replace(/✨/g, "• ")}</p>
           </div>
         )}
         {weakness && (
           <div className="bg-crim/5 border border-crim/30 rounded-lg px-4 py-3">
-            <div className="label !text-crim mb-1.5">Weaknesses</div>
+            <div className="section-pill mb-1.5">Weaknesses</div>
             <p className="text-[11.5px] text-mute whitespace-pre-line leading-relaxed">{stripTags(weakness).replace(/✨/g, "• ")}</p>
           </div>
         )}

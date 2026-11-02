@@ -43,7 +43,7 @@ function Bracket({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
   return <section className="rounded-xl border border-edge bg-panel overflow-hidden">
-    <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-3 border-b border-edge"><div><h2 className="text-[11px] font-black uppercase tracking-[0.14em]">Playoff bracket</h2><p className="text-[10px] text-faint mt-1">Image supplied by Rone · scroll to see the full bracket</p></div>
+    <div className="flex flex-wrap justify-between items-center gap-2 px-4 py-3 border-b border-edge"><div><h2 className="section-pill">Playoff bracket</h2><p className="text-[10px] text-faint mt-1">Image supplied by Rone · scroll to see the full bracket</p></div>
       <a href={url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-mute hover:text-leaf inline-flex items-center gap-1">Open full size <ExternalLink size={11} /></a></div>
     {failed ? <div className="p-4 text-[11px] text-mute">The bracket image couldn’t load. Seeds and available matches are shown below.</div>
       : <div className="overflow-x-auto bg-[#18181d] p-3"><img src={url} alt="Playoff bracket from Rone" referrerPolicy="no-referrer" className="block w-full min-w-[620px] h-auto rounded-lg" onError={() => setFailed(true)} /></div>}
@@ -95,11 +95,11 @@ export function RoneEsportsPage() {
       {view === "schedule" && weeks.length > 1 && <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="Schedule weeks"><button type="button" onClick={() => setWeek(null)} className={`chip shrink-0 !px-2.5 !py-1.5 ${week === null ? "border-crim/50 text-text" : "text-faint"}`}>All weeks</button>
         {weeks.map((value) => <button type="button" key={value} onClick={() => setWeek(value)} className={`chip shrink-0 !px-2.5 !py-1.5 ${week === value ? "border-crim/50 text-text" : "text-faint"}`}>Week {value}</button>)}</div>}
       {view === "playoffs" && feed.bracketImage && <Bracket url={feed.bracketImage} />}
-      {view === "playoffs" && seeds.length > 0 && <section><div className="flex items-center gap-2 mb-3"><Trophy size={14} className="text-crim" /><h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-mute">Playoff seeds</h2></div>
+      {view === "playoffs" && seeds.length > 0 && <section><div className="mb-3"><h2 className="section-pill"><Trophy size={14} className="text-crim" />Playoff seeds</h2></div>
         <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 gap-2">{seeds.map((row, index) => <SeedCard key={`${row.seed}-${index}`} row={row} />)}</div></section>}
       {view === "standings" && standings.length > 0 && <div className="grid lg:grid-cols-2 gap-3">{standings.map((row, index) => <StandingCard key={`${row.rank}-${index}`} row={row} />)}</div>}
       {view !== "standings" && groups.map((group) => <section key={group.key}>
-        <div className="flex flex-wrap items-center gap-2 mb-3"><span className="w-1 h-4 rounded-full bg-crim" /><h2 className="text-[11px] font-black uppercase tracking-[0.12em] text-mute">{group.week !== null ? `Week ${group.week} · ` : ""}{group.label}</h2></div>
+        <div className="mb-3"><h2 className="section-pill">{group.week !== null ? `Week ${group.week} · ` : ""}{group.label}</h2></div>
         <div className="grid lg:grid-cols-2 gap-3">{group.matches.map((match, index) => <RoneMatchCard key={`${match.id || "no-id"}-${index}`} match={match} onOpen={match.id ? () => setSelected(match) : undefined} />)}</div>
       </section>)}
       {!hasSourceData && <Empty title={`No ${view} data for ${league} right now`} hint="The community feed has not provided this data." />}

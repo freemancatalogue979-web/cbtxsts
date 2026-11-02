@@ -35,7 +35,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="label !text-leaf">THE KNOWLEDGE BASE</div>
+          <div className="section-pill section-pill--leaf">THE KNOWLEDGE BASE</div>
           <h2 className="text-xl font-extrabold mt-1">A library that grows with the squad.</h2>
           <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Search hero snapshots and human-reviewed community notes. Only published notes can be retrieved by the assistant; chats are never learned from automatically.</p>
         </div>
@@ -46,7 +46,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
         <div className="rounded-lg border border-edge bg-raised/60 px-4 py-3"><div className="label">Reviewed notes</div><div className="text-lg font-extrabold mt-1">{data?.community_count ?? "—"}</div><div className="text-[10px] text-faint">Community guidance</div></div>
       </div>
       <div className="rounded-lg border border-amber/25 bg-amber/5 p-3 text-[11px] text-mute leading-relaxed">
-        <strong className="text-amber">Freshness matters.</strong> This is keyword search, not live web search. There’s no connected Original/Advanced patch feed, live item database or verified current meta here. Hero profiles were imported from <a href="https://mlbbdex.com/en/api-doc" target="_blank" rel="noreferrer noopener" className="text-text underline">MLBBDex / Mobile Legends Wiki</a> (CC BY-SA); the bundled source labels its snapshot 2.2.16, but its import date and server channel are unverified.
+        <strong className="text-amber">Freshness matters.</strong> This library uses keyword search; the chat can also search the web when enabled. There is no verified live Original/Advanced patch feed or current-meta database here. Hero profiles were imported from <a href="https://mlbbdex.com/en/api-doc" target="_blank" rel="noreferrer noopener" className="text-text underline">MLBBDex / Mobile Legends Wiki</a> (CC BY-SA); the bundled source labels its snapshot 2.2.16, but its import date and server channel are unverified.
       </div>
       <label className="relative block">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -58,7 +58,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
       {!loading && data && (
         <div className="space-y-5">
           {data.heroes.length > 0 && <section>
-            <div className="label mb-2">Hero snapshots</div>
+            <div className="section-pill mb-2">Hero snapshots</div>
             <div className="grid sm:grid-cols-2 gap-2">
               {data.heroes.map((hero) => <button key={hero.id} onClick={() => navigate(`heroes/${hero.id}`)}
                 className="rounded-lg border border-edge hover:border-crim/40 bg-raised/50 text-left p-3 flex items-center gap-3 min-w-0 transition-colors">
@@ -70,7 +70,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
             </div>
           </section>}
           <section>
-            <div className="label mb-2">Reviewed community notes</div>
+            <div className="section-pill mb-2">Reviewed community notes</div>
             {data.notes.length ? <div className="grid gap-2">{data.notes.map((note) => {
               const link = safeExternal(note.source_url);
               return <article key={note.id} className="rounded-lg border border-edge bg-raised/40 p-4 min-w-0">

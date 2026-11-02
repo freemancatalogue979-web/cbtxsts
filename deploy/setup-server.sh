@@ -49,7 +49,7 @@ if [ ! -f .env ]; then
 CBT_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')
 CBT_HOST=127.0.0.1
 CBT_PORT=9000
-# DEEPSEEK_API_KEY=
+# CLOVER_AI_API_KEY=
 # GEMINI_API_KEY=
 # CBT_ADMIN_PASSWORD=change-me
 EOF
@@ -132,7 +132,7 @@ if [ "$DOMAIN" != "_" ]; then
 fi
 
 log "Waiting for the API"
-for i in $(seq 1 60); do curl -fs http://127.0.0.1/api/health >/dev/null 2>&1 && break; curl -fs http://127.0.0.1:9000/ >/dev/null 2>&1 && break; sleep 2; done
+for _ in $(seq 1 60); do curl -fs http://127.0.0.1/api/health >/dev/null 2>&1 && break; curl -fs http://127.0.0.1:9000/ >/dev/null 2>&1 && break; sleep 2; done
 IP="$(curl -s -m5 ifconfig.me || hostname -I | awk '{print $1}')"
 printf '\n\033[1;32m✔ 9 CLOVER Competitive Operations is live at http://%s\033[0m\n' "${DOMAIN/#_/$IP}"
 echo "  Logs:    sudo journalctl -u clover -f"

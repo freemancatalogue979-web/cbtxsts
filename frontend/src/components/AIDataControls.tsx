@@ -22,8 +22,8 @@ function Toggle({ label, description, checked, disabled, onChange }: {
   );
 }
 
-export function AIDataControls({ settings, context, onChange, onClearMatches }: {
-  settings: AISettings; context: AIContext | null; onChange: (value: AISettings) => void; onClearMatches: () => void;
+export function AIDataControls({ settings, context, onChange, onClearAttachments }: {
+  settings: AISettings; context: AIContext | null; onChange: (value: AISettings) => void; onClearAttachments: () => void;
 }) {
   const [goal, setGoal] = useState(settings.coaching_goal);
   const [busy, setBusy] = useState(false);
@@ -43,11 +43,11 @@ export function AIDataControls({ settings, context, onChange, onClearMatches }: 
     finally { setBusy(false); }
   }
   async function clear() {
-    if (!window.confirm("Delete all your coaching notes and coaching goal, turn off automatic profile, pool, scrim and chat-history context, and remove attached matches from this open chat? This affects future requests; anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
+    if (!window.confirm("Delete all your coaching notes and coaching goal, turn off automatic profile, pool, scrim and chat-history context, and remove attached matches and boards from this open chat? This affects future requests; anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
     setBusy(true); setError(null); setNotice("");
     try {
       const updated = await api.del<AISettings>("/ai/settings/memory");
-      onChange(updated); onClearMatches(); setGoal(""); setNotesRevision((value) => value + 1); setNotice("Coaching notes, automatic context and this chat’s match selection are cleared for future requests. Saved chats remain until you delete them.");
+      onChange(updated); onClearAttachments(); setGoal(""); setNotesRevision((value) => value + 1); setNotice("Coaching notes, automatic context and this chat’s attachments are cleared for future requests. Saved chats remain until you delete them.");
     } catch (e) { setError(e); }
     finally { setBusy(false); }
   }
@@ -59,7 +59,7 @@ export function AIDataControls({ settings, context, onChange, onClearMatches }: 
         <ShieldCheck size={19} className="text-leaf shrink-0 mt-0.5" />
         <div>
           <div className="text-[13px] font-extrabold">Your data, your call.</div>
-          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, pool and scrim context are off by default; recent chat history is on by default. Individually enabled notes can also be included in a DeepSeek request. Your current question is sent when the provider is used.</p>
+          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, pool and scrim context are off by default; recent chat history is on by default. Individually enabled notes can also be included in an external AI request. Your current question is sent when the provider is used.</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-3 gap-2">
@@ -110,7 +110,7 @@ export function AIDataControls({ settings, context, onChange, onClearMatches }: 
       <ErrorNote error={error} />
       <div className="flex gap-2 text-[11px] text-faint leading-relaxed">
         <LockKeyhole size={14} className="shrink-0 mt-0.5" />
-        <p>Other accounts, including admins, have no direct chat access in the AI workspace. Admins can reset account passwords, and server operators can read the app database. Chats, coaching goals and coaching notes aren’t encrypted by this feature. DeepSeek may retain submitted data; deleting a chat doesn’t erase existing backups or provider logs. Avoid sharing passwords or tokens.</p>
+        <p>Other accounts, including admins, have no direct chat access in the AI workspace. Admins can reset account passwords, and server operators can read the app database. Chats, coaching goals and coaching notes aren’t encrypted by this feature. The external AI provider may retain submitted data; deleting a chat doesn’t erase existing backups or provider logs. Avoid sharing passwords or tokens.</p>
       </div>
     </div>
   );

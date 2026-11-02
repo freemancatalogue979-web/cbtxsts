@@ -42,7 +42,7 @@ function Board({ field, title, tone, icon: Icon, rows, onPick }: {
     <div className="card p-4">
       <div className={`flex items-center gap-2 mb-3 ${tone}`}>
         <Icon size={14} />
-        <span className="label !text-[10px] !text-current">{title}</span>
+        <span className="section-pill">{title}</span>
       </div>
       <ol className="space-y-2">
         {rows.map((r, i) => {
@@ -244,7 +244,7 @@ function ToolsTab() {
   return (
     <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
       <form onSubmit={run} className="card p-5 space-y-4">
-        <div className="flex items-center gap-2 text-amber"><Calculator size={15} /><span className="label !text-[10px] !text-current">Win-rate calculator</span></div>
+        <div className="flex items-center gap-2 text-amber"><Calculator size={15} /><span className="section-pill">Win-rate calculator</span></div>
         <Field label="Matches played"><input className="input" inputMode="numeric" value={matches} onChange={(e) => setMatches(e.target.value)} /></Field>
         <Field label="Current win rate %"><input className="input" inputMode="decimal" value={wrNow} onChange={(e) => setWrNow(e.target.value)} /></Field>
         <Field label="Target win rate %"><input className="input" inputMode="decimal" value={wrTarget} onChange={(e) => setWrTarget(e.target.value)} /></Field>

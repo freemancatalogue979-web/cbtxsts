@@ -99,7 +99,7 @@ function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onCl
 
       {/* Stats */}
       <section className="card p-4">
-        <div className="label mb-3">Match statistics</div>
+        <div className="section-pill mb-3">Match statistics</div>
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
           {STAT_FIELDS.map(([k, label]) => (
             <label key={k} className="block">
@@ -113,7 +113,7 @@ function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onCl
 
       {/* Mistakes */}
       <section className="card p-4">
-        <div className="label mb-3">Biggest mistakes</div>
+        <div className="section-pill mb-3">Biggest mistakes</div>
         <div className="space-y-2">
           {(f.biggest_mistakes as string[]).map((m, i) => (
             <div key={i} className="flex items-start gap-2">
@@ -138,7 +138,7 @@ function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onCl
       </Field>
 
       <section className="card p-4">
-        <div className="label mb-3">Action item</div>
+        <div className="section-pill mb-3">Action item</div>
         <Field label="Action"><textarea className="input min-h-16" value={String(f.action_item)} onChange={(e) => set("action_item", e.target.value)} /></Field>
         <div className="grid grid-cols-3 gap-4 mt-3">
           <Field label="Assigned to">
@@ -186,7 +186,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
       <div className="grid lg:grid-cols-2 gap-4">
         <DraftBoard draft={review.draft} theirsLabel={review.opponent.toUpperCase()} />
         <div className="card p-4">
-          <div className="label mb-3">Match statistics</div>
+          <div className="section-pill mb-3">Match statistics</div>
           {Object.keys(review.stats || {}).length === 0 && <div className="text-[13px] text-faint">No stat line attached.</div>}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {STAT_FIELDS.filter(([k]) => review.stats?.[k] !== undefined).map(([k, label]) => (
@@ -204,7 +204,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
           </div>
           {review.player_ids.length > 0 && (
             <div className="mt-4">
-              <div className="label mb-1.5">Players</div>
+              <div className="section-pill mb-1.5">Players</div>
               <div className="flex flex-wrap gap-1.5">{review.player_ids.map((id) => <Badge key={id}>{userName(id)}</Badge>)}</div>
             </div>
           )}
@@ -228,14 +228,14 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
         {[["Why did it happen?", review.why_happened], ["What should we have done?", review.should_have_done],
           ["Who was involved?", review.who_involved], ["What will we change?", review.what_change]].map(([label, body]) => (
           <div key={label as string} className="card p-4">
-            <div className="label mb-2">{label as string}</div>
+            <div className="section-pill mb-2">{label as string}</div>
             <p className="text-[13.5px] text-text/85 leading-relaxed whitespace-pre-wrap">{(body as string) || "—"}</p>
           </div>
         ))}
       </div>
 
       <section className="card border-leaf/30 p-4">
-        <div className="label !text-leaf/90 mb-2">Lesson from this game</div>
+        <div className="section-pill section-pill--leaf mb-2">Lesson from this game</div>
         <p className="text-lg font-bold leading-snug">&ldquo;{review.lesson || "—"}&rdquo;</p>
       </section>
 
@@ -304,7 +304,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         {!scrimIdParam && !tmatchParam && (
           <div className="space-y-3 mb-5">
             <div className="card p-4">
-              <div className="label mb-2">Link to a scrim (recommended)</div>
+              <div className="section-pill mb-2">Link to a scrim (recommended)</div>
               <div className="flex flex-wrap gap-1.5">
                 {scrims.filter((s) => s.status === "played" && !s.has_review).map((s) => (
                   <button key={s.id} className="chip card-hover" onClick={() => navigate("reviews", "new", `scrim=${s.id}`)}>
@@ -318,7 +318,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             </div>
             {tQueue.length > 0 && (
               <div className="card p-4 border-amber/40">
-                <div className="label mb-2 !text-amber">Tournament matches awaiting review</div>
+                <div className="section-pill mb-2">Tournament matches awaiting review</div>
                 <div className="flex flex-wrap gap-1.5">
                   {tQueue.map((m) => (
                     <button key={m.id} className="chip card-hover !text-amber border-amber/40"

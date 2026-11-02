@@ -104,9 +104,9 @@ def update_settings(payload: SettingsPatch, db: Session = Depends(get_db), user=
 
 
 # ---------------------------------------------------------------------------
-# DeepSeek credential: write-only, admin-only, encrypted on the server.
+# AI provider credential: write-only, admin-only, encrypted on the server.
 # ---------------------------------------------------------------------------
-class DeepSeekKeyIn(BaseModel):
+class AIKeyIn(BaseModel):
     key: SecretStr
 
 
@@ -126,15 +126,15 @@ def _require_secret_write(request: Request, authorization: str | None) -> None:
         raise HTTPException(403, "Use HTTPS to change a provider key.")
 
 
-@router.get("/integrations/deepseek")
-def deepseek_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+@router.get("/integrations/ai")
+def ai_key_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     require(can.manage_users(user), "manage provider credentials")
     response.headers["Cache-Control"] = "no-store"
     return key_status(db)
 
 
-@router.post("/integrations/deepseek")
-def update_deepseek_key(payload: DeepSeekKeyIn, request: Request, response: Response,
+@router.post("/integrations/ai")
+def update_ai_key(payload: AIKeyIn, request: Request, response: Response,
                         authorization: str | None = Header(default=None), db: Session = Depends(get_db),
                         user: User = Depends(get_current_user)):
     require(can.manage_users(user), "manage provider credentials")
@@ -153,8 +153,8 @@ def update_deepseek_key(payload: DeepSeekKeyIn, request: Request, response: Resp
     return key_status(db)
 
 
-@router.delete("/integrations/deepseek")
-def remove_deepseek_key(request: Request, response: Response, authorization: str | None = Header(default=None),
+@router.delete("/integrations/ai")
+def remove_ai_key(request: Request, response: Response, authorization: str | None = Header(default=None),
                         db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     require(can.manage_users(user), "manage provider credentials")
     _require_secret_write(request, authorization)

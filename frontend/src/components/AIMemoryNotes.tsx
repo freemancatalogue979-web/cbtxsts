@@ -112,7 +112,7 @@ export function AIMemoryNotes({ revision, disabled, onBusyChange }: {
           <label className="block"><span className="text-[10px] font-bold text-mute">Your note</span><textarea aria-label="Your coaching note" className="input mt-1.5 min-h-20 !text-[12px]" maxLength={500} value={editor.content}
             onChange={(e) => setEditor({ ...editor, content: e.target.value })} placeholder="e.g. I want to practice checking the minimap before rotating." /></label>
           <label className="flex gap-2 items-start text-[11px] text-mute leading-relaxed"><input type="checkbox" className="mt-0.5 accent-emerald-400" checked={editor.share} onChange={(e) => setEditor({ ...editor, share: e.target.checked })} />
-            <span>Include this note in future AI requests. It may be sent to DeepSeek when the provider is used.</span></label>
+            <span>Include this note in future AI requests. It may be sent to the external AI provider when the provider is used.</span></label>
           <div className="flex flex-wrap gap-2"><button type="submit" className="btn-primary !text-[11px]" disabled={!editor.content.trim()}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Save note</button>
             <button type="button" className="btn-ghost !text-[11px]" onClick={() => setEditor(null)}><X size={13} /> Cancel</button></div>
         </fieldset>

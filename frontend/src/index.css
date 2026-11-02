@@ -65,6 +65,43 @@
   .label {
     @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-faint;
   }
+  /* Section/eyebrow headings, not form labels or action buttons. */
+  .section-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 100%;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgba(244, 120, 145, 0.25);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(225, 29, 72, 0.13), rgba(255, 255, 255, 0.025));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    color: #efd6dc;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    line-height: 1.25;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  .section-pill::before {
+    content: "";
+    flex: 0 0 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #fb718b;
+    box-shadow: 0 0 8px rgba(251, 113, 139, 0.5);
+  }
+  .section-pill--leaf {
+    border-color: rgba(52, 211, 153, 0.28);
+    background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(255, 255, 255, 0.025));
+    color: #b7f2da;
+  }
+  .section-pill--leaf::before {
+    background: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
   .input {
     @apply w-full bg-raised border border-edge rounded px-3 py-2 text-sm text-text
       placeholder:text-faint focus:outline-none focus:border-crim/70;
@@ -96,6 +133,16 @@
   }
   .divider {
     @apply border-t border-edge;
+  }
+}
+
+/* Keep compact headings readable beside controls on narrow phones. */
+@media (max-width: 420px) {
+  .section-pill {
+    gap: 0.35rem;
+    padding: 0.25rem 0.55rem;
+    font-size: 9px;
+    letter-spacing: 0.1em;
   }
 }
 

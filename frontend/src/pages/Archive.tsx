@@ -494,7 +494,7 @@ function ItemModal({ me, item, ownerIgn, onClose, onChanged, onEdit }: {
 
         {/* comments */}
         <div className="pt-3 border-t border-edge">
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-mute mb-2.5">
+          <div className="section-pill mb-2.5">
             Replies {comments ? `(${comments.length})` : ""}
           </div>
           {comments === null ? (
@@ -735,7 +735,7 @@ function ItemEditor({ me, folderId, initial, onClose, onSaved }: {
 
           {visibility === "private" && (
             <div className="mt-2 rounded-lg border border-edge bg-raised/40 p-2.5">
-              <div className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-mute mb-2">
+              <div className="section-pill mb-2">
                 Also allow {sharedIds.length > 0 && <span className="text-crim">({sharedIds.length})</span>}
               </div>
               {members === null ? (

@@ -15,11 +15,8 @@ export function PageTitle({ title, sub, right }: { title: string; sub?: string; 
 
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-2.5">
-      <div className="flex items-center gap-2">
-        <span className="inline-block w-1 h-3.5 bg-crim rounded-sm" />
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.18em] text-mute">{children}</h2>
-      </div>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
+      <h2 className="section-pill min-w-0">{children}</h2>
       {right}
     </div>
   );

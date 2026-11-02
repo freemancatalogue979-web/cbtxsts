@@ -4,6 +4,8 @@ export type AIStatus = {
   knowledge: string;
   patch_feed: string;
   web_search: string;
+  web_search_enabled: boolean;
+  web_search_daily_limit: number;
   account_match_history: string;
   tournament_participation: string;
   prediction_engine: string;
@@ -35,14 +37,15 @@ export type AIMemoryNote = {
 
 export type AIConversation = { id: string; title: string; created_at: string; updated_at: string };
 export type AISource = {
-  kind: "personal" | "hero" | "community" | "match"; label: string; route?: string; knowledge_id?: string;
+  kind: "personal" | "hero" | "community" | "match" | "web" | "draft" | "map" | "esports_feed"; label: string; route?: string; knowledge_id?: string;
   url?: string | null; reviewed_at?: string; observed_at?: string | null; detail_fetched_at?: string | null; match_id?: string;
+  published_at?: string | null; auto_selected?: boolean; board_id?: number;
 };
 export type AIMessage = {
   id: number;
   role: "user" | "assistant";
   content: string;
-  mode: "user" | "deepseek" | "facts";
+  mode: "user" | "ai" | "facts";
   note: string;
   sources: AISource[];
   feedback: -1 | 0 | 1;
@@ -56,8 +59,16 @@ export type AIExport = {
   truncated: boolean; message_limit: number; snapshot_through: number; next_after: number | null; notice: string;
 };
 
+export type AIWebMode = "auto" | "on" | "off";
+export type AIBoardSummary = { id: number; name: string; opponent: string; updated_at: string | null };
 export const AI_MATCH_LIMIT = 3;
+export const AI_BOARD_LIMIT = 2;
 export const AI_EXPORT_LIMIT = 2000;
+
+export function toggleBoardSelection<T extends { id: number }>(selected: T[], board: T): T[] {
+  if (selected.some((item) => item.id === board.id)) return selected.filter((item) => item.id !== board.id);
+  return selected.length < AI_BOARD_LIMIT ? [...selected, board] : selected;
+}
 
 // Keep the send button above the fixed mobile navigation when typing begins.
 export function revealAIComposer(element: Pick<HTMLElement, "scrollIntoView">, viewportWidth: number): void {

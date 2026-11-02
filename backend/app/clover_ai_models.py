@@ -52,6 +52,18 @@ class AIMemoryNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class AIWebSearchUsage(Base):
+    """A separate daily budget for potentially billable web searches."""
+
+    __tablename__ = "clover_ai_web_search_usage"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_ai_web_user_day"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    day: Mapped[str] = mapped_column(String(10), nullable=False)
+    calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
 class AIConversation(Base):
     __tablename__ = "clover_ai_conversations"
 
@@ -78,7 +90,9 @@ class AIMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(12), nullable=False)  # user | assistant
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    mode: Mapped[str] = mapped_column(String(20), default="user", nullable=False)  # user | deepseek | facts
+    mode: Mapped[str] = mapped_column(
+        String(20), default="user", nullable=False
+    )  # user | ai | facts; historic values remain readable
     note: Mapped[str] = mapped_column(String(600), default="", nullable=False)
     sources_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     feedback: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # -1 | 0 | 1

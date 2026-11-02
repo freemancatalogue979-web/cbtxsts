@@ -71,12 +71,12 @@ export function AIContributions() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="label !text-leaf">BUILD IT TOGETHER</div>
+        <div className="section-pill section-pill--leaf">BUILD IT TOGETHER</div>
         <h2 className="text-xl font-extrabold mt-1">Share what you know.</h2>
         <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Found something useful or spotted a mistake? Send it to the review queue. Your private chats are never copied or submitted automatically.</p>
       </div>
       <form onSubmit={submit} className="rounded-lg border border-edge bg-panel p-4 sm:p-5 space-y-4">
-        <div><div className="label mb-2">Contribution type</div>
+        <div><div className="section-pill mb-2">Contribution type</div>
           <div className="flex flex-wrap gap-1.5">{KINDS.map((option) => <button key={option.id} type="button" onClick={() => setKind(option.id)}
             className={`rounded border px-3 py-1.5 text-[11px] font-bold transition-colors ${kind === option.id ? "border-leaf/50 text-leaf bg-leaf/10" : "border-edge text-mute bg-raised hover:border-edge-2"}`}>{option.label}</button>)}</div>
         </div>
@@ -89,7 +89,7 @@ export function AIContributions() {
         </Field>
         <label className="flex items-start gap-2 text-[11px] leading-relaxed text-mute">
           <input type="checkbox" className="mt-0.5 accent-emerald-400" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
-          <span>I understand this submission is shared with admins for review and, if approved, may be visible to all members and sent to DeepSeek as knowledge. Published notes may remain if my account is removed; an admin can remove them. Don’t include private chat or someone else’s private data.</span>
+          <span>I understand this submission is shared with admins for review and, if approved, may be visible to all members and sent to the external AI provider as knowledge. Published notes may remain if my account is removed; an admin can remove them. Don’t include private chat or someone else’s private data.</span>
         </label>
         <ErrorNote error={error} />
         {notice && <p className="text-[11px] text-leaf" role="status">{notice}</p>}
@@ -97,7 +97,7 @@ export function AIContributions() {
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send for review
         </button>
       </form>
-      <section><div className="flex items-center gap-2 mb-3"><FileQuestion size={15} className="text-faint" /><h3 className="label">Your submissions</h3></div>
+      <section><div className="flex items-center gap-2 mb-3"><FileQuestion size={15} className="text-faint" /><h3 className="section-pill">Your submissions</h3></div>
         {items === null ? <p className="text-[12px] text-faint">Loading submissions…</p> : items.length ? <div className="space-y-2">{items.map((item) => <ContributionCard key={item.id} item={item}>
           {item.status === "pending" && <button type="button" className="text-[11px] font-semibold text-faint hover:text-crim mt-3" onClick={() => void withdraw(item)}>Withdraw submission</button>}
         </ContributionCard>)}</div> :
@@ -148,7 +148,7 @@ export function AIReviewQueue() {
   useEffect(() => { void load(); }, [load]);
   return <div className="space-y-5">
     <div className="flex items-start gap-3"><ShieldCheck size={22} className="text-leaf shrink-0 mt-1" /><div>
-      <div className="label !text-leaf">ADMIN REVIEW</div><h2 className="text-xl font-extrabold mt-1">Keep the library trustworthy.</h2>
+      <div className="section-pill section-pill--leaf">ADMIN REVIEW</div><h2 className="text-xl font-extrabold mt-1">Keep the library trustworthy.</h2>
       <p className="text-[12px] text-mute mt-1.5 leading-relaxed">Check sources and relevance before publishing. Questions and feedback can be acknowledged but are never published as facts. Exact duplicates are detected; no automatic fact-checking is claimed.</p>
     </div></div>
     <ErrorNote error={error} />

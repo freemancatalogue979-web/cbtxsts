@@ -14,7 +14,8 @@
     "clean": "rm -rf dist",
     "test:esports": "node --test tests/esports.test.mjs tests/rone-esports.test.mjs",
     "test:ai": "node --test tests/clover-ai.test.mjs",
-    "test:focus": "node --test tests/team-focus.test.mjs"
+    "test:focus": "node --test tests/team-focus.test.mjs",
+    "test:ui": "node --test tests/section-pill.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.3.0",

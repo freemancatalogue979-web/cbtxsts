@@ -72,16 +72,16 @@ export function DashboardPage() {
       )}
 
       {/* Training block + next activity */}
-      <div className="grid lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-2 card p-4 sm:p-5">
           <SectionTitle right={week && <button className="label !text-crim hover:!text-crim/80" onClick={() => navigate("training", "weeks", week.id)}>Open week →</button>}>
             Current training block
           </SectionTitle>
           {week ? (
             <>
-              <div className="label">Training week</div>
+              <div className="section-pill">Training week</div>
               <div className="text-3xl font-extrabold tabular-nums">{String(week.number).padStart(2, "0")}</div>
-              <div className="label mt-4">Current focus</div>
+              <div className="section-pill mt-4">Current focus</div>
               <div className="text-xl font-extrabold text-crim tracking-wide">{week.focus}</div>
               <div className="flex items-center justify-between mt-5 mb-1.5">
                 <span className="label">Progress</span>
@@ -103,7 +103,7 @@ export function DashboardPage() {
             <button onClick={() => navigate("scrims", dash.next_scrim!.id)}
               className="card card-hover w-full text-left p-4 mt-4 flex items-center justify-between gap-3">
               <div>
-                <div className="label mb-1">Next scrim</div>
+                <div className="section-pill mb-1">Next scrim</div>
                 <div className="font-bold text-[15px]">
                   Scrim #{dash.next_scrim.number} vs {dash.next_scrim.opponent}
                   <span className="text-mute font-semibold"> · {dash.next_scrim.format}</span>
@@ -161,7 +161,7 @@ export function DashboardPage() {
         </section>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent results */}
         <section>
           <SectionTitle right={<button className="label !text-crim" onClick={() => navigate("scrims")}>All scrims →</button>}>

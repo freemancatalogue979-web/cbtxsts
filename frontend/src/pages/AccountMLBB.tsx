@@ -36,7 +36,7 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
 
   return (
     <div className="card p-5 max-w-md space-y-4">
-      <div className="flex items-center gap-2 text-leaf"><Link2 size={15} /><span className="label !text-[10px] !text-current">Connect MLBB account</span></div>
+      <div className="flex items-center gap-2 text-leaf"><Link2 size={15} /><span className="section-pill section-pill--leaf">Connect MLBB account</span></div>
       <p className="text-[12px] text-mute leading-relaxed">
         Uses the official in-game mail verification — <b>we never ask for your game password</b>. You need access to
         the account's in-game mailbox. Codes expire in 5 minutes.
@@ -76,7 +76,7 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
   if (typeof env.error === "string" || (typeof env.code === "number" && env.code !== 0)) {
     return (
       <div className="card p-4">
-        <div className="label mb-1.5">{title}</div>
+        <div className="section-pill mb-1.5">{title}</div>
         <div className="text-[11.5px] text-faint">Unavailable right now (upstream endpoint deprecated or offline).</div>
       </div>
     );
@@ -101,7 +101,7 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
   const isImgUrl = (v: string) => /^https?:\/\//.test(v) && (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(v) || /face\/|akmpicture|youngjoygame/.test(v));
   return (
     <div className="card p-4">
-      <div className="label mb-2">{title}</div>
+      <div className="section-pill mb-2">{title}</div>
       <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5">
         {flat.slice(0, 12).map(([k, v]) =>
           isImgUrl(v) ? (
@@ -153,7 +153,7 @@ function ProfileHeroCard({ status, info }: { status: LinkStatus; info: unknown }
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-[0.22em] text-leaf font-bold mb-1">MLBB · Verified link</div>
+          <div className="section-pill section-pill--leaf mb-1">MLBB · Verified link</div>
           <div className="text-xl font-extrabold truncate">{name}</div>
           <div className="text-[11px] text-faint font-mono mt-0.5">ID {roleId} · Zone {zoneId}</div>
           <div className="flex flex-wrap gap-1.5 mt-3">

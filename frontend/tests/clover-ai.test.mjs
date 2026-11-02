@@ -7,7 +7,7 @@ const source = await readFile(new URL("../src/lib/cloverAI.ts", import.meta.url)
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 });
-const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, toggleBoardSelection, AI_BOARD_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
 test("source links require HTTPS and reject credentials and private hosts", () => {
   for (const value of [null, "", "javascript:alert(1)", "http://example.com", "https://a:b@example.com", "https://localhost/a", "https://foo.local/a", "https://127.1/a", "https://10.0.0.1", "https://192.168.1.4", "https://[::1]/"]) {
@@ -34,6 +34,19 @@ test("match selection is explicit, removable and limited to three", () => {
   assert.deepEqual(old.map((m) => m.id), ["1", "2", "3"]);
   selected = toggleMatchSelection(selected, matches[3]);
   assert.deepEqual(selected.map((m) => m.id), ["1", "3", "4"]);
+});
+
+test("board selection is explicit, removable and limited independently for each lab", () => {
+  assert.equal(AI_BOARD_LIMIT, 2);
+  const boards = [1, 2, 3].map((id) => ({ id }));
+  let drafts = [], maps = [];
+  for (const board of boards) drafts = toggleBoardSelection(drafts, board);
+  maps = toggleBoardSelection(maps, boards[2]);
+  assert.deepEqual(drafts.map((board) => board.id), [1, 2]);
+  assert.deepEqual(maps.map((board) => board.id), [3]);
+  drafts = toggleBoardSelection(drafts, boards[0]);
+  drafts = toggleBoardSelection(drafts, boards[2]);
+  assert.deepEqual(drafts.map((board) => board.id), [2, 3]);
 });
 
 function exportPage(ids, through, next) {

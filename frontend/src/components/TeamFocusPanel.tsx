@@ -89,7 +89,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
   return (
     <section className="team-focus" aria-labelledby="team-focus-title">
       <div className="team-focus__section-heading">
-        <div className="team-focus__section-name"><span aria-hidden="true" /><h2 id="team-focus-title">Team focus</h2></div>
+        <div className="team-focus__section-name"><h2 id="team-focus-title" className="section-pill">Team focus</h2></div>
         <span className="team-focus__section-tag">Dashboard settings</span>
       </div>
 
@@ -99,7 +99,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
           <div className="team-focus__intro-content">
             <div className="team-focus__icon"><Crosshair size={20} strokeWidth={1.8} aria-hidden="true" /></div>
             <div className="team-focus__intro-copy">
-              <div className="team-focus__eyebrow">9 CLOVER <span>/</span> TEAM DEVELOPMENT</div>
+              <div className="team-focus__eyebrow section-pill">9 CLOVER <span>/</span> TEAM DEVELOPMENT</div>
               <h3>One team. One focus<span>.</span></h3>
               <p>Turn a team weakness into a clear training goal.</p>
             </div>
@@ -119,7 +119,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
               <div className="team-focus__layout">
                 <div className="team-focus__form-column">
                   <div className="team-focus__form-heading">
-                    <div><span className="team-focus__eyebrow">THE GAME PLAN</span><h4>Focus details</h4></div>
+                    <div><span className="team-focus__eyebrow section-pill">THE GAME PLAN</span><h4>Focus details</h4></div>
                     <span className="team-focus__form-number" aria-hidden="true">01 / 02</span>
                   </div>
 
@@ -176,7 +176,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
                 </div>
 
                 <aside className="team-focus__preview" aria-label="Dashboard preview">
-                  <div className="team-focus__preview-top"><div><span className="team-focus__eyebrow">A LOOK AHEAD</span><h4>Dashboard preview</h4></div><span className="team-focus__preview-icon"><Eye size={16} aria-hidden="true" /></span></div>
+                  <div className="team-focus__preview-top"><div><span className="team-focus__eyebrow section-pill">A LOOK AHEAD</span><h4>Dashboard preview</h4></div><span className="team-focus__preview-icon"><Eye size={16} aria-hidden="true" /></span></div>
                   <div className="team-focus__preview-card">
                     <div className="team-focus__preview-brand">
                       <span className="team-focus__preview-crest"><img src="/brand/logo.png" alt="" aria-hidden="true" /></span>
@@ -184,7 +184,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
                       <span className="team-focus__preview-badge">PREVIEW</span>
                     </div>
                     <div className="team-focus__preview-divider" />
-                    <div className="team-focus__preview-label"><span aria-hidden="true" /> CURRENT TEAM WEAKNESS</div>
+                    <div className="team-focus__preview-label section-pill">CURRENT TEAM WEAKNESS</div>
                     <div className={`team-focus__preview-weakness${draft.current_weakness.trim() ? "" : " team-focus__preview-weakness--empty"}`}>{previewWeakness}</div>
                     <div className="team-focus__preview-footer">
                       <div><span>DRILL CATEGORY</span><strong>{draft.weakness_category || "Not selected"}</strong></div>

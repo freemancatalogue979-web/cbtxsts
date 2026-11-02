@@ -88,7 +88,7 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
       <PageTitle title="Team Admin" sub="Accounts, roles and the team-wide focus state."
         right={<button className="btn-primary" onClick={() => setForm({})}><Plus size={15} /> New account</button>} />
 
-      <DeepSeekPanel />
+      <AIProviderPanel />
 
       <section>
         <SectionTitle>Accounts</SectionTitle>
@@ -126,7 +126,7 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
   );
 }
 
-interface DeepSeekStatus {
+interface AIProviderStatus {
   configured: boolean;
   source: "admin" | "environment" | "none" | "unavailable";
   has_saved_key: boolean;
@@ -134,8 +134,8 @@ interface DeepSeekStatus {
   message: string | null;
 }
 
-function DeepSeekPanel() {
-  const [status, setStatus] = useState<DeepSeekStatus | null>(null);
+function AIProviderPanel() {
+  const [status, setStatus] = useState<AIProviderStatus | null>(null);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +145,7 @@ function DeepSeekPanel() {
 
   useEffect(() => {
     let active = true;
-    api.get<DeepSeekStatus>("/admin/integrations/deepseek")
+    api.get<AIProviderStatus>("/admin/integrations/ai")
       .then((value) => { if (active) setStatus(value); })
       .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Could not load provider settings."); });
     return () => { active = false; };
@@ -156,7 +156,7 @@ function DeepSeekPanel() {
     if (!key.trim() || busy || !secure) return;
     setBusy(true); setError(null); setNotice(null);
     try {
-      const next = await api.post<DeepSeekStatus>("/admin/integrations/deepseek", { key: key.trim() });
+      const next = await api.post<AIProviderStatus>("/admin/integrations/ai", { key: key.trim() });
       setKey(""); setStatus(next); setConfirmRemove(false);
       setNotice("Key saved. Provider connection has not been tested.");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not save the key."); }
@@ -167,7 +167,7 @@ function DeepSeekPanel() {
     if (busy || !secure) return;
     setBusy(true); setError(null); setNotice(null);
     try {
-      const next = await api.del<DeepSeekStatus>("/admin/integrations/deepseek");
+      const next = await api.del<AIProviderStatus>("/admin/integrations/ai");
       setStatus(next); setKey(""); setConfirmRemove(false);
       setNotice(next.source === "environment" ? "Saved key removed. The server environment key is now in use." : "Saved key removed. Facts-only analysis is available.");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not remove the key."); }
@@ -180,19 +180,19 @@ function DeepSeekPanel() {
     <div className="card p-4 sm:p-5 space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
         <div className="flex gap-3 items-start"><div className="rounded-lg border border-leaf/20 bg-leaf/10 p-2 text-leaf"><KeyRound size={17} /></div>
-          <div><h3 className="text-sm font-extrabold">DeepSeek API key</h3><p className="mt-1 text-[11px] text-mute leading-relaxed">Admin only. Used for member AI and requested match analysis, not for automatic model training.</p></div></div>
+          <div><h3 className="text-sm font-extrabold">AI provider API key</h3><p className="mt-1 text-[11px] text-mute leading-relaxed">Admin only. Used for member AI and requested match analysis, not for automatic model training.</p></div></div>
         {status && <span className={`h-fit rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${status.configured ? "border-leaf/30 bg-leaf/10 text-leaf" : "border-amber/30 bg-amber/10 text-amber"}`}>{label}</span>}
       </div>
       {!status && !error && <Spinner label="Loading provider settings" />}
       {status && <>
         {status.message && <div className="rounded-lg border border-amber/30 bg-amber/5 px-3 py-2 text-[11px] text-amber">{status.message}</div>}
         <form onSubmit={save} className="space-y-2">
-          <label htmlFor="deepseek-key" className="label block">{status.has_saved_key || status.source === "environment" ? "Enter a new key to replace the current one" : "Enter your API key"}</label>
-          <div className="flex flex-wrap sm:flex-nowrap gap-2"><input id="deepseek-key" className="input min-w-0 flex-1" type="password" autoComplete="off" spellCheck={false}
-            value={key} onChange={(event) => setKey(event.target.value)} placeholder={status.configured ? "Existing key is hidden" : "Paste your DeepSeek API key"} maxLength={512} disabled={busy || !secure} />
+          <label htmlFor="ai-provider-key" className="label block">{status.has_saved_key || status.source === "environment" ? "Enter a new key to replace the current one" : "Enter your API key"}</label>
+          <div className="flex flex-wrap sm:flex-nowrap gap-2"><input id="ai-provider-key" className="input min-w-0 flex-1" type="password" autoComplete="off" spellCheck={false}
+            value={key} onChange={(event) => setKey(event.target.value)} placeholder={status.configured ? "Existing key is hidden" : "Paste your AI provider API key"} maxLength={512} disabled={busy || !secure} />
             <button className="btn-primary shrink-0" disabled={busy || !key.trim() || !secure}>{busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} {status.has_saved_key || status.source === "environment" ? "Update key" : "Save key"}</button></div>
         </form>
-        <p className="flex items-start gap-2 text-[11px] text-faint leading-relaxed"><ShieldCheck size={14} className="shrink-0 text-leaf" /><span>The key is encrypted on the server and never displayed again. A saved key overrides the server environment key. Saving it does not verify provider access or billing.</span></p>
+        <p className="flex items-start gap-2 text-[11px] text-faint leading-relaxed"><ShieldCheck size={14} className="shrink-0 text-leaf" /><span>The key is encrypted on the server and never displayed again. A saved key overrides the server environment key. Saving it does not verify provider access or billing. Member web searches can incur separate charges; monitor usage and daily limits.</span></p>
         {!secure && <div className="text-[11px] text-amber">Open the hub over HTTPS before entering a key.</div>}
         {status.has_saved_key && <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
           {!confirmRemove ? <button type="button" className="btn-ghost !text-[11px]" onClick={() => setConfirmRemove(true)} disabled={busy || !secure}><Trash2 size={13} /> Remove saved key</button>

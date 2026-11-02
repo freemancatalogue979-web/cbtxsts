@@ -1,4 +1,4 @@
-"""Server-only, encrypted storage for the team's DeepSeek credential.
+"""Server-only, encrypted storage for the team's AI provider credential.
 
 The database contains ciphertext only. A separate Fernet key is supplied by the
 host or generated once in the persistent data directory with restrictive file
@@ -93,12 +93,17 @@ def _decrypt(row: ProviderCredential) -> str:
         raise CredentialStorageError("The saved key could not be unlocked. Restore the encryption key or save a new API key.") from exc
 
 
+def _environment_key() -> str | None:
+    # Keep existing deployments working while supporting a provider-neutral name.
+    return os.getenv("CLOVER_AI_API_KEY", "").strip() or os.getenv("DEEPSEEK_API_KEY", "").strip() or None
+
+
 def resolved_key(db: Session) -> str | None:
     """Admin-saved key takes precedence; a locked saved key fails closed."""
     row = db.get(ProviderCredential, PROVIDER)
     if row is not None:
         return _decrypt(row)
-    return os.getenv("DEEPSEEK_API_KEY", "").strip() or None
+    return _environment_key()
 
 
 def key_status(db: Session) -> dict:
@@ -111,7 +116,7 @@ def key_status(db: Session) -> dict:
                     "updated_at": row.updated_at.isoformat() + "Z", "message": "The saved key cannot be unlocked. Restore the encryption key or save a replacement."}
         return {"configured": usable, "source": "admin", "has_saved_key": True,
                 "updated_at": row.updated_at.isoformat() + "Z", "message": None}
-    from_env = bool(os.getenv("DEEPSEEK_API_KEY", "").strip())
+    from_env = bool(_environment_key())
     return {"configured": from_env, "source": "environment" if from_env else "none", "has_saved_key": False,
             "updated_at": None, "message": None}
 

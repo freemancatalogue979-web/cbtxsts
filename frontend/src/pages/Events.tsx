@@ -134,7 +134,7 @@ export function EventsPage({ me, meta }: { me: User; meta: Meta }) {
 
       {past.length > 0 && (
         <section>
-          <div className="label mb-2">Earlier</div>
+          <div className="section-pill mb-2">Earlier</div>
           <div className="space-y-2 opacity-60">
             {past.slice(0, 12).map((ev) => <RowV key={`${ev.source}-${ev.id}`} ev={ev} />)}
           </div>

@@ -43,7 +43,7 @@ async def asgi_request(method: str, token: str = "", payload: dict | None = None
         headers.append((b"origin", origin.encode()))
     if payload is not None:
         headers.append((b"content-type", b"application/json"))
-    path = "/api/admin/integrations/deepseek"
+    path = "/api/admin/integrations/ai"
     scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
              "method": method, "scheme": scheme, "path": path, "raw_path": path.encode(), "query_string": b"",
              "root_path": "", "headers": headers, "client": ("198.51.100.2", 1234), "server": ("clover.example", 443)}
@@ -76,7 +76,7 @@ class CredentialHttpTests(unittest.TestCase):
         self.key_file = Path(self.temp.name) / "credential-encryption.key"
         self.key_path_patch = patch("app.ai_credentials.KEY_PATH", self.key_file)
         self.key_path_patch.start()
-        self.env_patch = patch.dict(os.environ, {"DEEPSEEK_API_KEY": "", "CLOVER_CREDENTIAL_ENCRYPTION_KEY": ""})
+        self.env_patch = patch.dict(os.environ, {"CLOVER_AI_API_KEY": "", "DEEPSEEK_API_KEY": "", "CLOVER_CREDENTIAL_ENCRYPTION_KEY": ""})
         self.env_patch.start()
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)
@@ -144,7 +144,7 @@ class CredentialHttpTests(unittest.TestCase):
                                 "team2": {"teamName": "B", "teamScore": 2}}, "games": []}
             with patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=send_to_provider)):
                 result = ask(db, self.admin_id, "What happened?", detail)
-            self.assertEqual(result["mode"], "deepseek")
+            self.assertEqual(result["mode"], "ai")
             self.assertEqual(captured[0].get_header("Authorization"), f"Bearer {second}")
             self.assertNotIn(second, captured[0].data.decode())
             self.assertNotIn(second, json.dumps(result))

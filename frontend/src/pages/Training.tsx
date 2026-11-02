@@ -589,7 +589,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
         {/* progress matrix */}
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-edge flex items-center justify-between">
-            <div className="label">Per-member progress</div>
+            <div className="section-pill">Per-member progress</div>
             <div className="label !text-faint normal-case">tap your cell to mark done</div>
           </div>
           {enrolled.length === 0 && <div className="p-4"><Empty title="No players enrolled" hint={canManage ? "Edit the program to enroll players" : "Staff will enroll players"} /></div>}
@@ -732,7 +732,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                   if (!evs.length) return null;
                   return (
                     <div className="mt-3 border-t border-edge pt-2.5">
-                      <div className="label !text-[9px] mb-2">Completion evidence</div>
+                      <div className="section-pill mb-2">Completion evidence</div>
                       <div className="space-y-2.5">
                         {evs.map(({ u, c }) => (
                           <div key={u.id} className="flex items-start gap-2">
@@ -819,11 +819,11 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
             </div>
           </div>
         </div>
-        {a.description && <div className="card p-4"><div className="label mb-2">Brief</div><p className="text-sm text-text/85 leading-relaxed whitespace-pre-wrap">{a.description}</p></div>}
+        {a.description && <div className="card p-4"><div className="section-pill mb-2">Brief</div><p className="text-sm text-text/85 leading-relaxed whitespace-pre-wrap">{a.description}</p></div>}
         {(a.result || a.lessons) && (
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="card p-4"><div className="label mb-2">Result</div><p className="text-sm text-text/85 whitespace-pre-wrap">{a.result || "—"}</p>{a.score && <div className="chip mt-2 border-leaf/40 text-leaf">{a.score}</div>}</div>
-            <div className="card p-4"><div className="label mb-2">Lessons learned</div><p className="text-sm text-text/85 whitespace-pre-wrap">{a.lessons || "—"}</p></div>
+            <div className="card p-4"><div className="section-pill mb-2">Result</div><p className="text-sm text-text/85 whitespace-pre-wrap">{a.result || "—"}</p>{a.score && <div className="chip mt-2 border-leaf/40 text-leaf">{a.score}</div>}</div>
+            <div className="card p-4"><div className="section-pill mb-2">Lessons learned</div><p className="text-sm text-text/85 whitespace-pre-wrap">{a.lessons || "—"}</p></div>
           </div>
         )}
         {/* quick completion for assigned players / staff */}
@@ -857,13 +857,13 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
           )} />
         <div className="grid sm:grid-cols-3 gap-4">
           <div className="card p-4">
-            <div className="label mb-2">Progress</div>
+            <div className="section-pill mb-2">Progress</div>
             <div className="text-3xl font-extrabold tabular-nums">{w.progress}%</div>
             <div className="mt-2"><Progress value={w.progress} /></div>
             <div className="text-[11px] text-faint mt-2">{w.activity_counts.done}/{w.activity_counts.total} sessions · {w.status}</div>
           </div>
           <div className="card p-4 sm:col-span-2">
-            <div className="label mb-2">Performance target</div>
+            <div className="section-pill mb-2">Performance target</div>
             <div className="text-sm font-semibold">{w.performance_target || "—"}</div>
             {w.weakness_text && <div className="mt-3 text-[13px] text-amber font-semibold">Addresses: {w.weakness_text} ({w.weakness_drills_target} drills required)</div>}
             {w.notes && <div className="mt-2 text-[12px] text-faint">{w.notes}</div>}
@@ -938,7 +938,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
         <button onClick={() => navigate("training", "weeks", activeWeek.id)} className="card card-hover w-full text-left p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="label">Current block</div>
+              <div className="section-pill">Current block</div>
               <div className="text-xl font-extrabold mt-1">
                 Week {String(activeWeek.number).padStart(2, "0")} — <span className="text-crim">{activeWeek.focus}</span>
               </div>

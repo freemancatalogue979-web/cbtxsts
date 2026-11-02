@@ -38,7 +38,7 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
     </div>
     <label className="relative block"><span className="sr-only">Search saved matches</span><Search size={14} className="absolute left-3 top-3 text-faint pointer-events-none" />
       <input className="input !pl-9 !text-[12px]" maxLength={100} placeholder="Search teams, season or match ID…" value={search} onChange={(e) => setSearch(e.target.value)} /></label>
-    <div className="flex items-center justify-between gap-2"><span className="label">Saved Aerena matches</span><span className="text-[10px] font-bold text-faint">{chosen.length} / {AI_MATCH_LIMIT} selected</span></div>
+    <div className="flex items-center justify-between gap-2"><span className="section-pill">Saved Aerena matches</span><span className="text-[10px] font-bold text-faint">{chosen.length} / {AI_MATCH_LIMIT} selected</span></div>
     {chosen.length > 0 && <div className="flex flex-wrap gap-1.5">{chosen.map((match) => <button type="button" key={match.id} onClick={() => toggle(match)}
       aria-label={`Remove ${teamCode(match.team1)} vs ${teamCode(match.team2)} from selection`} className="max-w-full inline-flex items-center gap-1 rounded-md border border-leaf/25 bg-leaf/5 px-2 py-1 text-[10px] font-bold text-leaf">
       <span className="truncate">{teamCode(match.team1)} vs {teamCode(match.team2)}</span><X size={11} className="shrink-0" /></button>)}</div>}
