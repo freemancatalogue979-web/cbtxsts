@@ -65,6 +65,34 @@ export const AI_MATCH_LIMIT = 3;
 export const AI_BOARD_LIMIT = 2;
 export const AI_EXPORT_LIMIT = 2000;
 
+// Display preferences stay on this browser; they contain no chat content or personal context.
+export type AIWorkspaceLayout = { navigationOpen: boolean; historyOpen: boolean; headerOpen: boolean };
+export const AI_WORKSPACE_LAYOUT_KEY = "clover_ai_workspace_layout_v1";
+export const DEFAULT_AI_WORKSPACE_LAYOUT: AIWorkspaceLayout = { navigationOpen: true, historyOpen: true, headerOpen: true };
+
+export function readAIWorkspaceLayout(storage: Pick<Storage, "getItem"> | null): AIWorkspaceLayout {
+  try {
+    const value: unknown = JSON.parse(storage?.getItem(AI_WORKSPACE_LAYOUT_KEY) ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ...DEFAULT_AI_WORKSPACE_LAYOUT };
+    const saved = value as Record<string, unknown>;
+    return {
+      navigationOpen: typeof saved.navigationOpen === "boolean" ? saved.navigationOpen : DEFAULT_AI_WORKSPACE_LAYOUT.navigationOpen,
+      historyOpen: typeof saved.historyOpen === "boolean" ? saved.historyOpen : DEFAULT_AI_WORKSPACE_LAYOUT.historyOpen,
+      headerOpen: typeof saved.headerOpen === "boolean" ? saved.headerOpen : DEFAULT_AI_WORKSPACE_LAYOUT.headerOpen,
+    };
+  } catch {
+    return { ...DEFAULT_AI_WORKSPACE_LAYOUT };
+  }
+}
+
+export function saveAIWorkspaceLayout(storage: Pick<Storage, "setItem"> | null, layout: AIWorkspaceLayout): void {
+  try {
+    storage?.setItem(AI_WORKSPACE_LAYOUT_KEY, JSON.stringify(layout));
+  } catch {
+    // Private browsing or blocked storage should not prevent using the chat.
+  }
+}
+
 export function toggleBoardSelection<T extends { id: number }>(selected: T[], board: T): T[] {
   if (selected.some((item) => item.id === board.id)) return selected.filter((item) => item.id !== board.id);
   return selected.length < AI_BOARD_LIMIT ? [...selected, board] : selected;

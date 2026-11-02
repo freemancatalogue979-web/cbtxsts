@@ -1,14 +1,14 @@
 import {
   ArrowDownRight, BookOpenText, BrainCircuit, Check, ChevronRight, CircleHelp, Download, ExternalLink,
-  History, Lightbulb, Loader2, LockKeyhole, MessageSquare, Paperclip, PenLine, Plus, Send, Settings2,
-  ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
+  History, Lightbulb, Loader2, LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelTopClose, PanelTopOpen,
+  Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api, qs } from "../lib/api";
 import { AI_EXPORT_LIMIT, collectAIExport, revealAIComposer, safeExternal, shortDate } from "../lib/cloverAI";
-import type { AIBoardSummary, AIContext, AIConversation, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AISendResult, AISettings, AISource, AIStatus, AIWebMode } from "../lib/cloverAI";
+import type { AIBoardSummary, AIContext, AIConversation, AIExport, AIKnowledgeNote, AIList, AIMessage, AIMessagePage, AISendResult, AISettings, AISource, AIStatus, AIWebMode, AIWorkspaceLayout } from "../lib/cloverAI";
 import { teamCode, type EsportsMatch } from "../lib/esports";
 import type { User } from "../lib/types";
 import { navigate } from "../lib/util";
@@ -120,7 +120,9 @@ function MessageBubble({ message, onFeedback }: { message: AIMessage; onFeedback
   </div>;
 }
 
-export function CloverAIPage({ me }: { me: User }) {
+export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
+  me: User; desktopLayout: AIWorkspaceLayout; onToggleDesktopLayout: (key: keyof AIWorkspaceLayout) => void;
+}) {
   const [tab, setTab] = useState<Tab>("chat");
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
@@ -359,13 +361,17 @@ export function CloverAIPage({ me }: { me: User }) {
     onSelect: selectChat, onNew: newChat, disabled: busy || exporting,
     onRetry: () => setSearchRevision((value) => value + 1),
   };
+  const panelHeight = `h-[min(740px,calc(100vh-235px))] min-h-[560px] sm:min-h-[600px] ${
+    desktopLayout.headerOpen ? "" : "md:h-[calc(100dvh-125px)] md:min-h-[480px]"
+  }`;
   return <div className="space-y-4 pb-3">
     <header className="relative overflow-hidden rounded-xl border border-edge bg-panel" style={{ backgroundImage: "radial-gradient(circle at 85% -40%, rgba(52,211,153,.14), transparent 42%), radial-gradient(circle at 0% 0%, rgba(225,29,72,.12), transparent 35%)" }}>
-      <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-6 pb-4">
+      <h1 className="sr-only">9 CLOVER AI</h1>
+      <div id="ai-workspace-intro" className={`${desktopLayout.headerOpen ? "" : "md:hidden"} flex flex-wrap items-start justify-between gap-4 p-4 sm:p-6 pb-4`}>
         <div className="flex items-start gap-3 min-w-0">
           <div className="rounded-xl border border-edge-2 bg-ink/70 p-1.5 shrink-0"><BrandImg size={40} /></div>
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="section-pill section-pill--leaf">YOUR MLBB INTELLIGENCE</span><span className="text-[9px] uppercase font-extrabold tracking-wider text-faint">· Member workspace</span></div>
-            <h1 className="text-[22px] sm:text-3xl font-extrabold tracking-tight leading-tight mt-1">9 CLOVER <span className="text-leaf">AI</span></h1>
+            <p aria-hidden="true" className="text-[22px] sm:text-3xl font-extrabold tracking-tight leading-tight mt-1">9 CLOVER <span className="text-leaf">AI</span></p>
             <p className="text-[11px] sm:text-[12px] text-mute mt-1.5">Your game. Your questions. Your edge.</p>
           </div>
         </div>
@@ -374,27 +380,47 @@ export function CloverAIPage({ me }: { me: User }) {
           {status ? (status.provider_configured ? "Key configured · unverified" : "Local facts mode") : "Checking provider"}
         </div>
       </div>
-      <nav aria-label="AI workspace sections" className="flex gap-1 overflow-x-auto px-3 sm:px-5 border-t border-edge/70">
-        {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
-          className={`flex items-center gap-1.5 px-3 py-3 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider border-b-2 whitespace-nowrap ${tab === id ? "border-leaf text-text" : "border-transparent text-faint hover:text-mute"}`}><Icon size={14} />{label}</button>)}
-      </nav>
+      <div className={`flex items-center ${desktopLayout.headerOpen ? "border-t border-edge/70" : "border-t border-edge/70 md:border-t-0"}`}>
+        <nav aria-label="AI workspace sections" className="flex gap-1 overflow-x-auto min-w-0 flex-1 px-3 sm:px-5">
+          {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
+            className={`flex items-center gap-1.5 px-3 py-3 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider border-b-2 whitespace-nowrap ${tab === id ? "border-leaf text-text" : "border-transparent text-faint hover:text-mute"}`}><Icon size={14} />{label}</button>)}
+        </nav>
+        <div role="group" aria-label="Desktop layout controls" className="hidden md:flex items-center gap-1.5 shrink-0 pr-3 py-1.5">
+          <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[10px]" aria-controls="site-desktop-navigation" aria-expanded={desktopLayout.navigationOpen}
+            aria-label={desktopLayout.navigationOpen ? "Hide site navigation" : "Show site navigation"} title={desktopLayout.navigationOpen ? "Hide site navigation" : "Show site navigation"}
+            onClick={() => onToggleDesktopLayout("navigationOpen")}>
+            {desktopLayout.navigationOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}<span className="hidden lg:inline">{desktopLayout.navigationOpen ? "Hide nav" : "Show nav"}</span>
+          </button>
+          <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[10px]" aria-controls="ai-workspace-intro" aria-expanded={desktopLayout.headerOpen}
+            aria-label={desktopLayout.headerOpen ? "Hide AI header" : "Show AI header"} title={desktopLayout.headerOpen ? "Hide AI header" : "Show AI header"}
+            onClick={() => onToggleDesktopLayout("headerOpen")}>
+            {desktopLayout.headerOpen ? <PanelTopClose size={15} /> : <PanelTopOpen size={15} />}<span className="hidden lg:inline">{desktopLayout.headerOpen ? "Hide header" : "Show header"}</span>
+          </button>
+        </div>
+      </div>
     </header>
 
-    {tab === "chat" ? <div className="grid lg:grid-cols-[228px_minmax(0,1fr)] gap-3">
-      <aside className="hidden lg:block rounded-xl border border-edge bg-panel h-[min(740px,calc(100vh-235px))] min-h-[530px]"><HistoryPanel {...historyProps} /></aside>
-      {showHistory && <aside ref={mobileHistoryRef} className="lg:hidden rounded-xl border border-edge bg-panel h-72"><HistoryPanel {...historyProps} /></aside>}
-      <section className="rounded-xl border border-edge bg-panel min-w-0 flex flex-col h-[min(740px,calc(100vh-235px))] min-h-[560px] sm:min-h-[600px]">
-        <div className="flex items-center gap-2 sm:gap-3 border-b border-edge px-3 sm:px-4 py-3">
-          <button className="btn-ghost lg:hidden !p-2" type="button" aria-label={showHistory ? "Close conversation history" : "Open conversation history"} onClick={() => setShowHistory(!showHistory)}><History size={15} /></button>
-          <div className="min-w-0 flex-1"><div className="section-pill">PRIVATE CONVERSATION</div><div className="text-[12px] font-extrabold truncate mt-1">{current?.title || "New conversation"}</div></div>
-          {selected && <><button type="button" className="btn-ghost !p-2" aria-label="Download conversation" title="Download conversation" disabled={busy || exporting} onClick={() => void exportChat()}>{exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}</button>
-            <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => setRename(current?.title ?? "")}><PenLine size={14} /></button>
-            <button type="button" className="btn-ghost !p-2 hover:!text-crim" aria-label="Delete conversation" disabled={busy || exporting} onClick={() => void removeChat()}><Trash2 size={14} /></button></>}
-          <button type="button" aria-label="Your context" className="btn-ghost !p-2 sm:!px-3 sm:!py-2" onClick={() => setShowControls(true)}><Settings2 size={15} /><span className="hidden sm:inline text-[11px]">Your context</span></button>
+    {tab === "chat" ? <div className={`grid gap-3 ${desktopLayout.historyOpen ? "lg:grid-cols-[228px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}>
+      <aside id="ai-desktop-history" aria-label="Conversation history" className={`${desktopLayout.historyOpen ? "hidden lg:block" : "hidden"} rounded-xl border border-edge bg-panel ${panelHeight}`}><HistoryPanel {...historyProps} /></aside>
+      <aside id="ai-mobile-history" ref={mobileHistoryRef} aria-label="Conversation history" className={`${showHistory ? "" : "hidden"} lg:hidden rounded-xl border border-edge bg-panel h-72`}><HistoryPanel {...historyProps} /></aside>
+      <section aria-label="AI conversation" className={`rounded-xl border border-edge bg-panel min-w-0 flex flex-col ${panelHeight}`}>
+        <div className={`flex flex-wrap items-center gap-2 max-[430px]:gap-y-1 sm:gap-3 border-b border-edge px-3 sm:px-4 py-3 max-[430px]:py-2 ${desktopLayout.headerOpen ? "" : "md:py-2"}`}>
+          <button className="btn-ghost lg:hidden !p-2" type="button" aria-controls="ai-mobile-history" aria-expanded={showHistory}
+            aria-label={showHistory ? "Close conversation history" : "Open conversation history"} onClick={() => setShowHistory(!showHistory)}><History size={15} /></button>
+          <button type="button" className="btn-ghost hidden lg:inline-flex !p-2 !text-[10px]" aria-controls="ai-desktop-history" aria-expanded={desktopLayout.historyOpen}
+            aria-label={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"} title={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"}
+            onClick={() => onToggleDesktopLayout("historyOpen")}><History size={15} /><span className="hidden lg:inline">{desktopLayout.historyOpen ? "Hide chats" : "Show chats"}</span></button>
+          <div className={`min-w-[160px] flex-1 ${desktopLayout.headerOpen ? "" : "md:min-w-0"}`}><div className={desktopLayout.headerOpen ? "" : "md:hidden"}><div className="section-pill">PRIVATE CONVERSATION</div></div><div className={`text-[12px] font-extrabold truncate mt-1 ${desktopLayout.headerOpen ? "" : "md:mt-0"}`}>{current?.title || "New conversation"}</div></div>
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+            {selected && <><button type="button" className="btn-ghost !p-2" aria-label="Download conversation" title="Download conversation" disabled={busy || exporting} onClick={() => void exportChat()}>{exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}</button>
+              <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => setRename(current?.title ?? "")}><PenLine size={14} /></button>
+              <button type="button" className="btn-ghost !p-2 hover:!text-crim" aria-label="Delete conversation" disabled={busy || exporting} onClick={() => void removeChat()}><Trash2 size={14} /></button></>}
+            <button type="button" aria-label="Your context" className="btn-ghost !p-2 sm:!px-3 sm:!py-2" onClick={() => setShowControls(true)}><Settings2 size={15} /><span className="hidden sm:inline text-[11px]">Your context</span></button>
+          </div>
         </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 min-h-0">
           {loadingChat ? <div className="h-full grid place-items-center text-[12px] text-faint"><span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading conversation…</span></div> : messages.length ?
-            <div className="max-w-3xl mx-auto space-y-5" aria-live="polite">
+            <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
               {messages.map((message) => <MessageBubble key={message.id} message={message} onFeedback={giveFeedback} />)}
               {busy && <div className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin text-leaf" /> 9 Clover AI is working…</div>}

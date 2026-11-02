@@ -7,7 +7,7 @@ const source = await readFile(new URL("../src/lib/cloverAI.ts", import.meta.url)
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 });
-const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, toggleBoardSelection, AI_BOARD_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+const { safeExternal, shortDate, toggleMatchSelection, AI_MATCH_LIMIT, toggleBoardSelection, AI_BOARD_LIMIT, collectAIExport, AI_EXPORT_LIMIT, revealAIComposer, readAIWorkspaceLayout, saveAIWorkspaceLayout, AI_WORKSPACE_LAYOUT_KEY } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
 test("source links require HTTPS and reject credentials and private hosts", () => {
   for (const value of [null, "", "javascript:alert(1)", "http://example.com", "https://a:b@example.com", "https://localhost/a", "https://foo.local/a", "https://127.1/a", "https://10.0.0.1", "https://192.168.1.4", "https://[::1]/"]) {
@@ -95,4 +95,23 @@ test("mobile composer is revealed above fixed navigation while desktop stays put
   revealAIComposer(element, 767);
   revealAIComposer(element, 768);
   assert.deepEqual(calls, [{ block: "center", behavior: "auto" }, { block: "center", behavior: "auto" }]);
+});
+
+test("desktop layout preferences persist safely and reject malformed values", () => {
+  const defaults = { navigationOpen: true, historyOpen: true, headerOpen: true };
+  assert.deepEqual(readAIWorkspaceLayout(null), defaults);
+  assert.deepEqual(readAIWorkspaceLayout({ getItem: () => "not json" }), defaults);
+  assert.deepEqual(readAIWorkspaceLayout({ getItem: () => "[]" }), defaults);
+  assert.deepEqual(readAIWorkspaceLayout({ getItem: () => '"false"' }), defaults);
+  assert.deepEqual(readAIWorkspaceLayout({ getItem: () => { throw Error("blocked"); } }), defaults);
+  assert.deepEqual(readAIWorkspaceLayout({ getItem: () => JSON.stringify({ navigationOpen: false, historyOpen: "false", headerOpen: null }) }),
+    { navigationOpen: false, historyOpen: true, headerOpen: true });
+
+  let value = "";
+  const storage = { getItem: () => value, setItem: (key, content) => { assert.equal(key, AI_WORKSPACE_LAYOUT_KEY); value = content; } };
+  const layout = { navigationOpen: false, historyOpen: false, headerOpen: false };
+  saveAIWorkspaceLayout(storage, layout);
+  assert.deepEqual(readAIWorkspaceLayout(storage), layout);
+  assert.deepEqual(Object.keys(JSON.parse(value)).sort(), ["headerOpen", "historyOpen", "navigationOpen"]);
+  assert.doesNotThrow(() => saveAIWorkspaceLayout({ setItem: () => { throw Error("blocked"); } }, layout));
 });

@@ -221,8 +221,8 @@ function UserCard({ user, onLogout, onUserUpdate }: { user: User; onLogout: () =
   );
 }
 
-export function Layout({ user, onLogout, onUserUpdate, children }: {
-  user: User; onLogout: () => void; onUserUpdate: (u: User) => void; children: ReactNode;
+export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, children }: {
+  user: User; onLogout: () => void; onUserUpdate: (u: User) => void; hideDesktopNav?: boolean; children: ReactNode;
 }) {
   const [route, setRoute] = useState<string[]>(hashRoute());
   const [mobileNav, setMobileNav] = useState(false);
@@ -246,7 +246,7 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
   return (
     <div className="min-h-screen bg-ink">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-edge bg-panel z-40">
+      <aside id="site-desktop-navigation" aria-label="Site navigation" className={`${hideDesktopNav ? "hidden" : "hidden md:flex"} fixed inset-y-0 left-0 w-60 flex-col border-r border-edge bg-panel z-40`}>
         <div className="px-4 pt-4 pb-3 border-b border-edge">
           <Wordmark />
         </div>
@@ -284,8 +284,8 @@ export function Layout({ user, onLogout, onUserUpdate, children }: {
         </div>
       )}
 
-      <main className="md:pl-60 pb-20 md:pb-10">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 pt-7">{children}</div>
+      <main className={`${hideDesktopNav ? "" : "md:pl-60"} pb-20 md:pb-10 transition-[padding] duration-200 motion-reduce:transition-none`}>
+        <div className={`${hideDesktopNav ? "max-w-none" : "max-w-7xl"} mx-auto px-5 sm:px-8 pt-7`}>{children}</div>
       </main>
 
       {/* Mobile bottom quick bar */}

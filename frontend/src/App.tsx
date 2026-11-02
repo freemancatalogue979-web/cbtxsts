@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
+import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
 import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
 import { Layout } from "./components/Layout";
@@ -26,6 +27,10 @@ import { EventsPage } from "./pages/Events";
 import { ArchivePage } from "./pages/Archive";
 import { AdminPage } from "./pages/Admin";
 
+function aiLayoutStorage(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
+
 function useRoute() {
   const [route, setRoute] = useState<string[]>(hashRoute());
   useEffect(() => {
@@ -40,7 +45,10 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [booting, setBooting] = useState(true);
+  const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(aiLayoutStorage()));
   const route = useRoute();
+
+  useEffect(() => { saveAIWorkspaceLayout(aiLayoutStorage(), aiLayout); }, [aiLayout]);
 
   useEffect(() => {
     async function boot() {
@@ -81,11 +89,12 @@ export default function App() {
 
   const section = route[0] || "dashboard";
   const rest = route.slice(1);
+  const toggleAILayout = (key: keyof AIWorkspaceLayout) => setAILayout((previous) => ({ ...previous, [key]: !previous[key] }));
 
   let page: React.ReactNode;
   switch (section) {
     case "ai":
-      page = <CloverAIPage me={user} />;
+      page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} />;
       break;
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;
@@ -143,7 +152,8 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onUserUpdate={setUser} onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
+    <Layout user={user} onUserUpdate={setUser} hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
+      onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
       {page}
     </Layout>
   );
