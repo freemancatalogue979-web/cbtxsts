@@ -295,6 +295,7 @@ class CloverAITests(unittest.TestCase):
                 self.req("DELETE", "/settings/memory")[1],
                 {
                     "share_profile": False,
+                    "share_account_stats": False,
                     "share_pool": False,
                     "share_scrims": False,
                     "use_history": False,
@@ -742,7 +743,7 @@ class CloverAITests(unittest.TestCase):
             return io.BytesIO(b'{"choices":[{"message":{"content":"Synthetic match analysis."}}]}')
 
         with patch(
-            "app.routers.esports._refresh_detail_if_needed", side_effect=AssertionError("must not refresh")
+            "app.routers.esports._claim_detail_refresh", side_effect=AssertionError("must not refresh")
         ) as refresh, patch.dict(os.environ, {"DEEPSEEK_API_KEY": "synthetic-key"}), patch(
             "app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=provider)
         ):
@@ -775,7 +776,7 @@ class CloverAITests(unittest.TestCase):
             self.assertTrue(sources[0]["observed_at"])
             self.assertEqual(len(result["user_message"]["sources"]), 2)
             refresh.assert_not_called()
-        with patch("app.routers.esports._refresh_detail_if_needed", side_effect=AssertionError("must not refresh")):
+        with patch("app.routers.esports._claim_detail_refresh", side_effect=AssertionError("must not refresh")):
             status, result, _ = self.req(
                 "POST",
                 f"/conversations/{chat}/messages",

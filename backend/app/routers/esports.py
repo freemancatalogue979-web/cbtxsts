@@ -6,7 +6,7 @@ import urllib.parse
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
@@ -162,36 +162,42 @@ def list_matches(league_id: str = "", series_id: str = "", q: str = Query(defaul
     return {"matches": [match_row(match, league) for match, league in query.limit(limit).all()], "limit": limit}
 
 
-def _refresh_detail_if_needed(db: Session, row: AerenaMatch) -> None:
+def _claim_detail_refresh(db: Session, row: AerenaMatch):  # noqa: ANN201
     if not ENABLED:
-        return
+        return None
     now = utcnow()
     needs_detail = row.detail_fetched_at is None or row.detail_fetched_at + DETAIL_TTL < now or (
         row.source_updated_at is not None and row.detail_fetched_at is not None and row.source_updated_at > row.detail_fetched_at
     )
     if not needs_detail:
-        return
+        return None
     # Atomic cross-worker cooldown: many people opening the same match do not
     # trigger a burst of upstream requests. Never forward the user's session.
     result = db.execute(update(AerenaMatch).where(AerenaMatch.id == row.id,
                         or_(AerenaMatch.detail_attempted_at.is_(None), AerenaMatch.detail_attempted_at < now - DETAIL_RETRY))
-                        .values(detail_attempted_at=now))
+                        .values(detail_attempted_at=now, detail_error=""))
     db.commit()
-    if not result.rowcount:
-        return
-    try:
-        detail = client.match_stats(row.id)
-        league = db.get(AerenaLeague, row.league_id)
-        if not league:
-            raise AerenaError("This match's season is missing from the catalog.")
-        save_match_detail(db, detail, league)
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        saved = db.get(AerenaMatch, row.id)
-        if saved:
-            saved.detail_error = str(exc) if isinstance(exc, AerenaError) else "Match details could not be refreshed."
+    return now if result.rowcount else None
+
+
+def _refresh_detail_in_background(bind, match_id: str, attempted_at) -> None:  # noqa: ANN001
+    with Session(bind=bind) as db:
+        try:
+            detail = client.match_stats(match_id)
+            row = db.get(AerenaMatch, match_id)
+            if not row or row.detail_attempted_at != attempted_at:
+                return
+            league = db.get(AerenaLeague, row.league_id)
+            if not league:
+                raise AerenaError("This match's season is missing from the catalog.")
+            save_match_detail(db, detail, league)
             db.commit()
+        except Exception as exc:
+            db.rollback()
+            saved = db.get(AerenaMatch, match_id)
+            if saved and saved.detail_attempted_at == attempted_at:
+                saved.detail_error = str(exc) if isinstance(exc, AerenaError) else "Match details could not be refreshed."
+                db.commit()
 
 
 def detail_for(db: Session, row: AerenaMatch) -> dict:
@@ -235,13 +241,23 @@ def detail_for(db: Session, row: AerenaMatch) -> dict:
 
 
 @router.get("/matches/{match_id}")
-def get_match(match_id: str, db: Session = Depends(get_db), _user: User = Depends(get_current_user)) -> dict:
+def get_match(match_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+              _user: User = Depends(get_current_user)) -> dict:
     row = db.get(AerenaMatch, match_id)
     if row is None:
         raise HTTPException(404, "Match not found in the local Aerena database.")
-    _refresh_detail_if_needed(db, row)
+    attempted_at = _claim_detail_refresh(db, row)
+    if attempted_at:
+        background_tasks.add_task(_refresh_detail_in_background, db.get_bind(), match_id, attempted_at)
     db.expire_all()
-    return detail_for(db, db.get(AerenaMatch, match_id))
+    row = db.get(AerenaMatch, match_id)
+    result = detail_for(db, row)
+    result["detail_refreshing"] = bool(
+        ENABLED and row.detail_attempted_at and not row.detail_error
+        and (not row.detail_fetched_at or row.detail_attempted_at > row.detail_fetched_at)
+        and row.detail_attempted_at + DETAIL_RETRY > utcnow()
+    )
+    return result
 
 
 class RefreshIn(BaseModel):

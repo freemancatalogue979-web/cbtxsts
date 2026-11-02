@@ -141,8 +141,9 @@ A configured-key badge is not a provider connectivity check.
 
 ### Personal data and conversation privacy
 
-- Profile/linked-account snapshot, the member's own recorded hero pool and their
-  own recent scrim **assignments** are separate opt-ins, off by default. A
+- Profile/linked-account snapshot, saved MLBB account statistics, the member's
+  own recorded hero pool and their own recent scrim **assignments** are separate
+  opt-ins, off by default. A
   substitute assignment is not proof the person played. The pool is manually
   entered, not a verified match history. The AI uses at most 25 pool entries and
   scans lineup/substitute IDs from at most 200 recent team scrims to find five
@@ -154,6 +155,14 @@ A configured-key badge is not a provider connectivity check.
   linked role/server IDs are included only if the current question asks about
   them. Rone JWT/refresh tokens are never automatically selected. User-supplied
   text can still contain sensitive information, so **do not type secrets**.
+- Separately enabling **My MLBB account statistics** allows a small, filtered,
+  source-dated sample of your own saved account stats, frequent heroes and match
+  records to be sent to the external AI provider for relevant questions. Login
+  tokens, teammate identities and unrecognized fields are excluded. The upstream
+  schema and coverage may be incomplete; empty records do not prove no games.
+  Disconnecting or relinking removes your saved account snapshots and resets this
+  consent. Disabling sharing cannot recall information already sent, included in
+  chat history, or retained in backups or provider logs.
 - Members may write up to 12 private coaching notes (500 characters each) for
   strengths, focus areas, preferences and goals. Every note starts with sharing
   **off**; its owner may edit, delete or individually enable it. An enabled note
@@ -170,7 +179,7 @@ A configured-key badge is not a provider connectivity check.
   commands or fetch arbitrary pages; the server may provide bounded search
   excerpts or a public MPL feed for qualifying questions.
 - **Clear saved AI context** deletes the member's coaching notes and optional
-  coaching goal, turns off all four context switches, and removes the current
+  coaching goal, turns off all five context switches, and removes the current
   open chat's match and board selections. This affects future requests, not one
   already sent. It does not erase the underlying profile/pool/scrims or existing chats.
   Delete a chat from its header to remove its messages from the live database.
@@ -220,9 +229,12 @@ incomplete, and the source is community-compiled, not independently verified.
 For an explicitly named MPL region (PH, ID, MY or KH) and schedule, standings or
 playoff request, chat can also retrieve one public Rone feed. Only the allowlisted
 region and feed are sent to Rone, not the member's question, chat or private
-data. Responses are bounded, cached briefly and labelled with retrieval time.
-The feed may not identify a season; a recent retrieval does not establish that
-the data describes the current season. A failure does not fabricate data.
+data. Public Rone responses are bounded and saved in the database with retrieval
+dates. The page and AI can use the same saved snapshot; stale page data is
+returned immediately while a refresh is queued, and failures retain the last good
+snapshot. A cold miss may need an initial upstream request. The feed may not
+identify a season; a recent retrieval does not establish that the data describes
+the current season. A failure does not fabricate data.
 
 **Attach boards** lets a signed-in member select up to two saved Draft Lab boards
 and two saved Map Lab boards that the member can already read, then explicitly
@@ -253,13 +265,29 @@ model calls. `CLOVER_AI_WEB_SEARCH=0` disables it server-wide;
 (range 0–100; failures count). The shared model-request budget is independent.
 Search/provider access, billing and HTTPS connectivity have not been verified in
 the development sandbox: an operator must test them from the deployment. A
-configured-key badge is not a connectivity test. The app does not yet retrieve
-personal account match history or tournament participation, provide a verified
-Original/Advanced patch feed or run a prediction model or training pipeline.
+configured-key badge is not a connectivity test. Saved personal account data is
+available to AI only with separate consent and only when a usable snapshot exists;
+the source may not provide a complete match history. Tournament participation,
+a verified Original/Advanced patch feed, a prediction model and an automatic
+training pipeline are not connected.
 
 The application presents provider-neutral labels and normalizes old assistant
 messages, but this is not a secrecy boundary: server operators, source code and
 public repository history can still reveal implementation details.
+
+### Saved MLBB snapshots
+
+Public hero/reference and Rone esports responses are stored separately from the
+team's editable hero annotations. Private My MLBB snapshots are scoped to the
+linked account's owner, and account endpoints require a bearer session. Each
+snapshot is limited to 2 MB; retention is capped at 600 public snapshots and 30
+per linked account. Stale snapshots are shown immediately with their saved date
+and refreshed in the background with cross-worker cooldowns. Failed or invalid
+refreshes do not overwrite saved data. On a first visit, there may be no snapshot
+and the initial request depends on the source. Account snapshots are stored in
+the server database in plaintext, like the rest of the application's data; server
+operators and backups may retain them. Disconnect/relink removes the active
+account snapshots and consent from the database, not old backups or provider logs.
 
 ## Aerena Esports
 

@@ -16,7 +16,7 @@ from .. import ai_context, ai_web
 from .. import clover_ai_service as service
 from ..ai_credentials import key_status
 from ..ai_privacy import public_ai_mode, public_ai_text
-from ..clover_ai_models import AIContribution, AIConversation, AIKnowledge, AIMemoryNote, AIMessage, AISettings
+from ..clover_ai_models import AIAccountConsent, AIContribution, AIConversation, AIKnowledge, AIMemoryNote, AIMessage, AISettings
 from ..deps import get_current_user, get_db
 from ..hero_profiles import profile_for
 from ..models import Hero, User, dumps, loads, utcnow
@@ -98,6 +98,7 @@ def own_conversation(db: Session, user: User, conversation_id: str) -> AIConvers
 
 class SettingsIn(BaseModel):
     share_profile: bool | None = None
+    share_account_stats: bool | None = None
     share_pool: bool | None = None
     share_scrims: bool | None = None
     use_history: bool | None = None
@@ -200,7 +201,7 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
             if state["configured"]
             else "The AI provider is not configured or the saved key cannot be unlocked."
         ),
-        "knowledge": "Bundled historical hero profiles and approved community notes; keyword retrieval.",
+        "knowledge": "Saved community esports and hero snapshots, bundled historical profiles and approved community notes; bounded retrieval.",
         "patch_feed": "not connected",
         "web_search": (
             "available when enabled and the provider is configured; connectivity not verified"
@@ -209,7 +210,7 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
         ),
         "web_search_enabled": ai_web.enabled() and ai_web.daily_limit() > 0,
         "web_search_daily_limit": ai_web.daily_limit(),
-        "account_match_history": "not connected",
+        "account_match_history": "Own saved account snapshots only, when separately opted in; coverage depends on the upstream feed.",
         "tournament_participation": "not connected",
         "prediction_engine": "not available",
     }
@@ -217,7 +218,7 @@ def status(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict
 
 @router.get("/settings")
 def get_settings(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> dict:
-    return service.settings_dict(service.settings_for(db, user.id))
+    return service.settings_dict(service.settings_for(db, user.id), service.account_stats_consent(db, user.id))
 
 
 @router.patch("/settings")
@@ -225,6 +226,11 @@ def update_settings(data: SettingsIn, user: User = Depends(ai_user), db: Session
     changes = data.model_dump(exclude_unset=True)
     if any(value is None for value in changes.values()):
         raise HTTPException(status_code=422, detail="Settings cannot be null.")
+    share_account_stats = changes.pop("share_account_stats", None)
+    generation_id = None
+    if share_account_stats is True:
+        from .intel import _account_generation, _get_link
+        generation_id = _account_generation(db, _get_link(user, db))
     row = db.get(AISettings, user.id)
     if row is None:
         row = AISettings(user_id=user.id, **changes)
@@ -245,8 +251,25 @@ def update_settings(data: SettingsIn, user: User = Depends(ai_user), db: Session
             setattr(row, key, value)
         row.updated_at = utcnow()
         db.commit()
+    if share_account_stats is not None:
+        consent = db.get(AIAccountConsent, user.id)
+        if share_account_stats:
+            if consent is None:
+                consent = AIAccountConsent(user_id=user.id, generation_id=generation_id, share_account_stats=True)
+                db.add(consent)
+            else:
+                consent.generation_id = generation_id
+                consent.share_account_stats = True
+                consent.updated_at = utcnow()
+        elif consent is not None:
+            db.delete(consent)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(409, "Your linked account changed. Reload before sharing account statistics.") from None
     db.refresh(row)
-    return service.settings_dict(row)
+    return service.settings_dict(row, service.account_stats_consent(db, user.id))
 
 
 @router.delete("/settings/memory")
@@ -259,6 +282,7 @@ def clear_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -
     row.coaching_goal = ""
     row.updated_at = utcnow()
     db.query(AIMemoryNote).filter_by(user_id=user.id).delete(synchronize_session=False)
+    db.query(AIAccountConsent).filter_by(user_id=user.id).delete(synchronize_session=False)
     try:
         db.commit()
     except IntegrityError:  # Concurrent first-write from another session.
@@ -270,9 +294,10 @@ def clear_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -
         row.coaching_goal = ""
         row.updated_at = utcnow()
         db.query(AIMemoryNote).filter_by(user_id=user.id).delete(synchronize_session=False)
+        db.query(AIAccountConsent).filter_by(user_id=user.id).delete(synchronize_session=False)
         db.commit()
     db.refresh(row)
-    return service.settings_dict(row)
+    return service.settings_dict(row, False)
 
 
 @router.get("/memory-notes")
@@ -501,7 +526,8 @@ def send_message(
                 source["auto_selected"] = True
         prefs = service.settings_for(db, user.id)
         history, previous_user = service.recent_history(db, conversation_id, prefs.use_history)
-        facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources)
+        facts, sources = service.build_evidence(db, user, prefs, question, previous_user, match_facts, match_sources,
+                                                include_auto_esports=data.auto_esports)
         facts.update(board_facts)
         sources.extend(board_sources)
         row = own_conversation(db, user, conversation_id)

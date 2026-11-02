@@ -318,7 +318,7 @@ export function IntelPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="MLBB Intel" sub="Live hero analytics & game database — community Rone Arena dataset (not official Moonton)."
+      <PageTitle title="MLBB Intel" sub="Saved hero analytics & game data — community Rone Arena snapshots refresh in the background and may be out of date (not official Moonton)."
         right={<div className="flex items-center gap-2">
           {version && <Badge cls="text-sky border-sky/40">game v{version}</Badge>}
           <button className="btn-ghost" onClick={() => { void load(); }} disabled={busy}><RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh</button>
@@ -338,13 +338,13 @@ export function IntelPage() {
               {RANK_TIERS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
-          {fetchedAt && <span className="text-[11px] text-faint ml-auto">Fetched {fetchedAt.toLocaleTimeString()}</span>}
+          {fetchedAt && <span className="text-[11px] text-faint ml-auto">Loaded {fetchedAt.toLocaleTimeString()} · saved snapshots may be older</span>}
         </div>
       )}
 
       <ErrorNote error={err && `${err} — the upstream data service may be unreachable from this host; Refresh retries.`} />
 
-      {tab === "overview" && (busy && !fetchedAt ? <Spinner label="Pulling live hero analytics" /> : (
+      {tab === "overview" && (busy && !fetchedAt ? <Spinner label="Loading saved hero analytics" /> : (
         <div className="grid md:grid-cols-3 gap-4">
           {BOARDS.map((b) => <Board key={b.field} {...b} rows={boards[b.field]} onPick={(id) => navigate("heroes", id)} />)}
         </div>

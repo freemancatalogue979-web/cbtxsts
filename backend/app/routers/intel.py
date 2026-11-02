@@ -16,20 +16,25 @@ import json
 import logging
 import os
 import re
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import timedelta
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import exists, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..clover_ai_models import AIAccountConsent
 from ..config import AVATAR_DIR
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import IntelLink, User
+from ..intel_cache import MAX_SNAPSHOT_BYTES, IntelAccountGeneration, IntelSnapshot, cache_payload, claim_refresh, decode_snapshot, finish_refresh, save_snapshot, snapshot_key
+from ..models import IntelLink, User, utcnow
 
 logger = logging.getLogger("clover.intel")
 
@@ -41,7 +46,6 @@ FALLBACK_URL = os.getenv("RONE_FALLBACK_URL", "").rstrip("/")
 SAFE_PATH = re.compile(r"^[a-z0-9][a-z0-9\-_/\. ]*$", re.IGNORECASE)  # hero names carry spaces ("Yu Zhong", "Yi Sun-shin")
 ALLOWED_BASES = ("heroes", "academy", "esports", "addon")
 
-_cache: dict[str, tuple[float, int, bytes]] = {}
 CACHE_TTL = int(os.getenv("RONE_CACHE_TTL", "300"))  # shifting stats: 5 min
 LONG_TTL = 3600  # reference data: 1 h
 LONG_LIVED = re.compile(
@@ -51,16 +55,30 @@ LONG_LIVED = re.compile(
 
 
 def _fetch(url: str) -> tuple[int, bytes]:
-    req = urllib.request.Request(
-        url, headers={"Accept": "application/json", "User-Agent": "9clover-hub/1.0"}
-    )
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        return resp.status, resp.read()
+    from ..esports_ai import _NoRedirect
+
+    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "9clover-hub/1.0"})
+    with urllib.request.build_opener(_NoRedirect()).open(req, timeout=12) as resp:
+        body = resp.read(MAX_SNAPSHOT_BYTES + 1)
+        if len(body) > MAX_SNAPSHOT_BYTES:
+            raise ValueError("Source response exceeds the snapshot size limit.")
+        return resp.status, body
 
 
 # ---------------------------------------------------------------------------
 # MLBB account linking (verified flow: send-vc → login → Bearer jwt per user)
 # ---------------------------------------------------------------------------
+
+def account_user(response: Response, authorization: str | None = Header(default=None),
+                 user: User = Depends(get_current_user)) -> User:
+    # Cookies are intended for media, not cross-origin account-stat reads or writes.
+    scheme, _, credential = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not credential.strip():
+        raise HTTPException(401, "Bearer sign-in required for your MLBB account.")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return user
+
 
 class SendCodeIn(BaseModel):
     role_id: int
@@ -84,18 +102,29 @@ def _rone_request(method: str, path: str, *, payload: dict | None = None,
         headers["Content-Type"] = "application/json"
         data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    from ..esports_ai import _NoRedirect
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
+        # Never forward an account bearer token to a redirected host.
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=15) as resp:
+            body = resp.read(MAX_SNAPSHOT_BYTES + 1)
+            if len(body) > MAX_SNAPSHOT_BYTES:
+                raise HTTPException(502, "MLBB data response was too large.")
+            result = json.loads(body)
+            if not isinstance(result, dict):
+                raise HTTPException(502, "MLBB data service returned an invalid response.")
+            return result
     except urllib.error.HTTPError as exc:
         try:
-            return json.loads(exc.read())
-        except Exception:
-            raise HTTPException(502, f"MLBB data service error (HTTP {exc.code})") from None
+            result = json.loads(exc.read(MAX_SNAPSHOT_BYTES + 1))
+            if isinstance(result, dict):
+                return result
+        except (ValueError, OSError):
+            pass
+        raise HTTPException(502, f"MLBB data service error (HTTP {exc.code})") from None
     except (json.JSONDecodeError,) as exc:
         raise HTTPException(502, "MLBB data service returned bad JSON") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise HTTPException(502, f"MLBB data service unreachable ({exc})") from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise HTTPException(502, "MLBB data service is unreachable.") from None
 
 
 def _envelope_error(env: dict) -> str | None:
@@ -159,7 +188,7 @@ def _get_link(user: User, db: Session) -> IntelLink:
 
 
 @router.post("/account/send-code")
-def account_send_code(body: SendCodeIn, user: User = Depends(get_current_user)) -> dict:
+def account_send_code(body: SendCodeIn, user: User = Depends(account_user)) -> dict:
     env = _rone_request("POST", "user/auth/send-vc", payload={"role_id": body.role_id, "zone_id": body.zone_id})
     err = _envelope_error(env)
     if err:
@@ -168,7 +197,7 @@ def account_send_code(body: SendCodeIn, user: User = Depends(get_current_user)) 
 
 
 @router.post("/account/connect")
-def account_connect(body: ConnectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def account_connect(body: ConnectIn, user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
     env = _rone_request("POST", "user/auth/login",
                         payload={"role_id": body.role_id, "zone_id": body.zone_id, "vc": body.vc})
     err = _envelope_error(env)
@@ -179,23 +208,36 @@ def account_connect(body: ConnectIn, user: User = Depends(get_current_user), db:
     if not jwt:
         raise HTTPException(502, "Upstream login returned no token")
     link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none() or IntelLink(user_id=user.id)
+    # Capture the new profile before replacing the existing link. Old account
+    # snapshots and AI consent must never carry across a relink.
+    info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
+    _purge_account_data(db, user.id)
     link.role_id = body.role_id
     link.zone_id = body.zone_id
     link.jwt = jwt
     link.token = str(data.get("token") or "")
-    # capture display name + avatar + level/rank while the session is fresh
-    info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
+    link.linked_at = utcnow()
+    link.display_name = link.avatar = ""
+    link.level = link.rank_level = None
     idata = info.get("data") if isinstance(info.get("data"), dict) else {}
     _cache_profile(link, idata)
     _adopt_avatar(user, link.avatar)
     db.add(link)
+    db.flush()
+    generation = IntelAccountGeneration(id=uuid4().hex, owner_id=user.id, link_id=link.id)
+    db.add(generation)
     db.commit()
+    try:
+        if not _envelope_error(info):
+            save_snapshot(db, "account", "user/info", "lang=en", _account_safe(info, secrets=(jwt, link.token)), owner_id=user.id, generation_id=generation.id)
+    except (ValueError, IntegrityError):
+        db.rollback()  # Linking succeeded even if the optional first snapshot could not be saved.
     logger.info("MLBB account linked for user %s (role %s)", user.id, body.role_id)  # ids only, never tokens
     return {"linked": True, "name": link.display_name, "role_id": body.role_id, "zone_id": body.zone_id}
 
 
 @router.get("/account/status")
-def account_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def account_status(user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
     link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none()
     return _summary(link) if link else {"linked": False}
 
@@ -214,46 +256,211 @@ def account_of(user_id: int, user: User = Depends(get_current_user), db: Session
     return _summary(link) if link else {"linked": False}
 
 
+_ACCOUNT_SECRET_KEYS = {"jwt", "token", "access_token", "refresh_token", "authorization", "password", "secret", "cookie", "vc", "verification_code", "sig", "signature", "api_key"}
+
+
+def _account_safe(value, depth: int = 0, secrets: tuple[str, ...] = ()):  # noqa: ANN001
+    """Remove credentials even if an account endpoint unexpectedly echoes them."""
+    if depth > 16:
+        return None
+    if isinstance(value, dict):
+        return {str(k): _account_safe(v, depth + 1, secrets) for k, v in value.items()
+                if str(k).lower().replace("-", "_") not in _ACCOUNT_SECRET_KEYS
+                and not re.search(r"token|password|secret|credential|jwt|authorization|cookie|verification|session", str(k), re.I)}
+    if isinstance(value, list):
+        return [_account_safe(v, depth + 1, secrets) for v in value[:1000]]
+    if isinstance(value, str):
+        if re.fullmatch(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value):
+            return ""
+        for secret in secrets:
+            if secret:
+                value = value.replace(secret, "[redacted]")
+        # Signed URLs can contain credentials too; do not persist such URLs.
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            if parsed.scheme in {"http", "https"} and any(
+                key.lower() in _ACCOUNT_SECRET_KEYS or "token" in key.lower()
+                for key, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+            ):
+                return ""
+        except ValueError:
+            return ""
+        return value[:20000]
+    return value if value is None or isinstance(value, (bool, int, float)) else None
+
+
+def _purge_account_data(db: Session, user_id: int) -> None:
+    # The generation FK also prevents an in-flight refresh re-creating old data.
+    db.query(IntelSnapshot).filter_by(scope="account", owner_id=user_id).delete(synchronize_session=False)
+    db.query(IntelAccountGeneration).filter_by(owner_id=user_id).delete(synchronize_session=False)
+    db.query(AIAccountConsent).filter_by(user_id=user_id).delete(synchronize_session=False)
+
+
+def _account_generation(db: Session, link: IntelLink) -> str:
+    owner_id, link_id = link.user_id, link.id
+    existing = db.query(IntelAccountGeneration).filter_by(owner_id=owner_id, link_id=link_id).one_or_none()
+    if existing:
+        return existing.id
+    row = IntelAccountGeneration(id=uuid4().hex, owner_id=owner_id, link_id=link_id)
+    db.add(row)
+    try:
+        db.commit()
+        return row.id
+    except IntegrityError:
+        db.rollback()  # Another request may have created the namespace for a legacy link.
+        existing = db.query(IntelAccountGeneration).filter_by(owner_id=owner_id, link_id=link_id).one_or_none()
+        if existing is None:
+            raise HTTPException(409, "Your linked account changed. Please reload.") from None
+        return existing.id
+
+
+def _account_meta(payload: dict, observed_at, state: str, refreshing: bool = False, error: bool = False) -> dict:  # noqa: ANN001
+    return {**payload, "_clover_cache": {"observed_at": observed_at.isoformat() + "Z" if observed_at else None,
+                                          "status": state, "refreshing": refreshing, "refresh_failed": error}}
+
+
+def _update_profile_if_current(db: Session, user_id: int, generation_id: str, jwt: str, data: dict) -> None:
+    values: dict = {}
+    for key, attr, limit in (("name", "display_name", 120), ("avatar", "avatar", 500)):
+        if isinstance(data.get(key), str) and data[key]:
+            values[attr] = data[key][:limit]
+    for key in ("level", "rank_level"):
+        try:
+            if data.get(key) is not None:
+                values[key] = int(data[key])
+        except (ValueError, TypeError, OverflowError):
+            pass
+    if values:
+        active_generation = exists().where(IntelAccountGeneration.id == generation_id, IntelAccountGeneration.owner_id == user_id,
+                                           IntelAccountGeneration.link_id == IntelLink.id)
+        db.execute(update(IntelLink).where(IntelLink.user_id == user_id, IntelLink.jwt == jwt, active_generation).values(**values))
+        db.commit()
+
+
+def _refresh_account_snapshot(bind, key: str, user_id: int, generation_id: str, path: str, query: str, token: str) -> None:  # noqa: ANN001
+    with Session(bind=bind) as db:
+        try:
+            generation = db.get(IntelAccountGeneration, generation_id)
+            link = db.query(IntelLink).filter_by(user_id=user_id).one_or_none()
+            if not generation or generation.owner_id != user_id or not link or link.id != generation.link_id:
+                return
+            jwt = link.jwt  # Never place credentials in the task queue, snapshots or logs.
+            secrets = (jwt, link.token)
+            params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
+            payload = _account_safe(_rone_request("GET", path, params=params, jwt=jwt), secrets=secrets)
+            if _envelope_error(payload):
+                raise ValueError("Source returned an error.")
+            cache_payload(payload)
+            saved = finish_refresh(db, key, token, payload)
+            if saved and path == "user/info" and isinstance(payload.get("data"), dict):
+                _update_profile_if_current(db, user_id, generation_id, jwt, payload["data"])
+        except Exception:
+            db.rollback()
+            finish_refresh(db, key, token, None, "Refresh failed; the saved snapshot was retained.")
+
+
+def _account_cached(db: Session, user: User, link: IntelLink, path: str, params: dict,
+                    background_tasks: BackgroundTasks) -> dict:
+    generation_id = _account_generation(db, link)
+    query = urllib.parse.urlencode(sorted(params.items()))
+    key = snapshot_key("account", path, query, user.id, generation_id)
+    row = db.get(IntelSnapshot, key)
+    if row:
+        try:
+            payload = decode_snapshot(row)
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid saved account response.")
+        except (ValueError, TypeError):
+            db.delete(row); db.commit()
+        else:
+            observed_at = row.observed_at
+            stale = observed_at + timedelta(seconds=CACHE_TTL) <= utcnow()
+            had_error = bool(row.last_error)
+            refreshing = bool(row.lease_until and row.lease_until > utcnow())
+            if stale:
+                token = uuid4().hex
+                if claim_refresh(db, key, token):
+                    background_tasks.add_task(_refresh_account_snapshot, db.get_bind(), key, user.id, generation_id, path, query, token)
+                    refreshing = True
+            return _account_meta(payload, observed_at, "stale" if stale else "fresh", refreshing, had_error)
+
+    jwt = link.jwt
+    payload = _account_safe(_rone_request("GET", path, params=params, jwt=jwt), secrets=(jwt, link.token))
+    if _envelope_error(payload):
+        return payload
+    db.expire_all()
+    current = db.query(IntelLink).filter_by(user_id=user.id).one_or_none()
+    if not current or current.jwt != jwt or not db.get(IntelAccountGeneration, generation_id):
+        raise HTTPException(409, "Your linked account changed. Please reload.")
+    try:
+        row = save_snapshot(db, "account", path, query, payload, owner_id=user.id, generation_id=generation_id)
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise HTTPException(409, "Your linked account changed or the snapshot was too large. Please reload.") from None
+    if path == "user/info" and isinstance(payload.get("data"), dict):
+        _update_profile_if_current(db, user.id, generation_id, jwt, payload["data"])
+    return _account_meta(payload, row.observed_at, "fresh")
+
+
+def _account_params(request: Request, matches: bool) -> dict:
+    allowed = {"index", "size", "lang"} if matches else {"lang"}
+    if any(key not in allowed for key in request.query_params):
+        raise HTTPException(400, "Invalid account data query.")
+    result: dict = {"lang": request.query_params.get("lang", "en")}
+    if not re.fullmatch(r"[A-Za-z-]{2,12}", result["lang"]):
+        raise HTTPException(400, "Invalid language.")
+    if matches:
+        for key, default, maximum in (("index", 1, 100), ("size", 20, 50)):
+            try:
+                value = int(request.query_params.get(key, str(default)))
+            except ValueError:
+                raise HTTPException(400, f"Invalid {key}.") from None
+            if not 1 <= value <= maximum:
+                raise HTTPException(400, f"Invalid {key}.")
+            result[key] = value
+    return result
+
+
 @router.get("/account/profile")
-def account_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def account_profile(background_tasks: BackgroundTasks, response: Response, user: User = Depends(account_user),
+                    db: Session = Depends(get_db)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
     link = _get_link(user, db)
     out: dict = {"link": _summary(link)}
     for key, path in (("info", "user/info"), ("season", "user/season"), ("stats", "user/stats")):
         try:
-            out[key] = _rone_request("GET", path, params={"lang": "en"}, jwt=link.jwt)
-            if key == "info" and isinstance(out[key].get("data"), dict):
-                _cache_profile(link, out[key]["data"])  # keep roster snapshot fresh
-                _adopt_avatar(user, link.avatar)
-                db.commit()
-                out["link"] = _summary(link)
+            out[key] = _account_cached(db, user, link, path, {"lang": "en"}, background_tasks)
         except HTTPException as exc:
             out[key] = {"code": -1, "error": str(exc.detail)}
+    out["link"] = _summary(link)
     return out
 
 
 @router.get("/account/matches")
-def account_matches(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    link = _get_link(user, db)
-    params = dict(request.query_params)
-    return _rone_request("GET", "user/matches", params=params or {"lang": "en"}, jwt=link.jwt)
+def account_matches(request: Request, background_tasks: BackgroundTasks, response: Response,
+                    user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return _account_cached(db, user, _get_link(user, db), "user/matches", _account_params(request, True), background_tasks)
 
 
 @router.get("/account/heroes")
-def account_heroes(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    link = _get_link(user, db)
-    params = dict(request.query_params)
-    return _rone_request("GET", "user/heroes/frequent", params=params or {"lang": "en"}, jwt=link.jwt)
+def account_heroes(request: Request, background_tasks: BackgroundTasks, response: Response,
+                   user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return _account_cached(db, user, _get_link(user, db), "user/heroes/frequent", _account_params(request, False), background_tasks)
 
 
 @router.post("/account/disconnect")
-def account_disconnect(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def account_disconnect(user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
     link = _get_link(user, db)
-    try:
-        _rone_request("POST", "user/auth/logout", payload={}, jwt=link.jwt)
-    except HTTPException:
-        pass  # local cleanup happens regardless of upstream state
+    jwt = link.jwt
+    _purge_account_data(db, user.id)
     db.delete(link)
-    db.commit()
+    db.commit()  # Local access and saved data are removed even if logout fails.
+    try:
+        _rone_request("POST", "user/auth/logout", payload={}, jwt=jwt)
+    except HTTPException:
+        pass
     logger.info("MLBB account unlinked for user %s", user.id)
     return {"linked": False}
 
@@ -262,36 +469,80 @@ def account_disconnect(user: User = Depends(get_current_user), db: Session = Dep
 # Generic public GET proxy — registered LAST so /account/* wins the routing.
 # ---------------------------------------------------------------------------
 
-@router.get("/{path:path}")
-def intel_proxy(path: str, request: Request, _user: User = Depends(get_current_user)) -> JSONResponse:
-    if path.startswith("account") or not SAFE_PATH.match(path or ""):
-        raise HTTPException(404, "unknown endpoint")
-    base = path.split("/", 1)[0]
-    if base not in ALLOWED_BASES:
-        raise HTTPException(403, "endpoint not proxied")
-
-    qs = request.url.query
+def _public_fetch(path: str, query: str) -> tuple[int, object]:
     safe_path = urllib.parse.quote(path, safe="/._-")
-    key = f"{path}?{qs}"
-    hit = _cache.get(key)
-    if hit and hit[0] > time.time():
-        return JSONResponse(status_code=hit[1], content=json.loads(hit[2]), headers={"x-intel-cache": "hit"})
-
-    ttl = LONG_TTL if LONG_LIVED.match(path) else CACHE_TTL
-    last_err: Exception | None = None
     for host in [BASE_URL] + ([FALLBACK_URL] if FALLBACK_URL else []):
         try:
-            status, body = _fetch(f"{host}/{safe_path}" + (f"?{qs}" if qs else ""))
-            payload = json.loads(body)
-            if status == 200:
-                _cache[key] = (time.time() + ttl, status, body)
-                if len(_cache) > 500:  # crude bound
-                    _cache.clear()
-            return JSONResponse(status_code=status, content=payload, headers={"x-intel-cache": "miss"})
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            last_err = exc
-            logger.warning("intel upstream failed via %s: %s", host, exc)
-        except json.JSONDecodeError as exc:
-            last_err = exc
-            break
-    raise HTTPException(502, f"MLBB data service unreachable ({last_err})")
+            status, body = _fetch(f"{host}/{safe_path}" + (f"?{query}" if query else ""))
+            return status, json.loads(body)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            logger.warning("Public MLBB data refresh failed for %s", path)
+    raise HTTPException(502, "MLBB data service is unavailable. No saved snapshot exists yet.")
+
+
+def _refresh_public_snapshot(bind, key: str, path: str, query: str, token: str) -> None:  # noqa: ANN001
+    # A new session is required: the request's session closes after the response.
+    with Session(bind=bind) as db:
+        try:
+            status, payload = _public_fetch(path, query)
+            if status != 200:
+                raise ValueError("Source returned an error.")
+            cache_payload(payload)
+            finish_refresh(db, key, token, payload)
+        except Exception:
+            db.rollback()
+            finish_refresh(db, key, token, None, "Refresh failed; the saved snapshot was retained.")
+
+
+def _snapshot_response(payload: object, observed_at, state: str, refreshing: bool = False, error: bool = False) -> JSONResponse:  # noqa: ANN001
+    meta = {"observed_at": observed_at.isoformat() + "Z" if observed_at else None,
+            "status": state, "refreshing": refreshing, "refresh_failed": error}
+    # The upstream envelope is preserved; extra metadata is ignored by old clients.
+    content = {**payload, "_clover_cache": meta} if isinstance(payload, dict) else payload
+    return JSONResponse(content=content, headers={"x-intel-cache": state, "Cache-Control": "no-store"})
+
+
+@router.get("/{path:path}")
+def intel_proxy(path: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+                _user: User = Depends(get_current_user)) -> JSONResponse:
+    if (path.startswith("account") or not SAFE_PATH.fullmatch(path or "") or len(path) > 256
+            or any(part in {"", ".", ".."} for part in path.split("/"))):
+        raise HTTPException(404, "unknown endpoint")
+    if path.split("/", 1)[0] not in ALLOWED_BASES:
+        raise HTTPException(403, "endpoint not proxied")
+    query = request.url.query
+    if len(query) > 2048 or any(key.casefold() in {"token", "access_token", "jwt", "authorization", "api_key", "password", "vc"}
+                                 for key in request.query_params):
+        raise HTTPException(400, "Invalid public data query.")
+
+    key = snapshot_key("public", path, query)
+    row = db.get(IntelSnapshot, key)
+    ttl = LONG_TTL if LONG_LIVED.match(path) else CACHE_TTL
+    if row is not None:
+        try:
+            payload = decode_snapshot(row)
+        except (ValueError, TypeError):
+            # A corrupt snapshot is not a successful source response.
+            db.delete(row); db.commit(); row = None
+        else:
+            observed_at = row.observed_at
+            stale = observed_at + timedelta(seconds=ttl) <= utcnow()
+            had_error = bool(row.last_error)
+            refreshing = bool(row.lease_until and row.lease_until > utcnow())
+            if stale:
+                token = uuid4().hex
+                claimed = claim_refresh(db, key, token)
+                if claimed:
+                    background_tasks.add_task(_refresh_public_snapshot, db.get_bind(), key, path, query, token)
+                    refreshing = True
+            return _snapshot_response(payload, observed_at, "stale" if stale else "fresh", refreshing, had_error)
+
+    status, payload = _public_fetch(path, query)
+    if status != 200:
+        return JSONResponse(status_code=status, content=payload, headers={"Cache-Control": "no-store"})
+    try:
+        row = save_snapshot(db, "public", path, query, payload)
+    except ValueError:
+        # Preserve an upstream error envelope for existing clients; never cache it.
+        return JSONResponse(content=payload, headers={"x-intel-cache": "not-saved", "Cache-Control": "no-store"})
+    return _snapshot_response(payload, row.observed_at, "fresh")

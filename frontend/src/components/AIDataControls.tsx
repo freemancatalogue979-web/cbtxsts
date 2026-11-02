@@ -43,7 +43,7 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
     finally { setBusy(false); }
   }
   async function clear() {
-    if (!window.confirm("Delete all your coaching notes and coaching goal, turn off automatic profile, pool, scrim and chat-history context, and remove attached matches and boards from this open chat? This affects future requests; anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
+    if (!window.confirm("Delete all your coaching notes and coaching goal, turn off automatic profile, account statistics, pool, scrim and chat-history context, and remove attached matches and boards from this open chat? This affects future requests; anything already sent cannot be recalled. Your profile and saved conversations will stay.")) return;
     setBusy(true); setError(null); setNotice("");
     try {
       const updated = await api.del<AISettings>("/ai/settings/memory");
@@ -59,7 +59,7 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         <ShieldCheck size={19} className="text-leaf shrink-0 mt-0.5" />
         <div>
           <div className="text-[13px] font-extrabold">Your data, your call.</div>
-          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, pool and scrim context are off by default; recent chat history is on by default. Individually enabled notes can also be included in an external AI request. Your current question is sent when the provider is used.</p>
+          <p className="text-[11px] text-mute leading-relaxed mt-1">Automatic profile, account statistics, pool and scrim context are off by default; recent chat history is on by default. Individually enabled notes can also be included in an external AI request. Your current question is sent when the provider is used.</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-3 gap-2">
@@ -83,6 +83,9 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         <Toggle label="Profile & linked account" checked={settings.share_profile} disabled={busy || notesBusy}
           description="Your name, main lane, coaching goal and cached linked-account snapshot. Account ID and server are included only when your question asks about them. Rone login tokens are never pulled automatically."
           onChange={() => save({ share_profile: !settings.share_profile })} />
+        <Toggle label="My MLBB account statistics" checked={!!settings.share_account_stats} disabled={busy || notesBusy}
+          description="Separately opt in to sharing a small, filtered sample of your own saved account stats, frequent heroes and match results with the external AI provider when relevant. No login tokens or other players’ details are included. Requires a linked account; disconnecting or relinking turns this off."
+          onChange={() => save({ share_account_stats: !settings.share_account_stats })} />
         <Toggle label="Hero pool" checked={settings.share_pool} disabled={busy || notesBusy}
           description="Up to 25 of your own recorded picks, confidence and entered game counts. Coach notes are excluded."
           onChange={() => save({ share_pool: !settings.share_pool })} />

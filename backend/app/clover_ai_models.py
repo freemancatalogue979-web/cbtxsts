@@ -13,6 +13,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
+from .intel_cache import IntelAccountGeneration
 from .models import utcnow
 
 
@@ -29,6 +30,16 @@ class AISettings(Base):
     share_scrims: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     use_history: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     coaching_goal: Mapped[str] = mapped_column(String(600), default="", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class AIAccountConsent(Base):
+    """Separate, revocable opt-in for private MLBB account statistics."""
+    __tablename__ = "clover_ai_account_consent"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    generation_id: Mapped[str] = mapped_column(ForeignKey(IntelAccountGeneration.id, ondelete="CASCADE"), nullable=False)
+    share_account_stats: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 

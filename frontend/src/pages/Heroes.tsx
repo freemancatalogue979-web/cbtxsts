@@ -458,7 +458,7 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
   const fallbackCard = (withRetry: boolean) => (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4"><span className="section-pill">Skills</span>
-        {withRetry && <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry live kit</button>}
+        {withRetry && <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry Rone kit</button>}
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         {fallbackNames.map((s, i) => (
@@ -474,15 +474,15 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
   );
   if (!sets) {
     if (err) return fallbackNames.length > 0 ? fallbackCard(true)
-      : <div className="card p-5"><div className="section-pill mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Live kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
-    return <div className="card p-5"><div className="section-pill">Skills</div><Spinner label="Loading official kit" /></div>;
+      : <div className="card p-5"><div className="section-pill mb-2">Skills</div><div className="text-[11.5px] text-faint flex items-center justify-between gap-2">Rone kit unavailable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button></div></div>;
+    return <div className="card p-5"><div className="section-pill">Skills</div><Spinner label="Loading Rone kit" /></div>;
   }
   if (sets.length === 0) return fallbackNames.length > 0 ? fallbackCard(true) : null;
 
   const multiForm = sets.length > 1;
   return (
     <div className="card p-5">
-      <div className="section-pill mb-4">Skills · official kit</div>
+      <div className="section-pill mb-4">Skills · Rone snapshot</div>
       <div className="space-y-5">
         {sets.map((kit, ki) => (
           <div key={kit.listid ?? ki} className={multiForm ? "space-y-2" : ""}>
@@ -522,7 +522,7 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
           </div>
         ))}
       </div>
-      <div className="text-[10px] text-faint mt-3">P = passive · S1/S2 = skills · ULT = ultimate. Icons, descriptions &amp; tags: live Rone Arena (Moonton) data.</div>
+      <div className="text-[10px] text-faint mt-3">P = passive · S1/S2 = skills · ULT = ultimate. Icons, descriptions &amp; tags: saved Rone Arena snapshot; may be out of date.</div>
     </div>
   );
 }
@@ -544,13 +544,13 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
   useEffect(load, [load]);
   if (err) return (
     <div className="card p-5">
-      <div className="section-pill mb-2">Skill combos · live game data</div>
+      <div className="section-pill mb-2">Skill combos · Rone snapshot</div>
       <div className="text-[11.5px] text-faint flex items-center justify-between gap-2">
         Data service unreachable. <button className="btn-ghost !py-1 !text-[10.5px]" onClick={load}>Retry</button>
       </div>
     </div>
   );
-  if (!rows) return <div className="card p-5"><div className="section-pill">Skill combos · live game data</div><Spinner label="Loading combos" /></div>;
+  if (!rows) return <div className="card p-5"><div className="section-pill">Skill combos · Rone snapshot</div><Spinner label="Loading combos" /></div>;
   if (rows.length === 0) return null; // upstream simply has none for this hero
   const skills: { icon?: string; id?: number }[] = [];
   // dedupe icons in order of first appearance across all combos
@@ -561,7 +561,7 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
   }
   return (
     <div className="card p-5">
-      <div className="section-pill mb-4">Skill combos · live game data</div>
+      <div className="section-pill mb-4">Skill combos · Rone snapshot</div>
       {skills.length > 0 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {skills.map((s, i) => (
@@ -571,7 +571,7 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
                 : <span className="text-[9px] font-extrabold text-faint">{s.id ?? "?"}</span>}
             </span>
           ))}
-          <span className="text-[10px] text-faint ml-1">official skill icons</span>
+          <span className="text-[10px] text-faint ml-1">Rone skill icons</span>
         </div>
       )}
       <div className="space-y-3">

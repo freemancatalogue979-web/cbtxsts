@@ -12,6 +12,7 @@ const REGIONS = [
   { id: "my", league: "MPL MY" }, { id: "kh", league: "MPL KH" },
 ];
 type View = "schedule" | "standings" | "playoffs";
+type CacheInfo = { observed_at?: string | null; status?: string; refreshing?: boolean; refresh_failed?: boolean };
 
 function winsLosses(wins: number | null, losses: number | null): string {
   return wins === null || losses === null ? "—" : `${esportsNumber(wins)}–${esportsNumber(losses)}`;
@@ -54,6 +55,7 @@ export function RoneEsportsPage() {
   const [region, setRegion] = useState("ph");
   const [view, setView] = useState<View>("schedule");
   const [feed, setFeed] = useState<RoneFeed | null>(null);
+  const [cache, setCache] = useState<CacheInfo | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [query, setQuery] = useState("");
@@ -61,12 +63,24 @@ export function RoneEsportsPage() {
   const [selected, setSelected] = useState<RoneMatch | null>(null);
 
   useEffect(() => {
-    let live = true;
-    setErr(null); setFeed(null); setWeek(null); setSelected(null);
-    intelRaw(`esports/${region}/${view}`)
-      .then((payload) => { if (live) setFeed(parseRoneFeed(payload)); })
-      .catch(() => { if (live) setErr("The Rone feed couldn’t load from this server. Try again or choose another region."); });
-    return () => { live = false; };
+    let active = true;
+    let timer: number | undefined;
+    setErr(null); setFeed(null); setCache(null); setWeek(null); setSelected(null);
+    const load = (attempt = 0) => {
+      intelRaw<Record<string, unknown>>(`esports/${region}/${view}`)
+        .then((payload) => {
+          if (!active) return;
+          const info = payload && typeof payload._clover_cache === "object" ? payload._clover_cache as CacheInfo : null;
+          setFeed(parseRoneFeed(payload)); setCache(info); setErr(null);
+          // The server immediately returns the saved feed and refreshes separately.
+          if (info?.status === "stale" && info.refreshing && attempt < 3) {
+            timer = window.setTimeout(() => load(attempt + 1), 2500 * (attempt + 1));
+          }
+        })
+        .catch(() => { if (active && attempt === 0) setErr("The Rone feed couldn’t load from this server. Try again or choose another region."); });
+    };
+    load();
+    return () => { active = false; window.clearTimeout(timer); };
   }, [region, view, retry]);
 
   const league = useMemo(() => REGIONS.find((item) => item.id === region)?.league ?? region.toUpperCase(), [region]);
@@ -83,6 +97,10 @@ export function RoneEsportsPage() {
 
   return <div className="space-y-5 pb-7">
     <PageTitle title="Rone esports" sub="MPL fixtures, standings and playoffs from a community data feed." />
+    {cache?.observed_at && <p className="text-[11px] text-mute" role="status">
+      Saved {new Date(cache.observed_at).toLocaleString()} · {cache.status === "stale" ? "may be out of date" : "recent snapshot"}
+      {cache.refreshing ? " · refreshing in the background" : cache.refresh_failed ? " · last refresh failed; saved data retained" : ""}
+    </p>}
     <div className="flex flex-wrap gap-1.5">{REGIONS.map((item) => <button key={item.id} onClick={() => setRegion(item.id)}
       className={`chip !px-3 !py-1.5 ${region === item.id ? "border-leaf/60 text-leaf bg-leaf-dim/40" : "text-faint"}`}><Globe2 size={12} /> {item.league}</button>)}</div>
     <Tabs value={view} onChange={(value) => { setView(value as View); setQuery(""); }} tabs={[

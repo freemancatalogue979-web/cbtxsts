@@ -322,7 +322,7 @@ class ResearchTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "synthetic-key"}), patch(
             "app.clover_ai_service.urllib.request.build_opener", return_value=SimpleNamespace(open=upstream)
-        ), patch("app.routers.esports._refresh_detail_if_needed", side_effect=AssertionError("no refresh")):
+        ), patch("app.routers.esports._claim_detail_refresh", side_effect=AssertionError("no refresh")):
             result = self.req(
                 "POST", f"/conversations/{chat}/messages", payload={"text": "Analyze Alpha's latest esports match"}
             )[1]

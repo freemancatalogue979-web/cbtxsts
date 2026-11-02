@@ -12,7 +12,7 @@ import re
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
@@ -176,7 +176,38 @@ def _evidence(payload: dict, region: str, view: str, question: str, observed: st
     return result
 
 
-def lookup(question: str) -> tuple[dict | None, list[dict], str]:
+def saved_feed(db, question: str) -> tuple[dict | None, list[dict]]:  # noqa: ANN001
+    """Use the same durable public snapshot shown on the Rone page, if present."""
+    from .intel_cache import IntelSnapshot, decode_snapshot, snapshot_key
+    from .routers.intel import CACHE_TTL, LONG_TTL
+
+    requested = requested_feed(question)
+    if requested is None:
+        return None, []
+    region, view = requested
+    row = db.get(IntelSnapshot, snapshot_key("public", f"esports/{region}/{view}"))
+    if not row:
+        return None, []
+    try:
+        payload = decode_snapshot(row)
+        root = _dict(payload.get("data")) if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+        expected = {"standings": ("standings",), "schedule": ("weeks", "matches", "schedule"),
+                    "playoffs": ("days", "matches", "seeds")}[view]
+        if not isinstance(root, dict) or not any(isinstance(root.get(key), list) for key in expected):
+            return None, []
+        observed = row.observed_at.isoformat() + "Z"
+        evidence = _evidence(payload, region, view, question, observed)
+    except (ValueError, TypeError):
+        return None, []
+    ttl = LONG_TTL if view in {"standings", "playoffs"} else CACHE_TTL
+    evidence.update(status="saved", stale=row.observed_at + timedelta(seconds=ttl) < utcnow(),
+                    refresh_failed=bool(row.last_error))
+    evidence["notice"] += " This is a saved snapshot, not proof of live or current-season coverage."
+    return evidence, [{"kind": "esports_feed", "label": f"Saved Rone MPL {region.upper()} · {view}",
+                       "observed_at": observed, "route": "esports"}]
+
+
+def lookup(question: str, db=None) -> tuple[dict | None, list[dict], str]:  # noqa: ANN001
     requested = requested_feed(question)
     if requested is None:
         return None, [], ""
@@ -226,6 +257,12 @@ def lookup(question: str) -> tuple[dict | None, list[dict], str]:
                     [],
                     "The public MPL feed could not be retrieved.",
                 )
+    if db is not None:
+        from .intel_cache import save_snapshot
+        try:
+            save_snapshot(db, "public", f"esports/{region}/{view}", "", {k: v for k, v in payload.items() if k != "_observed_at"})
+        except Exception:
+            db.rollback()  # A valid answer may still use this bounded live result.
     evidence = _evidence(payload, region, view, question, observed)
     evidence["status"] = "ok"
     # Display a direct link only when the configured feed URL is public HTTPS.

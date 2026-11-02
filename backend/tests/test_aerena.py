@@ -141,6 +141,29 @@ class PersistenceTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
+    def test_match_detail_returns_saved_data_before_background_refresh(self):
+        from fastapi import BackgroundTasks
+        from app.routers.esports import get_match
+
+        save_match(self.db, match(), self.league)
+        self.db.commit()
+        tasks = BackgroundTasks()
+        with patch("app.routers.esports.ENABLED", True), patch("app.routers.esports.client.match_stats", side_effect=OSError("offline")) as upstream:
+            result = get_match(MATCH_ID, tasks, self.db, SimpleNamespace(id=1))
+            self.assertTrue(result["detail_refreshing"])
+            self.assertEqual(result["match"]["id"], MATCH_ID)
+            self.assertEqual(upstream.call_count, 0)  # Source is not called before the saved response.
+            self.assertEqual(len(tasks.tasks), 1)
+            task = tasks.tasks[0]
+            task.func(*task.args, **task.kwargs)
+            self.db.expire_all()
+            self.assertEqual(upstream.call_count, 1)
+            self.assertTrue(self.db.get(AerenaMatch, MATCH_ID).detail_error)
+            retry = get_match(MATCH_ID, BackgroundTasks(), self.db, SimpleNamespace(id=1))
+            self.assertFalse(retry["detail_refreshing"])
+            self.assertEqual(retry["match"]["id"], MATCH_ID)
+            self.assertEqual(upstream.call_count, 1)  # The cooldown deduplicates failures.
+
     def test_real_source_order_and_snapshot_are_persisted_without_inventing(self):
         save_match(self.db, match(), self.league)
         self.db.commit()

@@ -258,17 +258,58 @@ _ESPORTS_SKIP = {
     "performance",
     "perform",
     "played",
+    "access",
+    "accessible",
+    "available",
+    "availability",
+    "data",
+    "information",
+    "database",
+    "platform",
+    "sources",
+    "source",
+    "coverage",
+    "connected",
+    "connection",
+    "know",
+    "anything",
+    "there",
+    "you",
+    "your",
+    "about",
+    "update",
+    "updates",
+    "news",
+    "scene",
+    "going",
+    "into",
+    "right",
+    "now",
+    "see",
+    "all",
+    "any",
+    "currently",
+    "able",
+    "does",
+    "has",
+    "details",
+    "related",
+    "available",
 }
+
+
+def esports_intent(question: str) -> bool:
+    # A clear team acronym plus a match/draft question is also esports intent.
+    acronym = bool(re.search(r"\b[A-Z]{3,8}\b", question)) and bool(
+        re.search(r"\b(matches|match|games?|draft|series|picks?|bans?|results?|scores?)\b", question, re.I)
+    )
+    return bool(_ESPORTS_INTENT.search(question) or acronym)
 
 
 def automatic_match_ids(db: Session, question: str) -> list[str]:
     """Find a small, relevant saved sample; do not invent matches or refresh upstream."""
     tokens = [word for word in re.findall(r"[\w-]{3,}", question.casefold()) if word not in _ESPORTS_SKIP][:8]
-    # A clear team acronym plus a match/draft question is also esports intent.
-    acronym = bool(re.search(r"\b[A-Z]{3,8}\b", question)) and bool(
-        re.search(r"\b(matches|match|games?|draft|series|picks?|bans?|results?|scores?)\b", question, re.I)
-    )
-    if not _ESPORTS_INTENT.search(question) and not acronym:
+    if not esports_intent(question):
         return []
     base = db.query(AerenaMatch, AerenaLeague).outerjoin(AerenaLeague, AerenaMatch.league_id == AerenaLeague.id)
     # Never mix another MPL region's saved matches into an explicitly regional question.

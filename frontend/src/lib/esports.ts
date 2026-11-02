@@ -36,7 +36,7 @@ export interface EsportsGame {
   draft_coverage: "none" | "partial" | "complete" | "ambiguous"; draft_fetched_at: string | null;
   draft: EsportsDraftEvent[]; player_stats: EsportsPlayerStat[];
 }
-export interface EsportsDetail { match: EsportsMatch; games: EsportsGame[]; detail_error: string | null; source_note: string }
+export interface EsportsDetail { match: EsportsMatch; games: EsportsGame[]; detail_error: string | null; detail_refreshing?: boolean; source_note: string }
 export interface EsportsAnalysis { mode: "facts" | "ai"; answer: string; note: string; source_url: string; fetched_at: string | null }
 export interface EsportsSceneAnalysis { mode: "facts" | "ai"; answer: string; note: string; sources: { match_id: string; source_url: string; fetched_at: string | null }[] }
 export type EsportsView = "upcoming" | "results" | "all";

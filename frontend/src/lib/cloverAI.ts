@@ -13,6 +13,7 @@ export type AIStatus = {
 
 export type AISettings = {
   share_profile: boolean;
+  share_account_stats: boolean;
   share_pool: boolean;
   share_scrims: boolean;
   use_history: boolean;

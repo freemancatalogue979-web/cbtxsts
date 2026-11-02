@@ -70,6 +70,21 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
   );
 }
 
+type AccountCache = { observed_at?: string; status?: string; refreshing?: boolean; refresh_failed?: boolean };
+function accountCache(payload: unknown): AccountCache | null {
+  if (!payload || typeof payload !== "object") return null;
+  const meta = (payload as AnyRec)._clover_cache;
+  return meta && typeof meta === "object" ? meta as AccountCache : null;
+}
+function SnapshotNote({ payload }: { payload: unknown }) {
+  const cache = accountCache(payload);
+  if (!cache?.observed_at) return null;
+  return <p className="text-[10px] text-mute mt-2" role="status">
+    Saved {new Date(cache.observed_at).toLocaleString()} · {cache.status === "stale" ? "may be out of date" : "recent snapshot"}
+    {cache.refreshing ? " · refreshing" : cache.refresh_failed ? " · refresh failed; saved data retained" : ""}
+  </p>;
+}
+
 function Section({ title, payload, hide }: { title: string; payload: unknown; hide?: string[] }) {
   const env = payload as AnyRec | undefined;
   if (!env) return null;
@@ -116,6 +131,7 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
           ))}
       </div>
       {flat.length === 0 && <div className="text-[11.5px] text-faint">No further fields.</div>}
+      <SnapshotNote payload={payload} />
     </div>
   );
 }
@@ -164,7 +180,7 @@ function ProfileHeroCard({ status, info }: { status: LinkStatus; info: unknown }
         </div>
         <Badge cls="text-leaf border-leaf/40">connected</Badge>
       </div>
-      <div className="relative px-5 pb-3 text-[9.5px] text-faint">Tier values are the official ladder index as reported upstream.</div>
+      <div className="relative px-5 pb-3 text-[9.5px] text-faint">Tier values are the ladder index as reported upstream.<SnapshotNote payload={info} /></div>
     </div>
   );
 }
@@ -174,6 +190,7 @@ function ListSection({ title, payload, heroNames }: { title: string; payload: un
   return (
     <div>
       <SectionTitle>{title}</SectionTitle>
+      <SnapshotNote payload={payload} />
       {rows.length === 0 ? <Empty title="Nothing returned" hint="Upstream may not expose this yet" /> : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
           {rows.slice(0, 12).map((r, i) => {
@@ -219,19 +236,27 @@ export function AccountMLBBPage() {
     finally { setBusy(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  const refreshing = [profile?.info, profile?.season, profile?.stats, matches, heroes].some((item) => accountCache(item)?.refreshing);
+  useEffect(() => {
+    if (!refreshing) return;
+    const timer = window.setTimeout(() => { void load(); }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [refreshing, profile, matches, heroes, load]);
 
   const unlink = async () => {
-    if (!confirm("Disconnect your MLBB account? Your stats stop syncing (nothing is deleted upstream).")) return;
-    await disconnectLink().catch(() => null);
-    setProfile(null); setMatches(null); setHeroes(null);
-    void load();
+    if (!confirm("Disconnect your MLBB account? Saved account snapshots and their AI-sharing consent are removed here; nothing is deleted upstream.")) return;
+    try {
+      await disconnectLink();
+      setProfile(null); setMatches(null); setHeroes(null);
+      void load();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Could not disconnect."); }
   };
 
   if (busy && !status) return <Spinner label="Checking account link" />;
 
   return (
     <div className="space-y-6">
-      <PageTitle title="My MLBB" sub="Link your in-game account via mail verification — privacy-first, tokens stay server-side."
+      <PageTitle title="My MLBB" sub="Your saved account snapshots load first and refresh in the background; tokens stay server-side."
         right={status?.linked && (
           <div className="flex gap-2">
             <button className="btn-ghost" onClick={() => void load()}><RefreshCw size={14} /> Refresh</button>
@@ -269,7 +294,7 @@ export function AccountMLBBPage() {
             heroNames={(d) => pickStr(d, "hero_name", "result") ?? (pickNum(d, "match_time", "time") ? new Date(Number(pickNum(d, "match_time", "time")) * 1000).toLocaleDateString() : undefined)} />}
 
           <div className="text-[11px] text-faint flex items-center gap-1.5">
-            <LogOut size={11} /> Disconnect revokes your session upstream and wipes the stored token from our database.
+            <LogOut size={11} /> Disconnect removes your saved account snapshots, AI-sharing consent and stored token. Upstream logout is attempted.
           </div>
         </>
       )}

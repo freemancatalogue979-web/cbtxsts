@@ -69,10 +69,17 @@ export function EsportsMatchModal({ matchId, aiConfigured, onClose }: { matchId:
   const [gameNumber, setGameNumber] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    api.get<EsportsDetail>(`/esports/matches/${encodeURIComponent(matchId)}`).then((data) => {
-      if (alive) { setDetail(data); setGameNumber(data.games[0]?.number ?? null); }
-    }).catch((err) => { if (alive) setError(err instanceof Error ? err.message : "Could not load match."); });
-    return () => { alive = false; };
+    let timer: number | undefined;
+    setDetail(null); setError(null); setGameNumber(null);
+    const load = (attempt = 0) => {
+      api.get<EsportsDetail>(`/esports/matches/${encodeURIComponent(matchId)}`).then((data) => {
+        if (!alive) return;
+        setDetail(data); setGameNumber((current) => current ?? data.games[0]?.number ?? null);
+        if (data.detail_refreshing && attempt < 5) timer = window.setTimeout(() => load(attempt + 1), 4000);
+      }).catch((err) => { if (alive && attempt === 0) setError(err instanceof Error ? err.message : "Could not load match."); });
+    };
+    load();
+    return () => { alive = false; window.clearTimeout(timer); };
   }, [matchId]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -98,6 +105,7 @@ export function EsportsMatchModal({ matchId, aiConfigured, onClose }: { matchId:
               <div className="flex items-center gap-2.5 min-w-0 flex-1"><TeamMark team={detail.match.team2} size={50} /><span className="font-extrabold text-xs sm:text-base truncate">{teamCode(detail.match.team2)}</span></div></div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-faint"><span>Match saved {esportsDate(detail.match.fetched_at)}{detail.match.detail_fetched_at ? ` · Player details saved ${esportsDate(detail.match.detail_fetched_at)}` : ""} · {detail.match.source_verified ? "Marked verified by source" : "Not independently verified"}</span><a href={detail.match.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-mute hover:text-crim">View on Aerena <ArrowUpRight size={12} /></a></div>
+          {detail.detail_refreshing && <div className="rounded-lg border border-sky/25 bg-sky/5 px-3 py-2 text-[11px] text-sky" role="status">Showing saved match data while details refresh in the background.</div>}
           {detail.detail_error && <div className="rounded-lg border border-amber/25 bg-amber/5 px-3 py-2 text-[11px] text-amber">{detail.detail_error} Showing the saved match data.</div>}
           {detail.games.length > 0 ? <>
             <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="section-pill">Game breakdown</div><div className="text-[10px] text-faint mt-1">Drafts and stats when the source provides them</div></div><div className="flex flex-wrap gap-1">{detail.games.map((item) => <button key={item.id} onClick={() => setGameNumber(item.number)} className={`rounded-md px-3 py-1.5 text-[10px] font-extrabold border ${gameNumber === item.number ? "border-crim/50 bg-crim/10 text-text" : "border-edge text-faint hover:text-text"}`}>GAME {item.number}</button>)}</div></div>
