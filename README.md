@@ -227,13 +227,13 @@ the data describes the current season. A failure does not fabricate data.
 **Attach boards** lets a signed-in member select up to two saved Draft Lab boards
 and two saved Map Lab boards that the member can already read, then explicitly
 confirm sending their contents and notes to the external AI provider. The latest
-saved versions are read for every message while attached, so changes made by
-others after selection can also be included. Unsaved edits and Archive content
-are excluded. Maps are sent as bounded structured tokens, percentages, sampled
-paths, steps, chips and zones, not as an image; this does not provide visual map
-recognition. Selections reset on chat switch or reload; earlier chat history,
-backups or provider logs can still retain what was shared. Turn off history when
-necessary.
+saved versions, including changes made by others after selection, are included
+with the next message only. Match and board selections clear when sending,
+switching chats or reloading; reattach them for another message. Unsaved edits and
+Archive content are excluded. Maps are sent as bounded structured tokens,
+percentages, sampled paths, steps, chips and zones, not as an image; this does
+not provide visual map recognition. Earlier chat history, backups or provider
+logs can still retain what was shared. Turn off history when necessary.
 
 The composer offers **Live web: Auto / Always / Off**. Auto searches freshness-
 sensitive questions such as current patches, builds, ranked and esports. Always

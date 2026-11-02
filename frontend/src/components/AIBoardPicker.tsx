@@ -58,7 +58,7 @@ export function AIBoardPicker({ initialDrafts, initialMaps, onApply, onCancel }:
   return <div className="space-y-4">
     <div className="flex gap-3 rounded-lg border border-leaf/20 bg-leaf/5 p-3">
       <ShieldCheck size={17} className="text-leaf shrink-0 mt-0.5" />
-      <p className="text-[11px] text-mute leading-relaxed">Choose up to two saved drafts and two saved maps. The latest saved board contents and notes are sent to the external AI provider with each message while attached, including later edits by teammates. Unsaved edits and Archive items are not included.</p>
+      <p className="text-[11px] text-mute leading-relaxed">Choose up to two saved drafts and two saved maps. Their latest saved contents and notes, including team edits, are sent to the external AI provider with your next message only. Unsaved edits and Archive items are not included.</p>
     </div>
     <label className="relative block"><span className="sr-only">Search saved boards</span><Search size={14} className="absolute left-3 top-3 text-mute pointer-events-none" />
       <input className="input !pl-9 !text-[12px]" maxLength={100} placeholder="Search board name or opponent…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
@@ -67,8 +67,8 @@ export function AIBoardPicker({ initialDrafts, initialMaps, onApply, onCancel }:
         <div className="grid sm:grid-cols-2 gap-4"><BoardList title="Draft Lab" kind="draft" boards={availableDrafts} selected={drafts} filter={search} onToggle={(board) => { setDrafts((previous) => toggleBoardSelection(previous, board)); setConsent(false); }} />
           <BoardList title="Map Lab" kind="map" boards={availableMaps} selected={maps} filter={search} onToggle={(board) => { setMaps((previous) => toggleBoardSelection(previous, board)); setConsent(false); }} /></div>}
     {hasBoards && <label className="flex items-start gap-2 text-[11px] text-mute leading-relaxed cursor-pointer"><input type="checkbox" className="mt-0.5 accent-leaf" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
-      <span>I agree to share the selected saved team boards and notes with the external AI provider for messages in this chat until I remove them.</span></label>}
-    <p className="text-[10px] text-mute leading-relaxed">Selections reset when you switch chats or reload. Prior messages, backups or provider logs may still retain previously shared information.</p>
+      <span>I agree to share the selected saved team boards and notes with the external AI provider for my next message.</span></label>}
+    <p className="text-[10px] text-mute leading-relaxed">Selections clear when you send, switch chats or reload. Prior messages, backups or provider logs may still retain previously shared information.</p>
     <div className="flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost !text-[11px]" onClick={onCancel}>Cancel</button>
       <button type="button" className="btn-primary !text-[11px]" disabled={loading || Boolean(error) || (hasBoards && !consent)} onClick={() => onApply(drafts, maps)}>
         {hasBoards ? <><ClipboardList size={13} /> Use {drafts.length + maps.length} board{drafts.length + maps.length === 1 ? "" : "s"}</> : <><MapIcon size={13} /> Use no boards</>}

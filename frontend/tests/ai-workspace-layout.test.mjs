@@ -71,6 +71,16 @@ test("desktop layout controls are reversible and expose their current state", ()
   assert.match(closed, /aria-label="Your context"/);
 });
 
+test("chat scroll waits for loaded messages and attachments are single-message", async () => {
+  const chat = await readFile(new URL("../src/pages/CloverAI.tsx", import.meta.url), "utf8");
+  const picker = await readFile(new URL("../src/components/AIBoardPicker.tsx", import.meta.url), "utf8");
+  assert.match(chat, /!loadingChat && shouldScroll\.current && scrollRef\.current/);
+  assert.match(chat, /const matches = attachedMatches, drafts = attachedDrafts, maps = attachedMaps/);
+  assert.match(chat, /setAttachedMatches\(\[\]\); setAttachedDrafts\(\[\]\); setAttachedMaps\(\[\]\);/);
+  assert.match(chat, /draft_ids: drafts\.map/);
+  assert.match(picker, /share the selected saved team boards and notes with the external AI provider for my next message/);
+});
+
 test("mobile history remains separate and global navigation only collapses on AI", async () => {
   const html = render({ navigationOpen: false, historyOpen: false, headerOpen: false });
   assert.match(buttonFor(html, "ai-mobile-history"), /aria-expanded="false".*aria-label="Open conversation history"/);

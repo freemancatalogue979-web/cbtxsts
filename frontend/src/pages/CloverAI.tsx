@@ -3,7 +3,7 @@ import {
   History, Lightbulb, Loader2, LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelTopClose, PanelTopOpen,
   Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api, qs } from "../lib/api";
@@ -208,12 +208,13 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     return () => { alive = false; };
   }, [selected]);
 
-  useEffect(() => {
-    if (shouldScroll.current && scrollRef.current) {
+  useLayoutEffect(() => {
+    // Wait for the conversation (or the reply) to actually render before scrolling.
+    if (!loadingChat && shouldScroll.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       shouldScroll.current = false;
     }
-  }, [messages, selected, busy]);
+  }, [messages, selected, busy, loadingChat]);
 
   useEffect(() => {
     if (showHistory && window.innerWidth < 1024) mobileHistoryRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
@@ -267,6 +268,12 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     const question = text.trim();
     if (!question || busy || exporting || sendingRef.current || !workspaceReady || (selected && loadingChat)) return;
     sendingRef.current = true;
+    const matches = attachedMatches, drafts = attachedDrafts, maps = attachedMaps;
+    const submittedDraft = draft.trim() === question ? draft : "";
+    // Attachments are one-message-only. Capture them before clearing the composer.
+    if (submittedDraft) setDraft("");
+    setAttachedMatches([]); setAttachedDrafts([]); setAttachedMaps([]);
+    shouldScroll.current = true;
     setBusy(true); setError(null);
     let chatId = selected;
     try {
@@ -276,26 +283,28 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
         setConversations((prev) => [chat, ...prev]);
       }
       const result = await api.post<AISendResult>(`/ai/conversations/${chatId}/messages`, {
-        text: question, match_ids: attachedMatches.map((match) => match.id),
-        draft_ids: attachedDrafts.map((board) => board.id), map_ids: attachedMaps.map((board) => board.id),
-        share_board_context: attachedDrafts.length + attachedMaps.length > 0, web_mode: webMode,
+        text: question, match_ids: matches.map((match) => match.id),
+        draft_ids: drafts.map((board) => board.id), map_ids: maps.map((board) => board.id),
+        share_board_context: drafts.length + maps.length > 0, web_mode: webMode,
       });
       if (selectedRef.current === chatId) {
         requestVersion.current++;
         setLoadingChat(false); shouldScroll.current = true;
         setMessages((prev) => [...prev.filter((row) => row.id !== result.user_message.id && row.id !== result.assistant_message.id), result.user_message, result.assistant_message]);
-        setDraft((previous) => previous.trim() === question ? "" : previous);
       }
       setConversations((prev) => [result.conversation, ...prev.filter((row) => row.id !== result.conversation.id)]);
       setSelectedFromSearch(result.conversation); setSearchRevision((value) => value + 1);
     } catch (e) {
-      setError(e);
+      const message = e instanceof Error ? e.message : "The message could not be sent.";
+      const attachmentNote = matches.length + drafts.length + maps.length ? " Reattach any matches or boards if needed." : "";
+      setError(new Error(`${message} Your message may already be saved; check the conversation before retrying.${attachmentNote}`));
+      if (selectedRef.current === chatId && submittedDraft) setDraft((previous) => previous || submittedDraft);
       // The server may have saved the question before a network interruption.
-      // Reload without automatically resending it.
+      // Reload without automatically resending it or restoring revoked attachments.
       if (chatId && selectedRef.current === chatId) {
         try {
           const result = await api.get<AIMessagePage>(`/ai/conversations/${chatId}/messages`);
-          requestVersion.current++; setLoadingChat(false); setMessages(result.messages); setHasMoreMessages(result.has_more);
+          requestVersion.current++; setLoadingChat(false); shouldScroll.current = true; setMessages(result.messages); setHasMoreMessages(result.has_more);
         } catch { /* Keep the original error and the unsent text. */ }
       }
     } finally { sendingRef.current = false; setBusy(false); }
@@ -446,7 +455,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Saved matches</span>{attachedMatches.map((match) => <button type="button" key={match.id} disabled={busy || exporting}
               aria-label={`Remove ${teamCode(match.team1)} vs ${teamCode(match.team2)} from chat`} onClick={() => setAttachedMatches((previous) => previous.filter((item) => item.id !== match.id))}
               className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">{teamCode(match.team1)} vs {teamCode(match.team2)}</span><X size={11} className="shrink-0" /></button>)}</div>
-            <p className="text-[10px] text-faint mt-1.5 leading-relaxed">Included with each message until removed or you switch chats; selection resets on reload. Earlier chat history may still mention them.</p>
+            <p className="text-[10px] text-faint mt-1.5 leading-relaxed">Included with your next message only, then cleared. Earlier chat history may still mention them.</p>
           </div>}
           {(attachedDrafts.length > 0 || attachedMaps.length > 0) && <div className="mt-2 rounded-lg border border-leaf/20 bg-leaf/5 p-2.5" aria-label="Attached board context">
             <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Saved boards</span>
@@ -454,7 +463,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
                 className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">Draft · {board.name}</span><X size={11} className="shrink-0" /></button>)}
               {attachedMaps.map((board) => <button type="button" key={`map-${board.id}`} disabled={busy || exporting} aria-label={`Remove map ${board.name} from chat`} onClick={() => setAttachedMaps((previous) => previous.filter((item) => item.id !== board.id))}
                 className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">Map · {board.name}</span><X size={11} className="shrink-0" /></button>)}
-            </div><p className="text-[10px] text-mute mt-1.5 leading-relaxed">The latest saved board contents and notes, including later team edits, are shared on each message until removed or you switch chats. Earlier chat history may still mention them.</p>
+            </div><p className="text-[10px] text-mute mt-1.5 leading-relaxed">The latest saved board contents and notes, including team edits, are shared with your next message only, then cleared. Earlier chat history may still mention them.</p>
           </div>}
           <form onSubmit={submit} className="rounded-xl border border-edge-2 bg-raised/80 mt-2 focus-within:border-leaf/50">
             <textarea aria-label="Ask 9 Clover AI" className="w-full resize-none bg-transparent outline-none px-3.5 pt-3 text-[12px] sm:text-[13px] placeholder:text-faint min-h-16 max-h-40" rows={2}
