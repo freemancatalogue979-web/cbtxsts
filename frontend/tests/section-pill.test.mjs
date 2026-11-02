@@ -36,3 +36,14 @@ test("the private chat eyebrow uses a pill and the read-only draft board keeps i
   assert.match(chat, /className="section-pill">PRIVATE CONVERSATION/);
   assert.doesNotMatch(draftBoard, /section-pill/);
 });
+
+test("section pills have angled corners and respect reduced motion", async () => {
+  const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
+  const pill = css.match(/\.section-pill\s*\{([^}]+)\}/)?.[1] ?? "";
+  const accent = css.match(/\.section-pill::before\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(pill, /border-radius:\s*0\s*;/);
+  assert.match(pill, /clip-path:\s*polygon\(/);
+  assert.match(pill, /animation:\s*section-pill-enter/);
+  assert.match(accent, /animation:\s*section-pill-accent/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.section-pill,\s*\.section-pill::before\s*\{\s*animation:\s*none;/);
+});
