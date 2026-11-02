@@ -35,7 +35,7 @@ export interface RoneTeam { name: string; fullName: string | null; logo: string 
 export interface RoneMatch {
   id: string | null; team1: RoneTeam; team2: RoneTeam; score1: number | null; score2: number | null;
   status: string; winner: "team1" | "team2" | null; startsAt: string | null; localTime: string | null;
-  bestOf: number | null; round: string | null; replay: string | null;
+  bestOf: number | null; round: string | null; replay: string | null; idConflict?: boolean;
 }
 export interface RoneMatchGroup { key: string; week: number | null; label: string; matches: RoneMatch[] }
 export interface RoneStanding {
@@ -70,6 +70,26 @@ function dayGroups(days: unknown, week: number | null, prefix: string): RoneMatc
   })).filter((group) => group.matches.length > 0);
 }
 
+/** Repeated playoff cards must not look like extra series. If the same ID
+ * describes incompatible teams, dates or scores, don't open arbitrary details. */
+function uniquePlayoffGroups(groups: RoneMatchGroup[]): RoneMatchGroup[] {
+  const seen = new Map<string, RoneMatch>();
+  for (const group of groups) {
+    group.matches = group.matches.filter((match) => {
+      if (!match.id) return true;
+      const first = seen.get(match.id);
+      if (!first) { seen.set(match.id, match); return true; }
+      const different = (a: string | number | null, b: string | number | null) => a !== b && a !== null && b !== null && a !== "TBD" && b !== "TBD";
+      if (different(first.team1.name, match.team1.name) || different(first.team2.name, match.team2.name)
+          || different(first.startsAt, match.startsAt) || different(first.score1, match.score1) || different(first.score2, match.score2) || different(first.round, match.round)) {
+        first.id = null; first.idConflict = true;
+      }
+      return false;
+    });
+  }
+  return groups.filter((group) => group.matches.length > 0);
+}
+
 export function parseRoneFeed(payload: unknown): RoneFeed {
   const outer = record(payload);
   const root = outer.data && typeof outer.data === "object" && !Array.isArray(outer.data) ? record(outer.data) : outer;
@@ -77,7 +97,7 @@ export function parseRoneFeed(payload: unknown): RoneFeed {
   if (Array.isArray(root.weeks)) {
     groups = objects(root.weeks).flatMap((week, index) => dayGroups(week.days, roneNumber(week.week), `week-${index}`));
   } else if (Array.isArray(root.days)) {
-    groups = dayGroups(root.days, null, "playoff-day");
+    groups = uniquePlayoffGroups(dayGroups(root.days, null, "playoff-day"));
   } else {
     const raw = Array.isArray(payload) ? payload : Array.isArray(root.matches) ? root.matches : Array.isArray(root.schedule) ? root.schedule : [];
     const matches = objects(raw).map(roneMatch);

@@ -19,6 +19,15 @@ test("unknown dates and statistics are never rendered as zero", () => {
   assert.equal(esportsNumber(0), "0");
 });
 
+test("match centre exposes playoff filtering and a bounded load-more control", async () => {
+  const page = await readFile(new URL("../src/pages/Esports.tsx", import.meta.url), "utf8");
+  assert.match(page, /aria-label="Match stage"/);
+  assert.match(page, /item === "playoffs".*setView\("all"\)/);
+  assert.match(page, /hasMoreMatches && matchLimit < 500/);
+  assert.match(page, /Load more matches/);
+  assert.match(page, /Source-labelled playoff/);
+});
+
 test("team and game displays fall back explicitly", () => {
   assert.equal(teamName({}), "To be decided");
   assert.equal(teamCode({}), "TBD");

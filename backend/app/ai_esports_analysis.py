@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, or_, update
+from sqlalchemy import DateTime, String, Text, and_, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -84,6 +84,8 @@ def aerena_week(match: AerenaMatch) -> int | None:
 
     Conflicting source labels are unknown, not silently assigned to a week.
     """
+    if aerena_playoff_stage(match.stage):
+        return None  # A playoff round is not a regular-season week.
     raw = loads(match.raw_json, {})
     raw = raw if isinstance(raw, dict) else {}
     candidates = {_int(raw.get(key)) for key in ("week", "weekNumber", "week_number")}
@@ -97,6 +99,47 @@ def aerena_week(match: AerenaMatch) -> int | None:
         candidates.add(_int(label.group(1)))
     candidates.discard(None)
     return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+# Only source-provided stage names count; unknown stages are never inferred
+# from dates, scores, match IDs or best-of formats.
+AERENA_EXPLICIT_PLAYOFF_LABELS = (
+    "playoff",
+    "play-off",
+    "play off",
+    "bracket",
+    "knockout",
+    "grand final",
+    "grand-final",
+)
+AERENA_NON_PLAYOFF_MARKERS = ("regular", "group", "week")
+
+
+def aerena_playoff_stage(stage: str | None) -> bool:
+    value = (stage or "").casefold()
+    if any(label in value for label in AERENA_EXPLICIT_PLAYOFF_LABELS):
+        return True
+    # "Final week" or "group final" is not evidence of a playoff bracket.
+    return "final" in value and not any(
+        label in value for label in AERENA_NON_PLAYOFF_MARKERS
+    )
+
+
+def aerena_playoff_condition():  # noqa: ANN201
+    """SQL equivalent for filtering before pagination in the public match centre."""
+    return or_(
+        *(
+            AerenaMatch.stage.ilike(f"%{label}%")
+            for label in AERENA_EXPLICIT_PLAYOFF_LABELS
+        ),
+        and_(
+            AerenaMatch.stage.ilike("%final%"),
+            *(
+                ~AerenaMatch.stage.ilike(f"%{label}%")
+                for label in AERENA_NON_PLAYOFF_MARKERS
+            ),
+        ),
+    )
 
 
 def aerena_league_matches_region(league: AerenaLeague, region: str) -> bool:
@@ -124,6 +167,14 @@ def rone_id(region: str, value: Any) -> str | None:
     return None  # Rone publishes no KH match-details route.
 
 
+def _rone_source_id(value: Any) -> str | None:
+    """Safe identifier for deduplication, even when a region has no details route."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value).strip()
+    return text if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}", text) else None
+
+
 def _valid_schedule(payload: Any) -> bool:
     if (
         not isinstance(payload, dict)
@@ -135,6 +186,20 @@ def _valid_schedule(payload: Any) -> bool:
         rone_schedule_rows(
             payload, "id"
         )  # Shape and bounds only; no source IDs are fetched here.
+        return True
+    except ValueError:
+        return False
+
+
+def _valid_playoffs(payload: Any) -> bool:
+    if (
+        not isinstance(payload, dict)
+        or payload.get("code", 0) not in (0, None)
+        or not isinstance(_root(payload).get("days"), list)
+    ):
+        return False
+    try:
+        rone_playoff_rows(payload, "id")
         return True
     except ValueError:
         return False
@@ -301,6 +366,93 @@ def rone_schedule(
     )
 
 
+def rone_playoffs(
+    db: Session, region: str, *, refresh: bool = False
+) -> tuple[Any | None, datetime | None, str]:
+    if region not in REGIONS:
+        raise ValueError("Choose a supported MPL region.")
+    return load_rone(
+        db,
+        f"esports/{region}/playoffs",
+        _valid_playoffs,
+        ttl=SCHEDULE_TTL,
+        refresh=refresh,
+    )
+
+
+def rone_playoff_rows(payload: Any, region: str) -> tuple[list[dict], int]:
+    """Project the separate playoff days without treating them as schedule weeks."""
+    days = _root(payload).get("days")
+    if not isinstance(days, list) or len(days) > 50:
+        raise ValueError("Rone playoffs have incomplete day information.")
+    rows: list[dict] = []
+    seen: dict[str, dict] = {}
+    duplicates = 0
+
+    def team(value: Any) -> str:
+        obj = _obj(value)
+        return (
+            _text(
+                obj.get("name")
+                or obj.get("team_name")
+                or obj.get("full_name")
+                or value,
+                80,
+            )
+            or "TBD"
+        )
+
+    for day in days:
+        if (
+            not isinstance(day, dict)
+            or not isinstance(day.get("matches"), list)
+            or len(day["matches"]) > 50
+        ):
+            raise ValueError("Rone playoffs have incomplete match information.")
+        for item in day["matches"]:
+            if not isinstance(item, dict):
+                raise ValueError("Rone playoffs have an incomplete match record.")
+            raw_id = _rone_source_id(item.get("match_id"))
+            mid = rone_id(region, item.get("match_id"))
+            row = {
+                "id": mid,
+                "week": None,
+                "phase": "playoffs",
+                "day": _text(day.get("label"), 80),
+                "starts_at": _text(item.get("start_at"), 40) or None,
+                "team1": team(
+                    item.get("team1") or item.get("home") or item.get("team_a")
+                ),
+                "team2": team(
+                    item.get("team2") or item.get("away") or item.get("team_b")
+                ),
+                "score1": _int(item.get("score1"), low=0, high=30),
+                "score2": _int(item.get("score2"), low=0, high=30),
+                "status": _text(item.get("status"), 20),
+                "round": _text(item.get("round"), 100),
+                "best_of": _int(item.get("best_of"), low=1, high=30),
+            }
+            if raw_id and raw_id in seen:
+                duplicates += 1
+                first = seen[raw_id]
+                fields = ("team1", "team2", "starts_at", "score1", "score2", "round")
+                if any(
+                    first[key] != row[key]
+                    and first[key] not in (None, "", "TBD")
+                    and row[key] not in (None, "", "TBD")
+                    for key in fields
+                ):
+                    first["id"] = None
+                    first["id_conflict"] = True
+                continue
+            if raw_id:
+                seen[raw_id] = row
+            rows.append(row)
+            if len(rows) > MAX_SCHEDULE_ROWS:
+                raise ValueError("Rone playoffs exceed the safe scan limit.")
+    return rows, duplicates
+
+
 def rone_schedule_rows(
     payload: Any, region: str, week: int | None = None
 ) -> tuple[list[dict], int]:
@@ -376,18 +528,22 @@ def rone_schedule_rows(
 
 
 def requested_scope(question: str, db: Session | None = None) -> dict | None:
-    """Recognize a source + region + week without guessing a season."""
+    """Recognize a source, region and week or playoffs without guessing a season."""
     from .ai_rone import requested_region
 
     if not re.search(r"\b(rone|mpl|aerena)\b", question, re.I):
         return None
     week_pattern = r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)"
     hits = list(re.finditer(rf"\bweeks?\s*[-:#]?\s*({week_pattern})\b", question, re.I))
+    playoffs = bool(re.search(r"\b(?:play[\s-]?offs?|bracket)\b", question, re.I))
     region = requested_region(question)
-    if not hits or not region:
+    if not region:
+        short = re.search(
+            r"\b(?:rone|aerena)\s+(?:mpl\s+)?(id|ph|my|kh)\b", question, re.I
+        )
+        region = short.group(1).lower() if short else None
+    if (not hits and not playoffs) or not region:
         return None
-    hit = hits[0]
-    word = hit.group(1).casefold()
     words = {
         name: n
         for n, name in enumerate(
@@ -406,9 +562,11 @@ def requested_scope(question: str, db: Session | None = None) -> dict | None:
             1,
         )
     }
-    week = words.get(word) or _int(word)
-    if not week:
+    word = hits[0].group(1).casefold() if hits else ""
+    week = (words.get(word) or _int(word)) if hits else None
+    if hits and not week:
         return None
+    mode = "playoffs" if playoffs else "week"
     seasons = {
         int(value)
         for value in re.findall(
@@ -432,25 +590,39 @@ def requested_scope(question: str, db: Session | None = None) -> dict | None:
             re.I,
         )
     )
-    if multiple_weeks or (explicit_rone and explicit_aerena):
+    if multiple_weeks or (playoffs and hits) or (explicit_rone and explicit_aerena):
         return {
             "source": "aerena" if use_aerena else "rone",
-            "mode": "week",
+            "mode": mode,
             "region": region,
             "week": week,
-            "selection_error": "Choose one source and one week at a time in the picker; no other weeks or sources were silently combined.",
+            "selection_error": "Choose one source and one week or the playoffs at a time in the picker; no stages or sources were silently combined.",
+        }
+    narrow_round = playoffs and bool(
+        re.search(
+            r"\b(?:(?:upper|lower)\s+(?:bracket|finals?)|grand[\s-]+finals?|semi[\s-]*finals?|quarter[\s-]*finals?)\b|\b\w+\s+vs\.?\s+\w+\b",
+            question,
+            re.I,
+        )
+    )
+    if narrow_round:
+        return {
+            "source": "aerena" if use_aerena else "rone",
+            "mode": mode,
+            "region": region,
+            "selection_error": "For a specific playoff round or matchup, select those matches in the picker. The entire playoffs were not substituted.",
         }
     if not use_aerena:
         return {
             "source": "rone",
-            "mode": "week",
+            "mode": mode,
             "region": region,
             "week": week,
             "season_requested": bool(seasons),
         }
     result: dict[str, Any] = {
         "source": "aerena",
-        "mode": "week",
+        "mode": mode,
         "region": region,
         "week": week,
     }
@@ -797,6 +969,9 @@ def aggregate(
                 for key in (
                     "match_id",
                     "week",
+                    "phase",
+                    "stage",
+                    "round",
                     "team1",
                     "team2",
                     "status",
@@ -851,6 +1026,11 @@ def pick_chart(facts: dict, question: str) -> dict | None:
         if match is None:
             return None
         bucket, title = match, f"Most-picked heroes · game {number}"
+    scope = facts.get("scope") or {}
+    if scope.get("mode") == "playoffs" or scope.get("phase") == "playoffs":
+        title += " · playoffs"
+    elif scope.get("phase") == "all":
+        title += " · selected matches across stages"
     ranked = bucket.get("top_picks") or []
     if not ranked:
         return None
@@ -901,12 +1081,15 @@ def analyze_rone(
 ) -> tuple[dict, list[dict]]:
     region = scope["region"]
     week = scope.get("week") if scope.get("mode") == "week" else None
+    mode = scope.get("mode")
+    phase = "playoffs" if mode == "playoffs" else (scope.get("phase") or "regular")
     label = {
         "source": "Rone",
         "region": region.upper(),
         "week": week,
         "season": None,
-        "mode": scope.get("mode"),
+        "mode": mode,
+        "phase": phase,
     }
     if scope.get("selection_error"):
         return (
@@ -919,24 +1102,71 @@ def analyze_rone(
                 [],
                 source="Rone",
                 scope=label,
-                notice="Rone does not identify the season in its schedule. The requested historical season cannot be verified; no other season was substituted.",
+                notice="Rone does not identify the season in its schedule or playoffs. The requested historical season cannot be verified; no other season was substituted.",
             ),
             [],
         )
     if on_progress:
         on_progress("loading_matches")
-    payload, observed, state = rone_schedule(db, region)
-    if payload is None:
+    feeds = ["regular", "playoffs"] if phase == "all" else [phase]
+    rows: list[dict] = []
+    duplicates = 0
+    unavailable_feeds: list[str] = []
+    stale_feed = False
+    sources: list[dict] = []
+    for feed in feeds:
+        payload, observed, state = (
+            rone_playoffs(db, region)
+            if feed == "playoffs"
+            else rone_schedule(db, region)
+        )
+        if payload is None:
+            unavailable_feeds.append("playoffs" if feed == "playoffs" else "schedule")
+            continue
+        stale_feed |= state == "saved_stale"
+        source_rows, removed = (
+            rone_playoff_rows(payload, region)
+            if feed == "playoffs"
+            else rone_schedule_rows(payload, region, week)
+        )
+        rows.extend(source_rows)
+        duplicates += removed
+        sources.append(
+            {
+                "kind": "esports_feed",
+                "label": f"Rone MPL {region.upper()} · "
+                + (
+                    "Playoffs"
+                    if feed == "playoffs"
+                    else (f"Week {week}" if week else "Regular season")
+                ),
+                "route": "esports",
+                "url": f"https://arena.rone.dev/api/esports/{region}/"
+                + ("playoffs" if feed == "playoffs" else "schedule"),
+                "observed_at": observed.isoformat() + "Z" if observed else None,
+            }
+        )
+    if not sources:
         return (
             aggregate(
                 [],
                 source="Rone",
                 scope=label,
-                notice="Rone's schedule could not be loaded. No match data was invented; retry later.",
+                missing=len(set(scope.get("match_ids") or [])),
+                notice=f"Rone's {' and '.join(unavailable_feeds)} could not be loaded. No match data was invented; retry later.",
             ),
             [],
         )
-    rows, duplicates = rone_schedule_rows(payload, region, week)
+    cross_feed_conflicts: set[str] = set()
+    if phase == "all":
+        seen_ids: set[str] = set()
+        for row in rows:
+            if row["id"] and row["id"] in seen_ids:
+                cross_feed_conflicts.add(row["id"])
+            elif row["id"]:
+                seen_ids.add(row["id"])
+        rows = [row for row in rows if row["id"] not in cross_feed_conflicts]
+        duplicates += len(cross_feed_conflicts)
     unavailable_rows: list[dict] = []
     if scope.get("mode") == "matches":
         requested = scope.get("match_ids") or []
@@ -955,9 +1185,9 @@ def analyze_rone(
                 scope=label,
                 missing=len(rows) + len(unavailable_rows) + missing,
                 duplicate_rows=duplicates,
-                notice=f"This week exceeds the {MAX_MATCHES}-match safety limit; narrow the selection. No partial week was presented as complete.",
+                notice=f"This selection exceeds the {MAX_MATCHES}-match safety limit; narrow it. No partial stage was presented as complete.",
             ),
-            [],
+            sources,
         )
     deadline = time.monotonic() + LOAD_DEADLINE_SECONDS
     matches = []
@@ -1007,6 +1237,8 @@ def analyze_rone(
             {
                 "match_id": mid,
                 "week": row["week"],
+                "phase": row.get("phase", "regular"),
+                "round": row.get("round") or None,
                 "team1": row["team1"],
                 "team2": row["team2"],
                 "status": row["status"],
@@ -1038,6 +1270,8 @@ def analyze_rone(
             {
                 "match_id": None,
                 "week": row["week"],
+                "phase": row.get("phase", "regular"),
+                "round": row.get("round") or None,
                 "team1": row["team1"],
                 "team2": row["team2"],
                 "status": row["status"],
@@ -1046,9 +1280,17 @@ def analyze_rone(
                 "score2": row["score2"],
                 "observed_at": None,
                 "load_status": (
-                    "conflicting_source_week"
-                    if row.get("id_conflict")
-                    else "no_source_match_id"
+                    "conflicting_source_match"
+                    if row.get("id_conflict") and row.get("phase") == "playoffs"
+                    else (
+                        "conflicting_source_week"
+                        if row.get("id_conflict")
+                        else (
+                            "no_region_detail_route"
+                            if region == "kh"
+                            else "no_source_match_id"
+                        )
+                    )
                 ),
                 "missing_scored_games": score_total,
                 "ambiguous_games": 0,
@@ -1060,9 +1302,12 @@ def analyze_rone(
         if len(rows) + len(unavailable_rows) > 50
         else ""
     ) + (
-        "The saved schedule or details may be stale. "
-        if state == "saved_stale"
-        or any(m["load_status"] == "saved_stale" for m in matches)
+        "Rone does not provide a match-details route for MPL KH. "
+        if region == "kh"
+        else ""
+    ) + (
+        "The saved feed or details may be stale. "
+        if stale_feed or any(m["load_status"] == "saved_stale" for m in matches)
         else ""
     ) + (
         "After repeated source errors, remaining missing matches were not fetched; retry later. "
@@ -1073,30 +1318,30 @@ def analyze_rone(
         if skipped_after_timeout
         else ""
     ) + (
-        "A source match ID appeared in multiple weeks; those entries are excluded rather than assigned arbitrarily. "
+        "A source match ID has conflicting records; it was not resolved arbitrarily. "
         if any(row.get("id_conflict") for row in unavailable_rows)
+        or cross_feed_conflicts
         else ""
     ) + (
-        "No matches were listed for this source week. "
+        f"Rone's {' and '.join(unavailable_feeds)} could not be loaded; the selection may be incomplete. "
+        if unavailable_feeds
+        else ""
+    ) + (
+        "No matches were listed for this source selection. "
         if not rows and not unavailable_rows and not missing
         else ""
     )
-    source = {
-        "kind": "esports_feed",
-        "label": f"Rone MPL {region.upper()}"
-        + (f" · Week {week}" if week else " · selected matches"),
-        "route": "esports",
-        "url": f"https://arena.rone.dev/api/esports/{region}/schedule",
-        "observed_at": observed.isoformat() + "Z" if observed else None,
-    }
-    return aggregate(
-        matches,
-        source="Rone",
-        scope=label,
-        missing=missing,
-        duplicate_rows=duplicates,
-        notice=notice,
-    ), [source]
+    return (
+        aggregate(
+            matches,
+            source="Rone",
+            scope=label,
+            missing=missing,
+            duplicate_rows=duplicates,
+            notice=notice,
+        ),
+        sources,
+    )
 
 
 def analyze_aerena(
@@ -1188,6 +1433,12 @@ def analyze_aerena(
             {
                 "match_id": mid,
                 "week": aerena_week(row),
+                "stage": row.stage or None,
+                "phase": (
+                    "playoffs"
+                    if aerena_playoff_stage(row.stage)
+                    else "other_or_unknown"
+                ),
                 "team1": team_name(left),
                 "team2": team_name(right),
                 "starts_at": match.get("starts_at"),
@@ -1339,12 +1590,34 @@ def analyze_aerena_scope(
                     raise LookupError(
                         "A selected match is not in the chosen Aerena season."
                     )
+        league = (
+            db.get(AerenaLeague, scope["league_id"]) if scope.get("league_id") else None
+        )
+        stage_flags = {
+            aerena_playoff_stage(row.stage)
+            for mid in ids
+            if (row := db.get(AerenaMatch, mid))
+        }
+        selected_phase = (
+            "all"
+            if len(stage_flags) > 1
+            else "playoffs" if stage_flags == {True} else None
+        )
         return analyze_aerena(
-            db, ids, scope={"mode": "matches"}, on_progress=on_progress
+            db,
+            ids,
+            scope={
+                "mode": "matches",
+                "region": (scope.get("region") or "").upper() or None,
+                "season": league.code if league else None,
+                "season_id": league.id if league else None,
+                "phase": selected_phase,
+            },
+            on_progress=on_progress,
         )
     if scope.get("selection_error"):
         label = {
-            "mode": "week",
+            "mode": scope.get("mode", "week"),
             "region": (scope.get("region") or "").upper(),
             "week": scope.get("week"),
             "season": scope.get("season_number"),
@@ -1355,7 +1628,8 @@ def analyze_aerena_scope(
             ),
             [],
         )
-    league_id, week = scope["league_id"], scope["week"]
+    league_id, week = scope["league_id"], scope.get("week")
+    playoffs = scope.get("mode") == "playoffs"
     league = db.get(AerenaLeague, league_id)
     if league is None:
         raise LookupError("That Aerena season is not in the saved catalog.")
@@ -1374,9 +1648,10 @@ def analyze_aerena_scope(
         .all()
     )
     label = {
-        "mode": "week",
+        "mode": "playoffs" if playoffs else "week",
         "season": league.code,
         "season_id": league_id,
+        "region": (scope.get("region") or "").upper() or None,
         "week": week,
     }
     if len(rows) > 5000:
@@ -1385,12 +1660,19 @@ def analyze_aerena_scope(
                 [],
                 source="Aerena",
                 scope=label,
-                notice="The season exceeds the safe scan limit; no partial week was presented as complete.",
+                notice="The season exceeds the safe scan limit; no partial stage was presented as complete.",
             ),
             [],
         )
-    unknown = sum(aerena_week(row) is None for row in rows)
-    ids = [row.id for row in rows if aerena_week(row) == week]
+    unknown = sum(
+        aerena_week(row) is None and not aerena_playoff_stage(row.stage) for row in rows
+    )
+    unknown_stage = sum(not (row.stage or "").strip() for row in rows)
+    ids = (
+        [row.id for row in rows if aerena_playoff_stage(row.stage)]
+        if playoffs
+        else [row.id for row in rows if aerena_week(row) == week]
+    )
     if len(ids) > MAX_MATCHES:
         return (
             aggregate(
@@ -1398,14 +1680,36 @@ def analyze_aerena_scope(
                 source="Aerena",
                 scope=label,
                 missing=len(ids),
-                notice=f"This week exceeds the {MAX_MATCHES}-match safety limit; select individual matches instead.",
+                notice=f"This stage exceeds the {MAX_MATCHES}-match safety limit; select individual matches instead.",
             ),
             [],
         )
     facts, sources = analyze_aerena(db, ids, scope=label, on_progress=on_progress)
-    facts["coverage"]["season_matches_without_week_label"] = unknown
-    facts["notice"] += (
-        f" {unknown} season match(es) had no unambiguous source week and were not assigned to this week."
-        + (f" {load_note}" if not loaded else "")
-    )
+    if playoffs:
+        facts["coverage"]["season_matches_without_stage_label"] = unknown_stage
+        facts["notice"] += (
+            " Only source-labelled playoff, bracket, knockout or final stages are included; group/regular final weeks are not treated as playoffs. "
+            f"{unknown_stage} season match(es) had no stage label; other missing or differently labelled playoff matches cannot be inferred."
+        )
+        if not ids:
+            facts[
+                "notice"
+            ] += " No source-labelled playoff matches are saved for this season."
+    else:
+        facts["coverage"]["season_matches_without_week_label"] = unknown
+        selected_ids = set(ids)
+        unknown_selected = sum(
+            not (row.stage or "").strip() for row in rows if row.id in selected_ids
+        )
+        facts["coverage"]["selected_matches_without_stage_label"] = unknown_selected
+        facts["notice"] += (
+            f" {unknown} non-playoff season match(es) had no unambiguous source week and were not assigned to this week."
+            + (
+                f" {unknown_selected} selected match(es) have no source stage label, so their stage is unverified."
+                if unknown_selected
+                else ""
+            )
+        )
+    if not loaded:
+        facts["notice"] += f" {load_note}"
     return facts, sources

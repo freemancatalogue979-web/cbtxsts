@@ -51,7 +51,7 @@ def requested_feed(question: str) -> tuple[str, str] | None:
         return None
     if re.search(r"\b(standing|standings|table|rankings?|points)\b", question, re.I):
         view = "standings"
-    elif re.search(r"\b(playoffs?|bracket)\b", question, re.I):
+    elif re.search(r"\b(play[\s-]?offs?|bracket)\b", question, re.I):
         view = "playoffs"
     elif re.search(r"\b(schedule|fixtures?|matches|match|games?|next|upcoming|results?)\b", question, re.I):
         view = "schedule"

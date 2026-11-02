@@ -31,7 +31,7 @@ export function roneMatchStatus(match: RoneMatch): string {
   return status === "unknown" ? "Status unknown" : match.status.replace(/_/g, " ");
 }
 
-export function RoneMatchCard({ match, onOpen, compact = false }: { match: RoneMatch; onOpen?: () => void; compact?: boolean }) {
+export function RoneMatchCard({ match, onOpen, compact = false, detailsUnavailable }: { match: RoneMatch; onOpen?: () => void; compact?: boolean; detailsUnavailable?: string }) {
   const status = roneMatchStatus(match);
   const hasScore = match.score1 !== null && match.score2 !== null && (status === "Final" || status === "Live" || Boolean(match.winner));
   return <article className="rounded-xl border border-edge bg-panel overflow-hidden">
@@ -42,19 +42,19 @@ export function RoneMatchCard({ match, onOpen, compact = false }: { match: RoneM
     <div className="grid grid-cols-[minmax(0,1fr)_68px_minmax(0,1fr)] gap-2 items-center px-3 sm:px-4 py-5">
       <MatchTeam team={match.team1} winner={match.winner === "team1"} />
       <div className="text-center self-start pt-4 tabular-nums">
-        {hasScore ? <div className="text-xl sm:text-2xl font-black whitespace-nowrap">{esportsNumber(match.score1)} <span className="text-faint text-sm">:</span> {esportsNumber(match.score2)}</div>
-          : <div className="text-xs font-black text-faint tracking-[0.16em] pt-1.5">VS</div>}
-        <div className="text-[9px] font-bold text-faint uppercase tracking-wide mt-1">{status}</div>
+        {hasScore ? <div className="text-xl sm:text-2xl font-black whitespace-nowrap">{esportsNumber(match.score1)} <span className="text-mute text-sm">:</span> {esportsNumber(match.score2)}</div>
+          : <div className="text-xs font-black text-mute tracking-[0.16em] pt-1.5">VS</div>}
+        <div className="text-[9px] font-bold text-mute uppercase tracking-wide mt-1">{status}</div>
       </div>
       <MatchTeam team={match.team2} winner={match.winner === "team2"} />
     </div>
     <div className="border-t border-edge px-4 py-3 space-y-2">
-      <div className="flex items-start gap-1.5 text-[11px] text-mute leading-relaxed"><CalendarDays size={13} className="shrink-0 mt-0.5 text-faint" />
-        <span><strong className="text-text">Your time:</strong> {esportsDate(match.startsAt)}{match.localTime && <> <span className="text-faint">·</span> <strong className="text-text">Source local:</strong> {match.localTime}</>}</span></div>
-      {match.id && compact && <div className="text-[10px] text-faint break-all">Match ID: {match.id}</div>}
-      {(onOpen || match.replay || (!compact && !match.id)) && <div className="flex flex-wrap justify-between items-center gap-2 pt-1">
+      <div className="flex items-start gap-1.5 text-[11px] text-mute leading-relaxed"><CalendarDays size={13} className="shrink-0 mt-0.5 text-mute" />
+        <span><strong className="text-text">Your time:</strong> {esportsDate(match.startsAt)}{match.localTime && <> <span className="text-mute">·</span> <strong className="text-text">Source local:</strong> {match.localTime}</>}</span></div>
+      {match.id && compact && <div className="text-[10px] text-mute break-all">Match ID: {match.id}</div>}
+      {(onOpen || match.replay || detailsUnavailable || (!compact && !match.id)) && <div className="flex flex-wrap justify-between items-center gap-2 pt-1">
         {onOpen ? <button type="button" className="text-[11px] font-extrabold text-text hover:text-crim inline-flex items-center gap-1.5" onClick={onOpen}>View match details <ArrowRight size={13} /></button>
-          : !compact && !match.id ? <span className="text-[10px] text-faint">Match details not provided</span> : <span />}
+          : detailsUnavailable || (!compact && !match.id) ? <span className="text-[10px] text-mute">{detailsUnavailable || (match.idConflict ? "Conflicting source records; details unavailable" : "Match details not provided")}</span> : <span />}
         {match.replay && <a href={match.replay} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-mute hover:text-leaf inline-flex items-center gap-1">Replay <ExternalLink size={11} /></a>}
       </div>}
     </div>

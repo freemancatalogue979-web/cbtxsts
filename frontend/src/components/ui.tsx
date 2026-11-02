@@ -137,7 +137,7 @@ export function Tabs({ tabs, value, onChange }: {
           key={t.id}
           onClick={() => onChange(t.id)}
           className={`px-3 py-2 text-[12px] font-bold uppercase tracking-[0.1em] whitespace-nowrap border-b-2 -mb-px transition-colors ${
-            value === t.id ? "border-crim text-text" : "border-transparent text-faint hover:text-mute"
+            value === t.id ? "border-crim text-text" : "border-transparent text-mute hover:text-text"
           }`}
         >
           {t.label}

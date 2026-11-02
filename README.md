@@ -467,12 +467,14 @@ in Git.
 With no key or a provider failure, the UI returns a labelled facts-only summary
 rather than pretending to generate an AI answer. The Esports page's separate
 scene analysis uses at most the first eight saved matches shown by its filter,
-not a complete season. Clover chat can instead analyze a chosen source week or
-up to 500 individual matches using the **Attach esports**
-picker. Source, MPL region, season (where available), and week are filters;
-search is optional. For example, ask “Rone MPL ID week 1, most picked heroes in
-game 2?” or “Aerena MPL PH season 18 week 1, most picked heroes?” Clover waits
-for missing public source records, displays loading progress, and reuses saved
+not a complete season. Clover chat can instead analyze a chosen source week,
+playoff stage, or up to 500 individual matches using the **Attach esports**
+picker. Choose a source, MPL region, season (where available), and stage;
+search is optional. Rone has separate regular-season and playoff feeds, and
+individual selections may include matches from both. For example, ask “Rone MPL
+ID playoffs, most picked heroes?” or “Aerena MPL PH season 18 week 1, most picked
+heroes?” Select individual matches when asking about a specific playoff round.
+Clover waits for missing public source records, displays loading progress, and reuses saved
 snapshots. A short follow-up can reuse the public selection when chat history
 is enabled. Public source requests contain only the selected source identifiers,
 not the question, private boards, account credentials or chat history.
@@ -482,10 +484,14 @@ the selected scope, independently of the model. Rankings include only complete
 10-distinct-hero lineups; missing match IDs, incomplete games, score/detail gaps,
 stale records, duplicate schedule entries and bounded-context omissions are
 reported rather than guessed. Rone does not identify a season in its schedule
-or provide verified bans or draft order, so historical seasons cannot be inferred.
-Aerena week filters use explicit source week fields/labels or its source match-ID
-week label; unlabelled or conflicting records are excluded and disclosed. A week
-with more than 500 listed matches must be narrowed to individual matches. The
+or playoff feed or provide verified bans or draft order, so historical seasons
+cannot be inferred. Aerena playoff filters use its saved stage labels (playoff,
+bracket, knockout or final), not guessed dates or match formats; unknown or
+differently named stages can be missing. Regular-season final weeks and group
+finals are not assumed to be playoffs. Aerena week filters use explicit source
+week fields/labels or its source match-ID week label; unlabelled or conflicting
+records are excluded and disclosed. A week or playoff stage with more than 500
+listed matches must be narrowed to individual matches. The
 500-match ceiling, bounded response/context sizes and loading deadline are
 technical safeguards, not daily usage limits. Broad-scope counts include every
 complete game even when match cards, player details or some tied rankings are

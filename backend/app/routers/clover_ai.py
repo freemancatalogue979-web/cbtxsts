@@ -139,9 +139,10 @@ class EsportsSelectionIn(BaseModel):
     """Only source identifiers and filters, never client-supplied match facts."""
     model_config = ConfigDict(extra="forbid")
     source: Literal["aerena", "rone"]
-    mode: Literal["week", "matches"]
+    mode: Literal["week", "matches", "playoffs"]
     region: Literal["id", "ph", "my", "kh"] | None = None
     league_id: str | None = Field(default=None, max_length=80)
+    phase: Literal["regular", "playoffs", "all"] | None = None
     week: int | None = Field(default=None, ge=1, le=99, strict=True)
     match_ids: list[str] = Field(default_factory=list, max_length=500)
 
@@ -153,10 +154,14 @@ class EsportsSelectionIn(BaseModel):
             raise ValueError("Choose a Rone MPL region; the source does not identify a season.")
         if self.source == "aerena" and self.league_id is not None and not _id(self.league_id):
             raise ValueError("Invalid Aerena season identifier.")
-        if self.source == "aerena" and self.mode == "week" and not _id(self.league_id):
+        if self.source == "aerena" and self.mode in {"week", "playoffs"} and not _id(self.league_id):
             raise ValueError("Choose an Aerena season.")
-        if self.mode == "week" and (self.week is None or self.match_ids):
-            raise ValueError("Choose one source week without individual matches.")
+        if self.source == "aerena" and self.phase is not None:
+            raise ValueError("Aerena selections use the saved match stage, not a Rone feed phase.")
+        if self.mode == "week" and (self.week is None or self.match_ids or self.phase not in (None, "regular")):
+            raise ValueError("Choose one regular-season week without individual matches.")
+        if self.mode == "playoffs" and (self.week is not None or self.match_ids or self.phase not in (None, "playoffs")):
+            raise ValueError("Choose playoffs without a week or individual matches.")
         if self.mode == "matches" and (self.week is not None or not self.match_ids):
             raise ValueError("Choose one or more individual matches.")
         if len(set(self.match_ids)) != len(self.match_ids):
@@ -267,17 +272,36 @@ def ai_rone_schedule(region: str, refresh: bool = False, user: User = Depends(ai
             "notice": "Rone labels weeks but does not identify the season in this schedule."}
 
 
+@router.get("/esports/rone/{region}/playoffs")
+def ai_rone_playoffs(region: str, refresh: bool = False, user: User = Depends(ai_user),
+                     db: Session = Depends(get_db)) -> dict:
+    from .. import ai_esports_analysis as analysis
+    if region not in analysis.REGIONS:
+        raise HTTPException(404, "MPL region not found.")
+    payload, observed, state = analysis.rone_playoffs(db, region, refresh=refresh)
+    if payload is None:
+        return {"status": "unavailable", "matches": [], "weeks": [], "observed_at": None,
+                "notice": "Rone could not load these playoffs. Try again shortly."}
+    rows, duplicates = analysis.rone_playoff_rows(payload, region)
+    return {"status": state, "matches": rows, "weeks": [], "observed_at": iso(observed),
+            "duplicate_rows_removed": duplicates, "season": None,
+            "notice": "Playoffs are a separate Rone feed; its season is not identified."}
+
+
 @router.get("/esports/aerena/{league_id}/matches")
 def ai_aerena_matches(league_id: str, week: int | None = Query(default=None, ge=1, le=99),
                       q: str = Query(default="", max_length=100), offset: int = Query(default=0, ge=0, le=5000),
+                      phase: Literal["all", "playoffs"] = "all",
                       limit: int = Query(default=50, ge=1, le=100), user: User = Depends(ai_user),
                       db: Session = Depends(get_db)) -> dict:
     from ..aerena_models import AerenaLeague, AerenaMatch
-    from ..ai_esports_analysis import aerena_week
+    from ..ai_esports_analysis import aerena_playoff_stage, aerena_week
     from .esports import match_row
     league = db.get(AerenaLeague, league_id)
     if not league:
         raise HTTPException(404, "Aerena season not found.")
+    if phase == "playoffs" and week is not None:
+        raise HTTPException(422, "Choose either playoffs or a regular-season week.")
     rows = (db.query(AerenaMatch).filter_by(league_id=league_id)
             .order_by(AerenaMatch.starts_at.desc().nullslast(), AerenaMatch.id).limit(5001).all())
     if len(rows) > 5000:
@@ -287,15 +311,19 @@ def ai_aerena_matches(league_id: str, week: int | None = Query(default=None, ge=
         number = aerena_week(row)
         if number is not None:
             weeks[number] = weeks.get(number, 0) + 1
-    unknown = sum(aerena_week(row) is None for row in rows)
+    unknown = sum(aerena_week(row) is None and not aerena_playoff_stage(row.stage) for row in rows)
+    playoff_count = sum(aerena_playoff_stage(row.stage) for row in rows)
+    unknown_stage = sum(not (row.stage or "").strip() for row in rows)
     term = q.strip().casefold()
-    filtered = [row for row in rows if (week is None or aerena_week(row) == week) and (
-        not term or term in " ".join((row.id, row.team1_name or "", row.team2_name or "",
+    filtered = [row for row in rows if (week is None or aerena_week(row) == week)
+                and (phase != "playoffs" or aerena_playoff_stage(row.stage)) and (
+        not term or term in " ".join((row.id, row.team1_name or "", row.team2_name or "", row.stage or "",
                                        row.team1_json or "", row.team2_json or "")).casefold())]
     return {"matches": [dict(match_row(row, league), week=aerena_week(row)) for row in filtered[offset:offset + limit]],
             "total": len(filtered), "has_more": offset + limit < len(filtered), "offset": offset,
             "weeks": [{"number": n, "matches": weeks[n]} for n in sorted(weeks)],
-            "unlabeled_matches": unknown, "season_loaded": bool(league.matches_fetched_at),
+            "unlabeled_matches": unknown, "playoff_matches": playoff_count, "unlabeled_stages": unknown_stage,
+            "season_loaded": bool(league.matches_fetched_at),
             "season_observed_at": iso(league.matches_fetched_at), "season_error": bool(league.matches_error)}
 
 
@@ -783,6 +811,18 @@ def _send_message(
                 label += f" · MPL {scope['region'].upper()}"
             if scope.get("week"):
                 label += f" · Week {scope['week']}"
+            elif scope.get("mode") == "playoffs" or scope.get("phase") == "playoffs":
+                label += " · Playoffs"
+            elif scope.get("phase") == "all":
+                label += " · Regular season & playoffs"
+            elif scope.get("source") == "aerena" and scope.get("mode") == "matches":
+                from ..aerena_models import AerenaMatch
+                flags = {match_analysis.aerena_playoff_stage(row.stage) for mid in scope.get("match_ids", [])
+                         if (row := db.get(AerenaMatch, mid))}
+                if flags == {True}:
+                    label += " · Playoff matches"
+                elif len(flags) > 1:
+                    label += " · Selected stages"
             scope_source = [{"kind": "esports_feed", "label": label, "route": "esports",
                              "esports_selection": stored_scope}]
         prompt = AIMessage(

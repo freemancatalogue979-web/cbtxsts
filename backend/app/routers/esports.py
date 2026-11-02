@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import urllib.parse
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -135,13 +135,17 @@ def get_catalog(db: Session = Depends(get_db), _user: User = Depends(get_current
 @router.get("/matches")
 def list_matches(league_id: str = "", series_id: str = "", q: str = Query(default="", max_length=100),
                  view: str = Query(default="upcoming", pattern="^(upcoming|results|all)$"),
-                 limit: int = Query(default=80, ge=1, le=200),
+                 phase: Literal["all", "playoffs"] = "all",
+                 limit: int = Query(default=80, ge=1, le=500),
                  db: Session = Depends(get_db), _user: User = Depends(get_current_user)) -> dict:
     query = db.query(AerenaMatch, AerenaLeague).outerjoin(AerenaLeague, AerenaMatch.league_id == AerenaLeague.id)
     if league_id:
         query = query.filter(AerenaMatch.league_id == league_id)
     if series_id:
         query = query.filter(AerenaLeague.series_id == series_id)
+    if phase == "playoffs":
+        from ..ai_esports_analysis import aerena_playoff_condition
+        query = query.filter(aerena_playoff_condition())
     if q.strip():
         # Escape LIKE wildcards; search is text, not a query language.
         term = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -150,16 +154,19 @@ def list_matches(league_id: str = "", series_id: str = "", q: str = Query(defaul
                                  AerenaMatch.team2_name.ilike(pattern, escape="\\"),
                                  # Codes may differ entirely from full names (e.g. FLCN vs Team Falcons).
                                  AerenaMatch.team1_json.ilike(pattern, escape="\\"), AerenaMatch.team2_json.ilike(pattern, escape="\\"),
+                                 AerenaMatch.stage.ilike(pattern, escape="\\"),
                                  AerenaLeague.code.ilike(pattern, escape="\\"), AerenaLeague.name.ilike(pattern, escape="\\")))
     if view == "upcoming":
         query = query.filter(AerenaMatch.has_result.is_(False), AerenaMatch.starts_at >= utcnow())
-        query = query.order_by(AerenaMatch.starts_at.asc())
+        query = query.order_by(AerenaMatch.starts_at.asc(), AerenaMatch.id)
     elif view == "results":
         query = query.filter(AerenaMatch.has_result.is_(True))
-        query = query.order_by(AerenaMatch.starts_at.desc())
+        query = query.order_by(AerenaMatch.starts_at.desc().nullslast(), AerenaMatch.id)
     else:
-        query = query.order_by(AerenaMatch.starts_at.desc())
-    return {"matches": [match_row(match, league) for match, league in query.limit(limit).all()], "limit": limit}
+        query = query.order_by(AerenaMatch.starts_at.desc().nullslast(), AerenaMatch.id)
+    rows = query.limit(limit + 1).all()
+    return {"matches": [match_row(match, league) for match, league in rows[:limit]],
+            "limit": limit, "has_more": len(rows) > limit}
 
 
 def _claim_detail_refresh(db: Session, row: AerenaMatch):  # noqa: ANN201

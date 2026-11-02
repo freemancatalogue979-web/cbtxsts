@@ -73,10 +73,10 @@ export type AIMessagePage = { messages: AIMessage[]; has_more: boolean; conversa
 export type AIProgressStage = "preparing" | "loading_game_data" | "loading_matches" | "checking" | "connecting" | "thinking" | "writing" | "finishing";
 export type AIEsportsRegion = "id" | "ph" | "my" | "kh";
 export type AIEsportsSelection = {
-  source: "rone" | "aerena"; mode: "week" | "matches"; region?: AIEsportsRegion;
-  league_id?: string; week?: number; match_ids?: string[];
+  source: "rone" | "aerena"; mode: "week" | "matches" | "playoffs"; region?: AIEsportsRegion;
+  league_id?: string; phase?: "regular" | "playoffs" | "all"; week?: number; match_ids?: string[];
 };
-export type AIEsportsAttachment = { selection: AIEsportsSelection; label: string; chosen: { id: string; label: string }[] };
+export type AIEsportsAttachment = { selection: AIEsportsSelection; label: string; chosen: { id: string; label: string; phase?: "regular" | "playoffs" }[] };
 export const AI_ESPORTS_MATCH_LIMIT = 500;
 export type AISendResult = { conversation: AIConversation; user_message: AIMessage; assistant_message: AIMessage };
 export type AIExport = {

@@ -45,6 +45,19 @@ test("playoffs parse the actual days, seeds and bracket shape", () => {
   assert.equal(scheduled.groups[0].matches[0].status, "scheduled");
 });
 
+test("playoff duplicate IDs are counted once and conflicting records cannot open arbitrary details", () => {
+  const source = { days: [
+    { label: "Day 1", matches: [{ ...match, round: "Upper final" }, { ...match, round: "Upper final" }, { ...match, match_id: null }] },
+    { label: "Day 2", matches: [{ ...match, team1: { name: "Different team" } }, { ...match, match_id: "next" }] },
+  ] };
+  const feed = parseRoneFeed(source);
+  assert.equal(feed.groups.flatMap(group => group.matches).length, 3);
+  assert.equal(feed.groups[0].matches[0].id, null);
+  assert.equal(feed.groups[0].matches[0].idConflict, true);
+  assert.equal(feed.groups[0].matches[1].id, null); // TBD is still visible, not deduplicated away.
+  assert.equal(feed.groups[1].matches[0].id, "next");
+});
+
 test("standings retain nested win/loss values and unknowns", () => {
   const feed = parseRoneFeed({ data: { standings: [{ rank: 1, team: rora, match_point: 12,
     match_wl: { win: 12, lose: 2 }, game_wl: { win: 25, lose: 6 }, net_game_win: 19 }, { rank: 2, team: onic }] } });

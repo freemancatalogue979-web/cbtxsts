@@ -15,11 +15,14 @@ test('week analysis has its own bounded match limit without changing board or le
 
 test('esports picker exposes source, region, season, week and bulk selection with honest source gaps', async () => {
   const picker = await readFile(new URL('../src/components/AIMatchPicker.tsx', import.meta.url), 'utf8');
-  for (const phrase of ['Data source', 'MPL region', 'League / season', 'Use entire week', 'Load more matches', 'Retry schedule']) assert.ok(picker.includes(phrase), phrase);
-  assert.match(picker, /\/ai\/esports\/rone\/\$\{region\}\/schedule/);
+  for (const phrase of ['Data source', 'MPL region', 'League / season', 'Use entire week', 'Use entire playoffs', 'Load more matches', 'Match stage']) assert.ok(picker.includes(phrase), phrase);
+  assert.match(picker, /\/ai\/esports\/rone\/\$\{region\}\/\$\{phase === "playoffs" \? "playoffs" : "schedule"\}/);
   assert.match(picker, /\/ai\/esports\/aerena\/\$\{encodeURIComponent\(season\)\}\/matches/);
-  assert.match(picker, /doesn’t identify a season/);
+  assert.match(picker, /don’t identify a season/);
   assert.match(picker, /weekCount > AI_ESPORTS_MATCH_LIMIT/);
+  assert.match(picker, /playoffCount > AI_ESPORTS_MATCH_LIMIT/);
+  assert.match(picker, /Your selected matches stay selected when you switch stages/);
+  assert.match(picker, /phase: chosenPhase/);
   assert.match(picker, /source, mode, region, \.\.\.\(source === "aerena"/);
   assert.doesNotMatch(picker, /DeepSeek|ChatGPT|Gemini/i);
 });
