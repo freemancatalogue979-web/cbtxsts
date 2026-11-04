@@ -57,15 +57,15 @@ test("desktop layout controls are reversible and expose their current state", ()
   const open = render({ navigationOpen: true, historyOpen: true, headerOpen: true });
   const closed = render({ navigationOpen: false, historyOpen: false, headerOpen: false });
   for (const [target, hide, show] of [
-    ["site-desktop-navigation", "Hide site navigation", "Show site navigation"],
-    ["ai-desktop-history", "Hide conversation history", "Show conversation history"],
-    ["ai-workspace-intro", "Hide AI header", "Show AI header"],
+    ["site-desktop-navigation", "Hide nav \\(site navigation\\)", "Show nav \\(site navigation\\)"],
+    ["ai-desktop-history", "Hide chats \\(conversation history\\)", "Show chats \\(conversation history\\)"],
+    ["ai-workspace-intro", "Hide header \\(AI workspace\\)", "Show header \\(AI workspace\\)"],
   ]) {
     assert.match(buttonFor(open, target), new RegExp(`aria-expanded="true".*aria-label="${hide}"`));
     assert.match(buttonFor(closed, target), new RegExp(`aria-expanded="false".*aria-label="${show}"`));
   }
   assert.match(open, /id="ai-desktop-history"[^>]*class="hidden lg:block /);
-  assert.match(closed, /id="ai-desktop-history"[^>]*class="hidden rounded-xl /);
+  assert.match(closed, /id="ai-desktop-history"[^>]*class="hidden relative rounded-xl /);
   assert.match(closed, /id="ai-workspace-intro" class="md:hidden flex /);
   assert.match(closed, /md:h-\[calc\(100dvh-125px\)\]/);
   assert.match(closed, /lg:grid-cols-\[minmax\(0,1fr\)\]/);
@@ -81,6 +81,14 @@ test("chat scroll waits for loaded messages and attachments are single-message",
   assert.match(chat, /setAttachedMatches\(\[\]\); setAttachedDrafts\(\[\]\); setAttachedMaps\(\[\]\);/);
   assert.match(chat, /draft_ids: drafts\.map/);
   assert.match(picker, /share the selected saved team boards and notes with the external AI provider for my next message/);
+});
+
+test("the conversation can grow with readable type and attachments", () => {
+  const html = render({ navigationOpen: true, historyOpen: true, headerOpen: true });
+  assert.match(html, /min-h-min sm:h-\[min\(740px,calc\(100vh-235px\)\)\]/);
+  assert.match(html, /min-h-\[200px\] max-h-\[50vh\] sm:max-h-none/);
+  assert.match(html, /border-edge\/70 shrink-0/);
+  assert.match(html, /id="ai-desktop-history"[^>]*relative[^>]*h-full min-h-0[^>]*><div class="absolute inset-0"/);
 });
 
 test("mobile history remains separate and global navigation only collapses on AI", async () => {

@@ -47,3 +47,14 @@ test("section pills have angled corners and respect reduced motion", async () =>
   assert.match(accent, /animation:\s*section-pill-accent/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.section-pill,\s*\.section-pill::before\s*\{\s*animation:\s*none;/);
 });
+
+test("the read-only broadcast board keeps all ten circular bans visible in narrow columns", async () => {
+  const board = await readFile(new URL("../src/components/DraftBoard.tsx", import.meta.url), "utf8");
+  const row = board.match(/function BanRow\([\s\S]*?\n}\n/)?.[0] ?? "";
+  assert.match(row, /grid w-full min-w-0 max-w-\[264px\] grid-cols-5/);
+  assert.match(row, /order=\{i \+ 1\} fluid/);
+  assert.match(board, /fluid \? "w-full aspect-square" : "w-11 h-11 sm:w-12 sm:h-12"/);
+  assert.match(board, /grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,1fr\)\]/);
+  const reviews = await readFile(new URL("../src/pages/Reviews.tsx", import.meta.url), "utf8");
+  assert.match(reviews, /grid grid-cols-1 gap-4[^]*?<DraftBoard draft=\{review\.draft\}/);
+});

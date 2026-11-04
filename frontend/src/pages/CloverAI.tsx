@@ -498,8 +498,10 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     onSelect: selectChat, onNew: newChat, disabled: busy || exporting,
     onRetry: () => setSearchRevision((value) => value + 1),
   };
-  const panelHeight = `h-[min(740px,calc(100vh-235px))] min-h-[560px] sm:min-h-[600px] ${
-    desktopLayout.headerOpen ? "" : "md:h-[calc(100dvh-125px)] md:min-h-[480px]"
+  // Grow beyond the preferred desktop height when larger text or attachments
+  // need room, while leaving a usable, independently scrollable chat area.
+  const conversationHeight = `min-h-min sm:h-[min(740px,calc(100vh-235px))] ${
+    desktopLayout.headerOpen ? "" : "md:h-[calc(100dvh-125px)]"
   }`;
   return <div className="space-y-4 pb-3">
     <header className="relative overflow-hidden rounded-xl border border-edge bg-panel" style={{ backgroundImage: "radial-gradient(circle at 85% -40%, rgba(52,211,153,.14), transparent 42%), radial-gradient(circle at 0% 0%, rgba(225,29,72,.12), transparent 35%)" }}>
@@ -517,19 +519,19 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           {status ? (status.provider_configured ? "AI configured" : "Basic mode") : "Checking AI"}
         </div>
       </div>
-      <div className={`flex items-center ${desktopLayout.headerOpen ? "border-t border-edge/70" : "border-t border-edge/70 md:border-t-0"}`}>
-        <nav aria-label="AI workspace sections" className="flex gap-1 overflow-x-auto min-w-0 flex-1 px-3 sm:px-5">
+      <div className={`flex flex-wrap lg:flex-nowrap items-center ${desktopLayout.headerOpen ? "border-t border-edge/70" : "border-t border-edge/70 md:border-t-0"}`}>
+        <nav aria-label="AI workspace sections" className="flex gap-1 overflow-x-auto min-w-0 w-full flex-none lg:w-auto lg:flex-1 px-3 sm:px-5">
           {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
             className={`flex items-center gap-1.5 px-3 py-3 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider border-b-2 whitespace-nowrap ${tab === id ? "border-leaf text-text" : "border-transparent text-faint hover:text-mute"}`}><Icon size={14} />{label}</button>)}
         </nav>
-        <div role="group" aria-label="Desktop layout controls" className="hidden md:flex items-center gap-1.5 shrink-0 pr-3 py-1.5">
+        <div role="group" aria-label="Desktop layout controls" className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto lg:ml-0 pr-3 py-1.5">
           <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[10px]" aria-controls="site-desktop-navigation" aria-expanded={desktopLayout.navigationOpen}
-            aria-label={desktopLayout.navigationOpen ? "Hide site navigation" : "Show site navigation"} title={desktopLayout.navigationOpen ? "Hide site navigation" : "Show site navigation"}
+            aria-label={desktopLayout.navigationOpen ? "Hide nav (site navigation)" : "Show nav (site navigation)"} title={desktopLayout.navigationOpen ? "Hide site navigation" : "Show site navigation"}
             onClick={() => onToggleDesktopLayout("navigationOpen")}>
             {desktopLayout.navigationOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}<span className="hidden lg:inline">{desktopLayout.navigationOpen ? "Hide nav" : "Show nav"}</span>
           </button>
           <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[10px]" aria-controls="ai-workspace-intro" aria-expanded={desktopLayout.headerOpen}
-            aria-label={desktopLayout.headerOpen ? "Hide AI header" : "Show AI header"} title={desktopLayout.headerOpen ? "Hide AI header" : "Show AI header"}
+            aria-label={desktopLayout.headerOpen ? "Hide header (AI workspace)" : "Show header (AI workspace)"} title={desktopLayout.headerOpen ? "Hide AI header" : "Show AI header"}
             onClick={() => onToggleDesktopLayout("headerOpen")}>
             {desktopLayout.headerOpen ? <PanelTopClose size={15} /> : <PanelTopOpen size={15} />}<span className="hidden lg:inline">{desktopLayout.headerOpen ? "Hide header" : "Show header"}</span>
           </button>
@@ -538,14 +540,17 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     </header>
 
     {tab === "chat" ? <div className={`grid gap-3 ${desktopLayout.historyOpen ? "lg:grid-cols-[228px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}>
-      <aside id="ai-desktop-history" aria-label="Conversation history" className={`${desktopLayout.historyOpen ? "hidden lg:block" : "hidden"} rounded-xl border border-edge bg-panel ${panelHeight}`}><HistoryPanel {...historyProps} /></aside>
+      {/* History follows the chat height; its long list must not stretch the grid row. */}
+      <aside id="ai-desktop-history" aria-label="Conversation history" className={`${desktopLayout.historyOpen ? "hidden lg:block" : "hidden"} relative rounded-xl border border-edge bg-panel h-full min-h-0`}>
+        <div className="absolute inset-0"><HistoryPanel {...historyProps} /></div>
+      </aside>
       <aside id="ai-mobile-history" ref={mobileHistoryRef} aria-label="Conversation history" className={`${showHistory ? "" : "hidden"} lg:hidden rounded-xl border border-edge bg-panel h-72`}><HistoryPanel {...historyProps} /></aside>
-      <section aria-label="AI conversation" className={`rounded-xl border border-edge bg-panel min-w-0 flex flex-col ${panelHeight}`}>
+      <section aria-label="AI conversation" className={`rounded-xl border border-edge bg-panel min-w-0 flex flex-col ${conversationHeight}`}>
         <div className={`flex flex-wrap items-center gap-2 max-[430px]:gap-y-1 sm:gap-3 border-b border-edge px-3 sm:px-4 py-3 max-[430px]:py-2 ${desktopLayout.headerOpen ? "" : "md:py-2"}`}>
           <button className="btn-ghost lg:hidden !p-2" type="button" aria-controls="ai-mobile-history" aria-expanded={showHistory}
             aria-label={showHistory ? "Close conversation history" : "Open conversation history"} onClick={() => setShowHistory(!showHistory)}><History size={15} /></button>
           <button type="button" className="btn-ghost hidden lg:inline-flex !p-2 !text-[10px]" aria-controls="ai-desktop-history" aria-expanded={desktopLayout.historyOpen}
-            aria-label={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"} title={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"}
+            aria-label={desktopLayout.historyOpen ? "Hide chats (conversation history)" : "Show chats (conversation history)"} title={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"}
             onClick={() => onToggleDesktopLayout("historyOpen")}><History size={15} /><span className="hidden lg:inline">{desktopLayout.historyOpen ? "Hide chats" : "Show chats"}</span></button>
           <div className={`min-w-[160px] flex-1 ${desktopLayout.headerOpen ? "" : "md:min-w-0"}`}><div className={desktopLayout.headerOpen ? "" : "md:hidden"}><div className="section-pill">PRIVATE CONVERSATION</div></div><div className={`text-[12px] font-extrabold truncate mt-1 ${desktopLayout.headerOpen ? "" : "md:mt-0"}`}>{current?.title || "New conversation"}</div></div>
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
@@ -555,7 +560,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             <button type="button" aria-label="Your context" className="btn-ghost !p-2 sm:!px-3 sm:!py-2" onClick={() => setShowControls(true)}><Settings2 size={15} /><span className="hidden sm:inline text-[11px]">Your context</span></button>
           </div>
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 min-h-[200px] max-h-[50vh] sm:max-h-none">
           {loadingChat ? <div className="h-full grid place-items-center text-[12px] text-faint"><span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading conversation…</span></div> : messages.length || showPending ?
             <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
@@ -574,7 +579,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
               {waiting && <div className="mt-4">{(waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>}</div>}
             </div>}
         </div>
-        <div className="px-3 sm:px-4 pb-3 pt-2 border-t border-edge/70">
+        <div className="px-3 sm:px-4 pb-3 pt-2 border-t border-edge/70 shrink-0">
           {status && !status.provider_configured && <p className="text-[10px] text-amber leading-relaxed mb-1">
             The AI provider isn’t configured or its key can’t be unlocked. {me.role === "admin" ? <button type="button" className="underline font-bold" onClick={() => navigate("admin")}>Set it up in Team Admin</button> : "Ask an admin to configure it in Team Admin."} Until then, only local facts are available.
           </p>}

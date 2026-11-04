@@ -113,12 +113,12 @@ export function DraftsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
       <PageTitle title="Draft Lab" sub="Saved pick/ban boards — ideas become tested comps become approved doctrine."
         right={canManage && <button className="btn-primary" onClick={() => setEditing("new")}><Plus size={15} /> New board</button>} />
       {!drafts && <Spinner />}
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {(drafts ?? []).map((d) => (
-          <div key={d.id} className="space-y-2">
+          <div key={d.id} className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2 px-1">
               <LayersIcon size={14} className="text-crim" />
-              <span className="text-sm font-extrabold">{d.name}</span>
+              <span className="min-w-0 break-words text-sm font-extrabold">{d.name}</span>
               <Badge cls={STATUS_TONE[d.status] ?? "text-mute"}>{d.status}</Badge>
               {d.opponent && <Badge cls="text-crim border-crim/30">vs {d.opponent}</Badge>}
               <span className="text-[11px] text-faint ml-auto">{d.patch}</span>

@@ -102,9 +102,30 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
+test("the display font keeps its slant while gaining clarity and breathing room", () => {
+  const body = css.match(/body\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(body, /font-style:\s*oblique/);
+  assert.match(body, /font-synthesis:\s*style/);
+  assert.match(body, /font-synthesis-weight:\s*none/);
+  assert.match(body, /font-size-adjust:\s*0\.6/);
+  assert.match(body, /letter-spacing:\s*0\.035em/);
+  assert.match(body, /line-height:\s*1\.6/);
+  assert.doesNotMatch(body, /\bantialiased\b/);
+  assert.match(css, /--color-faint:\s*#898995/);
+  assert.match(css, /--tracking-tight:\s*0\.01em/);
+  assert.match(css, /@supports not \(font-size-adjust:\s*0\.6\)\s*\{\s*@font-face\s*\{[^}]*unicode-range:\s*U\+0000-002F,\s*U\+003A-10FFFF;[^}]*size-adjust:\s*120%/s);
+});
+
 test("the mobile quick bar keeps larger, higher-contrast labels for the display font", async () => {
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   const bar = layout.split("{/* Mobile bottom quick bar */}")[1]?.split("</nav>")[0] ?? "";
-  assert.match(bar, /text-\[9px\]/);
+  assert.match(bar, /text-\[10px\]/);
   assert.match(bar, /active \? "text-rose-500" : "text-mute"/);
+});
+
+test("draft cards can shrink and names can wrap on narrow screens", async () => {
+  const drafts = await readFile(new URL("../src/pages/Drafts.tsx", import.meta.url), "utf8");
+  assert.match(drafts, /grid grid-cols-1 gap-4/);
+  assert.match(drafts, /className="min-w-0 space-y-2"/);
+  assert.match(drafts, /min-w-0 break-words text-sm font-extrabold/);
 });

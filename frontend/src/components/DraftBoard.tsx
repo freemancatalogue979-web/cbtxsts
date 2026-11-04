@@ -70,8 +70,8 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
 
 /** Small slashed ban thumbnail. */
 /** Sim-style ban circle: round grayscale face with crimson ring+glow; empty = dashed circle with a skip dash. */
-function BanThumb({ name, order, interactive = false, onClick }: {
-  name?: string | null; ours: boolean; order: number; interactive?: boolean; onClick?: () => void;
+function BanThumb({ name, order, interactive = false, onClick, fluid = false }: {
+  name?: string | null; ours: boolean; order: number; interactive?: boolean; onClick?: () => void; fluid?: boolean;
 }) {
   useSyncExternalStore(subscribeArt, artVersion);
   const [stage, setStage] = useState(0);
@@ -80,7 +80,7 @@ function BanThumb({ name, order, interactive = false, onClick }: {
   const cands = filled ? [heroHead(name!), remote].filter((u): u is string => Boolean(u)) : [];
   const src = stage < cands.length ? cands[stage] : null;
   const thumb = (
-    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden transition
+    <div className={`relative ${fluid ? "w-full aspect-square" : "w-11 h-11 sm:w-12 sm:h-12"} rounded-full overflow-hidden transition
       ${filled
         ? "border-2 border-crim/80 shadow-[0_0_10px_rgba(225,29,72,0.35),inset_0_0_10px_rgba(225,29,72,0.2)]"
         : "border border-dashed border-mute/40 bg-[#111111]"}
@@ -237,8 +237,9 @@ function StageHeader({ oursLabel, theirsLabel, scoreUS, scoreThem }: {
 function BanRow({ bans, ours }: { bans?: (string | null)[]; ours: boolean }) {
   const list = (bans ?? []).concat([null, null, null, null, null]).slice(0, 5);
   return (
-    <div className={`flex items-center gap-1.5 ${ours ? "" : "justify-end"}`}>
-      {list.map((b, i) => <BanThumb key={i} name={b} ours={ours} order={i + 1} />)}
+    <div role="group" aria-label={ours ? "Our bans" : "Enemy bans"}
+      className={`grid w-full min-w-0 max-w-[264px] grid-cols-5 gap-1.5 ${ours ? "" : "justify-self-end"}`}>
+      {list.map((b, i) => <BanThumb key={i} name={b} ours={ours} order={i + 1} fluid />)}
     </div>
   );
 }
@@ -264,7 +265,7 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
       <div className="relative"><StageHeader oursLabel={oursLabel} theirsLabel={theirsLabel} scoreUS={scoreUS} scoreThem={scoreThem} /></div>
 
       {/* bans across the top — round sim circles, enemy row mirrors */}
-      <div className="relative hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+      <div className="relative hidden lg:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
         <BanRow bans={d.our_bans} ours />
         <span className="label !text-[8px] tracking-[0.3em]">BANS</span>
         <BanRow bans={d.enemy_bans} ours={false} />

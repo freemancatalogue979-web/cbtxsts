@@ -84,7 +84,7 @@
 .team-focus__intro-copy { min-width: 0; }
 .team-focus__eyebrow { font-size: 9px; }
 .team-focus__eyebrow span { color: #b58491; }
-.team-focus__intro h3 { margin: 6px 0 0; color: #f7f5f7; font-size: clamp(18px, 2vw, 23px); font-weight: 800; letter-spacing: -.035em; line-height: 1.2; }
+.team-focus__intro h3 { margin: 6px 0 0; color: #f7f5f7; font-size: clamp(18px, 2vw, 23px); font-weight: 800; letter-spacing: .01em; line-height: 1.3; }
 .team-focus__intro h3 > span { color: #ef3459; }
 .team-focus__intro p { margin: 6px 0 0; color: #aaa4ae; font-size: 12px; line-height: 1.55; }
 .team-focus__scope {
@@ -120,7 +120,7 @@
 .team-focus__form-column { display: grid; align-content: start; gap: 20px; min-width: 0; }
 .team-focus__form-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 1px; }
 .team-focus__form-heading h4,
-.team-focus__preview-top h4 { margin: 4px 0 0; color: #f0edf1; font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+.team-focus__preview-top h4 { margin: 4px 0 0; color: #f0edf1; font-size: 15px; font-weight: 800; letter-spacing: .01em; }
 .team-focus__form-number { color: #a19ba7; font-size: 10px; font-weight: 750; letter-spacing: .1em; white-space: nowrap; }
 .team-focus__field { min-width: 0; }
 .team-focus__label-row { justify-content: space-between; gap: 8px; margin-bottom: 8px; }
@@ -197,7 +197,7 @@
 .team-focus__preview-badge { padding: 4px 6px; color: #b18b96; border: 1px solid #44323a; border-radius: 5px; background: #21181e; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
 .team-focus__preview-divider { height: 1px; margin: 15px 0; background: #2c2730; }
 .team-focus__preview-label { font-size: 9px; line-height: 1.4; }
-.team-focus__preview-weakness { min-height: 47px; margin: 12px 0 17px; color: #f6f3f6; font-size: 15px; font-weight: 800; letter-spacing: -.02em; line-height: 1.4; overflow-wrap: anywhere; }
+.team-focus__preview-weakness { min-height: 47px; margin: 12px 0 17px; color: #f6f3f6; font-size: 15px; font-weight: 800; letter-spacing: .01em; line-height: 1.4; overflow-wrap: anywhere; }
 .team-focus__preview-weakness--empty { color: #a19aa5; font-weight: 600; }
 .team-focus__preview-footer { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; padding-top: 13px; border-top: 1px solid #2c2730; }
 .team-focus__preview-footer > div { display: grid; align-content: start; gap: 5px; min-width: 0; }

@@ -12,10 +12,26 @@
   unicode-range: U+0000-002F, U+003A-10FFFF;
 }
 
+/* Older Chromium versions don't support font-size-adjust, but do support this
+   face descriptor. Keep the same legible Corptic size without changing digits. */
+@supports not (font-size-adjust: 0.6) {
+  @font-face {
+    font-family: "Corptic";
+    src: url("/fonts/CorpticDEMO-Regular.otf") format("opentype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    unicode-range: U+0000-002F, U+003A-10FFFF;
+    size-adjust: 120%;
+  }
+}
+
 @theme {
   --font-sans: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
   --font-mono: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* Corptic is already compact; don't squeeze headings with negative tracking. */
+  --tracking-tight: 0.01em;
 
   /* dark premium foundation */
   --color-ink: #0a0a0d;
@@ -27,7 +43,7 @@
 
   --color-text: #f2f2f6;
   --color-mute: #9b9ba8;
-  --color-faint: #696973;
+  --color-faint: #898995;
 
   /* crimson + clover accents */
   --color-crim: #e11d48;
@@ -44,8 +60,17 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-ink text-text font-sans antialiased;
+    @apply bg-ink text-text font-sans;
     font-style: oblique; /* Keep the app-wide slanted style. */
+    /* Corptic has one regular face. Avoid fuzzy, artificially bold letters,
+       while still allowing the browser to synthesize the requested slant. */
+    font-synthesis: style;
+    font-synthesis-weight: none;
+    /* Its small x-height needs more actual glyph size without breaking the
+       responsive font-size utilities or the Montserrat number fallback. */
+    font-size-adjust: 0.6;
+    letter-spacing: 0.035em;
+    line-height: 1.6;
     font-feature-settings: "ss01";
   }
   ::selection {
@@ -77,7 +102,8 @@
     @apply hover:border-edge-2 transition-colors;
   }
   .label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-faint;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-faint;
+    line-height: 1.45;
   }
   /* Angular section/eyebrow headings, not form labels or action buttons. */
   .section-pill {
@@ -97,10 +123,10 @@
     background: var(--pill-frame);
     clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
     color: #efd6dc;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.13em;
-    line-height: 1.25;
+    line-height: 1.5;
     text-transform: uppercase;
     overflow-wrap: anywhere;
     animation: section-pill-enter 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -154,7 +180,8 @@
     @apply inline-flex items-center gap-1 rounded border border-edge bg-raised px-2 py-0.5 text-[11px] font-semibold;
   }
   .th {
-    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-faint text-left px-3 py-2 border-b border-edge;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-faint text-left px-3 py-2 border-b border-edge;
+    line-height: 1.45;
   }
   .td {
     @apply px-3 py-2.5 border-b border-edge/60 text-sm align-top;
@@ -183,7 +210,7 @@
   .section-pill {
     gap: 0.35rem;
     padding: 0.25rem 0.55rem;
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 0.1em;
   }
 }

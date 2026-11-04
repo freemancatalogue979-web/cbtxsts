@@ -183,7 +183,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
         </div>}
       />
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <DraftBoard draft={review.draft} theirsLabel={review.opponent.toUpperCase()} />
         <div className="card p-4">
           <div className="section-pill mb-3">Match statistics</div>
