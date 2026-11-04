@@ -1,13 +1,15 @@
 @import "tailwindcss";
 
-/* Corptic DEMO is a personal-use typeface by Pandeka Foundry. Its demo only
-   contains letters, so Montserrat supplies numerals, punctuation and accents. */
+/* Corptic DEMO is a personal-use typeface by Pandeka Foundry. Montserrat
+   supplies numbers and any punctuation or accents missing from the demo. */
 @font-face {
   font-family: "Corptic";
   src: url("/fonts/CorpticDEMO-Regular.otf") format("opentype");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  /* Exclude 0–9 so the next font, Montserrat, always draws the numbers. */
+  unicode-range: U+0000-002F, U+003A-10FFFF;
 }
 
 @theme {

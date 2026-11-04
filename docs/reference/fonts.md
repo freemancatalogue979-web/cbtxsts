@@ -10,8 +10,8 @@ The app uses **Corptic DEMO Regular** by Pandeka Foundry (Pandeka Studio). The f
 
 **The demo is free for personal, non-commercial use only.** Commercial or corporate use requires the appropriate license from the foundry. Check that the license permits the intended web embedding and distribution before deploying it for such use; the existence of this repository does not grant those rights.
 
-The demo contains basic Latin letters only: it has no numerals, punctuation or accented characters. The font stack therefore falls back to Montserrat and system symbol fonts for missing glyphs. This preserves readable scores, punctuation and symbols; it does not imply that the demo contains a full character set. The regular face is used throughout, with browser-synthesized weights and the existing oblique style where needed.
+The demo contains basic Latin letters only: it has no numerals, punctuation or accented characters. The interface explicitly uses Montserrat for digits 0–9, even if a Corptic font with numbers is installed later. Other missing glyphs fall back to Montserrat or system symbol fonts. The regular Corptic face is used with browser-synthesized weights and the existing oblique style where needed.
 
-## Montserrat fallback
+## Montserrat numbers and fallback
 
-Montserrat is provided through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. It remains in the build as a fallback for characters missing from Corptic DEMO.
+Montserrat is provided through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. It supplies numbers and remains available as a fallback for characters missing from Corptic DEMO.

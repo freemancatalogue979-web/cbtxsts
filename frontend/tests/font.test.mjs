@@ -83,6 +83,25 @@ test("demo letters use Corptic while unavailable characters have fallbacks", () 
   assert.match(css, /body\s*\{[^}]*font-style:\s*oblique/s);
 });
 
+test("digits use Montserrat even if a future Corptic face contains numbers", () => {
+  const face = css.match(/@font-face\s*\{[^}]*font-family:\s*"Corptic";[^}]*}/s)?.[0] ?? "";
+  const ranges = (face.match(/unicode-range:\s*([^;]+);/)?.[1] ?? "").split(",").map((part) => {
+    const match = part.trim().match(/^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i);
+    assert.ok(match, `invalid Unicode range: ${part}`);
+    return [parseInt(match[1], 16), parseInt(match[2] ?? match[1], 16)];
+  });
+  const corpticCanSupply = (character) => ranges.some(([first, last]) => {
+    const point = character.codePointAt(0);
+    return first <= point && point <= last;
+  });
+  for (const digit of "0123456789") assert.equal(corpticCanSupply(digit), false, digit);
+  for (const character of "AZaz .,!?é") assert.equal(corpticCanSupply(character), true, character);
+  for (const name of ["sans", "mono"]) {
+    const stack = css.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
+    assert.match(stack, /^"Corptic",\s*"Montserrat Variable"/);
+  }
+});
+
 test("the mobile quick bar keeps larger, higher-contrast labels for the display font", async () => {
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   const bar = layout.split("{/* Mobile bottom quick bar */}")[1]?.split("</nav>")[0] ?? "";
