@@ -531,6 +531,10 @@ integration does **not** yet provide verified live Original/Advanced Server patc
 feeds, a calibrated prediction model, or automatic team-specific draft
 recommendations. It cannot establish why a decision was made without evidence.
 
+## Fonts
+
+The interface uses Corptic DEMO by Pandeka Foundry. **The included demo is for personal, non-commercial use only**; obtain an appropriate license before commercial or corporate use. The demo contains letters only, so numerals, punctuation and other missing glyphs use Montserrat or system fallbacks. See [font credits and licensing](docs/reference/fonts.md).
+
 ## Tests
 
 ```bash

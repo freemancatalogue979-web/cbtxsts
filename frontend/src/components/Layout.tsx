@@ -301,7 +301,7 @@ export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, c
             const Icon = item.icon;
             return (
               <button key={item.id} onClick={() => navigate(item.id)} aria-label={item.label}
-                className={`flex flex-col items-center gap-1 py-2 text-[8px] font-bold uppercase tracking-wide ${active ? "text-crim" : "text-faint"}`}>
+                className={`flex flex-col items-center gap-1 py-2 text-[9px] font-bold uppercase tracking-wide ${active ? "text-rose-500" : "text-mute"}`}>
                 <Icon size={17} />
                 {short}
               </button>

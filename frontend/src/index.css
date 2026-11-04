@@ -1,7 +1,19 @@
 @import "tailwindcss";
 
+/* Corptic DEMO is a personal-use typeface by Pandeka Foundry. Its demo only
+   contains letters, so Montserrat supplies numerals, punctuation and accents. */
+@font-face {
+  font-family: "Corptic";
+  src: url("/fonts/CorpticDEMO-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 @theme {
-  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif; /* symbol fallbacks cover IPA/Greek/special glyphs */
+  --font-sans: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
+  --font-mono: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
 
   /* dark premium foundation */
   --color-ink: #0a0a0d;
