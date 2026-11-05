@@ -4,7 +4,7 @@
  * One socket per room drives everything: the member list, the question that is
  * live for the whole room, the per-question clock, the rolling scoreboard and
  * the chat that runs from the lobby to the final standings. Hosts get the
- * control bar (start, reveal early, next question); guests get the buzzer.
+ * start button; the server then reveals and advances every round automatically.
  */
 import {
   Check,
@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Play,
   Send,
-  SkipForward,
   Swords,
   Users,
   X,
@@ -30,6 +29,7 @@ import {formatNumber} from '../lib/format';
 import {sfx} from '../lib/sfx';
 import {LiveSocket} from '../lib/ws';
 import {useSession} from '../store/session';
+import {openPlayer} from '../components/PlayerCard';
 import type {RoomFinishPayload, RoomMessage, RoomQuestionPayload, RoomRevealPayload, RoomState} from '../lib/types';
 
 function parseTime(iso: string): number {
@@ -79,7 +79,7 @@ function ChatPanel({
           const mine = message.sender_id === myId;
           return (
             <div key={message.id} className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
-              <Avatar name={message.sender_name} hue={message.sender_hue} initials={message.sender_initials} size={26} />
+              <Avatar name={message.sender_name} hue={message.sender_hue} initials={message.sender_initials} photo={{id: message.sender_id, has: message.sender_has_photo}} size={26} />
               <div className={`max-w-[78%] ${mine ? 'text-right' : ''}`}>
                 <p className="text-[0.62rem] font-bold text-mist-600">{mine ? 'You' : message.sender_name}</p>
                 <p
@@ -130,14 +130,17 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
   /* ---------------------------------------------------------- boot + ws */
   useEffect(() => {
     let alive = true;
+    let snapshotVersion = 0;
+    let fetching = false;
     const applySnapshot = (data: Awaited<ReturnType<typeof api.roomDetail>>) => {
       if (!alive) return;
       setRoom(data.room);
       setMessages(data.messages);
+      setFinish(data.finish ?? null);
       if (data.question) {
         setQuestion(data.question);
         setMyPick(data.question.selected ?? null);
-        setLockedIds(data.question.answered ? [myId] : []);
+        setLockedIds(data.room.locked_ids ?? (data.question.answered ? [myId] : []));
         setReveal(data.reveal ?? null);
       } else {
         setQuestion(null);
@@ -148,18 +151,22 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
       setLoading(false);
     };
     const refreshSnapshot = () => {
-      void api.roomDetail(roomId).then(applySnapshot).catch(() => undefined);
+      if (fetching) return;
+      fetching = true;
+      const version = ++snapshotVersion;
+      void api.roomDetail(roomId).then((data) => {
+        if (version === snapshotVersion) applySnapshot(data);
+      }).catch((error: Error) => {
+        if (alive) { setLoading(false); toast('error', 'Room sync interrupted', error.message); }
+      }).finally(() => { fetching = false; });
     };
-
-    api
-      .roomDetail(roomId)
-      .then(applySnapshot)
-      .catch((error: Error) => {
-        if (!alive) return;
-        toast('error', 'Could not open the room', error.message);
-        setLoading(false);
-        onExit();
-      });
+    refreshSnapshot();
+    // REST is the recovery path even if a private question event is missed.
+    // Keep polling through reveal/finish too, not only while question is null.
+    const poll = window.setInterval(refreshSnapshot, 1500);
+    const recover = () => { if (!document.hidden) refreshSnapshot(); };
+    document.addEventListener('visibilitychange', recover);
+    window.addEventListener('ag:room-retry', refreshSnapshot);
 
     const socket = new LiveSocket({
       token: tokenStore.get() ?? '',
@@ -202,9 +209,11 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
             break;
           }
           case 'room_start':
+            refreshSnapshot();
             toast('success', 'Room is live!', 'First question incoming…');
             break;
           case 'room_question': {
+            snapshotVersion += 1;
             const payload = data as unknown as RoomQuestionPayload;
             setQuestion(payload);
             setReveal(null);
@@ -217,6 +226,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
             setLockedIds((rows) => (rows.includes(data.student_id as number) ? rows : [...rows, data.student_id as number]));
             break;
           case 'room_reveal': {
+            snapshotVersion += 1;
             const payload = data as unknown as RoomRevealPayload;
             setReveal(payload);
             if (payload.selected !== undefined) setMyPick(payload.selected);
@@ -225,6 +235,8 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
             break;
           }
           case 'room_finish': {
+            snapshotVersion += 1;
+            setRoom((current) => current ? {...current, status: 'finished'} : current);
             const payload = data as unknown as RoomFinishPayload;
             setFinish(payload);
             setQuestion(null);
@@ -246,6 +258,9 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
 
     return () => {
       alive = false;
+      window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', recover);
+      window.removeEventListener('ag:room-retry', refreshSnapshot);
       socket.close();
       socketRef.current = null;
     };
@@ -277,33 +292,14 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
     }
   };
 
-  const hostAction = async (action: 'start' | 'next' | 'reveal') => {
+  const hostAction = async (_action: 'start') => {
     setBusy(true);
     try {
-      if (action === 'start') {
-        const result = await api.startRoom(roomId);
-        setRoom(result.room);
-        if (result.question) setQuestion(result.question);
-      } else if (action === 'reveal') {
-        const result = await api.revealRoom(roomId);
-        setReveal(result.reveal);
-        setLockedIds([]);
-      } else {
-        const result = await api.nextRoom(roomId);
-        setRoom(result.room);
-        if (result.question) {
-          setQuestion(result.question);
-          setReveal(null);
-          setLockedIds([]);
-          setMyPick(null);
-        } else if (result.finish) {
-          setFinish(result.finish);
-          setQuestion(null);
-          setReveal(null);
-        }
-      }
+      const result = await api.startRoom(roomId);
+      setRoom(result.room);
+      if (result.question) setQuestion(result.question);
     } catch (error) {
-      toast('error', 'Host action failed', (error as Error).message);
+      toast('error', 'Could not start race', (error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -401,6 +397,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                       name={member.name}
                       hue={member.avatar_hue}
                       initials={member.initials}
+                      photo={{id: member.student_id, has: member.has_photo}}
                       size={32}
                       ring={member.is_host}
                     />
@@ -430,6 +427,8 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
               )}
             </Card>
           )}
+
+          {room.status === 'live' && <LiveRace standings={standings} myId={myId} lockedIds={lockedIds} total={room.question_count} round={room.round_index} />}
 
           {room.status === 'live' && question && (
             <Card className="relative overflow-hidden p-4 sm:p-5">
@@ -474,7 +473,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                   {reveal.explanation && <p className="mt-1 text-[0.76rem] font-medium leading-relaxed text-mist-400">{reveal.explanation}</p>}
                   <p className="mt-1 text-[0.7rem] font-bold text-mist-600">
                     {reveal.correct_ids.includes(myId) ? '' : 'Watch the standings — '}
-                    {room.is_host ? 'Press Next question when the room is ready.' : 'The host will move to the next question.'}
+                    Next round starts automatically in a moment.
                   </p>
                 </div>
               )}
@@ -485,22 +484,13 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                 <p className="mt-3 text-center text-[0.74rem] font-bold text-mist-600">{lockedIds.length}/{room.members.length} locked in</p>
               ))}
 
-              {room.is_host && (
-                <div className="mt-3 flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => hostAction('reveal')} disabled={busy} icon={<Check className="size-4" />}>
-                    Reveal now
-                  </Button>
-                  <Button size="sm" className="flex-1" onClick={() => hostAction('next')} loading={busy} icon={<SkipForward className="size-4" />}>
-                    {reveal ? 'Next question' : 'Skip + next'}
-                  </Button>
-                </div>
-              )}
             </Card>
           )}
 
           {room.status === 'live' && !question && (
             <Card className="grid place-items-center p-8 text-center">
-              <EmptyState icon={<Zap className="size-6" />} title="Get ready…" detail="The next question is loading for everyone." />
+              <EmptyState icon={<Zap className="size-6" />} title="Syncing your lane…" detail="Recovering your private question from the server." />
+              <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new Event('ag:room-retry'))}>Retry load</Button>
             </Card>
           )}
 
@@ -520,7 +510,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                       <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white/10 font-display text-[0.85rem] font-black text-mist-100">
                         {index + 1}
                       </span>
-                      <Avatar name={member.name} hue={member.avatar_hue} initials={member.initials} size={34} ring={index === 0} />
+                      <Avatar name={member.name} hue={member.avatar_hue} initials={member.initials} photo={{id: member.student_id, has: member.has_photo}} size={34} ring={index === 0} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[0.84rem] font-extrabold text-mist-50">
                           {member.name} {member.student_id === myId && <span className="text-mist-500">(you)</span>}
@@ -565,7 +555,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                       className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${member.student_id === myId ? 'bg-nova-500/12' : ''}`}
                     >
                       <span className="w-4 text-center text-[0.68rem] font-black text-mist-600">{index + 1}</span>
-                      <Avatar name={member.name} hue={member.avatar_hue} initials={member.initials} size={24} />
+                      <Avatar name={member.name} hue={member.avatar_hue} initials={member.initials} photo={{id: member.student_id, has: member.has_photo}} size={24} />
                       <span className="min-w-0 flex-1 truncate text-[0.74rem] font-bold text-mist-200">
                         {member.student_id === myId ? 'You' : member.name.split(' ')[0]}
                         {lockedIds.includes(member.student_id) && !reveal && <Check className="ml-1 inline size-3 text-mint-400" />}
@@ -594,7 +584,8 @@ function RoomClock({question, reveal}: {question: RoomQuestionPayload; reveal: R
       setSecondsLeft(0);
       return undefined;
     }
-    const tick = () => setSecondsLeft(Math.max(0, Math.round((parseTime(question.deadline) - Date.now()) / 1000)));
+    const offset = question.server_now ? parseTime(question.server_now) - Date.now() : 0;
+    const tick = () => setSecondsLeft(Math.max(0, Math.ceil((parseTime(question.deadline) - Date.now() - offset) / 1000)));
     tick();
     const timer = window.setInterval(tick, 250);
     return () => window.clearInterval(timer);
@@ -613,5 +604,38 @@ function RoomClock({question, reveal}: {question: RoomQuestionPayload; reveal: R
         </div>
       )}
     </>
+  );
+}
+
+function LiveRace({standings, myId, lockedIds, total, round}: {
+  standings: RoomState['members']; myId: number; lockedIds: number[]; total: number; round: number;
+}) {
+  const maxScore = Math.max(20, ...standings.map((row) => row.score));
+  return (
+    <section aria-label="Live race standings"><Card className="room-race-board !p-3.5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-black text-mist-50"><Crown className="size-4 text-gold-400" /> LIVE RACE</h2>
+        <Chip tone="mint" size="xs" dot>{Math.max(0, round + 1)}/{total} rounds</Chip>
+      </div>
+      <ol className="grid max-h-56 gap-2 overflow-y-auto overscroll-contain pr-1">
+        {standings.map((member, index) => (
+          <li key={member.student_id} className={`room-race-lane ${member.student_id === myId ? 'room-race-lane-you' : ''}`}>
+            <span className="w-5 shrink-0 text-center text-xs font-black text-gold-400">{index + 1}</span>
+            <button type="button" onClick={() => openPlayer(member.student_id)} className="shrink-0" aria-label={`View ${member.name}'s profile`}>
+              <Avatar name={member.name} size={28} photo={{id: member.student_id, has: member.has_photo}} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 text-[0.7rem] font-extrabold">
+                <span className="truncate text-mist-100">{member.student_id === myId ? 'You' : member.name}</span>
+                <span className="shrink-0 text-gold-400">{member.score} pts</span>
+              </div>
+              <div className="room-race-track"><span style={{width: `${Math.max(3, member.score / maxScore * 100)}%`}} /></div>
+              <p className="mt-0.5 text-[0.58rem] font-bold text-mist-500">{member.correct_count} correct · {lockedIds.includes(member.student_id) ? 'LOCKED' : 'AIMING'}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 text-[0.64rem] font-semibold text-mist-500">Everyone locks in or time runs out → reveal → next round.</p>
+    </Card></section>
   );
 }

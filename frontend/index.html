@@ -37,17 +37,17 @@
         var themeColor = document.querySelector('meta[name="theme-color"]');
         if (themeColor) themeColor.setAttribute('content', skin === 'night' ? '#07030f' : '#eaf4ff');
         var FONTS = {
+          'arsenica-sans': ["'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, sans-serif"],
           montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
           'helvetica-oblique': ["'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif", "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif"],
           arena: ["'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Orbitron', 'Exo 2', sans-serif"],
           grotesk: ["'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
           orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
         };
-        // Keep pre-paint defaults aligned with prefs.ts: Space Grotesk on phones/tablets,
-        // Helvetica Oblique on desktop. Any saved profile font overrides the device default.
+        // Match prefs.ts: Arsenica Sans on every device; saved choices still win.
         var savedFont = localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
-        var mobileOrTablet = window.matchMedia && (window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches);
-        var font = savedFont && FONTS[savedFont] ? savedFont : (mobileOrTablet ? 'grotesk' : 'helvetica-oblique');
+        var font = savedFont && FONTS[savedFont] ? savedFont : 'arsenica-sans';
+        document.documentElement.dataset.font = font;
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
           document.documentElement.style.setProperty('--font-display', FONTS[font][1]);

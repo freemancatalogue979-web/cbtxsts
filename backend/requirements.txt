@@ -6,3 +6,6 @@ pydantic>=2.9
 python-multipart>=0.0.9
 pypdf>=4.0
 pyspellchecker>=0.8
+
+# Validate and re-encode profile banner uploads.
+Pillow>=12.0

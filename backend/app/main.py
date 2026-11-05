@@ -97,6 +97,7 @@ async def game_ticker() -> None:
 
 def _ranked_tick_sync() -> list:
     from .services.duel import advance_duels
+    from .services.room import advance_rooms
 
     with session_scope() as db:
         events = poll_queue(db)
@@ -107,6 +108,7 @@ def _ranked_tick_sync() -> list:
         # Team ranked: squad matchmaking + the same paced round clock.
         events += poll_lobbies(db)
         events += advance_team_matches(db)
+        events += advance_rooms(db)
     return events
 
 

@@ -326,7 +326,7 @@ export const api = {
       method: 'POST',
     }),
   roomDetail: (roomId: number) =>
-    request<{room: RoomState; messages: RoomMessage[]; question: RoomQuestionPayload | null; reveal: RoomRevealPayload | null}>(`/api/rooms/${roomId}`),
+    request<{room: RoomState; messages: RoomMessage[]; question: RoomQuestionPayload | null; reveal: RoomRevealPayload | null; finish?: RoomFinishPayload | null}>(`/api/rooms/${roomId}`, {timeoutMs: 12_000}),
   startRoom: (roomId: number) =>
     request<{room: RoomState; question: RoomQuestionPayload | null}>(`/api/rooms/${roomId}/start`, {method: 'POST'}),
   answerRoom: (roomId: number, selected: string, elapsedMs: number) =>
@@ -465,8 +465,10 @@ export const api = {
     request<{ok: boolean; report_id: number; status: string}>(`/api/chat/${id}/report`, {method: 'POST', body: {reason}}),
   chatUnread: () => request<{total: number; per_friend: Record<number, number>}>('/api/chat/unread'),
   me: () => request<Profile>('/api/me', {timeoutMs: 12_000}),
-  updateMe: (body: {name?: string; avatar_hue?: number; bio?: string; status_text?: string; country?: string}) =>
+  updateMe: (body: {name?: string; avatar_hue?: number; bio?: string; status_text?: string; country?: string; profile_banner?: string; profile_motion?: boolean}) =>
     request<Profile>('/api/me', {method: 'PATCH', body}),
+  uploadBanner: (image: string) => request<Profile>('/api/me/banner', {method: 'POST', body: {image}}),
+  removeBanner: () => request<Profile>('/api/me/banner', {method: 'DELETE'}),
   uploadPhoto: (image: string) => request<Profile>('/api/me/photo', {method: 'POST', body: {image}}),
   removePhoto: () => request<Profile>('/api/me/photo', {method: 'DELETE'}),
 

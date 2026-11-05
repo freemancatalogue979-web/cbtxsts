@@ -2,7 +2,7 @@
 
 A room holds up to 15 players: one host, everyone else a guest. The host picks
 the question source (a course bank or the whole arena), starts the run and
-paces it — every round opens for the whole room at once with its own clock,
+then the server paces it — every round opens for the whole room at once with its own clock,
 but each player answers THEIR OWN server-dealt question (same count, same
 difficulty shape, different questions, no overlap while the bank allows it).
 Answers are graded server-side, the standings update live, and the room chat
@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import game
+from ..events import Event, to_room, to_student
 from ..models import (
     Question,
     Room,
@@ -37,9 +38,7 @@ PLACE_XP = (30, 20, 10)
 PLACE_COINS = (15, 10, 5)
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-# room_id -> {index, deadline} for the round currently on screen — pacing only;
-# each member's question comes from their own dealt set, never from the cache.
-OPEN: dict[int, dict] = {}
+REVEAL_SECONDS = 2.4
 
 
 class RoomError(Exception):
@@ -152,7 +151,19 @@ def members_payload(db: Session, room: Room) -> list[dict]:
 
 
 def room_state(db: Session, room: Room, viewer_id: int) -> dict:
+    info = open_info(room)
+    locked = []
+    if info:
+        for member in room_members(db, room):
+            question = _question_at(db, room, member, info["index"])
+            if question is not None and db.scalar(select(RoomAnswer.id).where(
+                RoomAnswer.room_id == room.id, RoomAnswer.student_id == member.student_id,
+                RoomAnswer.question_id == question.id,
+            )):
+                locked.append(member.student_id)
     return {
+        "locked_ids": locked,
+        "server_now": utcnow().isoformat() + "Z",
         "id": room.id,
         "code": room.code,
         "title": room.title,
@@ -252,7 +263,9 @@ def open_next(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]]] | 
     room.round_index = nxt
     db.flush()
     deadline = utcnow() + timedelta(seconds=room.per_question_seconds)
-    OPEN[room.id] = {"index": nxt, "deadline": deadline}
+    room.round_deadline = deadline
+    room.round_revealed_at = None
+    db.flush()
     meta = {
         "index": nxt,
         "total": total,
@@ -272,7 +285,12 @@ def open_next(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]]] | 
 
 
 def open_info(room: Room) -> dict | None:
-    return OPEN.get(room.id)
+    if room.status != "live" or room.round_deadline is None:
+        return None
+    info = {"index": room.round_index, "deadline": room.round_deadline}
+    if room.round_revealed_at is not None:
+        info["revealed_at"] = room.round_revealed_at
+    return info
 
 
 def _round_reveals(db: Session, room: Room, info: dict) -> tuple[dict, list[tuple[int, dict]]]:
@@ -328,7 +346,7 @@ def current_round_state(db: Session, room: Room, viewer_id: int) -> dict:
     Room sockets send question events once. This snapshot lets a refresh or
     reconnect recover the active round without exposing another member's deal.
     """
-    info = OPEN.get(room.id)
+    info = open_info(room)
     member = _member(db, room.id, viewer_id)
     if room.status != "live" or info is None or member is None:
         return {"question": None, "reveal": None}
@@ -362,7 +380,7 @@ def current_round_state(db: Session, room: Room, viewer_id: int) -> dict:
 
 
 def submit_answer(db: Session, room: Room, student: Student, selected: str, elapsed_ms: int) -> tuple[dict, bool]:
-    info = OPEN.get(room.id)
+    info = open_info(room)
     if info is None or room.status != "live" or "revealed_at" in info:
         raise RoomError("No question is open right now.")
     if utcnow() > info["deadline"]:
@@ -430,18 +448,23 @@ def close_question(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]
 
     Each member sees THEIR OWN question's answer key and their own grade;
     only aggregate counts and standings are room-wide. Keep the revealed round
-    in memory until the host opens the next one so reconnecting players can
+    in the database until the server opens the next one so reconnecting players can
     restore the same reveal without starting another clock.
     """
-    info = OPEN.get(room.id)
+    info = open_info(room)
     if info is None or "revealed_at" in info:
         return None
-    info["revealed_at"] = utcnow()
+    room.round_revealed_at = utcnow()
+    db.flush()
+    info["revealed_at"] = room.round_revealed_at
     return _round_reveals(db, room, info)
 
 
 def finish_run(db: Session, room: Room) -> dict:
-    OPEN.pop(room.id, None)
+    if room.status == "finished":
+        return finished_payload(db, room)
+    room.round_deadline = None
+    room.round_revealed_at = None
     room.status = "finished"
     room.finished_at = utcnow()
     standings = sorted(members_payload(db, room), key=lambda row: (-row["score"], row["name"]))
@@ -466,6 +489,18 @@ def finish_run(db: Session, room: Room) -> dict:
             )
         rewards.append({"student_id": row["student_id"], "xp": xp, "coins": coins})
     db.flush()
+    return {"standings": standings, "rewards": rewards}
+
+
+def finished_payload(db: Session, room: Room) -> dict:
+    """Read-only result reconstruction: never pay rewards twice on reconnect."""
+    standings = sorted(members_payload(db, room), key=lambda row: (-row["score"], row["name"]))
+    rewards = [
+        {"student_id": row["student_id"],
+         "xp": 3 * row["correct_count"] + (PLACE_XP[place] if place < len(PLACE_XP) else 0),
+         "coins": 2 * row["correct_count"] + (PLACE_COINS[place] if place < len(PLACE_COINS) else 0)}
+        for place, row in enumerate(standings)
+    ]
     return {"standings": standings, "rewards": rewards}
 
 
@@ -510,3 +545,40 @@ def add_message(db: Session, room: Room, student: Student, body: str) -> dict:
         "body": clean,
         "created_at": row.created_at.isoformat() + "Z",
     }
+
+
+def advance_rooms(db: Session) -> list[Event]:
+    """Durable, server-owned room pacing; no host clicks or per-request timers.
+
+    The shared one-second game clock calls this even when every client is
+    offline. Deadlines/reveal timestamps survive API restarts. Events contain
+    private question payloads only on the intended student's channel.
+    """
+    events: list[Event] = []
+    now = utcnow()
+    for room in db.scalars(select(Room).where(Room.status == "live")).all():
+        info = open_info(room)
+        if info is None:
+            # Legacy live rooms had an in-memory clock lost on restart. Resume
+            # the same round/deal with a fresh window rather than skipping it.
+            room.round_deadline = now + timedelta(seconds=room.per_question_seconds)
+            db.flush()
+            continue
+        if "revealed_at" not in info:
+            members = room_members(db, room)
+            all_answered = bool(members) and _round_answered(db, room, members, room.round_index) >= len(members)
+            if now < info["deadline"] and not all_answered:
+                continue
+            closed = close_question(db, room)
+            if closed:
+                events.extend(to_student(sid, "room_reveal", payload) for sid, payload in closed[1])
+            continue
+        if (now - info["revealed_at"]).total_seconds() < REVEAL_SECONDS:
+            continue
+        opened = open_next(db, room)
+        if opened:
+            events.extend(to_student(sid, "room_question", payload) for sid, payload in opened[1])
+        else:
+            finish = finish_run(db, room)
+            events.append(to_room(f"quizroom:{room.id}", "room_finish", finish))
+    return events

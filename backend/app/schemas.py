@@ -739,6 +739,8 @@ class ProfileUpdateIn(BaseModel):
     bio: str | None = Field(default=None, max_length=240)
     status_text: str | None = Field(default=None, max_length=80)
     country: str | None = Field(default=None, max_length=2)
+    profile_banner: Literal["auto", "space", "volcano", "forest", "ocean", "academy", "city"] | None = None
+    profile_motion: bool | None = None
 
 
 class RushItem(BaseModel):

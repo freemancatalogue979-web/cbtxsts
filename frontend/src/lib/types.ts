@@ -22,6 +22,10 @@ export interface PlayerSummary {
   phone: string;
   avatar_hue: number;
   has_photo?: boolean;
+  profile_banner?: string;
+  profile_motion?: boolean;
+  has_banner?: boolean;
+  banner_version?: string;
   bio?: string;
   status_text?: string;
   flair?: string;
@@ -121,6 +125,10 @@ export interface Profile {
   level_name: string;
   avatar_hue: number;
   has_photo: boolean;
+  profile_banner?: string;
+  profile_motion?: boolean;
+  has_banner?: boolean;
+  banner_version?: string;
   bio: string;
   status_text: string;
   player_code: string;
@@ -946,6 +954,8 @@ export interface RoomMember {
 }
 
 export interface RoomState {
+  locked_ids?: number[];
+  server_now?: string;
   id: number;
   code: string;
   title: string;
@@ -974,6 +984,7 @@ export interface RoomMessage {
 }
 
 export interface RoomQuestionPayload {
+  server_now?: string;
   index: number;
   total: number;
   seconds: number;

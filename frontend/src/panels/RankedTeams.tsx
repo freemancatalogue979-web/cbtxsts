@@ -108,7 +108,7 @@ interface MatchState {
   };
   teams: TeamSide[];
   current: {id: number; text: string; options: Record<string, string>} | null;
-  you: {team: number; position: number; score: number; correct: number; streak: number; rating_before: number; rating_delta: number; xp: number; coins: number} | null;
+  you: {team: number; position: number; score: number; correct: number; streak: number; rating_before: number; rating_delta: number; xp: number; coins: number; answered_this_round: boolean; round_result: Json | null} | null;
 }
 interface Review {
   match: {status: string; winner_team: number | null; team_size: number; question_count: number};
@@ -728,10 +728,16 @@ function InviteModal({open, onClose, lobby, toast}: {open: boolean; onClose: () 
 function MatchScreen({preferId, onBack}: {preferId: number | null; onBack: () => void}) {
   const {on, toast} = useSession();
   const [matchId, setMatchId] = useState<number | null>(preferId);
-  const [state, setState] = useState<MatchState | null>(null);
-  const [feedback, setFeedback] = useState<Json | null>(null);
+  const [state, setState] = useState<(MatchState & {receivedAt: number}) | null>(null);
   const [busy, setBusy] = useState(false);
   const tick = useRef(0);
+  const finishSound = useRef<number | null>(null);
+  const applyState = useCallback((next: MatchState) => {
+    setState((current) => {
+      if (current?.match.id === next.match.id && Date.parse(current.match.server_now) > Date.parse(next.match.server_now)) return current;
+      return {...next, receivedAt: Date.now()};
+    });
+  }, []);
 
   useEffect(() => {
     if (preferId && preferId !== matchId) setMatchId(preferId);
@@ -741,14 +747,15 @@ function MatchScreen({preferId, onBack}: {preferId: number | null; onBack: () =>
     if (!matchId) return;
     try {
       const data = (await api.teamMatch(matchId)) as unknown as MatchState;
-      setState(data);
-      if (data.match.status === 'finished') {
-        sfx.play(data.you && data.teams[0]?.members.some((m) => m.you && m.rating_delta > 0) ? 'win' : 'whoosh');
+      applyState(data);
+      if (data.match.status === 'finished' && finishSound.current !== data.match.id) {
+        finishSound.current = data.match.id;
+        sfx.play(data.you && data.match.winner_team === data.you.team ? 'win' : 'whoosh');
       }
     } catch (error) {
       toast('error', 'Match unreachable', (error as Error).message);
     }
-  }, [matchId, toast]);
+  }, [matchId, toast, applyState]);
 
   useEffect(() => {
     void refresh();
@@ -762,13 +769,12 @@ function MatchScreen({preferId, onBack}: {preferId: number | null; onBack: () =>
   }, [on, refresh]);
 
   const answer = async (label: string) => {
-    if (!state?.current || !matchId || busy) return;
+    if (!state?.current || !matchId || busy || state.you?.answered_this_round) return;
     setBusy(true);
     try {
-      const data = (await api.teamMatchAnswer(matchId, {question_id: state.current.id, selected: label, elapsed_ms: 0})) as unknown as {result: Json};
+      const data = (await api.teamMatchAnswer(matchId, {question_id: state.current.id, selected: label, elapsed_ms: 0})) as unknown as {result: Json; state: MatchState};
       sfx.play((data.result as {correct?: boolean}).correct ? 'correct' : 'wrong');
-      setFeedback(data.result as unknown as Json);
-      void refresh();
+      applyState(data.state);
     } catch (error) {
       toast('error', 'Answer rejected', (error as Error).message);
     } finally {
@@ -786,9 +792,11 @@ function MatchScreen({preferId, onBack}: {preferId: number | null; onBack: () =>
   }
   if (!state) return <Skeleton className="h-64 rounded-3xl" />;
 
+  const feedback = state.you?.answered_this_round ? state.you.round_result : null;
   const finished = state.match.status === 'finished';
-  const countdownLeft = state.match.countdown_ends_at ? Math.max(0, (new Date(state.match.countdown_ends_at).getTime() - Date.now()) / 1000) : 0;
-  const roundLeft = state.match.round_deadline ? Math.max(0, (new Date(state.match.round_deadline).getTime() - Date.now()) / 1000) : 0;
+  const serverNow = Date.now() + (Date.parse(state.match.server_now) - state.receivedAt);
+  const countdownLeft = state.match.countdown_ends_at ? Math.max(0, (new Date(state.match.countdown_ends_at).getTime() - serverNow) / 1000) : 0;
+  const roundLeft = state.match.round_deadline ? Math.max(0, (new Date(state.match.round_deadline).getTime() - serverNow) / 1000) : 0;
   const [sideA, sideB] = state.teams;
   const won = finished && state.match.winner_team !== null && state.you !== null && state.match.winner_team === state.you.team;
 
@@ -841,7 +849,7 @@ function MatchScreen({preferId, onBack}: {preferId: number | null; onBack: () =>
               <button
                 key={label}
                 type="button"
-                disabled={busy || Boolean(feedback)}
+                disabled={busy || state.you?.answered_this_round}
                 onClick={() => void answer(label)}
                 className="flex items-start gap-2.5 rounded-2xl border border-white/12 bg-white/5 px-3 py-2.5 text-left transition hover:border-flare-400/50 hover:bg-flare-500/10 disabled:opacity-60"
               >

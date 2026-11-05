@@ -519,6 +519,8 @@ def match_state(db: Session, match: TeamMatch, viewer_id: int | None) -> dict:
         if question is not None:
             order = display_order(question, shuffle=True, seed=f"team:{match.id}:{question.id}")
             current = question_public(question, order=order)
+    answered_this_round = bool(viewer_row is not None and match.status == "live" and viewer_row.position > match.round_index)
+    round_result = _reveal_for(db, match, viewer_row) if answered_this_round else None
     return {
         "match": {
             "id": match.id,
@@ -547,6 +549,8 @@ def match_state(db: Session, match: TeamMatch, viewer_id: int | None) -> dict:
                 "xp": viewer_row.xp_awarded,
                 "coins": viewer_row.coins_awarded,
                 "answers": dict(viewer_row.answers or {}),
+                "answered_this_round": answered_this_round,
+                "round_result": round_result,
             }
             if viewer_row is not None
             else None
@@ -616,6 +620,11 @@ def _push_round(db: Session, match: TeamMatch, players: list[TeamMatchPlayer]) -
     ]
 
 
+def _displayed_correct(match: TeamMatch, question: Question) -> str:
+    order = display_order(question, shuffle=True, seed=f"team:{match.id}:{question.id}")
+    return question_public(question, reveal=True, order=order).get("correct_label") or question.correct
+
+
 def _reveal_for(db: Session, match: TeamMatch, player: TeamMatchPlayer) -> dict:
     """The player's own last-round result — never anyone else's."""
     index = match.round_index
@@ -630,10 +639,11 @@ def _reveal_for(db: Session, match: TeamMatch, player: TeamMatchPlayer) -> dict:
     return {
         "match_id": match.id,
         "round_index": index,
+        "streak": player.streak,
         "answered": True,
         "question_id": qid,
         "correct": bool(entry.get("correct")),
-        "correct_answer": question.correct if question else "",
+        "correct_answer": _displayed_correct(match, question) if question else "",
         "explanation": (question.explanation if question else "") or "",
         "selected": entry.get("selected", ""),
         "points": entry.get("points", 0),
@@ -692,7 +702,7 @@ def submit_answer(db: Session, match: TeamMatch, student: Student, question_id: 
     return {
         "correct": correct,
         "selected": selected,
-        "correct_answer": question.correct,
+        "correct_answer": _displayed_correct(match, question),
         "explanation": question.explanation or "",
         "topic": question.topic or "",
         "points": points,

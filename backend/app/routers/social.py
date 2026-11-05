@@ -290,6 +290,15 @@ def player_photo(player_id: int, db: Session = Depends(get_db), student: Student
     return Response(content=raw, media_type=mime, headers={"Cache-Control": "private, max-age=300"})
 
 
+@router.get("/players/{player_id}/banner")
+def player_banner(player_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> Response:
+    target = db.get(Student, player_id)
+    if target is None or not target.banner_image:
+        raise HTTPException(404, "No custom banner yet.")
+    _, _, body = target.banner_image.partition(";base64,")
+    return Response(content=base64.b64decode(body), media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
+
+
 @router.get("/activity")
 def my_activity(
     db: Session = Depends(get_db),

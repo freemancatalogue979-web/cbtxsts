@@ -210,6 +210,58 @@ def update_me(
     if payload.country is not None:
         code = payload.country.strip().upper()
         student.country = code if len(code) == 2 and code.isalpha() else ""
+    if payload.profile_banner is not None:
+        student.profile_banner = payload.profile_banner
+        student.banner_image = None
+        student.banner_updated_at = utcnow()
+    if payload.profile_motion is not None:
+        student.profile_motion = payload.profile_motion
+    db.commit()
+    return student_profile(db, student)
+
+
+@me_router.post("/banner")
+def upload_banner(
+    payload: PhotoIn,
+    db: Session = Depends(get_db),
+    student: Student = Depends(require_student),
+) -> dict:
+    """Decode, verify and re-encode an uploaded backdrop; never serve raw SVG/HTML."""
+    from io import BytesIO
+    from PIL import Image, ImageOps, UnidentifiedImageError
+
+    image = (payload.image or "").strip()
+    if len(image) > 550_000:
+        raise HTTPException(413, "Keep uploaded images under 400KB.")
+    prefix = next((candidate for candidate in _PHOTO_PREFIXES if image.startswith(candidate)), None)
+    if prefix is None:
+        raise HTTPException(422, "Choose a JPEG, PNG or WebP banner.")
+    try:
+        raw = base64.b64decode(image[len(prefix):], validate=True)
+    except (ValueError, TypeError) as error:
+        raise HTTPException(422, "That banner could not be decoded.") from error
+    if len(raw) > 400_000:
+        raise HTTPException(413, "Keep banners under 400KB. The app resizes them automatically.")
+    try:
+        with Image.open(BytesIO(raw)) as source:
+            if source.format not in {"JPEG", "PNG", "WEBP"} or max(source.size) > 4096:
+                raise ValueError("Unsupported image or excessive dimensions")
+            source.load()
+            frame = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"), (960, 480))
+            output = BytesIO()
+            frame.save(output, format="JPEG", quality=82, optimize=True)
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
+        raise HTTPException(422, "That banner is not a valid JPEG, PNG or WebP image.") from error
+    student.banner_image = "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode("ascii")
+    student.banner_updated_at = utcnow()
+    db.commit()
+    return student_profile(db, student)
+
+
+@me_router.delete("/banner")
+def remove_banner(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
+    student.banner_image = None
+    student.banner_updated_at = utcnow()
     db.commit()
     return student_profile(db, student)
 
@@ -230,6 +282,8 @@ async def upload_photo(
 ) -> dict:
     """Store a profile photo (client-resized data URL) right in the database."""
     image = (payload.image or "").strip()
+    if len(image) > 550_000:
+        raise HTTPException(413, "Keep uploaded images under 400KB.")
     prefix = next((candidate for candidate in _PHOTO_PREFIXES if image.startswith(candidate)), None)
     if prefix is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Send a JPEG, PNG or WebP data URL.")

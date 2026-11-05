@@ -1,6 +1,7 @@
 @echo off
 REM Absolute Genesis - Windows launcher. Starts the API (:3000) and the web app (:5173).
 REM   start-arena.bat         both servers
+REM   start-arena.bat preview build and serve the bundled app (better for iPad/PWA demos)
 REM   start-arena.bat share   both servers + a public https link for installing on phones
 REM   start-arena.bat demo    fill the RUNNING app with the demo world (run in a second window)
 REM First run creates backend\.venv, installs both dependency sets and seeds the DB.
@@ -55,13 +56,22 @@ if "%NEED_NPM%"=="1" (
   popd
 )
 
+set "VITE_COMMAND=npx vite"
+if /i "%~1"=="preview" (
+  echo [*] Building the bundled app for preview...
+  pushd frontend
+  call npm run build || (popd & pause & exit /b 1)
+  popd
+  set "VITE_COMMAND=npx vite preview"
+)
+
 echo [*] Starting the API on http://localhost:3000 ...
 start "Absolute Genesis API :3000" cmd /k "cd /d %~dp0backend && .venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 3000 --reload --reload-dir app"
 
 timeout /t 3 /nobreak >nul
 
 echo [*] Starting the web app on http://localhost:5173 ...
-start "Absolute Genesis Web :5173" cmd /k "cd /d %~dp0frontend && npx vite --host 0.0.0.0 --port 5173"
+start "Absolute Genesis Web :5173" cmd /k "cd /d %~dp0frontend && %VITE_COMMAND% --host 0.0.0.0 --port 5173"
 
 REM "start-arena.bat share": a free public https link (Cloudflare quick tunnel)
 REM so phones can install Absolute Genesis as a real app. Plain http://192.168.x.x

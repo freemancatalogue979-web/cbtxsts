@@ -3,6 +3,7 @@
 #
 # VPS (persistent; survives SSH/terminal logout):
 #   ./start-arena.sh              # install/update dependencies and start both
+#   ./start-arena.sh preview      # bundled app for iPad/PWA demos (not a hardened production host)
 #   ./start-arena.sh status       # show process state
 #   ./start-arena.sh logs         # follow API + web logs
 #   ./start-arena.sh restart      # restart both
@@ -18,6 +19,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="${1:-all}"
 API_PORT="${API_PORT:-3000}"
 WEB_PORT="${WEB_PORT:-5173}"
+WEB_MODE="${WEB_MODE:-dev}"
 RUN_DIR="$ROOT/.arena-run"
 API_PID_FILE="$RUN_DIR/api.pid"
 WEB_PID_FILE="$RUN_DIR/web.pid"
@@ -112,11 +114,17 @@ start_web_daemon() {
     log "Web app is already running (PID $(cat "$WEB_PID_FILE"))."
     return
   fi
+  local vite_args=()
+  if [ "$WEB_MODE" = preview ]; then
+    log "Building the bundled app for preview…"
+    ( cd "$ROOT/frontend" && npm run build )
+    vite_args=(preview)
+  fi
   rm -f "$WEB_PID_FILE"
   : >> "$WEB_LOG"
   (
     cd "$ROOT/frontend"
-    nohup setsid ./node_modules/.bin/vite --host 0.0.0.0 --port "$WEB_PORT" \
+    nohup setsid ./node_modules/.bin/vite "${vite_args[@]}" --host 0.0.0.0 --port "$WEB_PORT" \
       >> "$WEB_LOG" 2>&1 < /dev/null &
     echo $! > "$WEB_PID_FILE"
   )
@@ -195,6 +203,16 @@ case "$TARGET" in
     show_status || true
     log "Safe to close this terminal. Use './start-arena.sh logs' to inspect output."
     ;;
+  preview)
+    setup_backend
+    ensure_gemini_key
+    setup_frontend
+    stop_one "web app" "$WEB_PID_FILE"
+    WEB_MODE=preview
+    start_api_daemon
+    start_web_daemon
+    show_status || true
+    ;;
   api)
     setup_backend
     ensure_gemini_key
@@ -250,7 +268,7 @@ case "$TARGET" in
     fi
     ;;
   *)
-    echo "usage: ./start-arena.sh [start|stop|restart|status|logs|api|web|foreground|share]" >&2
+    echo "usage: ./start-arena.sh [start|preview|stop|restart|status|logs|api|web|demo|foreground|share]" >&2
     exit 2
     ;;
 esac

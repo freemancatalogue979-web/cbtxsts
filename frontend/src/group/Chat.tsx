@@ -5,11 +5,12 @@
  * carry a referenced-message preview that scrolls to and highlights the
  * original; long-press (or hover) opens message actions.
  */
-import {Check, ChevronDown, ChevronLeft, CornerDownLeft, MessageSquareReply, MoreHorizontal, Pencil, Send, Smile, Trash2} from 'lucide-react';
+import {ChevronDown, ChevronLeft, CornerDownLeft, MoreHorizontal, Send} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Button, IconButton, Skeleton, TextInput} from '../components/ui';
 import {Holdable} from '../components/Holdable';
+import {ChatMessageRow, ChatMessageToolbar, ChatMessageMeta, ChatTombstone, ChatReplyQuote, ChatBubble, chatMessageActions, ChatReactionChips, ChatReactionPicker} from '../components/chat/shared';
 import {api} from '../lib/api';
 import {formatRelative} from '../lib/format';
 import {sfx} from '../lib/sfx';
@@ -17,7 +18,6 @@ import {useGroup} from './context';
 import {MemberAvatar, PresenceDot} from './bits';
 import type {GroupChatMessage, PresenceStatus} from '../lib/types';
 
-const EMOJIS = ['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'];
 const PAGE_SIZE = 40;
 
 function upsert(rows: GroupChatMessage[], message: GroupChatMessage): GroupChatMessage[] {
@@ -349,48 +349,24 @@ export default function Chat() {
           const status = (presence[String(message.student_id)] ?? 'offline') as PresenceStatus;
           const isEditing = editingId === message.id;
           const isHighlight = highlight === message.id;
-          const reactionEntries = Object.entries(message.reactions ?? {});
           return (
-            <div
-              key={message.id}
-              data-mid={message.id}
-              id={`gm-${message.id}`}
-              className={`group/msg flex items-start gap-2 rounded-xl px-1.5 py-1 transition-colors ${isHighlight ? 'bg-nova-500/20 ring-1 ring-nova-400/40' : ''}`}
-            >
-              <button
-                type="button"
-                onClick={() => !mine && openMember(message.student_id)}
-                className="shrink-0"
-                aria-label={mine ? message.name : `View ${message.name}`}
-              >
-                <MemberAvatar member={message} size={30} status={mine ? undefined : status} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : message.name}</span>
-                  {!mine && <PresenceDot status={status} />}
-                  <span className="ml-auto shrink-0 text-[0.62rem] font-semibold text-mist-600">{formatRelative(message.created_at)}</span>
-                </div>
-
+            <ChatMessageRow key={message.id} id={message.id} prefix="gm" name={message.name} mine={mine} time={formatRelative(message.created_at)} highlight={isHighlight}
+              avatar={<button type="button" onClick={() => !mine && openMember(message.student_id)} className="shrink-0" aria-label={mine ? message.name : `View ${message.name}`}><MemberAvatar member={message} size={30} status={mine ? undefined : status} /></button>}
+              presence={!mine && <PresenceDot status={status} />}
+              toolbar={!message.deleted && <ChatMessageToolbar onReply={() => setReplyTo(message)} onReact={() => setReactFor((current) => current === message.id ? null : message.id)} onEdit={mine ? () => startEdit(message) : undefined} />}>
                 <Holdable
                   hint="Hold for actions"
-                  actions={message.deleted ? [] : [
-                    {key: 'reply', label: 'Reply', icon: <MessageSquareReply className="size-4" />, onAction: () => setReplyTo(message)},
-                    {key: 'react', label: 'React', icon: <Smile className="size-4" />, onAction: () => setReactFor(message.id)},
-                    ...(mine
-                      ? [
-                          {key: 'edit', label: 'Edit', icon: <Pencil className="size-4" />, onAction: () => startEdit(message)},
-                          {key: 'delete', label: 'Delete', icon: <Trash2 className="size-4" />, tone: 'danger' as const, onAction: () => remove(message)},
-                        ]
-                      : can('moderate_chat')
-                        ? [{key: 'delete', label: 'Delete', icon: <Trash2 className="size-4" />, tone: 'danger' as const, onAction: () => remove(message)}]
-                        : []),
-                  ]}
+                  actions={message.deleted ? [] : chatMessageActions({
+                    message: {...message, kind: 'text'}, mine,
+                    deleteLabel: !mine && can('moderate_chat') ? 'Delete for everyone' : undefined,
+                    onReply: () => setReplyTo(message),
+                    onOpenReactions: () => setReactFor(message.id),
+                    onEdit: mine ? () => startEdit(message) : undefined,
+                    onDelete: mine || can('moderate_chat') ? () => { void remove(message); } : undefined,
+                  })}
                 >
                   {message.deleted ? (
-                    <p className="mt-0.5 inline-block rounded-2xl rounded-tl-md bg-white/4 px-3 py-1.5 text-[0.78rem] italic text-mist-600">
-                      This message was deleted
-                    </p>
+                    <ChatTombstone />
                   ) : isEditing ? (
                     <div className="mt-1 flex gap-2">
                       <TextInput value={editText} onChange={(event) => setEditText(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && saveEdit()} autoFocus />
@@ -400,87 +376,18 @@ export default function Chat() {
                     </div>
                   ) : (
                     <div className="mt-0.5">
-                      {message.reply_to && !message.reply_to.deleted && (
-                        <button
-                          type="button"
-                          onClick={() => jumpTo(message.reply_to!.id)}
-                          className="mb-1 block w-full max-w-sm truncate rounded-lg border-l-2 border-nova-400/50 bg-white/4 px-2.5 py-1 text-left"
-                        >
-                          <span className="block text-[0.66rem] font-bold text-nova-300">{message.reply_to.name}</span>
-                          <span className="block truncate text-[0.72rem] font-medium text-mist-400">{message.reply_to.body}</span>
-                        </button>
-                      )}
-                      <span
-                        className={`inline-block max-w-full rounded-2xl px-3 py-1.5 text-[0.82rem] leading-snug font-semibold break-words ${
-                          mine ? 'brand-gradient rounded-tl-md text-white' : 'rounded-tl-md bg-white/8 text-mist-100'
-                        }`}
-                      >
-                        {message.body}
-                      </span>
-                      <span className="ml-1.5 inline-flex items-center gap-1 align-bottom text-[0.6rem] font-bold text-mist-600">
-                        {message.edited_at && <span className="italic">edited</span>}
-                        {mine && (message.pending ? <span>· sending…</span> : message.failed ? <span className="text-flare-300">· failed</span> : <Check className="size-3 text-mint-400" />)}
-                      </span>
+                      {message.reply_to && !message.reply_to.deleted && <ChatReplyQuote mine={mine} meta={{reply_to: {id: message.reply_to.id, name: message.reply_to.name, snippet: message.reply_to.body}}} onJump={(id) => void jumpTo(id)} />}
+                      <ChatBubble mine={mine}>{message.body}</ChatBubble>
+                      <ChatMessageMeta edited={Boolean(message.edited_at)} delivery={mine ? message.pending ? 'sending' : message.failed ? 'failed' : 'sent' : undefined} />
                     </div>
                   )}
                 </Holdable>
 
-                {/* reactions */}
-                {reactionEntries.length > 0 && !message.deleted && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {reactionEntries.map(([emoji, count]) => {
-                      const active = (message.my_reactions ?? []).includes(emoji);
-                      return (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => void react(message, emoji)}
-                          className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold transition-colors ${
-                            active ? 'border-nova-400/50 bg-nova-500/20 text-nova-100' : 'border-white/12 bg-white/5 text-mist-300 hover:border-nova-400/30'
-                          }`}
-                        >
-                          <span>{emoji}</span>
-                          <span className="tabular">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                <ChatReactionChips message={message} mine={mine} onToggle={(emoji) => void react(message, emoji)} />
+                {reactFor === message.id && !message.deleted && (
+                  <ChatReactionPicker onPick={(emoji) => void react(message, emoji)} onClose={() => setReactFor(null)} />
                 )}
-
-                {/* inline emoji picker */}
-                <AnimatePresence>
-                  {reactFor === message.id && !message.deleted && (
-                    <motion.div initial={{opacity: 0, y: -4}} animate={{opacity: 1, y: 0}} exit={{opacity: 0}} className="mt-1 flex flex-wrap gap-1">
-                      {EMOJIS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => void react(message, emoji)}
-                          className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base hover:border-nova-400/40"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* desktop hover toolbar */}
-              {!message.deleted && <div className="hidden shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/msg:opacity-100 sm:flex">
-                <IconButton label="Reply" onClick={() => setReplyTo(message)}>
-                  <MessageSquareReply className="size-4 text-mist-500" />
-                </IconButton>
-                <IconButton label="React" onClick={() => setReactFor((current) => (current === message.id ? null : message.id))}>
-                  <Smile className="size-4 text-mist-500" />
-                </IconButton>
-                {mine && (
-                  <IconButton label="Edit" onClick={() => startEdit(message)}>
-                    <Pencil className="size-4 text-mist-500" />
-                  </IconButton>
-                )}
-              </div>}
-            </div>
+            </ChatMessageRow>
           );
         })}
         {typing && (

@@ -1,9 +1,12 @@
 /** Messages — one inbox for teacher ↔ student (and existing friend) conversations. */
-import {ArrowDown, ArrowLeft, Check, CheckCheck, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MessagesSquare, MoreVertical, Paperclip, Pencil, Reply, Search, Send, Share2, ShieldOff, Users} from 'lucide-react';
+import {ArrowDown, ArrowLeft, Check, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MessagesSquare, MoreVertical, Paperclip, Pencil, Reply, Search, Send, Share2, ShieldOff, Users} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent} from 'react';
 import {ApiError, api} from '../lib/api';
 import {fileUrl, formatBytes, teachers, type Conversation, type TMaterial, type TQuiz} from '../lib/teachers';
-import {ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
+import {ChatMessageRow, ChatMessageToolbar, ChatMessageMeta, ChatTombstone, ChatBubble, chatBubbleClass, ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
+import {Avatar} from '../components/ui';
+import {openPlayer} from '../components/PlayerCard';
+import {formatRelative} from '../lib/format';
 import {useChatNav} from '../components/AppShell';
 import {sfx} from '../lib/sfx';
 import type {ChatMessage} from '../lib/types';
@@ -554,6 +557,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
             <MessageBubble
               key={row.msg.id}
               msg={row.msg}
+              peer={conversation?.with ?? null}
               mine={row.msg.sender_id === meId}
               showSeen={row.msg.id === lastMine?.id}
               highlight={highlight === row.msg.id}
@@ -572,7 +576,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
         )}
         {typing && (
           <div className="t-msg">
-            <div className="t-bubble">
+            <div className={chatBubbleClass(false)}>
               <span className="t-typing" aria-label="typing">
                 <i />
                 <i />
@@ -646,6 +650,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
 
 function MessageBubble({
   msg,
+  peer,
   mine,
   showSeen,
   highlight = false,
@@ -661,6 +666,7 @@ function MessageBubble({
   showPicker = false,
 }: {
   msg: ChatMessage;
+  peer: Conversation['with'] | null;
   mine: boolean;
   showSeen: boolean;
   highlight?: boolean;
@@ -675,13 +681,16 @@ function MessageBubble({
   onJump: (id: number) => void;
   showPicker?: boolean;
 }) {
+  const {profile} = useSession();
+  const sender = mine ? profile : peer;
+  const senderName = mine ? 'You' : sender?.name || msg.sender_name || 'Member';
   const meta = msg.meta as {
     id?: number; name?: string; size?: number; mime?: string; is_image?: boolean;
     title?: string; topic?: string; subject?: string; questions?: number; minutes?: number;
   };
   const gone = Boolean(msg.deleted);
   let content: React.ReactNode;
-  if (gone) content = <div className="t-bubble opacity-60">This message was deleted</div>;
+  if (gone) content = <ChatTombstone />;
   else if (msg.kind === 'file' && meta.id) {
     content = (
       <div className="grid gap-1.5">
@@ -698,7 +707,7 @@ function MessageBubble({
             </span>
           </a>
         )}
-        {msg.body && <div className="t-bubble">{msg.body}</div>}
+        {msg.body && <ChatBubble mine={mine}>{msg.body}</ChatBubble>}
       </div>
     );
   } else if ((msg.kind === 'material' || msg.kind === 'tquiz') && meta.id) {
@@ -715,20 +724,14 @@ function MessageBubble({
         </span>
       </button>
     );
-  } else if (msg.kind === 'duel') content = <div className="t-bubble">⚔ Duel invite{msg.body ? ` — ${msg.body}` : ''}</div>;
-  else if (msg.kind === 'quiz') content = <div className="t-bubble">Quiz plan{msg.body ? ` — ${msg.body}` : ''}</div>;
-  else content = <div className="t-bubble">{msg.body || '…'}</div>;
+  } else if (msg.kind === 'duel') content = <ChatBubble mine={mine}>⚔ Duel invite{msg.body ? ` — ${msg.body}` : ''}</ChatBubble>;
+  else if (msg.kind === 'quiz') content = <ChatBubble mine={mine}>Quiz plan{msg.body ? ` — ${msg.body}` : ''}</ChatBubble>;
+  else content = <ChatBubble mine={mine}>{msg.body || '…'}</ChatBubble>;
 
   return (
-    <div
-      data-mid={msg.id}
-      id={`tm-${msg.id}`}
-      className={`t-msg group ${highlight ? 't-msg-highlight' : ''}`}
-      data-mine={mine ? '' : undefined}
-    >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/8 text-[0.62rem] font-black text-mist-200">{mine ? 'You' : 'T'}</span>
-      <div className="min-w-0 flex-1 teacher-name-row">
-        <div className="flex items-baseline gap-2"><span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : 'Them'}</span></div>
+    <ChatMessageRow id={msg.id} prefix="tm" name={senderName} mine={mine} time={formatRelative(msg.created_at)} highlight={highlight}
+      avatar={<button type="button" onClick={() => openPlayer(msg.sender_id)} aria-label={`View ${sender?.name || senderName}`}><Avatar name={sender?.name || senderName} hue={sender?.avatar_hue} photo={{id: msg.sender_id, has: sender?.has_photo}} cosmetics={mine ? profile?.cosmetics : undefined} size={30} /></button>}
+      toolbar={!gone && <ChatMessageToolbar onReply={onReply} onReact={onOpenReactions} onEdit={mine && msg.kind === 'text' ? onEdit : undefined} />}>
         <ChatActionSurface
           message={msg}
           mine={mine}
@@ -737,22 +740,17 @@ function MessageBubble({
           onDelete={onDelete}
           onEdit={onEdit}
           onReport={onReport}
-          className="max-w-[min(88%,34rem)]"
+          className="min-w-0"
         >
           <div className="min-w-0">
-            {!gone && <ChatReplyQuote meta={msg.meta} mine={mine} variant="pro" onJump={onJump} />}
+            {!gone && <ChatReplyQuote meta={msg.meta} mine={mine} onJump={onJump} />}
             {content}
-            <ChatReactionChips message={msg} mine={mine} variant="pro" onToggle={onReact} />
-            {showPicker && !gone && <ChatReactionPicker variant="pro" onPick={onReact} onClose={onOpenReactions} />}
-            <div className="t-msg-meta">
-              {msg.edited_at && !gone && <span>edited · </span>}
-              {showSeen && mine && !gone && <span className="inline-flex items-center gap-0.5">{msg.read ? <CheckCheck className="size-3" /> : <Check className="size-3" />}</span>}
-              {showSeen && mine && !gone && <span>{msg.read ? 'Seen' : 'Sent'}</span>}
-            </div>
+            <ChatReactionChips message={msg} mine={mine} onToggle={onReact} />
+            {showPicker && !gone && <ChatReactionPicker onPick={onReact} onClose={onOpenReactions} />}
+            {!gone && <ChatMessageMeta edited={Boolean(msg.edited_at)} delivery={showSeen && mine ? msg.read ? 'seen' : 'sent' : undefined} />}
           </div>
         </ChatActionSurface>
-      </div>
-    </div>
+    </ChatMessageRow>
   );
 }
 

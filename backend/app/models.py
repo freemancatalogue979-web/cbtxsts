@@ -71,6 +71,12 @@ class Student(Base):
     avatar_hue: Mapped[int] = mapped_column(Integer, default=265)
     photo: Mapped[str | None] = mapped_column(Text, nullable=True)  # base64 data URL, ≤ ~400KB
 
+    # Server-saved profile backdrop: independent of device appearance settings.
+    profile_banner: Mapped[str] = mapped_column(String(24), default="auto")
+    profile_motion: Mapped[bool] = mapped_column(Boolean, default=True)
+    banner_image: Mapped[str | None] = mapped_column(Text, nullable=True)
+    banner_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # --- progression -------------------------------------------------------
     xp: Mapped[int] = mapped_column(Integer, default=0)
     coins: Mapped[int] = mapped_column(Integer, default=0)
@@ -628,6 +634,8 @@ class Room(Base):
     per_question_seconds: Mapped[int] = mapped_column(Integer, default=30)
     status: Mapped[str] = mapped_column(String(16), default="lobby", index=True)  # lobby|live|finished
     round_index: Mapped[int] = mapped_column(Integer, default=-1)
+    round_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    round_revealed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

@@ -13,9 +13,10 @@ import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Flag, Gamepad2, L
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextArea, TextInput, PageBanner, askConfirm, Select} from '../components/ui';
+import {openPlayer} from '../components/PlayerCard';
 import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
-import {ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
+import {ChatMessageRow, ChatMessageToolbar, ChatMessageMeta, ChatTombstone, ChatBubble, ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
 import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
 import {api} from '../lib/api';
@@ -138,6 +139,7 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
  */
 function HoldMessage({
   message,
+  peer,
   mine,
   onReply,
   onDelete,
@@ -150,6 +152,7 @@ function HoldMessage({
   children,
 }: {
   message: ChatMessage;
+  peer: PlayerSummary | null;
   mine: boolean;
   onReply: (message: ChatMessage) => void;
   onDelete: (message: ChatMessage) => void;
@@ -161,6 +164,9 @@ function HoldMessage({
   highlight?: boolean;
   children: React.ReactNode;
 }) {
+  const {profile} = useSession();
+  const sender = mine ? profile : peer;
+  const senderName = mine ? 'You' : sender?.name || 'Friend';
   const gone = Boolean(message.deleted);
   const holdable = (
     <ChatActionSurface
@@ -172,7 +178,7 @@ function HoldMessage({
       onEdit={() => onEdit(message)}
       onReport={() => onReport(message)}
       menuWidth={214}
-      className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
+      className="min-w-0"
     >
       <div className="min-w-0">
         {children}
@@ -186,32 +192,17 @@ function HoldMessage({
     </ChatActionSurface>
   );
   return (
-    <div
-      data-mid={message.id}
-      id={`fm-${message.id}`}
-      className={`flex min-w-0 rounded-xl px-0.5 py-1 transition-colors ${mine ? 'justify-end' : 'justify-start'} ${highlight ? 'bg-nova-500/18 ring-1 ring-nova-400/40' : ''}`}
-    >
+    <ChatMessageRow id={message.id} prefix="fm" name={senderName} mine={mine} time={formatRelative(message.created_at)} highlight={highlight}
+      avatar={<button type="button" onClick={() => openPlayer(message.sender_id)} aria-label={`View ${sender?.name || senderName}`}><Avatar name={sender?.name || senderName} hue={sender?.avatar_hue} size={30} photo={{id: message.sender_id, has: sender?.has_photo}} cosmetics={sender?.cosmetics} /></button>}
+      toolbar={!gone && <ChatMessageToolbar onReply={() => onReply(message)} onReact={() => onOpenReactions(message)} onEdit={mine && message.kind === 'text' ? () => onEdit(message) : undefined} />}>
       {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
-    </div>
+    </ChatMessageRow>
   );
 }
 
 /** Shared reaction chips — a quick tap toggles your reaction. */
 function Reactions({message, mine, onToggle}: {message: ChatMessage; mine: boolean; onToggle: (emoji: string) => void}) {
   return <ChatReactionChips message={message} mine={mine} onToggle={onToggle} />;
-}
-
-/** A deleted message keeps its place in the thread instead of vanishing. */
-function Tombstone({mine}: {mine: boolean}) {
-  return (
-    <div
-      className={`rounded-2xl border border-dashed px-3 py-2 text-[0.8rem] font-semibold italic ${
-        mine ? 'border-white/20 text-mist-500' : 'border-white/12 text-mist-500'
-      }`}
-    >
-      This message was deleted
-    </div>
-  );
 }
 
 /** Reply quotes are actionable when the original message is in history. */
@@ -845,6 +836,7 @@ export default function FriendsPanel({
                         return (
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
+                              peer={selected}
                               message={message}
                               mine={mine}
                               onReply={setReplyTo}
@@ -892,6 +884,7 @@ export default function FriendsPanel({
                         return (
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
+                              peer={selected}
                               message={message}
                               mine={mine}
                               onReply={setReplyTo}
@@ -928,6 +921,7 @@ export default function FriendsPanel({
                       return (
                         <motion.li key={message.id} variants={staggerItem}>
                           <HoldMessage
+                              peer={selected}
                             message={message}
                             mine={mine}
                             onReply={setReplyTo}
@@ -941,18 +935,11 @@ export default function FriendsPanel({
                           >
                             <div className="min-w-0">
                               {message.deleted ? (
-                                <Tombstone mine={mine} />
+                                <ChatTombstone />
                               ) : (
-                                <div
-                                  className={`rounded-2xl px-3 py-2 ${
-                                    mine
-                                      ? myBubble
-                                        ? `${myBubble} text-white`
-                                        : 'brand-gradient text-white'
-                                      : 'border border-white/10 bg-white/[0.05] text-mist-100'
-                                  }`}
-                                >
-                                  <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
+                                <>
+                                <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
+                                <ChatBubble mine={mine} className={mine && myBubble ? myBubble : ''}>
                                   {(message.kind === 'file' || message.kind === 'material' || message.kind === 'tquiz') && (
                                     <button
                                       type="button"
@@ -965,13 +952,10 @@ export default function FriendsPanel({
                                       {message.kind === 'file' ? `📎 ${String(message.meta.name ?? 'Attachment')}` : `${message.kind === 'tquiz' ? 'Quiz' : 'Material'}: ${String(message.meta.title ?? '')}`} · open in Messages
                                     </button>
                                   )}
-                                  {message.body && <p className="break-words text-[0.82rem] leading-relaxed font-semibold">{message.body}</p>}
-                                  {/* inside the gradient bubble — theme-ok */}
- <p className={`mt-1 text-[0.58rem] font-bold tracking-wider ${mine ? 'text-white/70' : 'text-mist-600'}`}>
-                                    {formatRelative(message.created_at)}
-                                    {message.edited_at ? <span className="ml-1.5 normal-case">· edited</span> : null}
-                                  </p>
-                                </div>
+                                  {message.body && <span>{message.body}</span>}
+                                </ChatBubble>
+                                <ChatMessageMeta edited={Boolean(message.edited_at)} delivery={mine ? message.read ? 'seen' : 'sent' : undefined} />
+                                </>
                               )}
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
                             </div>

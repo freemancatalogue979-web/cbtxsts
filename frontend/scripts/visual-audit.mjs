@@ -65,7 +65,7 @@ const browser = await chromium.launch(browserOptions);
 try {
   const student = await studentSession();
 
-  // A genuinely fresh install must start in daylight and select the device
+  // A genuinely fresh install must start in daylight and select the shared default
   // font without persisting an automatic choice over the user's later pick.
   for (const viewport of [{name: 'fresh-phone', width: 390, height: 844}, {name: 'fresh-desktop', width: 1280, height: 800}]) {
     const page = await browser.newPage({viewport: {width: viewport.width, height: viewport.height}});
@@ -85,7 +85,7 @@ try {
       mode: document.documentElement.dataset.mode,
       storedFont: localStorage.getItem('arena.font.v7'),
     }));
-    const expectedFont = viewport.width <= 768 ? 'grotesk' : 'helvetica-oblique';
+    const expectedFont = 'arsenica-sans';
     if (defaults.skin !== 'day' || defaults.font !== expectedFont || defaults.storedFont !== null) {
       throw new Error(`${viewport.name} defaults are wrong: ${JSON.stringify(defaults)}`);
     }

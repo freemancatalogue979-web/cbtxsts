@@ -8,7 +8,7 @@ English and Mathematics; staff can configure the institution and manage approved
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite + WebSockets   → http://localhost:3000
-frontend/   React 19 + Vite + Tailwind v4 + Arsenica Sans (local) / Space Grotesk fallback → http://localhost:5173
+frontend/   React 19 + Vite + Tailwind v4 + bundled Space Grotesk / Arsenica Sans asset pending → http://localhost:5173
 ```
 
 ---
@@ -83,6 +83,14 @@ Open **http://localhost:5173**.
   Change those with `CBT_ADMIN_EMAIL` / `CBT_ADMIN_PASSWORD` before deploying anywhere real.
 
 Interactive API docs: **http://localhost:3000/docs**.
+
+### Bundled preview (including iPad/PWA demonstrations)
+
+For a built bundle rather than Vite development modules, close any existing local server
+windows and run `.\start-arena.bat preview` in PowerShell. On Linux use
+`./start-arena.sh preview`. Both build the frontend first and keep the same API proxy.
+Use HTTPS for actual PWA installation; Vite preview is **not a hardened production host**.
+Re-run the preview command after changing source files.
 
 ### Demo mode on a Windows PC
 
@@ -648,9 +656,25 @@ The browser keeps only the session token; the database remains the source of tru
 The default font selection is **Arsenica Sans** on desktop, tablet and phone. It is also
 available under **Profile → Font**, and existing explicit font choices remain unchanged.
 
-**No Arsenica Sans font file is bundled.** The browser uses it only when installed on the
-viewer's device under the family name `Arsenica Sans`; otherwise the bundled Space Grotesk
-(and then Montserrat/system sans) is used. To display Arsenica Sans on every device, obtain
-a webfont file and a licence that permits web embedding, then add the licensed files and
-appropriate `@font-face` declarations to `frontend/src/index.css`. A desktop licence alone
-may not permit web hosting. Do not rename another font to Arsenica Sans.
+**Bundling Arsenica Sans is still blocked on the real font files.** The previous
+installed-font-only behavior is not considered a completed implementation. Supply licensed
+WOFF2 regular/bold files or the variable font, with web-embedding permission, so they can
+be included in the frontend and loaded on a clean device. Until then, Space Grotesk remains
+the rendering fallback. No different font is renamed to impersonate Arsenica.
+
+### Restored profile and chat features
+
+- **Profile → Your profile backdrop:** choose a scene, toggle its animation, or upload a
+  JPEG/PNG/WebP banner. These choices are stored on your account and appear behind identity
+  information in other players' profile modals. Banner uploads are cropped to 2:1, resized,
+  validated and served only to signed-in players. Reduced-motion preferences are respected.
+- Study Group, Friends and Teacher Messages share the actual message row/bubble, toolbar,
+  quote, reactions and edited/delivery components. Teacher file/material/quiz features and
+  group moderation retain their existing server permissions.
+- Rooms are automatically paced by a persisted server clock; reloading restores each
+  player's private question and answer state. Team Ranked restores its own round feedback.
+- The requested slingshot prototype is **not included**.
+
+See [the archive audit](docs/archive-restoration-audit.md) for scope decisions, remaining
+font requirements and regression commands. Browser audits create test data; never run them
+against the production database.

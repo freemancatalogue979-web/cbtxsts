@@ -39,6 +39,7 @@ import {motion} from 'motion/react';
 import {useCallback, useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {Avatar, Button, Card, Chip, EmptyState, Field, ProgressRing, SectionHeading, Skeleton, TextInput, Select} from '../components/ui';
 import {titleOf, themeOf} from '../lib/cosmetics';
+import ProfileScenery, {OverallRankPlate, PROFILE_BANNERS} from '../components/ProfileScenery';
 import SeasonBadge from '../components/SeasonBadge';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
@@ -120,8 +121,36 @@ export default function ProfilePanel({
   const [volume, setVolume] = useState(() => music.volume());
   const musicState = useSyncExternalStore(music.subscribe, music.state);
   useEffect(() => music.subscribeStorage(() => setAudioLibrary(music.storage())), []);
+  const [profileMotion, setProfileMotion] = useState(true);
+  const [bannerBusy, setBannerBusy] = useState(false);
+  const bannerInput = useRef<HTMLInputElement | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoInput = useRef<HTMLInputElement | null>(null);
+
+  const updateBackdrop = async (choice: {profile_banner?: string; profile_motion?: boolean}) => {
+    if (choice.profile_motion !== undefined) setProfileMotion(choice.profile_motion);
+    setBannerBusy(true);
+    try { setProfile(await api.updateMe(choice)); }
+    catch (error) { setProfileMotion(profile?.profile_motion !== false); toast('error', 'Could not save backdrop', (error as Error).message); }
+    finally { setBannerBusy(false); }
+  };
+  const uploadBackdrop = async (file?: File) => {
+    if (!file) return;
+    setBannerBusy(true);
+    try {
+      const {resizeProfileImage} = await import('../lib/profileImage');
+      const image = await resizeProfileImage(file, 960, 480);
+      setProfile(await api.uploadBanner(image));
+      toast('success', 'Banner uploaded', 'Your image is now behind your profile, not above it.');
+    } catch (error) { toast('error', 'Could not upload banner', (error as Error).message); }
+    finally { setBannerBusy(false); }
+  };
+  const removeBackdrop = async () => {
+    setBannerBusy(true);
+    try { setProfile(await api.removeBanner()); }
+    catch (error) { toast('error', 'Could not remove banner', (error as Error).message); }
+    finally { setBannerBusy(false); }
+  };
 
   /** Crop to a square, downscale to 256px, upload as a JPEG data URL. */
   const onPickPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,6 +254,7 @@ export default function ProfilePanel({
     setBio(profile.bio ?? '');
     setStatusText(profile.status_text ?? '');
     setCountry(profile.country ?? '');
+    setProfileMotion(profile.profile_motion !== false);
   }, [profile]);
 
   useEffect(() => on('friend_added', load), [on, load]);
@@ -320,7 +350,7 @@ export default function ProfilePanel({
       <motion.section variants={staggerContainer} initial="hidden" animate="show">
         <motion.div variants={staggerItem}>
           <Card className={`relative overflow-hidden p-4 sm:p-6 ${profileTheme?.className ?? ''}`}>
-            <div className="pointer-events-none absolute inset-0 bg-ink-950/55" />
+            <ProfileScenery theme={profile.cosmetics?.theme} level={progress.level} banner={profile.profile_banner} motion={profile.profile_motion} playerId={profile.id} hasImage={profile.has_banner} version={profile.banner_version} />
             <div className="relative flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-5">
               <div className="flex shrink-0 flex-col items-center gap-1.5">
                 <div className="relative">
@@ -387,6 +417,7 @@ export default function ProfilePanel({
                 ) : (
                   <>
                     <h1 className="text-xl leading-tight font-black tracking-tight text-mist-50 sm:text-2xl">{profile.name}</h1>
+                    <div className="mt-3"><OverallRankPlate tier={profile.tier} level={progress.level} /></div>
                     <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-[0.78rem] font-semibold text-mist-400 sm:justify-start sm:gap-2 sm:text-[0.82rem]">
                       <span className="text-nova-300">
                         Level {progress.level} · {progress.title}
@@ -517,6 +548,28 @@ export default function ProfilePanel({
           <p className="mt-2.5 text-[0.7rem] font-medium text-mist-600">
             Friends add you with your player code — no phone number needed. Streak freezes fire on a missed day.
           </p>
+        </Card>
+      </section>
+
+      <section aria-label="Profile backdrop customization">
+        <SectionHeading title="Your profile backdrop" subtitle="Saved to your account. Everyone sees it behind your avatar, name and ranks." icon={<Sparkles className="size-4" />} />
+        <Card className="space-y-3 p-3.5 sm:p-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Profile scenes">
+            {PROFILE_BANNERS.map((scene) => <button type="button" key={scene.id} disabled={bannerBusy}
+              aria-pressed={!profile.has_banner && (profile.profile_banner || 'auto') === scene.id}
+              onClick={() => void updateBackdrop({profile_banner: scene.id})}
+              className={`relative min-w-0 overflow-hidden rounded-xl border-2 px-2 pb-2 pt-16 text-left disabled:opacity-60 ${!profile.has_banner && (profile.profile_banner || 'auto') === scene.id ? 'border-nova-400' : 'border-white/12'}`}>
+              <ProfileScenery banner={scene.id} theme={profile.cosmetics?.theme} motion={false} />
+              <span className="relative z-10 block rounded-md bg-ink-950/80 px-1.5 py-1 text-[0.7rem] font-extrabold text-mist-100">{scene.name}</span>
+            </button>)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input ref={bannerInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void uploadBackdrop(file); }} />
+            <Button size="sm" variant="outline" disabled={bannerBusy} onClick={() => bannerInput.current?.click()} icon={<Camera className="size-4" />}>Upload banner</Button>
+            {profile.has_banner && <Button size="sm" variant="ghost" disabled={bannerBusy} onClick={() => void removeBackdrop()} icon={<Trash2 className="size-4" />}>Remove banner</Button>}
+            <label className="flex min-h-10 items-center gap-2 text-xs font-bold text-mist-300"><input type="checkbox" className="scroll-mb-32" checked={profileMotion} disabled={bannerBusy} onChange={(event) => void updateBackdrop({profile_motion: event.target.checked})} /> Animate scenery</label>
+          </div>
+          <p className="text-[0.7rem] font-medium text-mist-500">JPEG, PNG or WebP. Images are cropped to 2:1 and resized automatically. Reduced-motion preferences always win.</p>
         </Card>
       </section>
 

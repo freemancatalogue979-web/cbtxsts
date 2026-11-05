@@ -1,8 +1,6 @@
 """Multiplayer room endpoints: create, join by code, live rounds, chat, rewards."""
 from __future__ import annotations
 
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -41,31 +39,6 @@ def _member_or_403(db: Session, room: Room, student: Student) -> RoomMember:
 def _host_or_403(room: Room, student: Student) -> None:
     if room.host_id != student.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Host-only action.")
-
-
-async def _schedule_auto_reveal(room_id: int, seconds: int, round_index: int) -> None:
-    """Reveal only the round whose timer expired, not a later host-advanced one."""
-
-    async def _timer() -> None:
-        await asyncio.sleep(seconds + 0.5)
-        with session_scope() as db:
-            room = db.get(Room, room_id)
-            if room is None or room.status != "live":
-                return
-            info = room_service.open_info(room)
-            if (
-                info is None
-                or info.get("index") != round_index
-                or "revealed_at" in info
-                or info.get("deadline") is None
-                or info["deadline"] > utcnow()
-            ):
-                return
-            closed = room_service.close_question(db, room)
-        if closed:
-            await _send_reveal(closed)
-
-    asyncio.create_task(_timer())
 
 
 async def _send_reveal(closed: tuple[dict, list[tuple[int, dict]]]) -> None:
@@ -151,6 +124,7 @@ def room_detail(
         "room": room_service.room_state(db, room, student.id),
         "messages": room_service.messages_payload(db, room),
         **room_service.current_round_state(db, room, student.id),
+        "finish": room_service.finished_payload(db, room) if room.status == "finished" else None,
     }
 
 
@@ -174,7 +148,6 @@ async def start_room(
     if opened:
         meta, per_student = opened
         await _send_question(opened)
-        await _schedule_auto_reveal(room.id, meta["seconds"], meta["index"])
         mine = _my_payload(per_student, student.id)
     return {"room": room_service.room_state(db, room, student.id), "question": mine}
 
@@ -216,16 +189,11 @@ async def reveal_question(
     room = _room_or_404(db, room_id)
     _member_or_403(db, room, student)
     _host_or_403(room, student)
-    closed = room_service.close_question(db, room)
-    if closed is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No question is open right now.")
-    db.commit()
-    await _send_reveal(closed)
-    return {"reveal": _my_payload(closed[1], student.id)}
+    raise HTTPException(status.HTTP_409_CONFLICT, "Rounds reveal automatically when everyone answers or the clock expires.")
 
 
 @router.post("/{room_id}/next")
-async def next_question(
+def next_question(
     room_id: int,
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
@@ -233,25 +201,9 @@ async def next_question(
     room = _room_or_404(db, room_id)
     _member_or_403(db, room, student)
     _host_or_403(room, student)
-    pending_reveal = room_service.close_question(db, room)  # host skipped the clock
-    db.commit()
-    if pending_reveal:
-        await _send_reveal(pending_reveal)
-    opened = room_service.open_next(db, room)
-    if opened:
-        db.commit()
-        meta, per_student = opened
-        await _send_question(opened)
-        await _schedule_auto_reveal(room.id, meta["seconds"], meta["index"])
-        return {"room": room_service.room_state(db, room, student.id), "question": _my_payload(per_student, student.id)}
-    finish = room_service.finish_run(db, room)
-    db.commit()
-    await hub.broadcast("room_finish", finish, room=_room_key(room.id))
-    await hub.broadcast(
-        "rooms_update",
-        {"room_id": room.id},
-    )
-    return {"room": room_service.room_state(db, room, student.id), "finish": finish}
+    # Keep the old URL explicit for stale clients, but never let a host race
+    # the durable ticker, skip another player's question or finish a lobby.
+    raise HTTPException(status.HTTP_409_CONFLICT, "Rounds advance automatically after the answer reveal.")
 
 
 @router.post("/{room_id}/kick/{target_id}")

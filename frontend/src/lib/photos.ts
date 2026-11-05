@@ -24,6 +24,7 @@ async function load(playerId: number): Promise<string | null> {
       const token = tokenStore.get();
       const response = await fetch(`/api/players/${playerId}/photo`, {
         headers: token ? {Authorization: `Bearer ${token}`} : undefined,
+        cache: 'no-store',
       });
       if (!response.ok) return null;
       const url = URL.createObjectURL(await response.blob());
@@ -55,7 +56,7 @@ export function invalidatePhoto(playerId: number): void {
 
 /** React hook: resolves a player's photo once `has` says they uploaded one. */
 export function usePlayerPhoto(playerId?: number | null, has?: boolean | null): string | null {
-  const [, bump] = useState(0);
+  const [revision, bump] = useState(0);
   useEffect(() => {
     const listener = () => bump((value) => value + 1);
     listeners.add(listener);
@@ -66,7 +67,7 @@ export function usePlayerPhoto(playerId?: number | null, has?: boolean | null): 
   useEffect(() => {
     if (!playerId || !has) return;
     if (!cache.has(playerId)) void load(playerId);
-  }, [playerId, has]);
+  }, [playerId, has, revision]);
   if (!playerId || !has) return null;
   return cache.get(playerId) ?? null;
 }

@@ -55,3 +55,15 @@ assert.equal(prefs.currentFont(), 'arsenica-sans');
 assert.doesNotThrow(() => prefs.applyFont('arsenica-sans'));
 dom.window.close();
 console.log('Font checks passed: desktop/mobile defaults, CSS variables, saved choices, legacy migration and disabled storage.');
+
+// The inline first-paint script must not paint the old desktop/mobile defaults.
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const inline = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+for (const selected of [null, ...prefs.FONTS.map((font) => font.id)]) {
+  const page = new JSDOM('<meta name="theme-color">', {url: 'https://example.test', runScripts: 'outside-only'});
+  if (selected) page.window.localStorage.setItem('arena.font.v7', selected);
+  page.window.eval(inline);
+  assert.equal(page.window.document.documentElement.dataset.font, selected || 'arsenica-sans');
+  page.window.close();
+}
+console.log('First-paint font checks passed for the default and every saved font.');

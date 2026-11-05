@@ -63,7 +63,7 @@ def dashboard(db: Session = Depends(get_db), student: Student = Depends(require_
         .join(TeamMatch, TeamMatch.id == TeamMatchPlayer.match_id)
         .where(TeamMatchPlayer.student_id == student.id, TeamMatch.status == "finished")
     ).all()
-    team_wins = sum(1 for row in history if (db.get(TeamMatch, row.match_id).winner_team or -1) == row.team)
+    team_wins = sum(1 for row in history if db.get(TeamMatch, row.match_id).winner_team == row.team)
     answered = sum(int(row.answered or 0) for row in history)
     correct = sum(int(row.correct or 0) for row in history)
     score_total = sum(int(row.score or 0) for row in history)
@@ -73,7 +73,7 @@ def dashboard(db: Session = Depends(get_db), student: Student = Depends(require_
             streak += 1
         else:
             break
-    match = teams.active_match_for(db, student.id) if lobby is None else None
+    match = teams.active_match_for(db, student.id)
     return {
         "rating": student.ranked_rating,
         "tier": meta,

@@ -2,8 +2,8 @@
  * Public player profile — identity, equipped look, competitive standing,
  * earned achievements and a short public activity history.
  */
-import {Activity, BookOpen, Clock3, Star, Swords, Target, Trophy, UserPlus, X} from 'lucide-react';
-import {useEffect, useState} from 'react';
+import {Activity, BookOpen, Clock3, MessageCircle, Star, Swords, Target, Trophy, UserPlus, X} from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
 import {Avatar, Button, Chip, IconButton} from './ui';
 import {api} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
@@ -11,6 +11,7 @@ import {AURAS, FRAMES, THEMES, titleOf} from '../lib/cosmetics';
 import {iconFor} from '../lib/icons';
 import RankedBadge from './RankedBadge';
 import SeasonBadge from './SeasonBadge';
+import ProfileScenery, {OverallRankPlate, prestigeFor} from './ProfileScenery';
 import {useSession} from '../store/session';
 import type {PlayerSummary, PublicAchievement, PublicPlayerActivity} from '../lib/types';
 
@@ -44,7 +45,7 @@ function Achievement({badge}: {badge: PublicAchievement}) {
   const Icon = iconFor(badge.icon);
   const tone = badge.tier === 'platinum' ? 'text-pulse-300' : badge.tier === 'gold' ? 'text-gold-400' : badge.tier === 'silver' ? 'text-mist-300' : 'text-gold-600';
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2">
+    <div className="profile-achievement flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2" data-tier={badge.tier}>
       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/8">
         <Icon className={`size-4 ${tone}`} />
       </span>
@@ -94,6 +95,26 @@ export default function PlayerCard({
   const [player, setPlayer] = useState<PlayerSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const mine = profile?.id === playerId;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const prestige = prestigeFor(player?.level ?? 1);
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+      if (event.key !== 'Tab') return;
+      const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], [tabindex="0"]') ?? []);
+      const first = nodes[0]; const last = nodes[nodes.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', keys);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', keys); previous?.focus(); };
+  }, [onClose]);
 
   useEffect(() => {
     let alive = true;
@@ -155,6 +176,8 @@ export default function PlayerCard({
     <div className="scrim fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto overscroll-contain p-2.5 sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="my-auto w-full max-w-xl"
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Public profile for ${player?.name || 'player'}`}
@@ -162,11 +185,14 @@ export default function PlayerCard({
         onClick={(event) => event.stopPropagation()}
       >
         <div
-          className="card max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain p-0"
+          className="card profile-showcase max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain p-0"
           data-profile-theme={cosmetics?.theme || 'classic'}
+          data-prestige={prestige.name.toLowerCase()}
           style={themeSurface}
         >
-          <div className="p-4 sm:p-5">
+          <ProfileScenery theme={cosmetics?.theme} level={player?.level} banner={player?.profile_banner} motion={player?.profile_motion} playerId={player?.id} hasImage={player?.has_banner} version={player?.banner_version} />
+          <div className="profile-showcase-content p-4 sm:p-5">
+            {player && <p className="mb-3 text-[0.62rem] font-black uppercase tracking-[0.24em]" style={{color: prestige.color}}>{prestige.name} · Level {player.level}</p>}
             <header className="flex min-w-0 items-start gap-3">
               <Avatar
                 name={player?.name || 'Player'}
@@ -175,7 +201,7 @@ export default function PlayerCard({
                 size={64}
                 photo={player ? {id: player.id, has: player.has_photo} : undefined}
                 cosmetics={cosmetics}
-                className="mt-0.5"
+                className="profile-showcase-portrait mt-0.5"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -196,7 +222,7 @@ export default function PlayerCard({
             {player?.bio && <p className="mt-3 break-words text-[0.78rem] font-medium leading-relaxed text-mist-300">{player.bio}</p>}
 
             <section aria-label="Equipped look" className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="mr-0.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-mist-500">Equipped</span>
+              <span className="mr-0.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-mist-500">Loadout</span>
               <Chip size="xs" tone="nova" icon={<span className="size-2.5 rounded-full border border-white/30" style={{background: equippedTheme?.swatch || '#64748b'}} />}>{equippedTheme?.label || 'Classic theme'}</Chip>
               {equippedFrame && <Chip size="xs" tone="gold">{equippedFrame.label}</Chip>}
               {equippedAura && <Chip size="xs" tone="pulse">{equippedAura.label}</Chip>}
@@ -205,9 +231,10 @@ export default function PlayerCard({
               )}
             </section>
 
-            <section className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Current ranks">
+            {player && <div className="mt-4"><OverallRankPlate tier={player.tier} level={player.level} /></div>}
+            <section className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Current ranks">
               {player?.season && (
-                <div className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/7 px-3 py-2.5">
+                <div className="profile-competitive-rank flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/7 px-3 py-2.5">
                   <SeasonBadge rank={player.season.rank} level={player.season.level} size="md" current />
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-mist-500">Season · {player.season.label}</p>
@@ -220,7 +247,7 @@ export default function PlayerCard({
                 </div>
               )}
               {player?.ranked && (
-                <div className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/7 px-3 py-2.5">
+                <div className="profile-competitive-rank flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/7 px-3 py-2.5">
                   {player.ranked.played > 0 ? <RankedBadge tier={player.ranked.tier} size="md" /> : <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/8"><Trophy className="size-4 text-gold-400" /></span>}
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-mist-500">Ranked ladder</p>
@@ -251,7 +278,7 @@ export default function PlayerCard({
                   {label: 'Duels', value: player ? `${formatNumber(player.duels_won)}W · ${formatNumber(player.duels_played)} played` : '—'},
                   {label: 'Ranked wins', value: player ? `${formatNumber(stats?.ranked_won ?? 0)} · ${formatNumber(stats?.ranked_played ?? 0)} played` : '—'},
                 ].map((item) => (
-                  <div key={item.label} className="min-w-0 rounded-xl border border-white/10 bg-white/6 px-2.5 py-2">
+                  <div key={item.label} className="profile-record-tile min-w-0 rounded-xl border border-white/10 bg-white/6 px-2.5 py-2">
                     <p className="truncate text-[0.56rem] font-black uppercase tracking-[0.12em] text-mist-500">{item.label}</p>
                     <p className="mt-0.5 break-words text-[0.76rem] font-black leading-tight text-mist-100 tabular">{item.value}</p>
                   </div>
@@ -292,13 +319,18 @@ export default function PlayerCard({
           </div>
 
           {!mine && (
-            <footer className="sticky bottom-0 z-10 flex gap-2 border-t border-white/10 bg-[var(--qa-surface-raised)] px-4 py-3 sm:px-5">
+            <footer className="sticky bottom-0 z-10 flex flex-wrap gap-2 border-t border-white/10 px-4 py-3 sm:px-5" style={{background: 'var(--qa-surface-raised)'}}>
               <Button className="flex-1 gap-1.5" disabled={busy || !player} onClick={() => void challenge()}>
                 <Swords className="size-4" /> Challenge
               </Button>
               <Button variant="outline" className="flex-1 gap-1.5" disabled={busy || !player || isFriend || outgoingRequest} onClick={() => void add()}>
                 <UserPlus className="size-4" /> {friendLabel}
               </Button>
+              <Button variant="ghost" className="gap-1.5" disabled={!player} onClick={() => {
+                sessionStorage.setItem('ag.msg.with', String(playerId));
+                onClose();
+                window.dispatchEvent(new CustomEvent('ag:navigate', {detail: {tab: 'messages', withId: playerId}}));
+              }} aria-label="Message player"><MessageCircle className="size-4" /> Message</Button>
             </footer>
           )}
           {mine && <p className="border-t border-white/10 px-4 py-3 text-center text-[0.7rem] font-semibold text-mist-500">This is your profile — manage your details in Profile.</p>}
