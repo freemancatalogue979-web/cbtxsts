@@ -304,7 +304,17 @@ def season(db: Session = Depends(get_db), student: Student = Depends(require_stu
         "history": ladder["history"],
         # ----------------------------------------------------------------------
         "leaderboard": [
-            {**student_public(row, mask=True), "season_xp": stat.xp, "rank": index + 1}
+            {
+                **student_public(row, mask=True),
+                "season_xp": stat.xp,
+                "rank": index + 1,
+                # The realm they are standing on, so the board can show the
+                # badge each of them is carrying rather than a bare XP number.
+                "level": season_ladder.level_from_xp(stat.xp),
+                "realm": season_ladder.rank_payload(
+                    season_ladder.rank_for_level(season_ladder.level_from_xp(stat.xp))
+                ),
+            }
             for index, (stat, row) in enumerate(board)
         ],
         "rewards": [

@@ -1,4 +1,4 @@
-"""Season ladder — 100 levels across 12 ranks, reset every calendar month.
+"""Season ladder — one hundred realms across a hundred levels, reset every month.
 
 A season is one calendar month. Season XP accumulates in ``season_stats`` while
 you play and starts again from zero when the next month opens, so the ladder
@@ -7,11 +7,15 @@ lifetime progress: the lifetime level, XP, coins, badges and mastery that the
 rest of the arena keeps are all untouched. This module only reads and writes
 the season column of that table.
 
-Rank bands get wider as you climb, so the badge ladder stays exciting early
-(Bronze is a couple of good evenings) and meaningful late (Celestial is a
-month-long grind). The curve is public: :func:`levels_table` is what the client
-draws its 10x10 level grid from, so the UI can never disagree with the server
-about what a level costs.
+The ladder is a hundred realms, one per level: Ember, Spark, Tinder ... up to
+Absolute Genesis. Every realm has its own name, colour, frame and emblem, so
+"Platinum" is no longer the ceiling — it is simply realm 40 of 100, and
+everything past it glows. The realm table itself lives in ``services/realms.py``
+and is shared with the client so the two can never disagree about a name.
+
+The XP curve is public: :func:`levels_table` is what the client draws its
+10x10 level grid from, so the UI can never disagree with the server about what
+a level costs.
 """
 from __future__ import annotations
 
@@ -22,39 +26,33 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import SeasonStat, Student, utcnow
+from .realms import MYSTICAL_FROM, REALM_COUNT, REALMS
 
 # ---------------------------------------------------------------------------
 # The ladder
 # ---------------------------------------------------------------------------
-MAX_LEVEL = 100
+MAX_LEVEL = REALM_COUNT  # one realm per level
 EPOCH_YEAR, EPOCH_MONTH = 2025, 9  # season 1 opened in September 2025
 
-# key, label, glyph, blurb, level band, badge palette (deep -> bright)
+# The realm ladder, in the shape the rest of this module expects: one band per
+# realm, so `from` and `to` are both the realm's own level.
 RANKS: list[dict] = [
-    {"key": "bronze", "label": "Bronze", "glyph": "medal", "from": 1, "to": 6,
-     "blurb": "First steps into the arena.", "deep": "#8a4b1e", "bright": "#e8a765"},
-    {"key": "silver", "label": "Silver", "glyph": "medal", "from": 7, "to": 13,
-     "blurb": "You keep turning up — and it shows.", "deep": "#8b95a8", "bright": "#e6ecf7"},
-    {"key": "gold", "label": "Gold", "glyph": "medal", "from": 14, "to": 21,
-     "blurb": "A regular on the boards.", "deep": "#a16207", "bright": "#fcd34d"},
-    {"key": "platinum", "label": "Platinum", "glyph": "shield", "from": 22, "to": 30,
-     "blurb": "Consistently sharp, consistently early.", "deep": "#0e7490", "bright": "#a5f3fc"},
-    {"key": "diamond", "label": "Diamond", "glyph": "gem", "from": 31, "to": 40,
-     "blurb": "Cut above the rest.", "deep": "#0369a1", "bright": "#bae6fd"},
-    {"key": "master", "label": "Master", "glyph": "star", "from": 41, "to": 51,
-     "blurb": "You have mastered the fundamentals.", "deep": "#6d28d9", "bright": "#ddd6fe"},
-    {"key": "grandmaster", "label": "Grandmaster", "glyph": "crown", "from": 52, "to": 62,
-     "blurb": "Feared in every duels lobby.", "deep": "#7e22ce", "bright": "#f0abfc"},
-    {"key": "elite", "label": "Elite", "glyph": "flame", "from": 63, "to": 73,
-     "blurb": "Top of the class, top of the campus.", "deep": "#047857", "bright": "#a7f3d0"},
-    {"key": "champion", "label": "Champion", "glyph": "trophy", "from": 74, "to": 83,
-     "blurb": "Champion of the arena boards.", "deep": "#b91c1c", "bright": "#fecaca"},
-    {"key": "legend", "label": "Legend", "glyph": "sparkles", "from": 84, "to": 91,
-     "blurb": "Your name leads conversations.", "deep": "#b45309", "bright": "#fde68a"},
-    {"key": "mythic", "label": "Mythic", "glyph": "zap", "from": 92, "to": 97,
-     "blurb": "The stuff of arena stories.", "deep": "#a21caf", "bright": "#f5d0fe"},
-    {"key": "celestial", "label": "Celestial", "glyph": "sun", "from": 98, "to": 100,
-     "blurb": "Season perfection. Almost nobody gets here.", "deep": "#3730a3", "bright": "#c7d2fe"},
+    {
+        "key": row["key"],
+        "label": row["label"],
+        "glyph": row["glyph"],
+        "blurb": row["blurb"],
+        "from": row["realm"],
+        "to": row["realm"],
+        "deep": row["deep"],
+        "bright": row["bright"],
+        "realm": row["realm"],
+        "band": row["band"],
+        "family": row["family"],
+        "shape": row["shape"],
+        "mystical": row["mystical"],
+    }
+    for row in REALMS
 ]
 
 RANK_BY_KEY = {row["key"]: row for row in RANKS}
@@ -120,6 +118,12 @@ def rank_payload(row: dict, xp: int | None = None) -> dict:
         "xp_to": xp_for_level(row["to"] + 1),
         "deep": row["deep"],
         "bright": row["bright"],
+        # --- the realm's own identity -------------------------------------
+        "realm": row["realm"],
+        "band": row["band"],
+        "family": row["family"],
+        "shape": row["shape"],
+        "mystical": row["mystical"],
     }
 
 
@@ -239,6 +243,7 @@ def record(db: Session, student: Student, xp: int, events: list[dict] | None = N
         "level": after_level,
         "levels_gained": after_level - before_level,
         "rank": rank_payload(after_rank),
+        # A new *realm* is always worth announcing ...
         "promoted": before_rank["key"] != after_rank["key"],
         "previous_rank": rank_payload(before_rank),
         "next_rank": rank_payload(nxt) if nxt else None,
@@ -246,12 +251,13 @@ def record(db: Session, student: Student, xp: int, events: list[dict] | None = N
         "progress": level_progress(after_xp),
     }
 
-    # A new rank band is a real milestone: it pays diamonds and a rare chest,
-    # once per band, through the same server-side claim table as everything else.
-    if payload["promoted"]:
+    # ... but the payout is for crossing into a new *family* of realms. With a
+    # hundred realms on the ladder, paying out on every single one would hand
+    # out a hundred chests a season; the ten families keep the old rhythm.
+    if before_rank["family"] != after_rank["family"]:
         from .shop import promote as promote_shop
 
-        payout = promote_shop(db, student, after_rank["key"], events)
+        payout = promote_shop(db, student, after_rank["family"], events)
         if payout:
             payload["payout"] = payout
     return payload
@@ -270,9 +276,9 @@ def standing(db: Session, student: Student, key: str | None = None, create: bool
         "rank": rank_payload(rank),
         "next_rank": rank_payload(nxt) if nxt else None,
         "progress": level_progress(xp),
-        "rank_progress": round(
-            min(100.0, max(0.0, (level - rank["from"]) / max(1, rank["to"] - rank["from"] + 1) * 100)), 1
-        ),
+        # A realm is exactly one level wide, so "progress through the band" is
+        # simply the progress through the level.
+        "rank_progress": level_progress(xp)["percent"],
         "board_rank": int(
             db.scalar(
                 select(func.count(SeasonStat.id)).where(SeasonStat.season_key == key, SeasonStat.xp > xp)
@@ -364,4 +370,6 @@ def summary(db: Session, student: Student) -> dict:
         "ladder": ladder(),
         "levels": levels_table(),
         "history": history(db, student),
+        # The first realm past platinum — everything from here glows.
+        "mystical_from": MYSTICAL_FROM,
     }

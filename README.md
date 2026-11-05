@@ -399,10 +399,11 @@ Design rules that keep the game honest:
 | `App.tsx` | State-machine router (login → dashboard → exam/duel/room/result → admin) |
 | `store/session.tsx` | Auth, live socket, presence, leaderboard cache, toasts, celebration queue |
 | `lib/api.ts` | Typed REST client (token handling, error normalisation) |
+| `lib/realms.ts` | The hundred realms — names, colours, frames, emblems (generated from `tools/gen_realms.py`) |
 | `lib/ws.ts` | Auto-reconnecting WebSocket client (token in query, heartbeat, duel rooms) |
 | `lib/confetti.ts` | Dependency-free canvas confetti / coin rain (respects `prefers-reduced-motion`) |
-| `components/` | Design-system primitives, brand mark, toasts, celebration overlay, app shell |
-| `panels/` | Play · Study Lab · Duels · Friends · Ranks · Prizes · Feed · Profile |
+| `components/` | Design-system primitives, the Genesis sigil, the badge kit (tier · medallion · realm), toasts, celebration overlay, app shell |
+| `panels/` | Play · Study Lab · Duels · Friends · Ranks · **Vault** · Prizes · Feed · Profile |
 | `views/` | Welcome → Landing/SignIn front face, Dashboard, Exam engine, Duel arena, Result slip, Admin console |
 | `admin/` | Content, people/results/claims, broadcasts/prizes |
 
@@ -412,6 +413,29 @@ set (lucide), a mobile bottom tab bar, selectable animated mascots, WebAudio sou
 motion-driven transitions.
 The Vite dev server proxies `/api`, `/live` and `/ws` to the backend so the browser only ever
 talks to one origin.
+
+## The mark
+
+The Absolute Genesis crest is **drawn, not photographed**. `frontend/src/components/Logo.tsx` is a
+vector sigil — a violet heater shield with a gold bevel, a four-point radiant star at its heart, a
+halo of twelve seed-dots (the genesis ring) and a rising chevron at the foot.
+
+It replaced a raster whose wordmark was baked into the artwork: at the 40px it actually appears at
+in the header, that file turned into an unreadable smear of light-on-dark and read as washed out.
+The vector version is crisp from a 16px favicon to a 512px store icon, has no baked lettering and
+no white halo, and works on both skins without a second asset.
+
+* `LogoMark` / `BrandLockup` / `Wordmark` all draw it, so the header, the landing page, the
+  sign-in screen and the app shell use the same mark.
+* `frontend/public/brand/ag-sigil.svg` is the same art as a standalone file, and the PNG icons
+  (favicon, PWA icons, the maskable icon, the apple-touch icon) are **rendered from it at build
+  time** by `frontend/scripts/make-brand.mjs`, which runs as `prebuild` and `predev`. The component
+  is the only place the mark is written down, so the icons cannot drift away from it.
+  `node scripts/make-brand.mjs` rebuilds them by hand; if no browser is installed the script warns
+  and leaves the PNGs alone rather than failing the build.
+* The splash is the brand's own dark stage in **both** skins — a deep violet field with a gold dawn
+  behind the sigil — so the first thing on load reads as Absolute Genesis rather than as a pale
+  splash with a logo floating in it.
 
 ## Music
 
@@ -444,9 +468,20 @@ lives in `backend/app/services/season.py`:
 
 * **100 levels** on a public curve — level 1 is free, level 2 costs 46 XP, every level after costs
   a little more (level 50 sits at 16,366 XP, level 100 at 62,766).
-* **12 rank badges** — bronze, silver, gold, platinum, diamond, master, grandmaster, elite,
-  champion, legend, mythic, celestial — each with its own glyph and deep/bright palette that the
-  frontend paints with (no image assets to ship).
+* **100 realms, one per level** — the ladder is no longer twelve bands with platinum on top. Every
+  level of a season is its own realm with its own name, colour, frame and emblem: *Ember, Spark,
+  Tinder … Alloy, Quench, Tempered … Aurum, Laurel, Sovereign … Aurora, Nebula, Comet … Absolute
+  Genesis*. A player is never "just Platinum"; they are always a realm, and that realm's badge is
+  the mark they carry. The table lives in `backend/app/services/realms.py` and is mirrored to the
+  client at `frontend/src/lib/realms.ts` by `tools/gen_realms.py`, so the API and the art can never
+  disagree about a name.
+* **Ten families, and a glow past platinum.** Realms 1-40 are forged — ember, iron, gold,
+  platinum — metal you can hold. From realm 41 (**Aurora**) the ladder turns mystical and every
+  badge gains a corona, a slow-turning ring of light and a pulse: those are entities, not medals.
+* **The badge is drawn, not styled.** `RealmBadge` in `frontend/src/components/Badge.tsx` gives
+  each realm its own silhouette (ten frames cycle up the ladder) and a **rune ring** with one tick
+  per level of the realm — realm 1 has a single tick, realm 100 has a hundred, so the number is
+  legible as texture long before it is legible as a digit. No image assets to ship.
 * **XP is server-side only.** `game.grant()` writes the granted amount into the month's
   `SeasonStat` row; claiming a season reward passes `season=False`, so a payout can never push a
   player up the ladder.
@@ -462,7 +497,13 @@ lives in `backend/app/services/season.py`:
   equal, and 90 XP of drift is exactly what the check caught before this was one door.
 * **The ladder announces itself.** Every grant that climbs a level returns a `season_level` event
   alongside the XP (`game.grant` -> `season.record`), so the client can show the badge the moment it
-  is earned. Crossing a rank opens the badge card; a plain level rides along in the reward toast.
+  is earned. The screen only stops for the loud climbs — a family milestone, any realm past
+  platinum, and the last realm on the ladder — because early realms arrive every few minutes and
+  would interrupt play every time; the rest ride along in the reward toast.
+* **The vault.** `GET /api/arena/season` also returns each leader's realm, so the **Vault** tab
+  (`frontend/src/panels/RealmVaultPanel.tsx`) can put the highest realm badges on display: the
+  ascendants standing in their own alcoves, and the full hundred-realm gallery underneath, lit where
+  you have reached and dimmed where you have not.
   When a new month starts the first screen of the season says so, and says what the last one ended
   on, instead of the badge silently disappearing overnight.
 
