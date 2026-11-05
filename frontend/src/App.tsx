@@ -122,7 +122,7 @@ function Splash() {
       <div className="ag-splash__stack">
         <img
           className="ag-splash__logo"
-          src="/brand/ag-logo.webp"
+          src="/brand/ag-icon-192.png"
           alt="Absolute Genesis"
           width={616}
           height={629}

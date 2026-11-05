@@ -70,7 +70,7 @@ export function Toasts() {
 
 const CELEBRATION_META: Record<Celebration['kind'], {icon: typeof Trophy; title: string; accent: string}> = {
   level_up: {icon: Flame, title: 'Level up', accent: 'from-flare-500 via-nova-500 to-pulse-500'},
-  season_rank: {icon: Medal, title: 'New badge', accent: 'from-gold-400 via-flare-500 to-nova-500'},
+  season_rank: {icon: Medal, title: 'New realm', accent: 'from-gold-400 via-flare-500 to-nova-500'},
   season_roll: {icon: Sparkles, title: 'New season', accent: 'from-pulse-500 via-nova-500 to-flare-500'},
   badge: {icon: Award, title: 'Badge unlocked', accent: 'from-gold-400 via-flare-500 to-nova-500'},
   duel_win: {icon: Swords, title: 'Duel victory', accent: 'from-flare-500 via-nova-600 to-pulse-600'},
@@ -112,8 +112,8 @@ function CelebrationCard({celebration, onClose}: {celebration: Celebration; onCl
         <div className="relative px-4 pt-6 pb-5 sm:px-7 sm:pt-9 sm:pb-8">
           <Character mood="celebrate" size={64} tone="day" className="pointer-events-none absolute top-2 right-2 sm:right-4" />
           {celebration.season ? (
-            /* A season badge gets its own hero: the metal shield the ladder
-               draws, with the level carved into it, and where it sits. */
+            /* A realm gets its own hero: the badge the ladder draws, with the
+               realm number carved into it, and where it sits. */
             <motion.div variants={popIn} initial="hidden" animate="show" transition={{delay: 0.08}} className="mx-auto w-fit">
               <SeasonBadge rank={celebration.season.rank} level={celebration.season.level} size="xl" current />
  <p className="mt-3 text-[0.62rem] font-black tracking-[0.18em] text-mist-500">

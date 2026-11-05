@@ -2415,6 +2415,235 @@ header { transition: background-color 0.4s ease, color 0.4s ease; }
   0%, 100% { transform: translateY(0) scale(1); }
   50% { transform: translateY(-2px) scale(1.04); }
 }
+/* ------------------------------------------------------------------- vault */
+/* The vault is a frame, not a page: a deep panel, a hairline rule and a lot of
+   dark space, so the badges are the only thing in it with colour. */
+.vault-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(70% 120% at 82% 0%, rgba(124, 58, 237, 0.24) 0%, transparent 62%),
+    radial-gradient(46% 90% at 12% 10%, rgba(250, 204, 21, 0.1) 0%, transparent 60%),
+    linear-gradient(165deg, rgba(24, 12, 52, 0.92) 0%, rgba(9, 5, 22, 0.94) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 40px -28px rgba(0, 0, 0, 0.9);
+}
+.vault-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(1.2px 1.2px at 22% 30%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 68% 18%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.3px 1.3px at 84% 62%, rgba(196, 181, 253, 0.5), transparent),
+    radial-gradient(1px 1px at 40% 76%, rgba(250, 204, 21, 0.4), transparent);
+}
+.vault-frame__head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 1.15rem;
+}
+.vault-frame__mine {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1.1rem;
+  background: rgba(9, 5, 22, 0.5);
+}
+
+/* An alcove: one ascendant, their badge and their name. */
+.vault-ascendant {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.05rem;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%);
+}
+.vault-ascendant--mine {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: linear-gradient(150deg, rgba(124, 58, 237, 0.16) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+.vault-ascendant__badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.vault-ascendant__name {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.vault-ascendant__rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  font-weight: 900;
+  color: var(--color-mist-400);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One realm in the gallery. */
+.vault-realm {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.55rem 0.2rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.02);
+  text-align: center;
+  opacity: 0.5;
+}
+.vault-realm--lit {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.015) 100%);
+}
+.vault-realm--mystical.vault-realm--lit {
+  border-color: rgba(167, 139, 250, 0.34);
+  box-shadow: inset 0 0 18px -6px rgba(139, 92, 246, 0.7);
+}
+.vault-realm--mine {
+  border-color: rgba(250, 204, 21, 0.6);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.28), 0 0 18px -6px rgba(250, 204, 21, 0.7);
+}
+.vault-realm__name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--color-mist-100);
+}
+.vault-realm__band {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-mist-500);
+}
+.vault-realm__lock {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.35rem;
+  color: var(--color-mist-600);
+}
+
+/* The band header: a name, a rule and a range. */
+.vault-band {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.vault-band__name {
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-mist-300);
+}
+.vault-band__name--mystical {
+  color: var(--color-nova-300);
+  text-shadow: 0 0 14px rgba(167, 139, 250, 0.6);
+}
+.vault-band__rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02));
+}
+.vault-band__range {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-mist-500);
+}
+
+/* ------------------------------------------------------------- realm badge */
+/* A realm badge is a realm's own object: its frame, its rune ring, its colour.
+   Past platinum it stops being a medal and becomes an entity — it gains a
+   corona, a slow-turning ring of light and a pulse. */
+.realm-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 5px 9px rgba(6, 10, 30, 0.45));
+}
+.realm-badge--mystical {
+  filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.55)) drop-shadow(0 6px 12px rgba(6, 10, 30, 0.5));
+}
+/* The aura behind a mystical badge breathes. */
+.realm-badge--mystical::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.3) 0%, rgba(124, 58, 237, 0.12) 42%, transparent 70%);
+  animation: realm-aura 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes realm-aura {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+/* The outer ring of light turns, very slowly. */
+.realm-badge__orbit {
+  transform-origin: 60px 56px;
+  animation: realm-orbit 44s linear infinite;
+}
+@keyframes realm-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.realm-badge__number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-title);
+  font-weight: 850;
+  font-style: normal;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.realm-badge--locked {
+  filter: grayscale(0.9) brightness(0.62) drop-shadow(0 3px 5px rgba(6, 10, 30, 0.35));
+  opacity: 0.72;
+}
+.realm-badge--current {
+  animation: realm-breathe 3.2s ease-in-out infinite;
+}
+@keyframes realm-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.05); }
+}
+
 /* The inline tag: a small badge beside the tier name, tinted with its metal. */
 .tier-pill {
   display: inline-flex;
@@ -3348,7 +3577,7 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 
 .agb-lockup { display: flex; align-items: center; gap: 0.6rem; min-width: 0; flex: 1 1 auto; }
 .agb-crest { position: relative; display: grid; place-items: center; width: 2.9rem; height: 2.9rem; flex-shrink: 0; }
-.agb-crest img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28)); }
+.agb-crest > * { position: relative; z-index: 2; width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28)); }
 .agb-words { display: grid; min-width: 0; gap: 0.12rem; }
 .agb-name {
   font-family: var(--font-title);
