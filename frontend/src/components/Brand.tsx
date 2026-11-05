@@ -1,5 +1,6 @@
 /** Absolute Genesis brand mark: the AG crest under a rising star, violet and gold. */
 import {useIsDesktop} from '../lib/viewport';
+import SkinToggle from './SkinToggle';
 import type React from 'react';
 
 /**
@@ -15,7 +16,7 @@ export function LogoMark({size = 42, className = ''}: {size?: number | null; cla
       width={size ?? undefined}
       height={size ?? undefined}
       draggable={false}
-      className={`shrink-0 object-contain drop-shadow-[0_6px_16px_rgba(250,204,21,0.25)] ${className}`}
+      className={`shrink-0 object-contain ${className}`}
       style={size ? {width: size, height: size} : undefined}
     />
   );
@@ -73,9 +74,8 @@ export function Wordmark({
 }
 
 /**
- * The official brand lockup: crest in a rotating ray halo, the two-tone
- * ABSOLUTE GENESIS wordmark and the tagline between gold rules. Pure markup;
- * styles live in index.css (.agb-*). Shows on phones and desktops alike.
+ * The official brand lockup: crisp crest, two-tone ABSOLUTE GENESIS wordmark,
+ * and a compact tagline. Pure markup; styles live in index.css (.agb-*).
  */
 export function BrandLockup({className = '', tagline = true}: {className?: string; tagline?: boolean}) {
   return (
@@ -105,7 +105,12 @@ export function BrandBar({left, children, className = ''}: {left?: React.ReactNo
         <span className="agb-bar-glint" aria-hidden="true" />
         {left}
         <BrandLockup />
-        {children && <div className="agb-actions">{children}</div>}
+        {children && (
+          <div className="agb-actions">
+            <SkinToggle className="hidden min-[340px]:inline-grid" />
+            {children}
+          </div>
+        )}
       </div>
     </header>
   );

@@ -53,15 +53,7 @@ from ..models import (
 # ---------------------------------------------------------------------------
 SUBJECTS: dict[str, list[str]] = {
     "Mathematics": ["Algebra", "Calculus", "Geometry", "Trigonometry", "Statistics", "Probability", "Linear Algebra", "Differential Equations", "Number Theory"],
-    "Physics": ["Mechanics", "Electromagnetism", "Waves and Optics", "Thermodynamics", "Modern Physics", "Electricity", "Nuclear Physics"],
-    "Chemistry": ["Organic Chemistry", "Inorganic Chemistry", "Physical Chemistry", "Stoichiometry", "Chemical Bonding", "Electrochemistry", "Analytical Chemistry"],
-    "Biology": ["Cell Biology", "Genetics", "Ecology", "Human Physiology", "Evolution", "Microbiology", "Botany", "Zoology"],
     "English": ["Grammar", "Essay Writing", "Comprehension", "Literature", "Oral English", "Vocabulary"],
-    "Law": ["Constitutional Law", "Criminal Law", "Contract Law", "Law of Torts", "Jurisprudence", "Land Law", "Equity and Trusts", "Evidence", "Commercial Law", "Legal Research"],
-    "Economics": ["Microeconomics", "Macroeconomics", "Development Economics", "Econometrics", "Public Finance"],
-    "Computer Science": ["Programming", "Data Structures", "Algorithms", "Databases", "Web Development", "Computer Networks"],
-    "Accounting": ["Financial Accounting", "Cost Accounting", "Management Accounting", "Auditing", "Taxation"],
-    "Government": ["Political Theory", "Nigerian Government", "International Relations", "Public Administration"],
 }
 
 LANGUAGES = ["English", "Pidgin", "Igbo", "Yoruba", "Hausa", "French"]
@@ -152,6 +144,15 @@ def profile_for(db: Session, student_id: int) -> TeacherProfile | None:
     return db.scalar(select(TeacherProfile).where(TeacherProfile.student_id == student_id))
 
 
+def has_current_specialty(db: Session, profile_id: int) -> bool:
+    return db.scalar(
+        select(TeacherSpecialty.id).where(
+            TeacherSpecialty.teacher_id == profile_id,
+            TeacherSpecialty.subject.in_(SUBJECTS.keys()),
+        ).limit(1)
+    ) is not None
+
+
 def is_live(profile: TeacherProfile | None) -> bool:
     return bool(profile and profile.status == "approved")
 
@@ -170,7 +171,7 @@ def require_teacher(db: Session, student: Student) -> TeacherProfile:
 
 def live_teacher_or_404(db: Session, teacher_id: int) -> TeacherProfile:
     profile = db.get(TeacherProfile, teacher_id)
-    if not is_live(profile):
+    if not is_live(profile) or not has_current_specialty(db, profile.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Teacher not found.")
     return profile  # type: ignore[return-value]
 

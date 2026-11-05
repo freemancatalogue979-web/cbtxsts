@@ -7,10 +7,12 @@
  * browser in the loop.
  */
 
-/** Press duration before the action menu opens (ms). */
-export const HOLD_MS = 420;
+/** Touch press duration before the action menu opens (ms). */
+export const HOLD_MS = 400;
+/** Keep mouse/pen holds slightly longer so desktop clicks stay deliberate. */
+export const MOUSE_HOLD_MS = 460;
 /** Movement that means "they were scrolling, not holding" (px). */
-export const HOLD_TOLERANCE = 14;
+export const HOLD_TOLERANCE = 12;
 /** Menu size used for placement (px). */
 export const MENU_WIDTH = 184;
 export const MENU_ITEM_HEIGHT = 44;

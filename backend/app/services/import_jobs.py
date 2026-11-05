@@ -54,11 +54,19 @@ def _state_path(job_id: str) -> Path:
     return _dir() / f"{job_id}.json"
 
 
+def _clean_strings(value: Any) -> Any:
+    """Drop malformed Unicode from cached/imported text before disk or API use."""
+    from .material_import import clean_tree
+
+    return clean_tree(value)
+
+
 def _persist(job: dict[str, Any]) -> None:
     """Atomically mirror one job; only JSON-compatible import drafts are stored."""
-    target = _state_path(str(job["id"]))
+    safe_job = _clean_strings(job)
+    target = _state_path(str(safe_job["id"]))
     temporary = target.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(job, ensure_ascii=False, default=str), encoding="utf-8")
+    temporary.write_text(json.dumps(safe_job, ensure_ascii=False, default=str), encoding="utf-8")
     os.replace(temporary, target)
 
 
@@ -107,6 +115,9 @@ def _set(job_id: str, **changes: Any) -> None:
         job = _jobs.get(job_id)
         if job is not None:
             job.update(changes, updated=time.time())
+            safe_job = _clean_strings(job)
+            job.clear()
+            job.update(safe_job)
             snapshot = dict(job)
     if snapshot is not None:
         _persist(snapshot)
@@ -186,8 +197,9 @@ def start(filename: str, data: bytes, *, owner: int) -> dict:
     job_id = uuid.uuid4().hex
     (_dir() / job_id).write_bytes(data)
     now = time.time()
+    safe_filename = _clean_strings(str(filename or "document"))[:200]
     with _lock:
-        _jobs[job_id] = {"id": job_id, "owner": owner, "filename": filename[:200], "size": len(data), "state": "reading", "error": "",
+        _jobs[job_id] = {"id": job_id, "owner": owner, "filename": safe_filename, "size": len(data), "state": "reading", "error": "",
                          "draft": None, "material": None, "commit_fields": None, "created": now, "updated": now}
         snapshot = dict(_jobs[job_id])
     _persist(snapshot)
@@ -204,19 +216,24 @@ def get(job_id: str, *, owner: int) -> dict:
 
 def commit(job_id: str, *, owner: int, fields: dict) -> dict:
     job = get(job_id, owner=owner)
+    safe_fields = _clean_strings(fields)
     with _lock:
         if job["state"] == "done":
-            return job
+            return _clean_strings(job)
         if job["state"] != "ready":
             raise JobError("This file isn't ready yet." if job["state"] in {"reading", "importing"} else job["error"] or "This file can't be imported.", 409)
-        job.update(state="importing", error="", commit_fields=fields, updated=time.time())
+        job.update(state="importing", error="", draft=_clean_strings(job.get("draft")), commit_fields=safe_fields, updated=time.time())
+        safe_job = _clean_strings(job)
+        job.clear()
+        job.update(safe_job)
         snapshot = dict(job)
     _persist(snapshot)
-    _pool.submit(_create, job_id, fields)
-    return job
+    _pool.submit(_create, job_id, safe_fields)
+    return _clean_strings(snapshot)
 
 
 def public(job: dict) -> dict:
+    job = _clean_strings(job)
     out: dict[str, Any] = {"id": job["id"], "state": job["state"], "filename": job["filename"], "size": job["size"], "error": job["error"] or None}
     if job.get("draft") is not None and job["state"] in {"ready", "importing"}:
         from ..routers.materials import _preview_payload

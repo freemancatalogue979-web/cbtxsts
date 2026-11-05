@@ -747,7 +747,7 @@ function QuestionEditor({index, q, problem, onChange, onRemove, onDuplicate, onM
                 <button
                   type="button"
                   className="grid size-8 shrink-0 place-items-center rounded-full border text-[0.75rem] font-bold"
-                  style={{borderColor: correct ? 'var(--pro-success)' : 'var(--pro-border-strong)', background: correct ? 'var(--pro-success)' : 'transparent', color: correct ? '#fff' : 'var(--pro-muted)'}}
+                  style={{borderColor: correct ? 'var(--pro-success)' : 'var(--pro-border-strong)', background: correct ? 'var(--pro-success)' : 'transparent', color: correct ? 'var(--pro-text)' : 'var(--pro-muted)'}}
                   onClick={() => onChange({answer: LETTERS[oi]!})}
                   aria-label={`Mark option ${String.fromCharCode(65 + oi)} correct`}
                   title="Mark as correct"

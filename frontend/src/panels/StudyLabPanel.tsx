@@ -523,7 +523,7 @@ function TopicScreen({
                 <span
                   className={
                     reached
-                      ? 'grid size-6 place-items-center rounded-full bg-emerald-500/85 text-[0.68rem] font-black text-white'
+                      ? 'grid size-6 place-items-center rounded-full bg-emerald-700 text-[0.68rem] font-black text-white'
                       : 'grid size-6 place-items-center rounded-full border border-white/15 bg-white/5 text-[0.68rem] font-black text-mist-500'
                   }
                 >

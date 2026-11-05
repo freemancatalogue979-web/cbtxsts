@@ -15,6 +15,7 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 
+from ...course_catalog import ACTIVE_COURSE_CODES
 from ...models import (
     AIFlashcard,
     AIFlashcardDeck,
@@ -42,7 +43,7 @@ COURSE_ID = {"type": "integer", "description": "Course id (from list_my_courses)
 def _course(ctx: ToolContext, course_id: int | None) -> Course:
     cid = course_id or ctx.course_hint
     course = ctx.db.get(Course, cid) if cid else None
-    if course is None or (not course.is_active and ctx.role not in STAFF_ROLES):
+    if course is None or (ctx.role not in STAFF_ROLES and (not course.is_active or course.code not in ACTIVE_COURSE_CODES)):
         raise ToolError("Course not found. Call list_my_courses to get valid ids.")
     return course
 
@@ -71,10 +72,10 @@ def get_my_profile(ctx: ToolContext, args: dict) -> dict:
     }
 
 
-@tool("list_my_courses", description="Courses available on the platform with ids, codes, topic counts and practice-question counts. Call this first to resolve a course name like 'Biology' or 'LAW 411' to an id.", roles=ANY | STAFF_ROLES, label="Looking up courses")
+@tool("list_my_courses", description="Courses available on the platform with ids, codes, topic counts and practice-question counts. Call this first to resolve a supported course such as English or Mathematics to an id.", roles=ANY | STAFF_ROLES, label="Looking up courses")
 def list_my_courses(ctx: ToolContext, args: dict) -> dict:
     db = ctx.db
-    courses = db.execute(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).scalars().all()
+    courses = db.execute(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).scalars().all()
     topics = dict(db.execute(select(CourseTopic.course_id, func.count(CourseTopic.id)).group_by(CourseTopic.course_id)).all())
     bank = dict(db.execute(_bank_filter(select(Question.course_id, func.count(Question.id))).where(Question.practice_enabled.is_(True)).group_by(Question.course_id)).all())
     return {"courses": [{"id": c.id, "code": c.code, "title": c.title, "topics": topics.get(c.id, 0), "practice_questions": bank.get(c.id, 0)} for c in courses]}

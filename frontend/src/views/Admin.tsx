@@ -714,7 +714,7 @@ export default function Admin({onExit, onSwitchToPlayer}: {onExit: () => void; o
               {section === 'institutions' && <InstitutionsAdmin key={`institutions-${bump}`} onOpenTutor={(prompt) => { setTutorPrompt(prompt); goto('tutor'); }} />}
               {section === 'support' && <SupportAdmin key={`support-${bump}`} />}
               {section === 'mystery' && <MysteryAdmin key={`mystery-${bump}`} />}
-              {section === 'tutor' && <TutorAdmin key={`tutor-${bump}-${tutorPrompt}`} initialPrompt={tutorPrompt || undefined} />}
+              {section === 'tutor' && <TutorAdmin key={`tutor-${bump}-${tutorPrompt}`} initialPrompt={tutorPrompt || undefined} onBackChat={() => goto('institutions')} />}
               {section === 'settings' && <SettingsPanel key={`settings-${bump}`} />}
               </Suspense>
             </motion.div>

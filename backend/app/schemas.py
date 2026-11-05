@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from .course_catalog import ACTIVE_COURSE_CODES
 from .security import is_valid_phone, normalize_phone
 
 OptionKey = Literal["A", "B", "C", "D"]
@@ -122,6 +123,14 @@ class CourseIn(BaseModel):
     lecturer: str = ""
     accent: Literal["red", "violet", "blue", "amber"] = "violet"
     is_active: bool = True
+
+    @field_validator("code")
+    @classmethod
+    def _supported_course_code(cls, value: str) -> str:
+        code = " ".join(value.strip().upper().split())
+        if code not in ACTIVE_COURSE_CODES:
+            raise ValueError("Only ENG 101 and MTH 101 courses are currently supported.")
+        return code
 
 
 class PhotoIn(BaseModel):
@@ -591,9 +600,9 @@ class StudentIn(BaseModel):
     phone: str = Field(min_length=7, max_length=20)
     reg_no: str | None = None
     level: str = "400 Level"
-    faculty: str = "Faculty of Law"
-    campus: str = "UNEC (Enugu Campus)"
-    class_name: str = "030 Law Class"
+    faculty: str = "English & Mathematics"
+    campus: str = "Online Campus"
+    class_name: str = "General Class"
 
     @field_validator("phone")
     @classmethod

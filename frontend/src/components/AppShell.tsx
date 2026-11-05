@@ -10,6 +10,7 @@ import {api} from '../lib/api';
 import {cacheRead, cacheWrite, userScope} from '../lib/cache';
 import {LogoMark, WalletPill} from './Brand';
 import SeasonBadge from './SeasonBadge';
+import SkinToggle from './SkinToggle';
 import {music} from '../lib/music';
 import {sfx} from '../lib/sfx';
 import {DESKTOP_MORE_TABS, DESKTOP_PRIMARY_TABS, MOBILE_TABS, MORE_TABS, TABS} from '../lib/nav';
@@ -323,15 +324,15 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
   return (
     <div className="relative" ref={wrapRef}>
       {/* On a phone the avatar sits in a true circle: square padding all round,
-          aspect-square so the ring can never stretch into a pill. The name is
-          what turns it into a pill, and that only appears from sm up. */}
+          aspect-square so the ring can never stretch into a pill. The name only
+          joins where the header has room for the wider account control. */}
       <button
         onClick={() => setOpen((value) => !value)}
         className="float-chip flex aspect-square shrink-0 items-center justify-center rounded-full border border-white/12 p-1 transition-colors hover:border-nova-400/40 sm:aspect-auto sm:gap-2 sm:pr-3 lg:aspect-square lg:gap-0 lg:pr-1 min-[1800px]:aspect-auto min-[1800px]:gap-2 min-[1800px]:pr-3"
         aria-label="Account menu"
       >
         <Avatar name={profile.name} hue={profile.avatar_hue} initials={profile.initials} size={30} />
-        <span className="hidden text-[0.8rem] font-bold text-mist-200 sm:block lg:hidden min-[1800px]:block">{profile.name.split(' ')[0]}</span>
+        <span className="hidden text-[0.8rem] font-bold text-mist-200 min-[900px]:block lg:hidden min-[1800px]:block">{profile.name.split(' ')[0]}</span>
       </button>
 
       <AnimatePresence>
@@ -370,6 +371,7 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
               ))}
             </div>
             <div className="mt-2 flex flex-col">
+              <SkinToggle row />
               <button
                 onClick={() => {
                   setOpen(false);
@@ -411,8 +413,8 @@ function LivePill() {
       title={`${label} to the live channel — the app re-syncs silently when the connection returns`}
     >
       {socketStatus === 'open' ? <Wifi className="size-3.5" /> : <WifiOff className="size-3.5 animate-pulse" />}
-      <span className="hidden tabular sm:inline lg:hidden min-[1800px]:inline">{label}</span>
-      <span className="hidden opacity-70 sm:inline lg:hidden 2xl:inline">
+      <span className="hidden tabular min-[900px]:inline lg:hidden min-[1800px]:inline">{label}</span>
+      <span className="hidden opacity-70 min-[900px]:inline lg:hidden 2xl:inline">
         · {online} online
       </span>
       {socketStatus === 'open' && <span className="size-1.5 animate-pulse rounded-full bg-mint-400" />}
@@ -499,10 +501,10 @@ export function AppShell({
 
   return (
     <ChatNavContext.Provider value={chatNavValue}>
-    <div className="aurora min-h-dvh">
+    <div className={`aurora min-h-dvh ${threadOpen ? 'ag-mobile-chat-active' : ''}`}>
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-60" />
 
-      <header className="print-hide sticky top-0 z-50 safe-top">
+      <header className="ag-shell-header print-hide sticky top-0 z-50 safe-top">
         <div className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2 lg:px-8">
           {/* Mobile hamburger & Callsign & Level */}
           <div className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2 lg:order-last lg:ml-3">
@@ -515,12 +517,12 @@ export function AppShell({
             </button>
 
             <LogoMark size={null} className="hidden size-10 shrink-0 lg:block" />
-            <span className="sr-only">Absolute Genesis</span>
+            <span className="sr-only left-0 top-0">Absolute Genesis</span>
 
-            {/* Phones keep just the menu up top — the LV pill only joins from
-                lg where the row has room (level also lives in the account menu). */}
+            {/* Compact layouts keep just the menu up top — the LV pill joins at
+                ultrawide widths where the header row has room (also in the account menu). */}
             {profile && (
-              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular lg:inline-flex">
+              <span className="hud-pill float-chip hidden shrink-0 px-1.5 py-0.5 text-[0.66rem] font-black tracking-tight text-nova-300 tabular min-[1800px]:inline-flex">
                 LV{profile.progress.level}
               </span>
             )}
@@ -597,12 +599,12 @@ export function AppShell({
           </nav>
 
           {/* Right: Telemetry & Permanent PFP */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-1.5">
             <button
               onClick={() => setPaletteOpen(true)}
               aria-label="Quick jump"
               title="Quick jump — ⌘K"
-              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/20 text-mist-100 hover:border-nova-400/50 hover:text-white lg:hidden xl:grid"
+              className="float-chip grid size-9 shrink-0 place-items-center rounded-lg border border-white/20 text-mist-100 hover:border-nova-400/50 hover:text-mist-50 lg:hidden xl:grid"
             >
               <Search className="size-[1.1rem]" />
             </button>
@@ -617,7 +619,7 @@ export function AppShell({
                     menu regardless. */}
                 {/* Wallet: coins + diamonds, always on show — phone and desktop. */}
                 <WalletPill coins={profile.coins} diamonds={profile.diamonds ?? 0} className="float-chip" onClick={() => onTab('shop')} />
-                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular md:inline-flex lg:hidden min-[1800px]:inline-flex" title="Daily streak">
+                <span className="hud-pill float-chip hidden text-[0.74rem] text-rose-300 tabular min-[900px]:inline-flex lg:hidden min-[1800px]:inline-flex" title="Daily streak">
                   <Flame className="size-3.5 text-rose-400" />
                   {profile.streak}d
                 </span>
@@ -660,7 +662,7 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="w-full px-3 pt-3.5 pb-24 sm:px-5 sm:pt-5 lg:px-8 lg:pb-10">
+      <main className={`w-full px-3 pt-3.5 pb-24 sm:px-5 sm:pt-5 lg:px-8 lg:pb-10 ${threadOpen ? 'ag-mobile-chat-main' : ''}`}>
         {tab === 'play' && <InstallBanner className="mb-3" />}
         {children}
       </main>
@@ -676,7 +678,7 @@ export function AppShell({
         animate={{y: navCollapsed ? '118%' : '0%'}}
         transition={{type: 'spring', stiffness: 380, damping: 36}}
         aria-hidden={navCollapsed}
-        className="print-hide fixed inset-x-0 bottom-0 z-50 px-2.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] lg:hidden"
+        className={`ag-mobile-chat-dock print-hide fixed inset-x-0 bottom-0 z-50 px-2.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] lg:hidden`}
         style={{pointerEvents: navCollapsed ? 'none' : undefined}}
       >
         <div className="mx-auto flex max-w-lg items-stretch justify-between gap-1 rounded-[1.4rem] border-2 border-white/12 bg-ink-900/94 p-1.5 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.9)] backdrop-blur-xl">
@@ -751,7 +753,7 @@ export function AppShell({
             animate={{opacity: 1, x: '-50%', y: navExpanded ? -78 : 0}}
             exit={{opacity: 0, x: '-50%', y: 10}}
             transition={{type: 'spring', stiffness: 420, damping: 32}}
-            className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-1/2 z-50 flex items-center gap-1.5 rounded-full border-2 border-white/14 bg-ink-900/95 px-3.5 py-2 text-[0.66rem] font-black tracking-wider text-mist-200 shadow-[0_10px_26px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl touch-manipulation active:scale-95 lg:hidden"
+            className="ag-mobile-chat-nav-pill fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-1/2 z-50 flex items-center gap-1.5 rounded-full border-2 border-white/14 bg-ink-900/95 px-3.5 py-2 text-[0.66rem] font-black tracking-wider text-mist-200 shadow-[0_10px_26px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl touch-manipulation active:scale-95 lg:hidden"
           >
             {navCollapsed ? (
               <>

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db, session_scope
 from ..deps import require_student
-from ..models import Room, RoomMember, Student
+from ..models import Room, RoomMember, Student, utcnow
 from ..schemas import CreateRoomIn, RoomAnswerIn
 from ..services import room as room_service
 from ..services.room import RoomError
@@ -43,14 +43,23 @@ def _host_or_403(room: Room, student: Student) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Host-only action.")
 
 
-async def _schedule_auto_reveal(room_id: int, seconds: int) -> None:
-    """When a question's clock runs out, the server reveals the answer on its own."""
+async def _schedule_auto_reveal(room_id: int, seconds: int, round_index: int) -> None:
+    """Reveal only the round whose timer expired, not a later host-advanced one."""
 
     async def _timer() -> None:
         await asyncio.sleep(seconds + 0.5)
         with session_scope() as db:
             room = db.get(Room, room_id)
             if room is None or room.status != "live":
+                return
+            info = room_service.open_info(room)
+            if (
+                info is None
+                or info.get("index") != round_index
+                or "revealed_at" in info
+                or info.get("deadline") is None
+                or info["deadline"] > utcnow()
+            ):
                 return
             closed = room_service.close_question(db, room)
         if closed:
@@ -141,6 +150,7 @@ def room_detail(
     return {
         "room": room_service.room_state(db, room, student.id),
         "messages": room_service.messages_payload(db, room),
+        **room_service.current_round_state(db, room, student.id),
     }
 
 
@@ -164,7 +174,7 @@ async def start_room(
     if opened:
         meta, per_student = opened
         await _send_question(opened)
-        await _schedule_auto_reveal(room.id, meta["seconds"])
+        await _schedule_auto_reveal(room.id, meta["seconds"], meta["index"])
         mine = _my_payload(per_student, student.id)
     return {"room": room_service.room_state(db, room, student.id), "question": mine}
 
@@ -232,7 +242,7 @@ async def next_question(
         db.commit()
         meta, per_student = opened
         await _send_question(opened)
-        await _schedule_auto_reveal(room.id, meta["seconds"])
+        await _schedule_auto_reveal(room.id, meta["seconds"], meta["index"])
         return {"room": room_service.room_state(db, room, student.id), "question": _my_payload(per_student, student.id)}
     finish = room_service.finish_run(db, room)
     db.commit()

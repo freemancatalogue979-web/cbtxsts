@@ -80,21 +80,25 @@ def _can_talk(db: Session, me: int, other: int) -> bool:
 @router.get("")
 def history(
     with_id: int = Query(alias="with"),
+    before_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=60, ge=1, le=120),
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
 ) -> dict:
+    pair = or_(
+        (ChatMessage.sender_id == student.id) & (ChatMessage.recipient_id == with_id),
+        (ChatMessage.sender_id == with_id) & (ChatMessage.recipient_id == student.id),
+    )
+    statement = select(ChatMessage).where(pair)
+    if before_id is not None:
+        statement = statement.where(ChatMessage.id < before_id)
     rows = db.scalars(
-        select(ChatMessage)
-        .where(
-            or_(
-                (ChatMessage.sender_id == student.id) & (ChatMessage.recipient_id == with_id),
-                (ChatMessage.sender_id == with_id) & (ChatMessage.recipient_id == student.id),
-            )
-        )
-        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
-        .limit(120)
+        statement.order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(limit)
     ).all()
-    return {"messages": [_serialize(row, student.id) for row in reversed(rows)]}
+    return {
+        "messages": [_serialize(row, student.id) for row in reversed(rows)],
+        "has_more": len(rows) == limit,
+    }
 
 
 @router.get("/unread")

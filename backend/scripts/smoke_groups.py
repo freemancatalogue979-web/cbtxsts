@@ -57,7 +57,7 @@ def main():
     tok_c, c = register(f"gsc{suffix}", f"070{suffix}33")
 
     # --- create + join -------------------------------------------------
-    status, group = call("POST", "/groups", tok_a, {"name": "Government Study Squad", "goal": "Ace mocks"})
+    status, group = call("POST", "/groups", tok_a, {"name": "English & Maths Study Squad", "goal": "Build confidence in both subjects"})
     check("create group", status == 200 and group.get("code"), (status, group))
     gid = group["id"]
     code = group["code"]
@@ -135,7 +135,7 @@ def main():
     status, quiz = call(
         "POST", f"/groups/{gid}/quizzes", tok_a,
         {
-            "title": "Government Quiz",
+            "title": "English Grammar Quiz",
             "question_count": 5,
             "per_question_seconds": 20,
             "max_attempts": 2,
@@ -197,7 +197,7 @@ def main():
         {"title": "Can someone explain this part of Wuthering Heights?", "body": "Chapter 9 — Cathy's motive?", "topic": "Literature"},
     )
     check("ask question", status == 200 and q["id"], (status, q))
-    status, reply = call("POST", f"/groups/{gid}/questions/{q['id']}/answers", tok_a, {"body": "She wants status — discuss the class lens."})
+    status, reply = call("POST", f"/groups/{gid}/questions/{q['id']}/answers", tok_a, {"body": "Her choice reveals a conflict between personal feeling and social expectations; quote the chapter to support the interpretation."})
     check("answer question", status == 200 and reply["id"], (status, reply))
     status, payload = call("POST", f"/groups/{gid}/questions/{q['id']}/answers/{reply['id']}/useful", tok_c)
     check("mark useful", status == 200 and payload["useful_count"] == 1, (status, payload))
@@ -217,7 +217,7 @@ def main():
     check("members paginated", members.get("total") == 3 and len(members["items"]) == 2, members)
     status, members = call("GET", f"/groups/{gid}/members?filter=moderators", tok_a)
     check("members filter moderators", members.get("total") == 2, members)
-    status, members = call("GET", f"/groups/{gid}/members?q=government", tok_a)
+    status, members = call("GET", f"/groups/{gid}/members?q=gsb", tok_a)
     check("members search by name", status == 200, members.get("total"))
     status, profile = call("GET", f"/groups/{gid}/members/{b['id']}/profile", tok_a)
     check(
@@ -258,7 +258,7 @@ def main():
     check("activity paginated", activity.get("pages", 0) >= 1 and activity.get("total", 0) >= 5, activity.get("total"))
     status, found = call("GET", f"/groups/{gid}/search?q=wuthering", tok_b)
     check("search finds question", len(found.get("questions", [])) == 1, found)
-    status, payload = call("PATCH", f"/groups/{gid}", tok_a, {"description": "Weekly government + literature drills."})
+    status, payload = call("PATCH", f"/groups/{gid}", tok_a, {"description": "Weekly grammar, writing and maths drills."})
     check("owner edits group", status == 200 and payload["description"].startswith("Weekly"), (status, payload))
     status, payload = call("PATCH", f"/groups/{gid}", tok_b, {"description": "hacked"})
     check("moderator cannot edit group", status == 403, (status, payload))

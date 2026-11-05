@@ -94,7 +94,7 @@ function CreateQuiz({onDone, onCancel}: {onDone: () => void; onCancel: () => voi
 
       <Card className="grid gap-3 p-4">
         <Field label="Quiz title">
-          <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Government Quiz — Week 4" maxLength={200} />
+          <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. English Grammar — Week 4" maxLength={200} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Course">
@@ -108,7 +108,7 @@ function CreateQuiz({onDone, onCancel}: {onDone: () => void; onCancel: () => voi
             </Select>
           </Field>
           <Field label="Topic (optional)">
-            <TextInput value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Constitutional Law" maxLength={120} />
+            <TextInput value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Algebra" maxLength={120} />
           </Field>
         </div>
         <Field label="Description (optional)">

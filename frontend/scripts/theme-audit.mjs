@@ -41,6 +41,18 @@ const css = readFileSync(join(SRC, 'index.css'), 'utf8');
 const declared = new Set();
 for (const match of css.matchAll(/--(?:color|qa)-([a-z]+)-(\d{2,3}):/g)) declared.add(`${match[1]}-${match[2]}`);
 
+// Correct/wrong answer tiles deliberately use deep fills at night. Require a
+// skin-aware daylight rule in the real component so feedback stays readable.
+const answerComponent = readFileSync(join(SRC, 'components', 'GameQuestion.tsx'), 'utf8');
+for (const state of ['correct', 'wrong']) {
+  const selector = `[data-answer-tile][data-answer-state='${state}']`;
+  const hasDayRule = css.includes(`[data-skin='day']:not([data-mode='pro']) ${selector}`);
+  const hasProLightRule = css.includes(`[data-mode='pro'][data-pro-theme='light'] ${selector}`);
+  if (!answerComponent.includes('data-answer-tile') || (!hasDayRule && !hasProLightRule)) {
+    issues.push(`GameQuestion ${state} feedback is missing its daylight answer-tile rule`);
+  }
+}
+
 for (const file of walk(SRC)) {
   const source = readFileSync(file, 'utf8');
   const lines = source.split('\n');
@@ -62,8 +74,10 @@ for (const file of walk(SRC)) {
     if (/lib\/confetti\.ts$/.test(rel)) return;
     for (const match of line.matchAll(/#(?:fff(?:fff)?|f6f7ff|f8f9ff|ffffff)\b/gi)) {
       const around = line.slice(Math.max(0, match.index - 60), match.index + 60);
-      // Shadows and inset highlights are decoration, not type.
+      // Shadows and inset highlights are decoration, not type. A PDF iframe's
+      // white canvas is also deliberate: changing it would tint the document.
       if (/shadow-|inset|drop-shadow|confetti|BRAND_COLORS|dots:|particle|flake/i.test(around)) continue;
+      if (/<iframe\b/i.test(line) && /background:\s*['"]#fff/i.test(line)) continue;
       issues.push(`${rel}:${index + 1} hard-coded white ${match[0]} — it disappears on the daylight skin (${around.trim().slice(0, 70)})`);
     }
   });
@@ -71,7 +85,7 @@ for (const file of walk(SRC)) {
   /* --------------------------------- 1. white type without a colour behind it */
   // Walk the element a `text-white` belongs to, then a few ancestors, looking
   // for something that paints a saturated background.
-  const coloured = /gradient|brand-gradient|bg-(?:nova|flare|pulse|mint|gold|rose|amber)-(?:4|5|6|7)\d0|keep-dark|map-node|gbtn-primary|score-pop/;
+  const coloured = /gradient|brand-gradient|bg-(?:nova|flare|pulse|mint|gold|rose|amber)-(?:4|5|6|7)\d0|bg-emerald-(?:6|7)00|keep-dark|map-node|gbtn-primary|score-pop/;
   lines.forEach((line, index) => {
     if (!/\btext-white(?:\/\d+)?\b/.test(line)) return;
     if (/\bkeep-dark\b/.test(line)) return;

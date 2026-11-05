@@ -17,6 +17,7 @@ import {
   Target, UserSearch, Wand2, X, XCircle, Zap, ChevronLeft, ChevronRight, FileText, BookOpenText, PenLine, Trash2, Users, Ban, Coins as CoinsIcon,
 } from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
+import {createPortal} from 'react-dom';
 import {Button, Card, Field, Modal, ProgressRing, Skeleton, TextArea, TextInput, ToneIcon, type Tone, Select} from '../components/ui';
 import {ToolTrail} from '../components/tutor/AgentBits';
 import TasksView, {attachFile, TaskInline, type AttachedMaterial} from './AITasks';
@@ -123,7 +124,7 @@ function readCourse(): number | null {
 }
 
 /* =================================================================== shell */
-export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n: number) => void; initialPrompt?: string}) {
+export default function AIAssistant({onPending, initialPrompt, onBack}: {onPending?: (n: number) => void; initialPrompt?: string; onBack?: () => void}) {
   const {toast} = useSession();
   const [view, setView] = useSessionState<View>('ag.admin.ai.view', 'assistant', (v) => ['assistant', 'insights', 'tasks', 'review', 'activity'].includes(v));
   const [status, setStatus] = useState<AIStaffStatus | null>(null);
@@ -133,7 +134,29 @@ export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n:
   const [refreshKey, setRefreshKey] = useState(0);
   const [queued, setQueued] = useState<string | null>(initialPrompt || null);
   const [focusTask, setFocusTask] = useState<number | null>(null);
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
   const openTask = (id: number) => { setFocusTask(id); setView('tasks'); };
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)');
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  const mobileChat = Boolean(onBack && mobile && view === 'assistant');
+  useEffect(() => {
+    if (!mobileChat) return undefined;
+    const oldOverflow = document.body.style.overflow;
+    const oldOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.documentElement.style.overscrollBehavior = oldOverscroll;
+    };
+  }, [mobileChat]);
 
   const loadStatus = useCallback(() => {
     aiStaffApi.status().then((s) => { setStatus(s); onPending?.(s.pending_proposals); }).catch(() => undefined);
@@ -162,6 +185,29 @@ export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n:
     setView('assistant');
   };
   const course = courses.find((c) => c.id === courseId) ?? null;
+  const chatNode = (
+    <Chat
+      status={status}
+      course={course}
+      onProposal={setOpenProposal}
+      onTask={openTask}
+      onUsed={changed}
+      queued={queued}
+      onQueuedUsed={() => setQueued(null)}
+      onBack={mobileChat ? onBack : undefined}
+      mobileFullscreen={mobileChat}
+    />
+  );
+
+  if (mobileChat) {
+    return createPortal(
+      <div className="admin-shell admin-ai-chat-fullscreen" role="region" aria-label="Staff AI assistant chat">
+        {chatNode}
+        <ProposalModal id={openProposal} onClose={() => setOpenProposal(null)} onDecided={changed} />
+      </div>,
+      document.body,
+    );
+  }
 
   return (
     <div className="min-w-0 space-y-3">
@@ -169,7 +215,7 @@ export default function AIAssistant({onPending, initialPrompt}: {onPending?: (n:
       <Tabs view={view} onChange={setView} pending={status?.pending_proposals ?? 0} />
       {view === 'assistant' && (
         <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          <Chat status={status} course={course} onProposal={setOpenProposal} onTask={openTask} onUsed={changed} queued={queued} onQueuedUsed={() => setQueued(null)} />
+          {chatNode}
           <Rail status={status} course={course} refreshKey={refreshKey} onAsk={askAI} onInsights={() => setView('insights')} />
         </div>
       )}
@@ -289,7 +335,7 @@ function Tabs({view, onChange, pending}: {view: View; onChange: (v: View) => voi
     {id: 'activity', label: 'Activity', icon: History},
   ];
   return (
-    <div role="tablist" className="grid grid-cols-5 gap-1 rounded-2xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]">
+    <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] sm:grid-cols-3 xl:grid-cols-5">
       {tabs.map((t) => {
         const on = view === t.id;
         return (
@@ -317,8 +363,8 @@ function Tabs({view, onChange, pending}: {view: View; onChange: (v: View) => voi
 /* -------------------------------------------------------------------- chat */
 type Upload = {key: string; name: string; stage: string; fraction?: number; material?: AttachedMaterial; error?: string};
 
-function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}: {
-  status: AIStaffStatus | null; course: Course | null; onProposal: (id: number) => void; onTask: (id: number) => void; onUsed: () => void; queued: string | null; onQueuedUsed: () => void;
+function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed, onBack, mobileFullscreen = false}: {
+  status: AIStaffStatus | null; course: Course | null; onProposal: (id: number) => void; onTask: (id: number) => void; onUsed: () => void; queued: string | null; onQueuedUsed: () => void; onBack?: () => void; mobileFullscreen?: boolean;
 }) {
   const {toast} = useSession();
   const [turns, setTurns] = useState<AgentTurn[]>(() => {
@@ -592,18 +638,23 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
 
   return (
     <div
-      className="relative min-w-0"
+      className={`relative min-w-0 ${mobileFullscreen ? 'admin-ai-mobile-chat-content' : ''}`}
       onDragOver={(e: DragEvent) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={(e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e: DragEvent) => { e.preventDefault(); setDragging(false); if (ready) addFiles(e.dataTransfer.files); }}
     >
-    <Card className={`relative flex h-[min(44rem,calc(100dvh-9rem))] min-h-[30rem] min-w-0 flex-col overflow-hidden p-0 ${dragging ? 'ring-2 ring-nova-400/60' : ''}`}>
+    <Card className={`admin-ai-chat-card relative flex h-[min(44rem,calc(100dvh-9rem))] min-h-[30rem] min-w-0 flex-col overflow-hidden p-0 ${mobileFullscreen ? 'admin-ai-chat-card-fullscreen' : ''} ${dragging ? 'ring-2 ring-nova-400/60' : ''}`}>
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-ink-950/75 backdrop-blur-sm">
           <p className="flex items-center gap-2 rounded-2xl border border-nova-400/40 bg-nova-500/15 px-4 py-3 text-[0.9rem] font-extrabold text-white"><Paperclip className="size-5" /> Drop to attach to {course?.code ?? 'the course'}</p>
         </div>
       )}
-      <div className="flex min-w-0 items-center gap-2 border-b border-white/6 bg-white/[0.02] px-3 py-2">
+      <div className="admin-ai-chat-header flex min-w-0 items-center gap-2 border-b border-white/6 bg-white/[0.02] px-3 py-2">
+        {onBack && (
+          <button type="button" onClick={onBack} aria-label="Back to AI tools" title="Back to AI tools" className="grid size-11 shrink-0 place-items-center rounded-xl border border-white/10 text-mist-300 transition-colors hover:border-nova-400/40 hover:text-mist-50">
+            <ChevronLeft className="size-5" />
+          </button>
+        )}
         <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"><Sparkles className="size-4" /></span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.84rem] font-extrabold text-mist-50">Staff assistant</p>
@@ -639,7 +690,7 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
                         onClick={() => void send(play.prompt)}
                         disabled={!ready || busy}
                         title={play.prompt}
-                        className="group flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 text-left text-[0.78rem] font-bold text-mist-200 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="admin-ai-prompt group flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 text-left text-[0.78rem] font-bold text-mist-200 transition hover:bg-white/[0.06] hover:text-mist-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <span className="min-w-0 flex-1 truncate">{play.label}</span>
                         <ArrowUp className="size-3.5 shrink-0 rotate-45 text-mist-600 transition group-hover:text-nova-300" />
@@ -690,13 +741,13 @@ function Chat({status, course, onProposal, onTask, onUsed, queued, onQueuedUsed}
         {lastAssistant && !busy && (
           <div className="flex flex-wrap gap-1.5 pl-10">
             {FOLLOW_UPS.map((f) => (
-              <button key={f} onClick={() => void send(f)} disabled={!ready} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[0.7rem] font-bold text-mist-300 transition hover:border-nova-400/40 hover:text-white disabled:opacity-40">{f}</button>
+              <button key={f} onClick={() => void send(f)} disabled={!ready} className="admin-ai-prompt rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[0.7rem] font-bold text-mist-300 transition hover:border-nova-400/40 hover:text-mist-50 disabled:opacity-40">{f}</button>
             ))}
           </div>
         )}
       </div>
 
-      <form className="border-t border-white/6 bg-black/15 p-2.5" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <form className="admin-ai-chat-composer border-t border-white/6 bg-black/15 p-2.5" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         {uploads.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {uploads.map((u) => (
@@ -825,7 +876,7 @@ function Insights({courseId, onCourse, onAsk, refreshKey}: {courseId: number | n
                 </span>
                 {c.pending > 0 && <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[0.62rem] font-black text-ink-950">{c.pending} to review</span>}
               </div>
-              <div className="mt-3 grid grid-cols-4 gap-1 text-center">
+              <div className="mt-3 grid grid-cols-2 gap-1 text-center sm:grid-cols-4">
                 {([['Questions', c.bank], ['Topics', c.topics], ['Materials', c.materials], ['Attempts', c.attempts]] as const).map(([k, v]) => (
                   <span key={k} className="rounded-lg bg-black/20 px-1 py-1.5">
                     <span className="block text-[0.9rem] font-black text-mist-50 tabular-nums">{formatNumber(v)}</span>
@@ -1211,7 +1262,7 @@ function Seg({value, onChange, options}: {value: string; onChange: (v: string) =
   return (
     <div className="flex rounded-full border border-white/10 bg-black/20 p-0.5">
       {options.map(([id, label]) => (
-        <button key={id} onClick={() => onChange(id)} className={`rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition ${value === id ? 'bg-white/12 text-white' : 'text-mist-500 hover:text-mist-300'}`}>{label}</button>
+        <button key={id} onClick={() => onChange(id)} className={`rounded-full px-2.5 py-1 text-[0.68rem] font-bold transition ${value === id ? 'bg-white/12 text-mist-50' : 'text-mist-500 hover:text-mist-300'}`}>{label}</button>
       ))}
     </div>
   );
@@ -1395,7 +1446,7 @@ function ProposalModal({id, onClose, onDecided}: {id: number | null; onClose: ()
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-1 text-[0.7rem] font-extrabold">
                 {(['all', 'selected', ...(flagged ? ['flagged'] : [])] as ('all' | 'selected' | 'flagged')[]).map((v) => (
-                  <button key={v} onClick={() => { setShow(v); setPage(0); }} className={`rounded-full px-2.5 py-1 capitalize transition ${show === v ? 'bg-white/[0.12] text-white' : 'text-mist-400 hover:bg-white/[0.05]'}`}>
+                  <button key={v} onClick={() => { setShow(v); setPage(0); }} className={`rounded-full px-2.5 py-1 capitalize transition ${show === v ? 'bg-white/[0.12] text-mist-50' : 'text-mist-400 hover:bg-white/[0.05]'}`}>
                     {v === 'all' ? `All ${items.length}` : v === 'selected' ? `Selected ${picked.size}` : `Flagged ${flagged}`}
                   </button>
                 ))}

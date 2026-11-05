@@ -26,11 +26,10 @@ import './form-controls.css';
 // Modes (pro/game/fun) and the chosen font family apply before React renders.
 applyMode(currentMode());
 applyFont(currentFont(), false);
-// Day/night applies before paint too — the default is the night arena, with
-// daylight one tap away in the personalisation panel.
+// Day/night applies before paint too — daylight is the default; saved choices win.
 applySkin(currentSkin());
-// Standard / Pro experience + Pro appearance and reading prefs (after the font,
-// so Pro's single typeface wins).
+// Standard / Pro experience + Pro appearance and reading prefs. Both share the
+// device default or the player's selected font pack.
 bootExperience();
 
 // Offline app shell + "Install app" (production builds only; see public/sw.js).

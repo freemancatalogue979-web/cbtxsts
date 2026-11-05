@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import game
 from ..db import get_db
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..deps import require_student
 from ..events import dispatch, to_everyone
 from ..models import (
@@ -62,6 +63,13 @@ def config_payload(db: Session) -> dict:
     }
 
 
+def course_is_student_visible(db: Session, course_id: int | None) -> bool:
+    if course_id is None:
+        return True
+    course = db.get(Course, course_id)
+    return bool(course and course.is_active and course.code in ACTIVE_COURSE_CODES)
+
+
 def submission_count(db: Session, quiz_id: int) -> int:
     return int(
         db.scalar(select(func.count(Attempt.id)).where(Attempt.quiz_id == quiz_id, Attempt.status == "submitted"))
@@ -103,6 +111,7 @@ def bootstrap(db: Session = Depends(get_db)) -> dict:
     quizzes = db.scalars(
         select(Quiz).where(Quiz.status.in_(["active", "scheduled"])).order_by(Quiz.id.desc())
     ).all()
+    quizzes = [quiz for quiz in quizzes if course_is_student_visible(db, quiz.course_id)]
     notices = db.scalars(
         select(Notification).order_by(Notification.is_pinned.desc(), Notification.created_at.desc()).limit(6)
     ).all()
@@ -124,7 +133,7 @@ def bootstrap(db: Session = Depends(get_db)) -> dict:
 def list_courses(db: Session = Depends(get_db)) -> list[dict]:
     from ..models import Question
 
-    courses = db.scalars(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).all()
+    courses = db.scalars(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).all()
     counts = dict(db.execute(select(Quiz.course_id, func.count(Quiz.id)).where(Quiz.is_bank.is_(False)).group_by(Quiz.course_id)).all())
     # Duel-ready question bank per course (same filters the duel pool uses).
     question_counts = dict(
@@ -153,6 +162,7 @@ def list_courses(db: Session = Depends(get_db)) -> list[dict]:
 def list_quizzes(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> list[dict]:
     # Course question banks are holding quizzes, not exams — never listed.
     quizzes = db.scalars(select(Quiz).where(Quiz.is_bank.is_(False)).order_by(Quiz.id.desc())).all()
+    quizzes = [quiz for quiz in quizzes if course_is_student_visible(db, quiz.course_id)]
     payload = []
     for quiz in quizzes:
         mine = db.scalar(select(Attempt).where(Attempt.quiz_id == quiz.id, Attempt.student_id == student.id))
@@ -163,7 +173,7 @@ def list_quizzes(db: Session = Depends(get_db), student: Student = Depends(requi
 @router.get("/quizzes/{quiz_id}")
 def read_quiz(quiz_id: int, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     quiz = db.get(Quiz, quiz_id)
-    if quiz is None or bool(getattr(quiz, "is_bank", False)):
+    if quiz is None or bool(getattr(quiz, "is_bank", False)) or not course_is_student_visible(db, quiz.course_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
     mine = db.scalar(select(Attempt).where(Attempt.quiz_id == quiz.id, Attempt.student_id == student.id))
     return quiz_public(quiz, submission_count=submission_count(db, quiz.id), my_attempt=mine)
@@ -171,7 +181,8 @@ def read_quiz(quiz_id: int, db: Session = Depends(get_db), student: Student = De
 
 @router.get("/quizzes/{quiz_id}/leaderboard")
 def read_quiz_leaderboard(quiz_id: int, db: Session = Depends(get_db)) -> list[dict]:
-    if db.get(Quiz, quiz_id) is None:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None or not course_is_student_visible(db, quiz.course_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
     return quiz_leaderboard(db, quiz_id)
 

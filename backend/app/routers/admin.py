@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .. import game
 from ..config import DEFAULT_ADMIN_EMAIL
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..db import get_db
 from ..deps import require_admin
 from ..events import dispatch, to_everyone
@@ -199,7 +200,7 @@ def list_courses(db: Session = Depends(get_db)) -> list[dict]:
             topic_count=int(topic_counts.get(c.id, 0)),
             material_count=int(material_counts.get(c.id, 0)),
         )
-        for c in db.scalars(select(Course).order_by(Course.code)).all()
+        for c in db.scalars(select(Course).where(Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).all()
     ]
 
 
@@ -221,6 +222,9 @@ def update_course(course_id: int, payload: CourseIn, db: Session = Depends(get_d
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found.")
     data = payload.model_dump()
     data["code"] = data["code"].strip().upper()
+    duplicate = db.scalar(select(Course.id).where(Course.code == data["code"], Course.id != course_id))
+    if duplicate is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{data['code']} already exists.")
     for field, value in data.items():
         setattr(course, field, value)
     db.commit()

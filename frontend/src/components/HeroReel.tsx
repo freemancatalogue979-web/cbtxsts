@@ -57,7 +57,7 @@ export default function HeroReel({slides}: {slides: HeroSlide[]}) {
 
   return (
     <div
-      className="group relative overflow-hidden rounded-[1.4rem] border border-white/12 bg-ink-900 shadow-[0_40px_90px_-45px_rgba(168,85,247,0.55)] sm:rounded-[1.9rem]"
+      className="group hero-reel relative overflow-hidden rounded-[1.4rem] border border-white/12 bg-ink-900 shadow-[0_40px_90px_-45px_rgba(168,85,247,0.55)] sm:rounded-[1.9rem]"
       onPointerDown={() => setPaused(true)}
       onPointerUp={() => setPaused(false)}
       onPointerLeave={() => setPaused(false)}
@@ -96,8 +96,8 @@ export default function HeroReel({slides}: {slides: HeroSlide[]}) {
         ))}
 
         {/* scrims keep captions legible on any frame */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/25 to-transparent" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-ink-950/70 via-transparent to-transparent" />
+        <div className="hero-reel-scrim-bottom pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/25 to-transparent" />
+        <div className="hero-reel-scrim-side pointer-events-none absolute inset-0 bg-gradient-to-r from-ink-950/70 via-transparent to-transparent" />
 
         {/* frame counter */}
         <p className="absolute top-3 right-3.5 rounded-full border border-white/15 bg-ink-950/55 px-2.5 py-1 text-[0.6rem] font-black tracking-[0.18em] text-mist-300 tabular backdrop-blur-md sm:top-4 sm:right-4 sm:text-[0.66rem]">
@@ -112,13 +112,13 @@ export default function HeroReel({slides}: {slides: HeroSlide[]}) {
           transition={{duration: 0.55, ease: EASE}}
           className="absolute inset-x-0 bottom-0 p-4 pr-16 pb-5 sm:p-7 sm:pb-7"
         >
- <p className={`text-[0.62rem] font-black tracking-[0.22em] sm:text-[0.7rem] ${slide.accent}`}>
+ <p className={`hero-reel-eyebrow text-[0.62rem] font-black tracking-[0.22em] sm:text-[0.7rem] ${slide.accent}`}>
             {slide.eyebrow}
           </p>
           <h2 className="game-title mt-1.5 max-w-xl font-display text-[1.32rem] leading-[1.12] font-black italic tracking-tight sm:mt-2 sm:text-[1.95rem] lg:text-[2.4rem]">
             {slide.title}
           </h2>
-          <p className="mt-1.5 max-w-md text-[0.8rem] leading-relaxed font-semibold text-mist-300 sm:mt-2.5 sm:text-[0.9rem]">
+          <p className="hero-reel-caption mt-1.5 max-w-md text-[0.8rem] leading-relaxed font-semibold text-mist-300 sm:mt-2.5 sm:text-[0.9rem]">
             {slide.caption}
           </p>
         </motion.div>

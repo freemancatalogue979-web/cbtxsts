@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from .. import game
 from ..db import get_db
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..deps import require_student
 from ..events import Event, dispatch, to_student
 from ..models import (
@@ -30,6 +31,7 @@ from ..models import (
     PracticeChallenge,
     PracticeRun,
     Question,
+    Quiz,
     Student,
     utcnow,
 )
@@ -91,6 +93,11 @@ def _parse_iso(value: Any) -> datetime | None:
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed
+
+
+def _course_is_available(db: Session, course_id: int) -> bool:
+    course = db.get(Course, course_id)
+    return bool(course and course.is_active and course.code in ACTIVE_COURSE_CODES)
 
 
 def _run_expired(state: dict[str, Any]) -> bool:
@@ -291,7 +298,7 @@ def practice_catalog(db: Session = Depends(get_db), student: Student = Depends(r
     asked in practice (approved, visible, practice-enabled, bank originals —
     never an exam's drawn copies), so the number offered is the number usable.
     """
-    courses = db.scalars(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).all()
+    courses = db.scalars(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).all()
     rows = db.execute(
         select(Question.course_id, Question.topic, func.count(Question.id))
         .where(
@@ -501,6 +508,16 @@ def start_practice(
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
 ) -> dict:
+    if payload.course_id:
+        course = db.get(Course, payload.course_id)
+        if course is None or not course.is_active or course.code not in ACTIVE_COURSE_CODES:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That course is no longer available.")
+    if payload.quiz_id:
+        quiz = db.get(Quiz, payload.quiz_id)
+        if quiz is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That quiz is no longer available.")
+        if quiz.course_id and not _course_is_available(db, quiz.course_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That quiz is no longer available.")
     if payload.mode == CUSTOM_MODE:
         return _start_custom(payload, db, student)
     mode = payload.mode if payload.mode in MODES else "sprint10"
@@ -572,7 +589,7 @@ def _start_custom(payload: PracticeStartIn, db: Session, student: Student) -> di
     if not payload.course_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a course to practise.")
     course = db.get(Course, payload.course_id)
-    if course is None or not course.is_active:
+    if course is None or not course.is_active or course.code not in ACTIVE_COURSE_CODES:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "That course is no longer available.")
 
     # One open custom run at a time: starting fresh quietly discards the old one.

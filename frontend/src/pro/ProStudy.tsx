@@ -151,7 +151,7 @@ export default function ProStudy({onTab}: {onTab: (tab: Tab) => void}) {
                     <div className="mt-5 flex min-w-0 items-end justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="text-[1.0625rem] leading-snug font-bold [overflow-wrap:anywhere]">{c.title}</h2>
-                        <p className="mt-0.5 text-[0.75rem] font-semibold text-white/80">
+                        <p className="theme-ok mt-0.5 text-[0.75rem] font-semibold text-white/80">
                           {c.topics.length} topics · {started} started
                         </p>
                       </div>

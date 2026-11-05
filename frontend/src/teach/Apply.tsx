@@ -303,7 +303,7 @@ export function AboutStep({draft, setDraft, languages}: {draft: Draft; setDraft:
   const allLanguages = useMemo(() => Array.from(new Set([...(languages.length ? languages : ['English', 'Pidgin', 'Igbo', 'Yoruba', 'Hausa', 'French']), ...draft.languages])), [languages, draft.languages]);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
-      <Field label="Headline" hint="One line students see in search. e.g. “Calculus & Physics tutor for 100-level students”">
+      <Field label="Headline" hint="One line students see in search. e.g. “Mathematics tutor for algebra and statistics”">
         <input className="pro-input" value={draft.headline} onChange={(e) => set('headline', e.target.value)} maxLength={140} />
       </Field>
       <Field label="About you" hint={`${draft.bio.trim().length} characters · at least 60. How do you teach? Who do you help best?`}>
@@ -368,7 +368,7 @@ export function SubjectsStep({draft, setDraft, catalog}: {draft: Draft; setDraft
   };
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] min-w-0 gap-4">
-      <p className="pro-secondary">Pick specific topics — students search by topic, so “Organic Chemistry” beats just “Chemistry”. Up to 8 subjects.</p>
+      <p className="pro-secondary">Choose topics in English or Mathematics — students search by topic, so “Calculus” or “Essay Writing” is clearer than a broad subject. Add up to 8 topic specialities.</p>
       <div className="flex min-w-0 flex-wrap gap-2">
         {subjects.map((s) => {
           const count = draft.specialties.find((x) => x.subject === s.subject)?.topics.length ?? 0;

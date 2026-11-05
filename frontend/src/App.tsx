@@ -119,9 +119,6 @@ function routeFromHash(): Route {
 function Splash() {
   return (
     <div className="ag-splash ag-splash--live" role="status" aria-label="Loading Absolute Genesis">
-      <div className="ag-splash__rays" />
-      <div className="ag-splash__glow" />
-      <div className="ag-splash__stars" />
       <div className="ag-splash__stack">
         <img
           className="ag-splash__logo"
@@ -196,6 +193,16 @@ export default function App() {
   const {pro} = useExperience();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
   const [started, setStarted] = useState(false);
+
+  /* Register above splash/auth early returns so hook order never changes. */
+  useEffect(() => {
+    const onPlayer = (event: Event) => {
+      const id = Number((event as CustomEvent<{id?: number}>).detail?.id);
+      if (Number.isSafeInteger(id) && id > 0) setPlayerId(id);
+    };
+    window.addEventListener('ag:player', onPlayer);
+    return () => window.removeEventListener('ag:player', onPlayer);
+  }, []);
 
   /* ---------------------------------------------------------- navigation
      One door in and out of every screen. Each move is a real history entry, so
@@ -376,17 +383,6 @@ export default function App() {
     [on],
   );
 
-  /* Always register player-card listener before any early return so hook
-     order stays stable when role/profile flips between renders. */
-  useEffect(() => {
-    const onPlayer = (event: Event) => {
-      const id = Number((event as CustomEvent).detail?.id);
-      if (id) setPlayerId(id);
-    };
-    window.addEventListener('ag:player', onPlayer);
-    return () => window.removeEventListener('ag:player', onPlayer);
-  }, []);
-
   if (!started || !ready) return <Splash />;
 
   /* Admin ⇄ Player: the stored slot for the other role switches instantly;
@@ -449,7 +445,6 @@ export default function App() {
   const openRoom = (roomId: number) => navigate({view: 'room', roomId});
   const openGroup = (groupId: number, section: GroupSection = 'overview') => navigate({view: 'group', groupId, section});
   const backToDashboard = (tab: Tab = 'play') => navigate({view: 'dashboard', tab});
-
 
   return (
     <>

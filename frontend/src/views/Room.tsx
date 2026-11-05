@@ -130,14 +130,30 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
   /* ---------------------------------------------------------- boot + ws */
   useEffect(() => {
     let alive = true;
+    const applySnapshot = (data: Awaited<ReturnType<typeof api.roomDetail>>) => {
+      if (!alive) return;
+      setRoom(data.room);
+      setMessages(data.messages);
+      if (data.question) {
+        setQuestion(data.question);
+        setMyPick(data.question.selected ?? null);
+        setLockedIds(data.question.answered ? [myId] : []);
+        setReveal(data.reveal ?? null);
+      } else {
+        setQuestion(null);
+        setReveal(data.reveal ?? null);
+        setMyPick(data.reveal?.selected ?? null);
+        setLockedIds(data.reveal ? [myId] : []);
+      }
+      setLoading(false);
+    };
+    const refreshSnapshot = () => {
+      void api.roomDetail(roomId).then(applySnapshot).catch(() => undefined);
+    };
+
     api
       .roomDetail(roomId)
-      .then((data) => {
-        if (!alive) return;
-        setRoom(data.room);
-        setMessages(data.messages);
-        setLoading(false);
-      })
+      .then(applySnapshot)
       .catch((error: Error) => {
         if (!alive) return;
         toast('error', 'Could not open the room', error.message);
@@ -158,6 +174,10 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
             setRoom(state.room);
             setMessages(state.messages);
             setLoading(false);
+            // A socket handshake only carries room-safe metadata. Ask the
+            // member-checked REST snapshot for this player's current question
+            // and answer state so reconnects never strand them on “Get ready”.
+            refreshSnapshot();
             break;
           }
           case 'room_join':
@@ -172,7 +192,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
               onExit();
               return;
             }
-            api.roomDetail(roomId).then((fresh) => setRoom(fresh.room)).catch(() => undefined);
+            refreshSnapshot();
             break;
           }
           case 'room_chat': {
@@ -188,8 +208,8 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
             const payload = data as unknown as RoomQuestionPayload;
             setQuestion(payload);
             setReveal(null);
-            setLockedIds([]);
-            setMyPick(null);
+            setLockedIds(payload.answered ? [myId] : []);
+            setMyPick(payload.selected ?? null);
             sfx.play('duel');
             break;
           }
@@ -199,7 +219,8 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
           case 'room_reveal': {
             const payload = data as unknown as RoomRevealPayload;
             setReveal(payload);
-            setLockedIds([]);
+            if (payload.selected !== undefined) setMyPick(payload.selected);
+            setLockedIds([myId]);
             sfx.play(payload.correct_ids.includes(myId) ? 'correct' : 'wrong');
             break;
           }
@@ -448,7 +469,7 @@ export default function Room({roomId, onExit}: {roomId: number; onExit: () => vo
                 <div className="rise-in mt-3 rounded-2xl border border-white/10 bg-ink-950/50 p-3.5">
                   <p className="flex items-center gap-2 text-[0.82rem] font-extrabold text-mist-100">
                     {myCorrect ? <Zap className="size-4 text-gold-300" /> : <Swords className="size-4 text-flare-400" />}
-                    {myCorrect ? 'Correct!' : `Answer: ${reveal.correct}`} · {reveal.correct_ids.length}/{reveal.answered || room.members.length} got it
+                    {myCorrect ? 'Correct!' : `Answer: ${reveal.correct}`} · {reveal.correct_count ?? reveal.correct_ids.length}/{reveal.answered || room.members.length} got it
                   </p>
                   {reveal.explanation && <p className="mt-1 text-[0.76rem] font-medium leading-relaxed text-mist-400">{reveal.explanation}</p>}
                   <p className="mt-1 text-[0.7rem] font-bold text-mist-600">

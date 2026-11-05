@@ -781,6 +781,10 @@ select.pro-input { padding-right: 32px; }
 .pro-tutor .tutor-example:nth-child(6n + 5) > svg { color: var(--pro-h-teal); background: var(--pro-h-teal-soft); }
 .pro-tutor .tutor-example:nth-child(6n + 6) > svg { color: var(--pro-h-rose); background: var(--pro-h-rose-soft); }
 .pro-tutor .tutor-example:disabled { opacity: 0.55; }
+[data-mode='pro'][data-pro-theme='light'] .pro-tutor .tutor-example:disabled {
+  opacity: 1;
+  color: var(--pro-text-2);
+}
 /* messages: assistant reads like a document, the student's turn is a soft bubble */
 .pro-tutor .tutor-user { background: var(--pro-accent-soft); color: var(--pro-text); border-radius: 12px 12px 4px 12px; font-size: 0.9375rem; line-height: 1.55; }
 .pro-tutor .tutor-avatar { background: var(--pro-h-violet-soft); background-image: none; color: var(--pro-h-violet); border-radius: 8px; }

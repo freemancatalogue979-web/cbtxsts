@@ -175,3 +175,110 @@
     .pro-section-header > .shrink-0 { max-width: 42%; }
   }
 }
+
+/* The Pro shell also hands mobile/tablet the entire viewport for an open chat. */
+@media (max-width: 1023px) {
+  .pro-chat-active { height: 100dvh; overflow: hidden; }
+  .pro-chat-active .pro-topbar,
+  .pro-chat-active .pro-bottom-nav { display: none !important; }
+  .pro-chat-active .pro-chat-main {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 60 !important;
+    display: flex;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none !important;
+    min-height: 0;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: var(--pro-bg);
+  }
+  .pro-chat-active .pro-chat-main > .pro-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .pro-chat-active .pro-chat-main .pro-page > div {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .pro-chat-active .pro-chat-main .friends-panel {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0 !important;
+    overflow: hidden;
+    margin: 0;
+  }
+  .pro-chat-active .pro-chat-main .friends-page-heading,
+  .pro-chat-active .pro-chat-main .friends-pane-switch,
+  .pro-chat-active .pro-chat-main .friends-circle { display: none !important; }
+  .pro-chat-active .pro-chat-main .friends-layout {
+    display: flex !important;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 0%;
+    gap: 0 !important;
+    margin: 0;
+  }
+  .pro-chat-active .pro-chat-main .friends-thread {
+    display: flex !important;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 0%;
+  }
+  .pro-chat-active .pro-chat-main .friends-thread-card {
+    width: 100%;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none;
+    flex: 1 1 0%;
+    border-radius: 0 !important;
+    border-inline: 0;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+  .pro-chat-active .pro-chat-main .friends-thread-card > div:first-child {
+    flex-shrink: 0;
+    padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+  }
+  .pro-chat-active .pro-chat-main .friends-thread-card > div:last-child {
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  }
+  .pro-chat-active .pro-chat-main .tutor-page {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0 !important;
+    overflow: hidden;
+    margin: 0;
+  }
+  .pro-chat-active .pro-chat-main .tutor-page-heading {
+    flex-shrink: 0;
+    gap: 0.5rem;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
+    margin: 0 !important;
+    border-bottom: 1px solid var(--pro-border);
+    background: var(--pro-bg);
+  }
+  .pro-chat-active .pro-chat-main .tutor-layout { display: flex !important; min-height: 0; flex: 1 1 0%; gap: 0 !important; }
+  .pro-chat-active .pro-chat-main .tutor-side { display: none !important; }
+  .pro-chat-active .pro-chat-main .tutor-main {
+    width: 100%; height: 100% !important; min-height: 0 !important; flex: 1 1 0%;
+    border-radius: 0 !important; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); box-shadow: none;
+  }
+}

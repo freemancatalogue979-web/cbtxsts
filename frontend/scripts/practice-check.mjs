@@ -58,7 +58,7 @@ function makeWindow(url = `${BASE}/`) {
   window.print = () => {};
   window.scrollTo = () => {};
   window.HTMLCanvasElement.prototype.getContext = () => null;
-  window.confirm = () => true;
+  window.confirm = () => { throw new Error('native confirm must not be used'); };
   return dom;
 }
 
@@ -85,6 +85,16 @@ async function main() {
   });
   if (!response.ok) throw new Error(`cannot register: ${response.status}`);
   const {token} = await response.json();
+  const catalogResponse = await globalThis.fetch(`${BASE}/api/arena/practice/catalog`, {
+    headers: {Authorization: `Bearer ${token}`},
+  });
+  if (!catalogResponse.ok) throw new Error(`cannot load practice catalog: ${catalogResponse.status}`);
+  const catalog = await catalogResponse.json();
+  const courseCodes = new Set((catalog.courses ?? []).map((row) => row.code));
+  const course = (catalog.courses ?? []).find((row) => row.code === 'ENG 101' && row.available > 0)
+    ?? (catalog.courses ?? []).find((row) => row.code === 'MTH 101' && row.available > 0);
+  const topic = [...(course?.topics ?? [])].filter((row) => row.count > 0).sort((a, b) => a.count - b.count)[0];
+  if (!course || !topic) throw new Error('supported English/Mathematics course has no available practice topic');
 
   /* ------------------------------------------------- boot straight into the app */
   const dom = makeWindow(`${BASE}/#/play`);
@@ -104,37 +114,46 @@ async function main() {
   await wait(1200);
   check('the practice setup interface is the landing view', text().includes('Set up your practice'), text().slice(0, 220));
   check('setup walks Course → Topic → Questions → Duration', ['1 · Course', '2 · Topic', '3 · Number of questions', '4 · Practice duration'].every((step) => text().includes(step)), text().slice(0, 400));
-  check('courses arrive from the bank with live counts', /Jurisprudence & Legal Theory/.test(text()) && /\d+ questions/.test(text()), text().slice(0, 400));
+  check(
+    'the player catalog exposes only English and Mathematics',
+    catalog.courses.length === 2 && courseCodes.has('ENG 101') && courseCodes.has('MTH 101') && [...courseCodes].every((code) => ['ENG 101', 'MTH 101'].includes(code)),
+    [...courseCodes].join(', '),
+  );
+  check(
+    'course cards show live titles and question counts',
+    catalog.courses.every((row) => text().includes(row.code) && text().includes(row.title) && text().includes(`${row.available} questions`)),
+    text().slice(0, 500),
+  );
   check('duration options run 10 to 60 minutes', ['10 min', '30 min', '60 min'].every((option) => text().includes(option)), '');
 
   /* ------------------------------------------------ pick a course and a topic */
-  const jurisCard = [...window.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Jurisprudence'));
-  click(jurisCard);
+  const courseButton = [...window.document.querySelectorAll('button')].find((node) =>
+    (node.textContent || '').includes(course.code) && (node.textContent || '').includes(course.title),
+  );
+  click(courseButton);
   await wait(300);
-  const topicSelect = window.document.querySelector('select');
-  check('topic dropdown lists the course topics with counts', Boolean(topicSelect) && (topicSelect.textContent || '').includes('Historical School'), topicSelect?.textContent?.slice(0, 200));
-  const historical = [...(topicSelect?.options ?? [])].find((option) => option.text.includes('Historical School'));
-  check('the topic declares its real availability', Boolean(historical) && /1 question/.test(historical.text), historical?.text);
-  if (topicSelect && historical) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-    setter.call(topicSelect, historical.value);
-    topicSelect.dispatchEvent(new window.Event('change', {bubbles: true}));
-    await wait(400);
-  }
-  check('a thin topic says exactly how many questions exist', text().includes('Only 1 question is available for Historical School'), text().slice(0, 500));
+  const topicPicker = window.document.querySelector('button[aria-label="Choose topics"]');
+  click(topicPicker);
+  await wait(250);
+  const topicOption = [...window.document.querySelectorAll('[role="option"]')].find((node) => (node.textContent || '').includes(topic.topic));
+  const topicCountLabel = `${topic.count} ${topic.count === 1 ? 'question' : 'questions'}`;
+  check(
+    'the in-app multi-select lists real topics and availability counts',
+    Boolean(topicOption) && (topicOption.textContent || '').includes(topicCountLabel),
+    topicOption?.textContent,
+  );
+  check('the topic count matches the live practice catalog', Boolean(topicOption) && (topicOption.textContent || '').includes(topicCountLabel), `${topic.topic}: ${topicCountLabel}`);
+  click(topicOption);
+  await wait(250);
+  click([...window.document.querySelectorAll('button')].find((node) => /^Done/.test((node.textContent || '').trim())));
+  await wait(300);
+  const availabilityNotice = `Only ${topic.count} ${topic.count === 1 ? 'question is' : 'questions are'} available for ${topic.topic}.`;
+  check('the selected topic accurately caps the question count', text().includes(availabilityNotice), text().slice(0, 600));
 
-  /* ------------------------------------ switch to the full course and start */
-  if (topicSelect) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-    setter.call(topicSelect, '');
-    topicSelect.dispatchEvent(new window.Event('change', {bubbles: true}));
-    await wait(400);
-  }
-
-  /* --------------------------------------------- start the (small) topic run */
+  /* --------------------------------------------- start the selected topic run */
   click(byText('button', 'Start practice'));
   check('the timed run opens on question 1', await waitFor(() => text().includes('Question 1 of')), text().slice(0, 240));
-  check('the countdown timer is showing', /\d{1,2}:\d{2}/.test(text()) && text().includes('answered'), text().slice(0, 240));
+  check('the countdown timer and live answer counters are showing', /\d{1,2}:\d{2}/.test(text()) && text().includes('done') && text().includes('left'), text().slice(0, 240));
   const clockText = (text().match(/(\d{1,2}):(\d{2})/) || []).slice(1).map(Number);
   check(
     'the run does not expire instantly (timezone-honest ends_at)',
@@ -171,8 +190,13 @@ async function main() {
   const questionNumber = matched ? Number(matched[1]) : 1;
   const reloaded = rehydrate(window, `${BASE}/#/play`);
   const rw = reloaded.window;
-  check('a refresh lands back inside the same run (not a new paper)', await waitFor(() => (rw.document.querySelector('#root')?.textContent ?? '').includes('Question')), (rw.document.querySelector('#root')?.textContent ?? '').slice(0, 200));
-  const restoredText = rw.document.querySelector('#root')?.textContent ?? '';
+  const restored = () => rw.document.querySelector('#root')?.textContent ?? '';
+  check(
+    'a refresh restores the active practice run, not the exam catalogue',
+    await waitFor(() => /Question \d+ of \d+/.test(restored()) || restored().includes('Practice completed')),
+    restored().slice(0, 240),
+  );
+  const restoredText = restored();
   check(
     'the resumed run resumes at the first unanswered question',
     restoredText.includes(`Question ${questionNumber + 1} of`) || restoredText.includes('Practice completed'),

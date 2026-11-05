@@ -13,10 +13,12 @@ from .. import game
 from ..db import get_db
 from ..deps import require_student
 from ..events import dispatch, to_student
-from ..models import Activity, Duel, DuelParticipant, Friendship, InboxNote, Reaction, Student, utcnow
+from ..models import Activity, Badge, Duel, DuelParticipant, Friendship, InboxNote, Reaction, Student, StudentBadge, utcnow
 from ..schemas import FriendRequestIn
 from ..security import normalize_phone
-from ..serializers import activity_public, student_public
+from ..serializers import activity_public, iso, student_public
+from ..services import ranked as ranked_service
+from ..services import season as season_ladder
 from ..ws import hub
 
 router = APIRouter(tags=["social"])
@@ -103,6 +105,10 @@ async def add_friend(
     if existing and existing.status == "accepted":
         raise HTTPException(status.HTTP_409_CONFLICT, "You are already friends.")
     if existing and existing.status == "pending":
+        if existing.friend_id != student.id:
+            # Repeating an outgoing request must not silently accept it on the
+            # sender's behalf. Treat it as an idempotent request instead.
+            return {"ok": True, "status": "pending"}
         existing.status = "accepted"
         events = _friend_events(db, student, target_id, accepted=True)
         db.commit()
@@ -181,13 +187,90 @@ def read_player(player_id: int, db: Session = Depends(get_db), student: Student 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found.")
     payload = student_public(player, viewer_id=student.id)
     payload["online"] = hub.is_online(player.id)
-    payload["is_friend"] = _friendship(db, student.id, player.id) is not None
+    friendship = _friendship(db, student.id, player.id)
+    payload["friendship_status"] = friendship.status if friendship else None
+    payload["direction"] = (
+        "outgoing" if friendship and friendship.student_id == student.id else "incoming" if friendship else None
+    )
+    payload["is_friend"] = bool(friendship and friendship.status == "accepted")
     duels = db.scalar(
         select(func.count(Duel.id))
         .where(Duel.status == "finished")
         .where(Duel.participants.any(student_id=player.id))
     )
     payload["duels_played"] = int(duels or player.duels_played)
+
+    # Public profile additions use a strict allowlist. Do not reuse
+    # student_profile(): it includes private contact and account fields.
+    badge_rows = db.execute(
+        select(Badge, StudentBadge.awarded_at)
+        .join(StudentBadge, StudentBadge.badge_id == Badge.id)
+        .where(StudentBadge.student_id == player.id)
+        .order_by(StudentBadge.awarded_at.desc(), Badge.name.asc())
+        .limit(12)
+    ).all()
+    payload["badges"] = [
+        {
+            "key": badge.key,
+            "name": badge.name,
+            "description": badge.description,
+            "icon": badge.icon,
+            "tier": badge.tier,
+            "awarded_at": iso(awarded_at),
+        }
+        for badge, awarded_at in badge_rows
+    ]
+    payload["badges_total"] = int(
+        db.scalar(select(func.count(StudentBadge.id)).where(StudentBadge.student_id == player.id)) or 0
+    )
+
+    questions_answered = int(player.questions_answered or 0)
+    correct_answers = int(player.correct_answers or 0)
+    payload["stats"] = {
+        "exams_won": int(player.exams_won or 0),
+        "questions_answered": questions_answered,
+        "correct_answers": correct_answers,
+        "accuracy": round(correct_answers / questions_answered * 100, 1) if questions_answered else 0.0,
+        "best_run": int(player.best_run or 0),
+        "ranked_played": int(player.ranked_played or 0),
+        "ranked_won": int(player.ranked_won or 0),
+    }
+
+    rating = int(player.ranked_rating or 1000)
+    ranked_tier = ranked_service.tier_for(rating)
+    tier_payload = next(row for row in ranked_service.tiers_payload() if row["key"] == ranked_tier["key"])
+    ranked_played = int(player.ranked_played or 0)
+    ranked_rank = None
+    if ranked_played:
+        higher = db.scalar(
+            select(func.count(Student.id)).where(
+                Student.ranked_played > 0,
+                or_(
+                    Student.ranked_rating > rating,
+                    (Student.ranked_rating == rating) & (Student.ranked_played > ranked_played),
+                ),
+            )
+        )
+        ranked_rank = int(higher or 0) + 1
+    payload["ranked"] = {
+        "rating": rating,
+        "tier": tier_payload,
+        "played": ranked_played,
+        "won": int(player.ranked_won or 0),
+        "win_rate": round(int(player.ranked_won or 0) / ranked_played * 100, 1) if ranked_played else 0.0,
+        "rank": ranked_rank,
+    }
+    payload["season"] = season_ladder.badge_block(db, player)
+
+    # Match the public arena activity feed's visibility allowlist.
+    public_kinds = ("level", "badge", "duel", "prize")
+    recent = db.scalars(
+        select(Activity)
+        .where(Activity.student_id == player.id, Activity.kind.in_(public_kinds))
+        .order_by(Activity.created_at.desc(), Activity.id.desc())
+        .limit(8)
+    ).all()
+    payload["history"] = [activity_public(row) for row in recent]
     return payload
 
 
@@ -363,5 +446,4 @@ def global_activity(
     payload = _with_reactions(db, rows, student.id)
     for entry, row in zip(payload, rows):
         entry["student"] = student_public(row.student, mask=True) if row.student else None
-        payload.append(entry)
     return payload

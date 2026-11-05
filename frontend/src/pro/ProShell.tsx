@@ -9,6 +9,7 @@
  * command menu (Ctrl+K, or Ctrl+/) reaches every workspace, exam and material.
  */
 import {Search, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, ArrowLeftRight, Settings as SettingsIcon, ChevronDown, Flame} from 'lucide-react';
+import {ChatNavContext, type ChatNavValue} from '../components/AppShell';
 import {api} from '../lib/api';
 import {Ring} from './ui';
 import {MotionConfig} from 'motion/react';
@@ -138,6 +139,13 @@ export default function ProShell({
   const {profile} = useSession();
   const {appearance} = useExperience();
   const [drawer, setDrawer] = useState(false);
+  const [chatThreadOpen, setChatThreadOpen] = useState(false);
+  useEffect(() => { if (tab !== 'messages') setChatThreadOpen(false); }, [tab]);
+  const chatImmersive = tab === 'tutor' || ((tab === 'messages' || tab === 'friends') && chatThreadOpen);
+  const chatNavValue = useMemo<ChatNavValue>(
+    () => ({collapsed: chatImmersive, setThreadOpen: setChatThreadOpen, toggleNav: () => {}}),
+    [chatImmersive],
+  );
   const [palette, setPalette] = useState(false);
   const [account, setAccount] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -195,8 +203,9 @@ export default function ProShell({
   const initials = profile?.initials || (profile?.name || '?').slice(0, 2).toUpperCase();
 
   return (
+    <ChatNavContext.Provider value={chatNavValue}>
     <MotionConfig reducedMotion="always">
-      <div className="pro-app">
+      <div className={`pro-app ${chatImmersive ? 'pro-chat-active' : ''}`}>
         <a href="#pro-main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] pro-btn">
           Skip to content
         </a>
@@ -312,7 +321,7 @@ export default function ProShell({
             id="pro-main"
             ref={mainRef}
             tabIndex={-1}
-            className="pro-main mx-auto w-full max-w-[1280px] min-w-0 px-3 pt-4 pb-28 focus:outline-none sm:px-4 md:px-6 md:pt-7 md:pb-12 lg:px-8"
+            className={`pro-main mx-auto w-full max-w-[1280px] min-w-0 px-3 pt-4 pb-28 focus:outline-none sm:px-4 md:px-6 md:pt-7 md:pb-12 lg:px-8 ${chatImmersive ? 'pro-chat-main' : ''}`}
           >
             <div key={tab} className="pro-page min-w-0">
               {children}
@@ -391,5 +400,6 @@ export default function ProShell({
         />
       </div>
     </MotionConfig>
+    </ChatNavContext.Provider>
   );
 }

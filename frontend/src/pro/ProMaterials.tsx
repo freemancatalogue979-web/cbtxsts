@@ -273,10 +273,10 @@ export default function ProMaterials() {
                     className="pro-card pro-lift flex min-w-0 flex-col gap-3 p-2.5 text-left"
                   >
                     <Cover hue={hue} code={course?.code ?? m.course_title ?? 'General'} glyph={m.kind === 'note' ? <NotebookPen className="size-full" /> : <BookOpen className="size-full" />} className="min-h-[84px]">
-                      <span className="absolute top-3.5 right-3.5 inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
+                      <span className="theme-ok absolute top-3.5 right-3.5 inline-flex items-center gap-1 rounded-full bg-black/25 px-2 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
                         <Clock className="size-3" /> {m.estimated_minutes} min
                       </span>
-                      <p className="mt-5 truncate text-[0.75rem] font-semibold text-white/85">{m.topic || 'General reading'}</p>
+                      <p className="theme-ok mt-5 truncate text-[0.75rem] font-semibold text-white/85">{m.topic || 'General reading'}</p>
                     </Cover>
                     <div className="grid min-w-0 gap-1.5 px-1.5">
                       <p className="text-[0.9375rem] leading-snug font-bold tracking-tight [overflow-wrap:anywhere]" style={{color: 'var(--pro-text)'}}>{m.title}</p>

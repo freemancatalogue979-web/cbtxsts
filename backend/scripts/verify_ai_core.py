@@ -139,14 +139,14 @@ def main() -> None:
         from app.services.course_bank import ensure_bank_quiz
 
         with SessionLocal() as db:
-            course = Course(code=f"LAW{uuid.uuid4().hex[:3].upper()}", title="Law of Torts")
-            db.add(course)
-            db.flush()
+            # Exercise the same active two-course catalogue as the real app;
+            # legacy Law/science courses are deliberately unavailable.
+            course = db.query(Course).filter(Course.code == "ENG 101", Course.is_active.is_(True)).one()
             bank = ensure_bank_quiz(db, course)
             for i in range(24):
-                topic = ["Negligence", "Nuisance", "Defamation"][i % 3]
-                db.add(Question(quiz_id=bank.id, course_id=course.id, position=i, text=f"{topic} question {i}: which is right?", option_a="Right", option_b="Wrong", option_c="Also wrong", option_d="Nope",
-                                correct="A", explanation=f"Because {topic.lower()} rule {i}.", difficulty=["easy", "medium", "hard"][i % 3], topic=topic))
+                topic = ["Grammar", "Vocabulary", "Punctuation"][i % 3]
+                db.add(Question(quiz_id=bank.id, course_id=course.id, position=100 + i, text=f"{topic} practice item {i}: which option is correct?", option_a="Correct", option_b="Incorrect", option_c="Also incorrect", option_d="No other choice",
+                                correct="A", explanation=f"This tests the {topic.lower()} rule {i}.", difficulty=["easy", "medium", "hard"][i % 3], topic=topic))
             db.commit()
             course_id, course_code = course.id, course.code
 
@@ -155,9 +155,12 @@ def main() -> None:
         student_tools, staff_tools = set(registry.names_for(registry.STUDENT)), set(registry.names_for(registry.STAFF))
         check("students get learning tools", {"search_question_bank", "get_my_progress", "create_mini_exam", "search_course_material"} <= student_tools, student_tools)
         check("students never get staff/writing tools", not (student_tools & {"propose_questions", "propose_topics", "propose_classification", "get_student_report", "get_class_performance", "analyze_question_bank"}), student_tools & staff_tools)
-        check("no destructive tools exist at all", not any(n.startswith(("delete_", "drop_", "grant_", "change_score", "set_score")) for n in student_tools | staff_tools))
+        direct_question_tools = {"delete_questions", "remove_duplicate_questions", "restore_deleted_questions"}
+        check("direct question tools are staff-only", direct_question_tools <= staff_tools and not (direct_question_tools & student_tools), (direct_question_tools & staff_tools, direct_question_tools & student_tools))
+        other_direct_destructive = {n for n in staff_tools if n.startswith(("delete_", "drop_", "grant_", "change_score", "set_score")) and n not in direct_question_tools}
+        check("no other direct destructive tools exist", not other_direct_destructive, other_direct_destructive)
 
-        code, conv = call("POST", "/tutor/conversations", {"title": "Torts"}, me)
+        code, conv = call("POST", "/tutor/conversations", {"title": "English practice"}, me)
         cid = conv["id"] if isinstance(conv, dict) and "id" in conv else conv.get("conversation", {}).get("id")
 
         # the model tries a staff tool, sends bad args, then does it properly
@@ -165,7 +168,7 @@ def main() -> None:
             calls(("propose_questions", {"course_id": course_id, "questions": []}), ("get_course_topics", {"course_id": "abc"})),
             lambda m, t: (tool_results(m), reply("Tried."))[1],
         ]
-        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Explain negligence", "context": {"course_id": course_id}}, me)
+        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Explain subject–verb agreement", "context": {"course_id": course_id}}, me)
         ev = sse(text if isinstance(text, str) else json.dumps(text))
         tools = [d for e, d in ev if e == "tool" and d.get("status") != "running"]
         check("staff tool from a student → denied", any(t["name"] == "propose_questions" and t["status"] == "denied" for t in tools), tools)
@@ -180,20 +183,20 @@ def main() -> None:
         SEEN.clear()
         SCRIPT[:] = [
             calls(("get_course_topics", {"course_id": course_id})),
-            calls(("create_mini_exam", {"course_id": course_id, "topics": ["Negligence", "Nuisance"], "question_count": 6, "duration_minutes": 8, "difficulty": "mixed", "title": "Torts warm-up"})),
-            reply("Your **Torts warm-up** is ready — press Start when you are."),
+            calls(("create_mini_exam", {"course_id": course_id, "topics": ["Grammar", "Punctuation"], "question_count": 6, "duration_minutes": 8, "difficulty": "mixed", "title": "English warm-up"})),
+            reply("Your **English warm-up** is ready — press Start when you are."),
         ]
-        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Give me a 6-question test on negligence and nuisance", "context": {"course_id": course_id}}, me)
+        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Give me a 6-question test on grammar and punctuation", "context": {"course_id": course_id}}, me)
         ev = sse(text)
         kinds = [e for e, _ in ev]
         check("stream: meta → tool → delta → actions → done", kinds[0] == "meta" and "tool" in kinds and "delta" in kinds and kinds[-2:] == ["actions", "done"], kinds)
         answer = "".join(d["text"] for e, d in ev if e == "delta")
-        check("final answer streamed", "Torts warm-up" in answer, answer)
+        check("final answer streamed", "English warm-up" in answer, answer)
         actions = next(d["actions"] for e, d in ev if e == "actions")
         card = actions[0]
         check("mini-exam card action", card["type"] == "mini_exam" and card["question_count"] == 6 and card["duration_minutes"] == 8 and card["course"] == course_code, card)
         topics_seen = tool_results(SEEN[1][0]).get("get_course_topics")
-        check("tool results reach the model (minimal data)", topics_seen and "Negligence" in json.dumps(topics_seen) and "correct" not in json.dumps(topics_seen), topics_seen)
+        check("tool results reach the model (minimal data)", topics_seen and "Grammar" in json.dumps(topics_seen) and "correct" not in json.dumps(topics_seen), topics_seen)
         code, full = call("GET", f"/tutor/conversations/{cid}", token=me)
         last = full["messages"][-1]
         check("saved answer keeps tools + card", last["role"] == "assistant" and last["meta"].get("actions", [{}])[0].get("id") == card["id"] and last["meta"].get("tools"), last.get("meta"))
@@ -211,15 +214,15 @@ def main() -> None:
         code, ex = call("POST", f"/ai/mini-exams/{eid}/start", token=me)
         check("start → in progress with a backend deadline", code == 200 and ex["status"] == "in_progress" and 0 < ex["seconds_left"] <= 8 * 60, ex.get("seconds_left"))
         check("answers never sent before the finish", len(ex["questions"]) == 6 and all("correct" not in q and "explanation" not in q for q in ex["questions"]), ex["questions"][0])
-        check("only the chosen topics", all(q.get("topic") in {"Negligence", "Nuisance"} for q in ex["questions"]), [q.get("topic") for q in ex["questions"]])
+        check("only the chosen topics", all(q.get("topic") in {"Grammar", "Punctuation"} for q in ex["questions"]), [q.get("topic") for q in ex["questions"]])
         qs = ex["questions"]
         with SessionLocal() as db:
             truth = {q.id: q.correct for q in db.query(Question).filter(Question.id.in_([q["question_id"] for q in qs]))}
         picks = {}
-        skip = next(q["question_id"] for q in reversed(qs) if q["topic"] == "Nuisance")
+        skip = next(q["question_id"] for q in reversed(qs) if q["topic"] == "Punctuation")
         for q in qs:
-            # right on Negligence, wrong on Nuisance (so weak/strong topics show up)
-            letter = truth[q["question_id"]] if q["topic"] == "Negligence" else next(x for x in "ABCD" if x != truth[q["question_id"]])
+            # right on Grammar, wrong on Punctuation (so weak/strong topics show up)
+            letter = truth[q["question_id"]] if q["topic"] == "Grammar" else next(x for x in "ABCD" if x != truth[q["question_id"]])
             if q["question_id"] == skip:
                 continue  # leave one unanswered
             picks[q["question_id"]] = letter
@@ -232,14 +235,14 @@ def main() -> None:
         expected = sum(1 for qid, letter in picks.items() if truth[qid] == letter)
         check("finish scores on the server", code == 200 and done["status"] == "submitted" and done["score"] == expected, (done.get("score"), expected))
         an = done.get("analysis") or {}
-        check("analysis: percentage, weak + strong topics, actions", "percentage" in an and "Nuisance" in json.dumps(an.get("weak_topics")) and "Negligence" in json.dumps(an.get("strong_topics")) and an.get("recommended_actions"), an)
+        check("analysis: percentage, weak + strong topics, actions", "percentage" in an and "Punctuation" in json.dumps(an.get("weak_topics")) and "Grammar" in json.dumps(an.get("strong_topics")) and an.get("recommended_actions"), an)
         check("answers + explanations revealed after finish", all("correct" in q and "explanation" in q for q in done["questions"]), done["questions"][0])
         check("no answering after finish", call("POST", f"/ai/mini-exams/{eid}/answer", {"question_id": qs[1]["question_id"], "selected": "A"}, me)[0] == 409)
         with SessionLocal() as db:
             from app.security import decode_token
             sid = int(decode_token(me).subject)
             prog = {p.topic: p for p in db.query(StudentTopicProgress).filter(StudentTopicProgress.user_id == sid)}
-        check("topic mastery updated from the mini exam", "Negligence" in prog and "Nuisance" in prog, list(prog))
+        check("topic mastery updated from the mini exam", "Grammar" in prog and "Punctuation" in prog, list(prog))
         code, fb = call("POST", f"/ai/mini-exams/{eid}/feedback", token=me)
         check("AI feedback written + stored", code == 200 and fb["feedback"]["headline"] == "Solid start" and not fb["cached"], fb)
         check("feedback cached (no second AI call)", call("POST", f"/ai/mini-exams/{eid}/feedback", token=me)[1].get("cached") is True)
@@ -267,12 +270,12 @@ def main() -> None:
         SEEN.clear()
         SCRIPT[:] = [
             calls(("analyze_question_bank", {"course_id": course_id})),
-            calls(("propose_questions", {"course_id": course_id, "rationale": "Defamation is thin.", "questions": [
-                {"text": "Which defence applies to a true statement?", "option_a": "Justification", "option_b": "Consent", "option_c": "Necessity", "option_d": "Volenti", "correct": "A", "explanation": "Truth is a complete defence.", "topic": "Defamation", "difficulty": "medium"},
-                {"text": "Libel is defamation in what form?", "option_a": "Permanent", "option_b": "Spoken", "option_c": "Implied", "option_d": "None", "correct": "A", "explanation": "Libel is permanent form.", "topic": "Defamation", "difficulty": "easy"},
-                {"text": "Negligence question 0: which is right?", "option_a": "Right", "option_b": "Wrong", "correct": "A", "topic": "Negligence"},
-            ]}), ("propose_topics", {"course_id": course_id, "topics": [{"name": "Vicarious Liability", "description": "Employer liability.", "learning_objectives": ["Explain the close connection test"]}]})),
-            reply("I've drafted 2 new Defamation questions and one topic for your review."),
+            calls(("propose_questions", {"course_id": course_id, "rationale": "Punctuation is thin.", "questions": [
+                {"text": "Which sentence uses its correctly?", "option_a": "The dog wagged its tail.", "option_b": "The dog wagged it's tail.", "option_c": "The dog wagged its' tail.", "option_d": "The dog wagged it is tail.", "correct": "A", "explanation": "Its is the possessive form; it's means it is.", "topic": "Vocabulary", "difficulty": "medium"},
+                {"text": "Which spelling is correct?", "option_a": "accommodate", "option_b": "acommodate", "option_c": "accomodate", "option_d": "accomodation", "correct": "A", "explanation": "Accommodate has a double c and a double m.", "topic": "Vocabulary", "difficulty": "easy"},
+                {"text": "Grammar practice item 0: which option is correct?", "option_a": "Right", "option_b": "Wrong", "correct": "A", "topic": "Grammar"},
+            ]}), ("propose_topics", {"course_id": course_id, "topics": [{"name": "Word Formation", "description": "How words are built from roots and affixes.", "learning_objectives": ["Identify common prefixes and suffixes."]}]})),
+            reply("I've drafted 2 new English questions and one topic for your review."),
         ]
         with SessionLocal() as db:
             before_q = db.query(Question).filter(Question.course_id == course_id).count()
@@ -288,19 +291,19 @@ def main() -> None:
         tprop = next(p for p in plist["proposals"] if p["kind"] == "topics")
         code, detail = call("GET", f"/admin/ai/proposals/{qprop['id']}", token=staff)
         items = detail["payload"]["items"]
-        check("proposal preview holds the drafted questions", len(items) == 3 and items[0]["text"].startswith("Which defence"), items)
+        check("proposal preview holds the drafted questions", len(items) == 3 and items[0]["text"].startswith("Which sentence"), items)
         check("near-duplicate of a bank question flagged", items[2].get("possible_duplicate") and not items[0].get("possible_duplicate"), items[2])
         check("students can't see proposals", call("GET", "/admin/ai/proposals", token=me)[0] in (401, 403))
-        edited = [dict(items[0], explanation="Truth (justification) is a complete defence to defamation.")]
+        edited = [dict(items[0], explanation="The possessive pronoun theirs stands alone; their modifies a noun.")]
         code, res = call("POST", f"/admin/ai/proposals/{qprop['id']}/approve", {"selected": [0], "items": edited}, staff)
         check("approve with edits → saved", code == 200 and res["status"] == "approved", res)
         with SessionLocal() as db:
             saved = db.query(Question).filter(Question.course_id == course_id, Question.text == items[0]["text"]).all()
-            check("only the selected, edited question joined the bank", len(saved) == 1 and saved[0].explanation.startswith("Truth (justification)") and db.query(Question).filter(Question.course_id == course_id).count() == before_q + 1, [(q.text, q.explanation) for q in saved])
+            check("only the selected, edited question joined the bank", len(saved) == 1 and saved[0].explanation.startswith("The possessive pronoun theirs") and db.query(Question).filter(Question.course_id == course_id).count() == before_q + 1, [(q.text, q.explanation) for q in saved])
         check("can't approve twice", call("POST", f"/admin/ai/proposals/{qprop['id']}/approve", {}, staff)[0] == 409)
         code, res = call("POST", f"/admin/ai/proposals/{tprop['id']}/reject", {"reason": "Not in this syllabus"}, staff)
         with SessionLocal() as db:
-            check("rejected topic not created", code == 200 and res["status"] == "rejected" and not db.query(CourseTopic).filter(CourseTopic.course_id == course_id, CourseTopic.name == "Vicarious Liability").count(), res)
+            check("rejected topic not created", code == 200 and res["status"] == "rejected" and not db.query(CourseTopic).filter(CourseTopic.course_id == course_id, CourseTopic.name == "Word Formation").count(), res)
             check("proposals stored separately with status", {p.status for p in db.query(AIProposal)} >= {"approved", "rejected"})
 
         print("staff assistant: leaked tool markup, final round, streaming, thinking, stop")
@@ -399,7 +402,7 @@ def main() -> None:
         check("limits are bounded (0..10000)", call("PUT", "/admin/tutor/settings", {"ai_staff_daily_limit": 10**9}, staff)[0] == 422)
         call("PUT", "/admin/tutor/settings", {"ai_agent_enabled": False}, staff)
         SEEN.clear()
-        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Give me a 10 question test on torts"}, me)
+        code, text = call("POST", f"/tutor/conversations/{cid}/messages", {"content": "Give me a 10 question test on grammar"}, me)
         check("agent off → 'make a test' falls back to the practice generator", code == 200 and isinstance(text, dict) and text.get("route") == "generate" and text.get("kind") == "practice", text)
     finally:
         server.should_exit = True

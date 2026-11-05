@@ -156,27 +156,43 @@ def other_label(order: list[str], canonical: str) -> str:
 # ---------------------------------------------------------------------------
 # 1 + 2. catalog and setup rules
 # ---------------------------------------------------------------------------
-def check_catalog(admin: str, student: str) -> dict:
+def check_catalog(admin: str, student: str) -> dict | None:
     print("\n[1] practice catalog")
     status, catalog = call("GET", "/arena/practice/catalog", token=student)
     check("catalog loads", status == 200, (status, catalog))
-    courses = catalog["courses"]
-    check("at least one course offers practice", len(courses) >= 1, courses)
-    juris = next((row for row in courses if "Computer Science" in row["title"]), None)
-    check("Computer Science course listed", juris is not None, [row["title"] for row in courses])
-    topics = {row["topic"]: row for row in (juris["topics"] if juris else [])}
-    check(
-        "Algorithms topic present with its count",
-        topics.get("Algorithms", {}).get("count", 0) >= 1,
-        topics,
-    )
-    check("course availability equals the sum of its topics", juris["available"] == sum(row["count"] for row in juris["topics"]), juris)
+    courses = catalog.get("courses", []) if isinstance(catalog, dict) else []
+    codes = {row.get("code") for row in courses}
+    supported = {"ENG 101", "MTH 101"}
+    check("English and Mathematics are available", supported <= codes, sorted(codes))
+    check("no unsupported courses appear in the player catalog", bool(courses) and codes <= supported, sorted(codes))
+    if not courses:
+        check("at least one course offers practice", False, courses)
+        return None
+
+    candidates = [row for row in courses if row.get("code") in supported and row.get("available", 0) > 0]
+    course = next((row for row in candidates if row.get("code") == "MTH 101"), None)
+    course = course or (max(candidates, key=lambda row: row.get("available", 0)) if candidates else None)
+    if course is None:
+        check("an English or Mathematics course offers practice", False, [row.get("title") for row in courses])
+        return None
+
+    topics = course.get("topics") or []
+    usable_topics = [row for row in topics if 0 < int(row.get("count", 0)) < 50]
+    if not usable_topics:
+        check("a real topic has questions below the custom-run limit", False, topics)
+        return None
+    test_topic = min(usable_topics, key=lambda row: int(row["count"]))
+    course["test_topic"] = test_topic
+    check("a supported course has an available practice topic", True, test_topic)
+    check("course availability equals the sum of its topics",
+          course["available"] == sum(row["count"] for row in topics), course)
 
     print("\n[2] setup rules — the bank decides the maximum")
+    count = int(test_topic["count"])
     status, payload = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Algorithms", "size": 20, "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": course["id"], "topic": test_topic["topic"], "size": count + 1, "time_limit_seconds": 600},
         token=student,
     )
     check("requesting more than the bank holds is refused", status == 409, (status, payload))
@@ -186,41 +202,41 @@ def check_catalog(admin: str, student: str) -> dict:
     announced = _re.search(r"Only (\d+) questions? are available", refused)
     check(
         "the refusal says exactly how many exist",
-        bool(announced) and int(announced.group(1)) == topics["Algorithms"]["count"] and "available" in refused,
+        bool(announced) and int(announced.group(1)) == count and "available" in refused,
         refused,
     )
 
     status, payload = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Nowhere", "size": 5, "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": course["id"], "topic": "Nowhere", "size": 5, "time_limit_seconds": 600},
         token=student,
     )
     check("empty topic is refused, not silently widened", status == 409, (status, payload))
-    return juris
+    return course
 
 
 # ---------------------------------------------------------------------------
 # 3 + 4 + 5. one full run: random, unique, shuffled, refresh-proof
 # ---------------------------------------------------------------------------
-def check_full_run(admin: str, student: str, juris: dict) -> None:
+def check_full_run(admin: str, student: str, course: dict) -> None:
     print("\n[3] random unique selection + shuffled order")
-    size = min(8, juris["available"])
+    size = min(8, course["available"])
     status, default_run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "", "size": 0, "time_limit_seconds": 1200},
+        {"mode": "custom", "course_id": course["id"], "topic": "", "size": 0, "time_limit_seconds": 1200},
         token=student,
     )
     check(
         "an unset size falls back to the bank's real maximum",
-        status == 200 and len(default_run["questions"]) == min(20, juris["available"]),
-        (status, len(default_run.get("questions") or []), juris["available"]),
+        status == 200 and len(default_run["questions"]) == min(20, course["available"]),
+        (status, len(default_run.get("questions") or []), course["available"]),
     )
     status, run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "", "size": size, "time_limit_seconds": 1200},
+        {"mode": "custom", "course_id": course["id"], "topic": "", "size": size, "time_limit_seconds": 1200},
         token=student,
     )
     check("run starts with the requested size", status == 200 and len(run["questions"]) == size, (status, run))
@@ -357,16 +373,23 @@ def check_full_run(admin: str, student: str, juris: dict) -> None:
 # ---------------------------------------------------------------------------
 # 6. the server clock
 # ---------------------------------------------------------------------------
-def check_server_clock(student: str, juris: dict) -> None:
+def check_server_clock(student: str, course: dict) -> None:
     print("\n[6] the timer belongs to the server")
-    positivism = next((row["count"] for row in juris["topics"] if row["topic"] == "Number Systems"), 0)
+    topic = course.get("test_topic")
+    if not topic:
+        check("clock test has an available course topic", False, course)
+        return
+    topic_name = topic["topic"]
+    available = int(topic["count"])
     status, run = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Number Systems", "size": min(3, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": course["id"], "topic": topic_name, "size": min(3, available), "time_limit_seconds": 600},
         token=student,
     )
     check("timed run starts", status == 200, (status, run))
+    if status != 200 or not run.get("questions"):
+        return
     token = run["token"]
     question = run["questions"][0]
     time.sleep(3)  # let the aged window (started + 2s) pass for real
@@ -386,9 +409,12 @@ def check_server_clock(student: str, juris: dict) -> None:
     status, fresh = call(
         "POST",
         "/arena/practice/start",
-        {"mode": "custom", "course_id": juris["id"], "topic": "Number Systems", "size": min(2, positivism), "time_limit_seconds": 600},
+        {"mode": "custom", "course_id": course["id"], "topic": topic_name, "size": min(2, available), "time_limit_seconds": 600},
         token=student,
     )
+    check("a second timed run starts", status == 200, (status, fresh))
+    if status != 200 or not fresh.get("questions"):
+        return
     token = fresh["token"]
     call("POST", "/arena/practice/answer", {"token": token, "question_id": fresh["questions"][0]["id"], "selected": "A", "elapsed_ms": 500}, token=student)
     time.sleep(3)
@@ -407,52 +433,70 @@ def check_server_clock(student: str, juris: dict) -> None:
 # ---------------------------------------------------------------------------
 # 8. the upload path — correct answer as real text
 # ---------------------------------------------------------------------------
-def check_text_answers(admin: str, juris_course_id: int) -> None:
+def check_text_answers(admin: str, course: dict) -> None:
     print("\n[8] uploads may state the correct answer as its actual text")
     status, quizzes = call("GET", "/admin/quizzes", token=admin)
-    quiz = next(row for row in quizzes if row["course"] and row["course"]["id"] == juris_course_id)
-    status, created = call(
-        "POST",
-        f"/admin/quizzes/{quiz['id']}/questions",
-        {
-            "text": "Who is regarded as the father of the Historical School of Jurisprudence?",
-            "option_a": "John Austin",
-            "option_b": "Savigny",
-            "option_c": "Jeremy Bentham",
-            "option_d": "Roscoe Pound",
-            "correct": "Savigny",
-            "explanation": "Savigny founded the Historical School, emphasising the Volksgeist.",
-            "topic": "Historical School",
-        },
-        token=admin,
-    )
-    check("single upload accepts the answer text", status == 200 and created["correct"] == "B", (status, created))
+    quiz = next((row for row in quizzes if row.get("course") and row["course"].get("id") == course["id"]), None)
+    check("an English or Mathematics quiz is available for the upload test", quiz is not None, course.get("code"))
+    if quiz is None:
+        return
+
+    if course.get("code") == "ENG 101":
+        question = {
+            "text": "Which sentence uses the apostrophe correctly?",
+            "option_a": "The students book is here.",
+            "option_b": "The student's book is here.",
+            "option_c": "The students' book are here.",
+            "option_d": "The student book is here.",
+            "correct": "The student's book is here.",
+            "explanation": "The apostrophe marks the singular possessive form.",
+            "topic": "Grammar",
+        }
+        paper = (
+            f"Choose the correctly spelled word (paste check {digits(4)}).\n"
+            "A. accomodate\nB. accommodate\nC. accommodation\nD. accomadate\n"
+            "Answer: accommodate\nExplanation: The standard spelling is accommodate.\n"
+        )
+    else:
+        question = {
+            "text": "What is 25% of 80?",
+            "option_a": "15",
+            "option_b": "20",
+            "option_c": "25",
+            "option_d": "40",
+            "correct": "20",
+            "explanation": "25% is one quarter, and one quarter of 80 is 20.",
+            "topic": "Fractions & Percentages",
+        }
+        paper = (
+            f"What is 18 divided by 3 (paste check {digits(4)})?\n"
+            "A. 5\nB. 6\nC. 7\nD. 8\n"
+            "Answer: 6\nExplanation: 18 divided by 3 equals 6.\n"
+        )
+
+    status, created = call("POST", f"/admin/quizzes/{quiz['id']}/questions", question, token=admin)
+    check("single upload accepts the answer text", status == 200 and created.get("correct") == "B", (status, created))
+    if status != 200 or not isinstance(created, dict):
+        return
+    created_id = created.get("id")
     check("the stored answer is the canonical key, not the text", created["correct"] in ("A", "B", "C", "D"), created["correct"])
 
-    paper = (
-        f"Who defined law as the command of the sovereign? (paste check {digits(4)})\n"
-        "A. H.L.A. Hart\n"
-        "B. John Austin\n"
-        "C. Roscoe Pound\n"
-        "D. Thomas Aquinas\n"
-        "Answer: John Austin\n"
-        "Explanation: Austin's command theory in a single line.\n"
-    )
     status, bulk = call(
         "POST",
         f"/admin/quizzes/{quiz['id']}/questions/bulk",
         {"raw": paper, "mode": "append"},
         token=admin,
     )
+    bulk_questions = bulk.get("questions", []) if isinstance(bulk, dict) else []
     check(
         "bulk paste accepts the answer text too",
-        status == 200 and bulk["created"] == 1 and bulk["rejected"] == 0 and not bulk["errors"],
+        status == 200 and bulk.get("created") == 1 and bulk.get("rejected") == 0 and not bulk.get("errors"),
         (status, bulk),
     )
     check(
         "the pasted text answer lands on the right canonical key",
-        status == 200 and [row["correct"] for row in bulk["questions"]] == ["B"],
-        bulk.get("questions"),
+        status == 200 and [row["correct"] for row in bulk_questions] == ["B"],
+        bulk_questions,
     )
 
     status, ambiguous = call(
@@ -487,8 +531,8 @@ def check_text_answers(admin: str, juris_course_id: int) -> None:
     )
     check("an unknown text answer is rejected", status == 422, (status, nonsense))
 
-    # cleanup: remove the questions this check added (leave the bank as found)
-    created_ids = [created["id"]] + [row["id"] for row in (bulk.get("questions") or []) if isinstance(row, dict) and row.get("id")]
+    # cleanup: remove the questions this check added (leave the bank as found).
+    created_ids = ([created_id] if created_id else []) + [row["id"] for row in bulk_questions if isinstance(row, dict) and row.get("id")]
     for question_id in created_ids:
         call("DELETE", f"/admin/questions/{question_id}", token=admin)
 
@@ -519,10 +563,11 @@ def check_legacy_modes(student: str) -> None:
 def main() -> None:
     admin = admin_token()
     student, _profile = new_student()
-    juris = check_catalog(admin, student)
-    check_full_run(admin, student, juris)
-    check_server_clock(student, juris)
-    check_text_answers(admin, juris["id"])
+    course = check_catalog(admin, student)
+    if course is not None:
+        check_full_run(admin, student, course)
+        check_server_clock(student, course)
+        check_text_answers(admin, course)
     check_legacy_modes(student)
 
     print(f"\npractice suite: {PASSED} passed, {FAILED} failed")

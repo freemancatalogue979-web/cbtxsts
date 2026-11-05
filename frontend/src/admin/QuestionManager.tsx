@@ -162,6 +162,9 @@ export default function QuestionManager({
   const [historyFor, setHistoryFor] = useState<QuestionPublic | null>(null);
   const [versions, setVersions] = useState<{version: number; created_at: string; note?: string; author?: string}[] | null>(null);
   const [statsFor, setStatsFor] = useState<{question_id: number; stats: {answered: number; correct: number; accuracy: number; avg_ms: number}; most_wrong: string[]} | null>(null);
+  const [flagFor, setFlagFor] = useState<QuestionPublic | null>(null);
+  const [flagReason, setFlagReason] = useState('');
+  const [flagBusy, setFlagBusy] = useState(false);
 
   const filtering = Boolean(query.trim() || statusFilter || flaggedOnly || topicFilter || difficultyFilter || sortKey !== 'position');
 
@@ -244,15 +247,23 @@ export default function QuestionManager({
     }
   };
 
-  const flag = async (question: QuestionPublic) => {
-    const reason = window.prompt('Why is this question being flagged?', question.flag_reason ?? '');
-    if (reason === null) return;
+  const flag = (question: QuestionPublic) => {
+    setFlagFor(question);
+    setFlagReason(question.flag_reason ?? '');
+  };
+
+  const submitFlag = async () => {
+    if (!flagFor || flagBusy) return;
+    setFlagBusy(true);
     try {
-      await api.admin.studio.flag(question.id, {reason});
+      await api.admin.studio.flag(flagFor.id, {reason: flagReason.trim().slice(0, 240)});
       toast('info', 'Flagged for review');
+      setFlagFor(null);
       load();
     } catch (error) {
       toast('error', 'Could not flag', (error as Error).message);
+    } finally {
+      setFlagBusy(false);
     }
   };
 
@@ -803,7 +814,7 @@ export default function QuestionManager({
                 </Select>
               </Field>
               <Field label="Topic">
-                <TextInput value={editing.topic} onChange={(event) => setEditing({...editing, topic: event.target.value})} placeholder="e.g. Constitutional Law" />
+                <TextInput value={editing.topic} onChange={(event) => setEditing({...editing, topic: event.target.value})} placeholder="e.g. Grammar" />
               </Field>
               <Field label="Subtopic">
                 <TextInput value={editing.subtopic} onChange={(event) => setEditing({...editing, subtopic: event.target.value})} />
@@ -900,13 +911,13 @@ export default function QuestionManager({
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 font-mono text-[0.74rem] leading-relaxed text-mist-400">
  <p className="font-sans text-[0.72rem] font-black tracking-[0.16em] text-mist-500">Format</p>
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{`1. Which court has original jurisdiction over presidential elections?
-A. Supreme Court
-B. Court of Appeal
-C. Federal High Court
-D. National Industrial Court
-Answer: Court of Appeal
-Explanation: Section 246(1)(a) of the 1999 Constitution.
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{`1. Which word is a noun?
+A. Quickly
+B. Gentle
+C. Library
+D. Bright
+Answer: Library
+Explanation: A noun names a person, place, thing or idea.
 
 2. Next question...`}</pre>
             <p className="mt-2 font-sans text-[0.7rem] font-semibold text-mist-500">
@@ -1100,6 +1111,33 @@ Explanation: Section 246(1)(a) of the 1999 Constitution.
                 <p className="mt-1 font-mono text-[0.78rem] font-bold text-mist-300">{statsFor.most_wrong.join(' · ')}</p>
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal icon={Flag} tone="flare"
+        open={Boolean(flagFor)}
+        onClose={() => { if (!flagBusy) setFlagFor(null); }}
+        title="Flag question for review"
+        subtitle={flagFor ? `Question ${flagFor.id} · Explain what needs a closer look.` : undefined}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={flagBusy} onClick={() => setFlagFor(null)}>Cancel</Button>
+            <Button variant="danger" loading={flagBusy} onClick={() => void submitFlag()} icon={<Flag className="size-4" />}>
+              Flag for review
+            </Button>
+          </>
+        }
+      >
+        {flagFor && (
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-[0.78rem] font-semibold leading-relaxed text-mist-300 [overflow-wrap:anywhere]">
+              {flagFor.text}
+            </div>
+            <Field label="Reason" hint="Optional · up to 240 characters">
+              <TextArea value={flagReason} onChange={(event) => setFlagReason(event.target.value.slice(0, 240))} maxLength={240} rows={3} placeholder="e.g. Incorrect key or unclear wording" />
+            </Field>
           </div>
         )}
       </Modal>

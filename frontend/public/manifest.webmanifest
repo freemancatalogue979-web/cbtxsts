@@ -11,8 +11,24 @@
     "minimal-ui"
   ],
   "orientation": "portrait",
-  "background_color": "#07030f",
-  "theme_color": "#07030f",
+  "screenshots": [
+    {
+      "src": "/brand/ag-screen-phone.jpg",
+      "sizes": "720x1536",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Absolute Genesis on a phone"
+    },
+    {
+      "src": "/brand/ag-screen-wide.jpg",
+      "sizes": "1280x800",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Absolute Genesis on desktop"
+    }
+  ],
+  "background_color": "#eaf4ff",
+  "theme_color": "#eaf4ff",
   "lang": "en-NG",
   "dir": "ltr",
   "categories": [
@@ -76,22 +92,6 @@
           "type": "image/png"
         }
       ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/brand/ag-screen-phone.jpg",
-      "sizes": "780x1688",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "Live CBT exams on your phone"
-    },
-    {
-      "src": "/brand/ag-screen-wide.jpg",
-      "sizes": "1280x800",
-      "type": "image/jpeg",
-      "form_factor": "wide",
-      "label": "Absolute Genesis on a computer"
     }
   ]
 }

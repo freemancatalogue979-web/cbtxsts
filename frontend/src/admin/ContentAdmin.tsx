@@ -74,7 +74,7 @@ export function CourseBadge({course, className = ''}: {course: Pick<Course, 'cod
   );
 }
 
-/** "Random 40 of 2,000 · LAW 411" / "Exam-specific · 12 questions". */
+/** "Random 40 of 2,000 · ENG 101" / "Exam-specific · 12 questions". */
 export function sourceSummary(quiz: Quiz): string {
   if (quiz.question_source === 'course_random') {
     const bank = typeof quiz.bank_size === 'number' ? ` of ${formatNumber(quiz.bank_size)} in bank` : '';
@@ -131,14 +131,18 @@ function CourseEditor({
     >
       {editing && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <Field label="Code">
-            <TextInput value={editing.code} maxLength={24} placeholder="LAW 411" onChange={(event) => setEditing({...editing, code: event.target.value.toUpperCase()})} />
+          <Field label="Course" aside={<span className="font-bold text-mist-500">English or Mathematics only</span>}>
+            <Select value={editing.code} onChange={(event) => setEditing({...editing, code: event.target.value})} label="Course">
+              <option value="">Choose a supported course</option>
+              <option value="ENG 101">ENG 101 — English</option>
+              <option value="MTH 101">MTH 101 — Mathematics</option>
+            </Select>
           </Field>
           <Field label="Credit units">
             <TextInput type="number" min={0} max={12} value={editing.credit_units} onChange={(event) => setEditing({...editing, credit_units: Number(event.target.value)})} />
           </Field>
           <Field label="Title" className="col-span-2">
-            <TextInput value={editing.title} placeholder="e.g. Nigerian Constitutional Law" onChange={(event) => setEditing({...editing, title: event.target.value})} />
+            <TextInput value={editing.title} placeholder="e.g. English Language" onChange={(event) => setEditing({...editing, title: event.target.value})} />
           </Field>
           <Field label="Description" className="col-span-2" aside={<span>{editing.description.length}/400</span>}>
             <TextArea rows={2} maxLength={400} value={editing.description} placeholder="What players will learn in this course" onChange={(event) => setEditing({...editing, description: event.target.value})} />
@@ -164,9 +168,9 @@ function CourseEditor({
                     role="radio"
                     aria-checked={active}
                     onClick={() => setEditing({...editing, accent})}
-                    className={`flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-[0.8rem] font-bold capitalize transition ${active ? 'border-white/40 bg-white/[0.08] text-white' : 'border-white/10 bg-white/[0.02] text-mist-400 hover:border-white/20 hover:text-mist-200'}`}
+                    className={`flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-[0.8rem] font-bold capitalize transition ${active ? 'border-white/40 bg-white/[0.08] text-mist-50' : 'border-white/10 bg-white/[0.02] text-mist-400 hover:border-white/20 hover:text-mist-200'}`}
                   >
-                    <span className={`grid size-6 place-items-center rounded-full ${ACCENT_SWATCH[accent]}`}>{active && <Check className="size-3.5 text-white" strokeWidth={3} />}</span>
+                    <span className={`theme-ok grid size-6 place-items-center rounded-full ${ACCENT_SWATCH[accent]}`}>{active && <Check className="size-3.5 text-white" strokeWidth={3} />}</span>
                     {accent}
                   </button>
                 );
@@ -478,7 +482,7 @@ function ExamEditor({
     >
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
         <Field label="Title" className="sm:col-span-2">
-          <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} placeholder="LAW 411 Mid-semester test" />
+          <TextInput value={editing.title} onChange={(event) => setEditing({...editing, title: event.target.value})} placeholder="MTH 101 Mid-semester test" />
         </Field>
 
         {/* ------------------------------------------------ QUESTION SOURCE */}

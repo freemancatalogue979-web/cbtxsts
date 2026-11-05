@@ -12,7 +12,6 @@ database; usernames are fixed, so a second run fails on registration.
 """
 
 import json
-import random
 import sys
 import urllib.error
 import urllib.request
@@ -44,16 +43,20 @@ def token(r):
     return r.get("token") or r.get("access_token")
 
 
-def register(user, name):
-    phone = "0803" + str(random.randint(1000000, 9999999))
-    return token(call("POST", "/auth/register", {"username": user, "phone": phone, "password": PASSWORD, "display_name": name}))
+def register(user, name, phone, country):
+    session = call("POST", "/auth/register", {
+        "username": user, "phone": phone, "password": PASSWORD, "display_name": name,
+    })
+    tok = token(session)
+    call("PATCH", "/me", {"country": country}, tok)
+    return tok
 
 
 admin = token(call("POST", "/auth/admin", {"email": "admin@quizarena.ng", "password": "arena2026"}))
 
 
-def teacher(user, name, headline, bio, specs, years, inst, verify):
-    t = register(user, name)
+def teacher(user, name, phone, country, headline, bio, specs, years, inst, verify):
+    t = register(user, name, phone, country)
     call("PUT", "/teachers/me/profile", {
         "headline": headline, "bio": bio, "experience_years": years,
         "experience": "Taught secondary and university students.", "institution": inst,
@@ -71,17 +74,25 @@ def teacher(user, name, headline, bio, specs, years, inst, verify):
     return t, pid
 
 
-T, tid = teacher("adaeze", "Adaeze Okafor", "Calculus & physics tutor for first-year students",
-                 "I help first-year students build intuition for calculus and mechanics with worked examples, short quizzes and weekly check-ins tailored to each learner.",
-                 [{"subject": "Mathematics", "topics": ["Calculus", "Algebra"]}, {"subject": "Physics", "topics": ["Mechanics"]}], 8, "University of Port Harcourt", True)
-teacher("emeka", "Emeka Nwosu", "Organic chemistry made simple and practical",
-        "Chemistry lecturer focused on reaction mechanisms, lab safety and exam technique. I break hard topics into small steps and practice questions every week.",
-        [{"subject": "Chemistry", "topics": ["Organic chemistry"]}, {"subject": "Biology", "topics": ["Genetics"]}], 5, "Rivers State University", False)
-teacher("ibrahim", "Ibrahim Musa", "English language and literature coach",
+T, tid = teacher("adaeze", "Adaeze Okafor", "+447700900501", "GB", "Calculus tutor for first-year students",
+                 "I help first-year students build intuition for calculus and algebra with worked examples, short quizzes and weekly check-ins tailored to each learner.",
+                 [{"subject": "Mathematics", "topics": ["Calculus", "Algebra"]}, {"subject": "English", "topics": ["Comprehension"]}], 8, "University College London", True)
+teacher("emeka", "Emeka Nwosu", "+12025550502", "US", "Algebra and statistics made practical",
+        "I teach algebra, geometry and statistics with clear worked examples, short quizzes and focused exam-technique sessions.",
+        [{"subject": "Mathematics", "topics": ["Geometry", "Statistics"]}, {"subject": "English", "topics": ["Grammar"]}], 5, "University of Chicago", False)
+teacher("ibrahim", "Ibrahim Musa", "+447700900503", "GB", "English language and literature coach",
         "I coach students on comprehension, essay writing and literature analysis with a calm, structured approach and lots of written feedback on every essay.",
-        [{"subject": "English", "topics": ["Essay writing"]}], 3, "UniPort", None)
+        [{"subject": "English", "topics": ["Essay Writing", "Comprehension"]}], 3, "University of Oxford", None)
 
-S = {k: register(k, n) for k, n in (("tobi", "Tobi Adeyemi"), ("chidi", "Chidi Eze"), ("ngozi", "Ngozi Obi"), ("amaka", "Amaka Uche"))}
+S = {
+    user: register(user, name, phone, country)
+    for user, name, phone, country in (
+        ("tobi", "Tobi Adeyemi", "+12025550504", "US"),
+        ("chidi", "Chidi Eze", "+447700900505", "GB"),
+        ("ngozi", "Ngozi Obi", "+12025550506", "US"),
+        ("amaka", "Amaka Uche", "+447700900507", "GB"),
+    )
+}
 
 
 def request(student, topic, msg):

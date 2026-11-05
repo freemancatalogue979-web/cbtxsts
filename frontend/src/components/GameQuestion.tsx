@@ -42,7 +42,7 @@ export function AnswerTile({
 }) {
   const faces: Record<AnswerState, string> = {
     idle: 'border-white/12 bg-ink-850 hover:border-nova-400/50 hover:bg-ink-800',
-    picked: 'border-nova-400/80 bg-nova-950/40 shadow-[0_0_15px_-3px_rgba(6,182,212,0.3)]',
+    picked: 'border-nova-400/80 bg-nova-500/15 shadow-[0_0_15px_-3px_rgba(6,182,212,0.3)]',
     correct: 'border-emerald-500/80 bg-emerald-950/35 text-emerald-100 shadow-[0_0_15px_-3px_rgba(16,185,129,0.3)]',
     wrong: 'border-red-500/80 bg-red-950/35 text-red-100 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]',
     muted: 'border-white/8 bg-ink-900 opacity-50',
@@ -64,6 +64,8 @@ export function AnswerTile({
       onClick={onPick}
       disabled={disabled}
       aria-pressed={state === 'picked'}
+      data-answer-tile
+      data-answer-state={state}
       className={`gbtn flex w-full min-w-0 items-center gap-2.5 rounded-lg border px-3 py-3 text-left touch-manipulation disabled:cursor-default sm:gap-3 sm:px-4 sm:py-3.5 ${faces[state]} ${animate}`}
     >
       <span className={`grid size-9 shrink-0 place-items-center rounded-md border text-[0.88rem] font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] sm:size-10 ${badges[state]}`}>

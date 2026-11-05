@@ -9,12 +9,13 @@
  * Friends can also be nudged with one tap and messages arrive live over the
  * arena socket.
  */
-import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Copy, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X, CalendarPlusIcon} from 'lucide-react';
+import {ArrowLeft, BellRing, CalendarPlus, Check, ChevronDown, Flag, Gamepad2, Loader2, MessageCircle, Pencil, Reply, Send, Swords, Trash2, UserPlus, Users, X, CalendarPlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextInput, PageBanner, askConfirm, Select} from '../components/ui';
+import {Avatar, Button, Card, EmptyState, Modal, Segmented, Skeleton, TextArea, TextInput, PageBanner, askConfirm, Select} from '../components/ui';
 import {useChatNav} from '../components/AppShell';
 import {Holdable} from '../components/Holdable';
+import {ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
 import {HAPTICS} from '../lib/haptics';
 import {GroupsPanel} from './CommunityPanel';
 import {api} from '../lib/api';
@@ -93,9 +94,8 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
           const dx = event.clientX - g.x;
           const dy = event.clientY - g.y;
           if (!g.engaged) {
-            // Give Holdable ~320ms to win a press-and-hold before swipe engages.
-            const age = performance.now() - g.t0;
-            if (age < 320 && Math.abs(dx) < 28) return;
+            // Give Holdable the first ~320ms to claim a long-press action.
+            if (performance.now() - g.t0 < 320 && Math.abs(dx) < 28) return;
             if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
               gesture.current = null; // vertical intent — this is a scroll, not a swipe
               return;
@@ -133,11 +133,8 @@ function SwipeToReply({onReply, children}: {onReply: () => void; children: React
 }
 
 /**
- * Hold a message to act on it: **Reply**, **Copy** (text messages) and
- * **Delete**. Nothing is painted on the bubble — no buttons, no swipe panel —
- * so the thread stays clean; on desktop the same menu opens from right-click or
- * the little `⋯` that fades in on hover. Delete removes the message from this
- * device only and stays gone after a reload.
+ * Hold a bubble for the shared Friends / teacher action menu. Replies and
+ * reactions stay tucked away until requested, keeping the mobile thread clean.
  */
 function HoldMessage({
   message,
@@ -145,148 +142,63 @@ function HoldMessage({
   onReply,
   onDelete,
   onEdit,
-  onReact,
+  onOpenReactions,
+  onToggleReaction,
   onReport,
-  children,
+  showPicker = false,
   highlight = false,
-  peerName = '',
+  children,
 }: {
   message: ChatMessage;
   mine: boolean;
   onReply: (message: ChatMessage) => void;
   onDelete: (message: ChatMessage) => void;
   onEdit: (message: ChatMessage) => void;
-  onReact: (message: ChatMessage, emoji: string) => void;
+  onOpenReactions: (message: ChatMessage) => void;
+  onToggleReaction: (message: ChatMessage, emoji: string) => void;
   onReport: (message: ChatMessage) => void;
-  children: React.ReactNode;
+  showPicker?: boolean;
   highlight?: boolean;
-  peerName?: string;
+  children: React.ReactNode;
 }) {
   const gone = Boolean(message.deleted);
-  const quick = ['👍', '🔥', '😂', '💯'];
-  const actions = [
-    ...(gone
-      ? []
-      : [
-          {
-            key: 'reply',
-            label: 'Reply',
-            icon: <Reply className="size-4" />,
-            tone: 'accent' as const,
-            onAction: () => onReply(message),
-          },
-          ...quick.map((emoji) => ({
-            key: `react-${emoji}`,
-            label: `${emoji} React`,
-            icon: <span className="text-[0.95rem] leading-none">{emoji}</span>,
-            tone: 'neutral' as const,
-            onAction: () => onReact(message, emoji),
-          })),
-        ]),
-    ...(message.body && !gone
-      ? [
-          {
-            key: 'copy',
-            label: 'Copy text',
-            icon: <Copy className="size-4" />,
-            tone: 'neutral' as const,
-            onAction: () => {
-              void navigator.clipboard?.writeText(message.body).catch(() => undefined);
-            },
-          },
-        ]
-      : []),
-    ...(mine && message.kind === 'text' && !gone
-      ? [
-          {
-            key: 'edit',
-            label: 'Edit',
-            icon: <Pencil className="size-4" />,
-            tone: 'neutral' as const,
-            onAction: () => onEdit(message),
-          },
-        ]
-      : []),
-    {
-      key: 'delete',
-      label: mine && !gone ? 'Delete for both' : 'Hide for me',
-      icon: <Trash2 className="size-4" />,
-      tone: 'danger' as const,
-      onAction: () => onDelete(message),
-    },
-    ...(!mine && !gone
-      ? [
-          {
-            key: 'report',
-            label: 'Report',
-            icon: <Flag className="size-4" />,
-            tone: 'danger' as const,
-            onAction: () => onReport(message),
-          },
-        ]
-      : []),
-  ];
-
   const holdable = (
-    <Holdable
-      actions={actions}
-      hint="Hold a message for the full menu"
+    <ChatActionSurface
+      message={message}
+      mine={mine}
+      onReply={() => onReply(message)}
+      onOpenReactions={() => onOpenReactions(message)}
+      onDelete={() => onDelete(message)}
+      onEdit={() => onEdit(message)}
+      onReport={() => onReport(message)}
       menuWidth={214}
       className={gone ? 'max-w-[70%]' : 'max-w-[88%] sm:max-w-[78%]'}
     >
-      {children}
-    </Holdable>
+      <div className="min-w-0">
+        {children}
+        {showPicker && !gone && (
+          <ChatReactionPicker
+            onPick={(emoji) => onToggleReaction(message, emoji)}
+            onClose={() => onOpenReactions(message)}
+          />
+        )}
+      </div>
+    </ChatActionSurface>
   );
-
   return (
     <div
       data-mid={message.id}
       id={`fm-${message.id}`}
-      className={`flex min-w-0 items-start gap-2 rounded-xl px-0.5 py-1 transition-colors ${highlight ? 'bg-nova-500/20 ring-1 ring-nova-400/40' : ''}`}
+      className={`flex min-w-0 rounded-xl px-0.5 py-1 transition-colors ${mine ? 'justify-end' : 'justify-start'} ${highlight ? 'bg-nova-500/18 ring-1 ring-nova-400/40' : ''}`}
     >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/8 text-[0.62rem] font-black text-mist-200">
-        {mine ? 'You' : (peerName || '·').slice(0, 2).toUpperCase()}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : peerName || 'Friend'}</span>
-          <span className="ml-auto shrink-0 text-[0.62rem] font-semibold text-mist-600">{formatRelative(message.created_at)}</span>
-        </div>
-        {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
-      </div>
+      {gone ? holdable : <SwipeToReply onReply={() => onReply(message)}>{holdable}</SwipeToReply>}
     </div>
   );
 }
 
-/** Reaction chips live under the bubble; your own tap is highlighted. */
-function Reactions({
-  message,
-  mine,
-  onToggle,
-}: {
-  message: ChatMessage;
-  mine: boolean;
-  onToggle: (emoji: string) => void;
-}) {
-  const entries = Object.entries(message.reactions ?? {}).filter(([, count]) => count > 0);
-  if (!entries.length) return null;
-  const mineSet = new Set(message.my_reactions ?? []);
-  return (
-    <div className={`mt-1 flex min-w-0 flex-wrap gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
-      {entries.map(([emoji, count]) => (
-        <button
-          key={emoji}
-          onClick={() => onToggle(emoji)}
-          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.68rem] font-black transition-colors ${
-            mineSet.has(emoji) ? 'border-nova-400/60 bg-nova-500/22 text-nova-100' : 'border-white/12 bg-white/[0.04] text-mist-400'
-          }`}
-        >
-          <span className="text-[0.8rem] leading-none">{emoji}</span>
-          <span className="tabular">{count}</span>
-        </button>
-      ))}
-    </div>
-  );
+/** Shared reaction chips — a quick tap toggles your reaction. */
+function Reactions({message, mine, onToggle}: {message: ChatMessage; mine: boolean; onToggle: (emoji: string) => void}) {
+  return <ChatReactionChips message={message} mine={mine} onToggle={onToggle} />;
 }
 
 /** A deleted message keeps its place in the thread instead of vanishing. */
@@ -302,40 +214,9 @@ function Tombstone({mine}: {mine: boolean}) {
   );
 }
 
-/**
- * Quoted snippet shown inside a bubble when it replies to another message.
- * Rendered inside the sender's bubble, which stays a saturated gradient in both
- * skins, so the white type below is correct on paper too. theme-ok
- */
-function QuoteBlock({
-  meta,
-  mine,
-  onJump,
-}: {
-  meta: Record<string, unknown>;
-  mine: boolean;
-  onJump?: (messageId: number) => void;
-}) {
-  const reply = (meta?.reply_to ?? null) as {id?: number; name?: string; snippet?: string} | null;
-  if (!reply) return null;
-  const canJump = typeof reply.id === 'number' && typeof onJump === 'function';
-  const className = `mb-1.5 block w-full border-l-2 pl-2 text-left text-[0.68rem] leading-snug font-semibold ${
-    mine ? 'border-white/60 text-white/85' : 'border-nova-400/60 text-mist-400'
-  } ${canJump ? 'cursor-pointer active:opacity-80' : ''}`;
-  const body = (
-    <>
-      <span className="font-black">{reply.name}</span>
-      {reply.snippet ? `: ${reply.snippet}` : ''}
-    </>
-  );
-  if (canJump) {
-    return (
-      <button type="button" className={className} onClick={() => onJump!(reply.id!)} aria-label="Jump to replied message">
-        {body}
-      </button>
-    );
-  }
-  return <span className={className}>{body}</span>;
+/** Reply quotes are actionable when the original message is in history. */
+function QuoteBlock({meta, mine, onJump}: {meta: Record<string, unknown>; mine: boolean; onJump: (id: number) => void}) {
+  return <ChatReplyQuote meta={meta} mine={mine} onJump={onJump} />;
 }
 
 export default function FriendsPanel({
@@ -370,11 +251,24 @@ export default function FriendsPanel({
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [planFor, setPlanFor] = useState<{quizId: number; when: string} | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [highlight, setHighlight] = useState<number | null>(null);
   const [reactFor, setReactFor] = useState<number | null>(null);
+  const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
+  const [reportReason, setReportReason] = useState('Abusive or inappropriate');
+  const [reportDetail, setReportDetail] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const highlightTimer = useRef<number | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const hasMoreRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const selectedIdRef = useRef<number | null>(null);
   const [pane, setPane] = useState<'friends' | 'groups'>('friends');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
 
   const load = useCallback(() => {
     api
@@ -423,15 +317,26 @@ export default function FriendsPanel({
 
   const openThread = useCallback(
     (friend: PlayerSummary) => {
+      selectedIdRef.current = friend.id;
       setSelected(friend);
       setChatFocus(friend.id);
       setReplyTo(null);
+      setReactFor(null);
+      setHighlight(null);
+      setHasMore(false);
+      hasMoreRef.current = false;
       // Paint the saved conversation immediately, then sync with the server.
-      setMessages(cacheRead<ChatMessage[]>(scope, `thread.${friend.id}`) ?? []);
+      const cached = cacheRead<ChatMessage[]>(scope, `thread.${friend.id}`) ?? [];
+      messagesRef.current = cached;
+      setMessages(cached);
       api
         .chatWith(friend.id)
         .then((result) => {
+          if (selectedIdRef.current !== friend.id) return;
+          messagesRef.current = result.messages;
+          hasMoreRef.current = result.has_more;
           setMessages(result.messages);
+          setHasMore(result.has_more);
           cacheWrite(scope, `thread.${friend.id}`, result.messages.slice(-200));
         })
         .catch((error: Error) => {
@@ -447,7 +352,10 @@ export default function FriendsPanel({
   );
 
   const closeThread = useCallback(() => {
+    selectedIdRef.current = null;
     setSelected(null);
+    setReplyTo(null);
+    setReactFor(null);
     setChatFocus(null);
   }, [setChatFocus]);
 
@@ -456,11 +364,67 @@ export default function FriendsPanel({
      bring it back temporarily). Closing the thread restores the bar. */
   const chatNav = useChatNav();
   useEffect(() => {
-    chatNav.setThreadOpen(Boolean(selected));
+    chatNav.setThreadOpen(Boolean(selected && pane === 'friends'));
     return () => chatNav.setThreadOpen(false);
-  }, [selected, chatNav.setThreadOpen]);
+  }, [selected, pane, chatNav.setThreadOpen]);
 
   const atBottom = useRef(true);
+
+  const loadOlder = useCallback(async (): Promise<boolean> => {
+    const friendId = selected?.id;
+    const oldestId = messagesRef.current[0]?.id;
+    if (!friendId || !oldestId || !hasMoreRef.current || loadingOlderRef.current) return false;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const node = scrollRef.current;
+    const oldHeight = node?.scrollHeight ?? 0;
+    const oldTop = node?.scrollTop ?? 0;
+    try {
+      const result = await api.chatWith(friendId, {beforeId: oldestId, limit: 60});
+      if (selectedIdRef.current !== friendId) return false;
+      const existing = new Set(messagesRef.current.map((row) => row.id));
+      const olderRows = result.messages.filter((row) => !existing.has(row.id));
+      const next = [...olderRows, ...messagesRef.current];
+      messagesRef.current = next;
+      hasMoreRef.current = result.has_more && olderRows.length > 0;
+      setMessages(next);
+      setHasMore(hasMoreRef.current);
+      if (olderRows.length) {
+        requestAnimationFrame(() => {
+          if (node && scrollRef.current === node) node.scrollTop = oldTop + node.scrollHeight - oldHeight;
+        });
+        cacheWrite(scope, `thread.${friendId}`, next.slice(-200));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      toast('error', 'Could not load older messages', (error as Error).message);
+      return false;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [scope, selected?.id, toast]);
+
+  const jumpToMessage = useCallback(async (messageId: number) => {
+    let target = scrollRef.current?.querySelector(`[data-mid="${messageId}"]`) as HTMLElement | null;
+    let pages = 0;
+    while (!target && hasMoreRef.current && pages < 40) {
+      const loaded = await loadOlder();
+      if (!loaded) break;
+      pages += 1;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      target = scrollRef.current?.querySelector(`[data-mid="${messageId}"]`) as HTMLElement | null;
+    }
+    if (!target) {
+      toast('info', 'Message unavailable', 'This reply points to a message that is no longer in the conversation.');
+      return;
+    }
+    target.scrollIntoView({behavior: 'smooth', block: 'center'});
+    setHighlight(messageId);
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1700);
+  }, [loadOlder, toast]);
 
   const scrollToEnd = useCallback((smooth = true) => {
     const node = scrollRef.current;
@@ -469,20 +433,6 @@ export default function FriendsPanel({
     setUnseen(0);
     atBottom.current = true;
   }, []);
-
-  const jumpToMessage = useCallback((messageId: number) => {
-    const node = scrollRef.current?.querySelector(`[data-mid="${messageId}"]`) as HTMLElement | null;
-    if (!node) {
-      toast('info', 'Message not loaded', 'Scroll up or open the chat again to find older messages.');
-      return;
-    }
-    node.scrollIntoView({behavior: 'smooth', block: 'center'});
-    setHighlight(messageId);
-    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
-    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1600);
-  }, [toast]);
-
-
 
   useEffect(() => {
     // Never yank a reader who is scrolled up: offer the jump pill instead.
@@ -544,19 +494,26 @@ export default function FriendsPanel({
     [toast],
   );
 
-  const reportMessage = useCallback(
-    async (message: ChatMessage) => {
-      const reason = window.prompt('What is wrong with this message?', 'Abusive language') ?? '';
-      if (!reason.trim()) return;
-      try {
-        await api.reportChat(message.id, reason.trim());
-        toast('success', 'Reported to the arena team', 'Thank you — moderators will review it.');
-      } catch (error) {
-        toast('error', 'Could not report that', (error as Error).message);
-      }
-    },
-    [toast],
-  );
+  const reportMessage = useCallback((message: ChatMessage) => {
+    setReportingMessage(message);
+    setReportReason('Abusive or inappropriate');
+    setReportDetail('');
+  }, []);
+
+  const submitReport = useCallback(async () => {
+    if (!reportingMessage || reportBusy) return;
+    setReportBusy(true);
+    try {
+      const reason = [reportReason, reportDetail.trim()].filter(Boolean).join(': ').slice(0, 400);
+      await api.reportChat(reportingMessage.id, reason);
+      setReportingMessage(null);
+      toast('success', 'Report sent', 'Thank you — moderators will review it.');
+    } catch (error) {
+      toast('error', 'Could not report that', (error as Error).message);
+    } finally {
+      setReportBusy(false);
+    }
+  }, [reportingMessage, reportBusy, reportReason, reportDetail, toast]);
 
   const startEdit = useCallback((message: ChatMessage) => {
     setEditTo(message);
@@ -659,8 +616,8 @@ export default function FriendsPanel({
   const rivals = data?.rivals ?? [];
 
   return (
-    <div className="min-w-0 space-y-3.5 sm:space-y-5">
-      <PageBanner tone="nova" eyebrow="Social"
+    <div className={`friends-panel min-w-0 space-y-3.5 sm:space-y-5 ${selected && pane === 'friends' ? 'friends-thread-open' : ''}`}>
+      <PageBanner className="friends-page-heading" tone="nova" eyebrow="Social"
         title="Friends"
         subtitle="See who is online, chat, and turn conversations into duels."
         icon={<Users className="size-4" />}
@@ -673,21 +630,26 @@ export default function FriendsPanel({
         }
       />
 
+      <div className="friends-pane-switch">
       <Segmented
         value={pane}
-        onChange={setPane}
+        onChange={(next) => {
+          setPane(next);
+          if (next === 'groups') closeThread();
+        }}
         options={[
           {value: 'friends', label: 'Friends', icon: Users},
           {value: 'groups', label: 'Study groups', icon: Users},
         ]}
       />
+      </div>
 
       {pane === 'groups' && <GroupsPanel onOpenGroup={onOpenGroup} />}
 
       {pane === 'friends' && (
-      <div className="grid min-w-0 gap-3.5 lg:grid-cols-[20rem_1fr] lg:gap-4">
+      <div className="friends-layout grid min-w-0 gap-3.5 lg:grid-cols-[20rem_1fr] lg:gap-4">
         {/* ---------------------------------------------------- the circle */}
-        <section className={`min-w-0 space-y-3 ${selected ? 'hidden lg:block' : ''}`}>
+        <section className={`friends-circle min-w-0 space-y-3 ${selected ? 'hidden lg:block' : ''}`}>
           {!data ? (
             <div className="space-y-2">
               {[0, 1, 2].map((key) => (
@@ -797,7 +759,7 @@ export default function FriendsPanel({
                           variant="outline"
                           onClick={() => {
                             void api.addFriend({student_id: row.id}).then(() => {
-                              toast('success', 'Friend request sent');
+                              toast('success', 'Friend added');
                               load();
                             });
                           }}
@@ -815,7 +777,7 @@ export default function FriendsPanel({
         </section>
 
         {/* ---------------------------------------------------- the thread */}
-        <section className={`min-w-0 ${selected ? '' : 'hidden lg:block'}`}>
+        <section className={`friends-thread min-w-0 ${selected ? '' : 'hidden lg:block'}`}>
           {!selected ? (
             <Card className="grid min-h-[18rem] place-items-center p-6">
               <EmptyState
@@ -832,15 +794,17 @@ export default function FriendsPanel({
                cover the latest messages. While the tab bar is tucked away the
                thread claims the freed space too. Desktop keeps natural height. */
             <Card
-              className={`flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:min-h-[20rem] ${
+              className={`friends-thread-card flex min-h-[24rem] min-w-0 flex-col overflow-hidden p-0 max-lg:min-h-[20rem] ${
                 chatNav.collapsed ? 'max-lg:h-[calc(100dvh-13rem)]' : 'max-lg:h-[calc(100dvh-16.5rem)]'
               }`}
             >
               <div className="flex items-center gap-2.5 border-b border-white/8 px-3 py-2.5 sm:px-4">
-                <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} className="-ml-1.5 lg:hidden" />
+                <Button variant="ghost" size="sm" onClick={closeThread} icon={<ArrowLeft className="size-4" />} aria-label="Back to friends" className="-ml-1.5 lg:hidden" />
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />
                 <span className="min-w-0 flex-1">
-                  <button type="button" className="block truncate text-left text-[0.86rem] font-extrabold text-mist-50" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: selected.id}}))}>{selected.flag || '🌍'} {selected.name}</button>
+                  <button type="button" className="block max-w-full truncate text-left text-[0.86rem] font-extrabold text-mist-50 hover:text-nova-200" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: selected.id}}))}>
+                    {selected.flag || '🌍'} {selected.name}
+                  </button>
                   <span className="block text-[0.64rem] font-bold text-mist-500">
                     {selected.online ? 'Online now' : `Lv ${selected.level} ${selected.title}`}
                   </span>
@@ -859,9 +823,16 @@ export default function FriendsPanel({
                   const bottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
                   atBottom.current = bottom;
                   if (bottom) setUnseen(0);
+                  if (node.scrollTop < 44 && hasMoreRef.current && !loadingOlderRef.current) void loadOlder();
                 }}
                 className="relative min-h-0 min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 pt-3 pb-4 sm:px-4 lg:max-h-none"
               >
+                {hasMore && (
+                  <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder} className="sticky top-0 z-[1] mx-auto flex items-center gap-1.5 rounded-full border border-white/10 bg-ink-950/90 px-3 py-1 text-[0.68rem] font-bold text-mist-400 shadow-sm disabled:opacity-60">
+                    {loadingOlder ? <Loader2 className="size-3 animate-spin" /> : <ChevronDown className="size-3 rotate-180" />}
+                    {loadingOlder ? 'Loading older messages…' : 'Load older messages'}
+                  </button>
+                )}
                 {messages.length === 0 ? (
                   <p className="py-8 text-center text-[0.78rem] font-semibold text-mist-500">
                     No messages yet — break the ice with a 👋 or a challenge.
@@ -875,12 +846,15 @@ export default function FriendsPanel({
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
                               message={message}
-                              mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
+                              mine={mine}
                               onReply={setReplyTo}
                               onDelete={dropMessage}
                               onEdit={startEdit}
-                              onReact={reactTo}
+                              onOpenReactions={(row) => setReactFor((current) => current === row.id ? null : row.id)}
+                              onToggleReaction={reactTo}
                               onReport={reportMessage}
+                              showPicker={reactFor === message.id}
+                              highlight={highlight === message.id}
                             >
                               <div className="min-w-0">
                               <div className="rounded-2xl border border-nova-500/30 bg-nova-500/10 px-3 py-2.5">
@@ -906,15 +880,6 @@ export default function FriendsPanel({
                                 )}
                               </div>
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
-                              {reactFor === message.id && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
-                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
                               </div>
                             </HoldMessage>
                           </motion.li>
@@ -928,12 +893,15 @@ export default function FriendsPanel({
                           <motion.li key={message.id} variants={staggerItem}>
                             <HoldMessage
                               message={message}
-                              mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
+                              mine={mine}
                               onReply={setReplyTo}
                               onDelete={dropMessage}
                               onEdit={startEdit}
-                              onReact={reactTo}
+                              onOpenReactions={(row) => setReactFor((current) => current === row.id ? null : row.id)}
+                              onToggleReaction={reactTo}
                               onReport={reportMessage}
+                              showPicker={reactFor === message.id}
+                              highlight={highlight === message.id}
                             >
                               <div className="min-w-0">
                               <div className="rounded-2xl border border-pulse-500/30 bg-pulse-500/10 px-3 py-2.5">
@@ -952,15 +920,6 @@ export default function FriendsPanel({
                                 )}
                               </div>
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
-                              {reactFor === message.id && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
-                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
                               </div>
                             </HoldMessage>
                           </motion.li>
@@ -970,12 +929,15 @@ export default function FriendsPanel({
                         <motion.li key={message.id} variants={staggerItem}>
                           <HoldMessage
                             message={message}
-                            mine={mine} highlight={highlight === message.id} peerName={selected?.name || ""}
+                            mine={mine}
                             onReply={setReplyTo}
                             onDelete={dropMessage}
                             onEdit={startEdit}
-                            onReact={reactTo}
+                            onOpenReactions={(row) => setReactFor((current) => current === row.id ? null : row.id)}
+                            onToggleReaction={reactTo}
                             onReport={reportMessage}
+                            showPicker={reactFor === message.id}
+                            highlight={highlight === message.id}
                           >
                             <div className="min-w-0">
                               {message.deleted ? (
@@ -983,7 +945,11 @@ export default function FriendsPanel({
                               ) : (
                                 <div
                                   className={`rounded-2xl px-3 py-2 ${
-                                    mine ? 'brand-gradient rounded-tl-md text-white' : 'rounded-tl-md bg-white/8 text-mist-100'
+                                    mine
+                                      ? myBubble
+                                        ? `${myBubble} text-white`
+                                        : 'brand-gradient text-white'
+                                      : 'border border-white/10 bg-white/[0.05] text-mist-100'
                                   }`}
                                 >
                                   <QuoteBlock meta={message.meta} mine={mine} onJump={jumpToMessage} />
@@ -1008,15 +974,6 @@ export default function FriendsPanel({
                                 </div>
                               )}
                               <Reactions message={message} mine={mine} onToggle={(emoji) => void reactTo(message, emoji)} />
-                              {reactFor === message.id && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {['👍', '❤️', '😂', '🔥', '🎉', '😮', '🤔', '✅'].map((emoji) => (
-                                    <button key={emoji} type="button" onClick={() => { void reactTo(message, emoji); setReactFor(null); }} className="grid size-8 place-items-center rounded-lg border border-white/12 bg-ink-900/80 text-base">
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </HoldMessage>
                         </motion.li>
@@ -1177,6 +1134,36 @@ export default function FriendsPanel({
         </section>
       </div>
       )}
+
+      <Modal
+        open={Boolean(reportingMessage)}
+        onClose={() => { if (!reportBusy) setReportingMessage(null); }}
+        title="Report message"
+        subtitle="Reports are private and reviewed by the moderation team."
+        footer={
+          <>
+            <Button size="sm" variant="outline" disabled={reportBusy} onClick={() => setReportingMessage(null)}>Cancel</Button>
+            <Button size="sm" className="whitespace-nowrap" loading={reportBusy} disabled={!reportReason.trim()} onClick={() => void submitReport()} icon={<Flag className="size-4" />}>
+              Submit report
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <label className="grid gap-1.5 text-[0.72rem] font-extrabold text-mist-400">
+            Reason
+            <Select value={reportReason} onChange={(event) => setReportReason(event.target.value)} aria-label="Report reason" className="w-full">
+              {['Abusive or inappropriate', 'Spam or advertising', 'Harassment or bullying', 'Scam or phishing', 'Other'].map((reason) => (
+                <option key={reason} value={reason}>{reason}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="grid gap-1.5 text-[0.72rem] font-extrabold text-mist-400">
+            Details (optional)
+            <TextArea value={reportDetail} onChange={(event) => setReportDetail(event.target.value.slice(0, 300))} maxLength={300} rows={4} placeholder="Add context for the moderators…" />
+          </label>
+        </div>
+      </Modal>
 
       {/* -------------------------------------------------- quiz plan modal
           Uses the shared Modal so the dialog gets a max-height + internal

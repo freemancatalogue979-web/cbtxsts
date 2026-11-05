@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import timedelta
+from threading import RLock
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -117,6 +118,7 @@ LAST_STANDINGS: dict[int, dict] = {}
 # gone when the server restarts — the match record never carries chatter.
 LOBBY_CHAT: dict[int, deque] = {}
 LOBBY_CHAT_CAP = 80
+LOBBY_CHAT_LOCK = RLock()
 
 
 def queue_players_payload(db: Session, course_id: int | None, limit: int = 12) -> list[dict]:
@@ -151,13 +153,20 @@ def queue_players_payload(db: Session, course_id: int | None, limit: int = 12) -
 
 
 def lobby_chat_payload(match_id: int) -> list[dict]:
-    return list(LOBBY_CHAT.get(match_id, ()))
+    with LOBBY_CHAT_LOCK:
+        return list(LOBBY_CHAT.get(match_id, ()))
 
 
 def lobby_chat_write(match_id: int, student: Student, body: str) -> dict:
     line = {"match_id": match_id, "student_id": student.id, "name": student.name, "body": body, "at": _iso(utcnow())}
-    LOBBY_CHAT.setdefault(match_id, deque(maxlen=LOBBY_CHAT_CAP)).append(line)
+    with LOBBY_CHAT_LOCK:
+        LOBBY_CHAT.setdefault(match_id, deque(maxlen=LOBBY_CHAT_CAP)).append(line)
     return line
+
+
+def lobby_chat_clear(match_id: int) -> None:
+    with LOBBY_CHAT_LOCK:
+        LOBBY_CHAT.pop(match_id, None)
 
 
 class RankedError(Exception):
@@ -560,6 +569,7 @@ def _finish_match(db: Session, match: RankedMatch) -> list[Event]:
     OPEN.pop(match.id, None)
     ACTIVITY.pop(match.id, None)
     LAST_STANDINGS.pop(match.id, None)
+    lobby_chat_clear(match.id)
     match.status = "finished"
     match.finished_at = utcnow()
     rows = participants(db, match)
@@ -876,6 +886,7 @@ def match_state(
         "round_index": match.round_index,
         "questions_total": total,
         "lobby_at": _iso(match.lobby_at),
+        "question_deadline": _iso(info.get("deadline")) if info is not None and info.get("deadline") else None,
         "lobby_seconds": LOBBY_SECONDS,
         "server_now": _iso(utcnow()),
         "participants": roster,
@@ -883,6 +894,7 @@ def match_state(
         "reveal": reveal,
         "me": me,
         "activity": list(ACTIVITY.get(match.id, [])),
+        "lobby_chat": lobby_chat_payload(match.id) if match.status == "lobby" else [],
     }
 
 

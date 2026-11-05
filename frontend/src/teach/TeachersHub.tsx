@@ -284,7 +284,7 @@ function FindTeachers({catalog, groups, onOpen, onGroups, onReloadGroups, links,
       <form onSubmit={submit} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="pro-search min-w-0">
           <Search />
-          <input id="t-search" className="pro-input w-full" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Try “calculus”, “organic chemistry” or a teacher's name" aria-label="Search teachers" enterKeyHint="search" />
+          <input id="t-search" className="pro-input w-full" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Try “algebra”, “comprehension” or a teacher's name" aria-label="Search teachers" enterKeyHint="search" />
         </label>
         <button type="submit" className="pro-btn pro-btn-primary max-sm:hidden">
           Search

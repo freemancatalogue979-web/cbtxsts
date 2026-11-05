@@ -334,9 +334,22 @@ export function SessionProvider({children}: {children: ReactNode}) {
   /* ------------------------------------------------- restore the session */
   useEffect(() => {
     let cancelled = false;
+    // A stalled bootstrap must never trap iPad/PWA users on the launch screen.
+    // Cached player data paints first; the API refresh continues in the background.
+    const bootGuard = window.setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, 8_000);
     (async () => {
       const stored = tokenStore.get();
       const storedRole = tokenStore.getRole();
+      if (stored && storedRole === 'student') {
+        const saved = cacheRead<{tail: string; me: Profile}>('app', 'me.profile', 0);
+        if (saved && saved.tail === stored.slice(-24)) {
+          setToken(stored);
+          setRole('student');
+          setProfile(saved.me);
+        }
+      }
       await loadBootstrap();
       if (stored && storedRole === 'student') {
         try {
@@ -377,10 +390,14 @@ export function SessionProvider({children}: {children: ReactNode}) {
         setToken(stored);
         setRole('admin');
       }
-      if (!cancelled) setReady(true);
+      if (!cancelled) {
+        window.clearTimeout(bootGuard);
+        setReady(true);
+      }
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(bootGuard);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

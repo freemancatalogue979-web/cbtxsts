@@ -464,7 +464,7 @@ function CreateScreen({
           <p className="min-w-0 flex-1 text-[1rem] font-black text-mist-50">Create a ranked lobby</p>
         </div>
         <p className="mt-1 text-[0.78rem] font-semibold text-mist-400">Pick a team size — every player on your side answers their own dealt set.</p>
-        <div className="mt-4 grid grid-cols-5 gap-1.5">
+        <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
           {SIZES.map((value) => (
             <button
               key={value}

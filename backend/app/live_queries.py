@@ -159,8 +159,6 @@ async def ranked_chat_async(match_id: int, student_id: int, body: str) -> dict |
     or ``None`` when it must be dropped — sender is not a participant, or the
     match has already left the lobby. Chat locks the moment questions start.
     """
-    from .models import utcnow
-
     clean = (body or "").strip()[:300]
     if not clean:
         return None
@@ -176,13 +174,13 @@ async def ranked_chat_async(match_id: int, student_id: int, body: str) -> dict |
         if member is None:
             return None
         student = await session.get(Student, student_id)
-        return {
-            "match_id": match_id,
-            "student_id": student_id,
-            "name": student.name if student else "",
-            "body": clean,
-            "at": utcnow().isoformat(timespec="seconds") + "Z",
-        }
+        if student is None:
+            return None
+        # The chat remains intentionally ephemeral and capped, but keep a short
+        # server-side history so a reconnecting lobby can catch up.
+        from .services.ranked import lobby_chat_write
+
+        return lobby_chat_write(match_id, student, clean)
 
 
 # ---------------------------------------------------------------------------

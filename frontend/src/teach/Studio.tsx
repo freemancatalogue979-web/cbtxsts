@@ -721,7 +721,7 @@ function Groups({groups, onChanged}: {groups: TGroup[]; onChanged: () => void}) 
           icon={<Users className="size-6" />}
           hue="teal"
           title="No groups yet"
-          body="Create a group for a topic — e.g. “JAMB Physics evening class”. Choose public, request-to-join or invite only."
+          body="Create a group for a topic — e.g. “Algebra evening study group”. Choose public, request-to-join or invite only."
           action={
             <button type="button" className="pro-btn pro-btn-sm" onClick={() => setEditing('new')}>
               <Plus className="size-4" /> Create a group
@@ -828,7 +828,7 @@ function GroupEditor({open, group, onClose, onSaved}: {open: boolean; group: TGr
     >
       <div className="grid gap-4">
         <Field label="Name">
-          <input className="pro-input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} maxLength={140} placeholder="e.g. Organic Chemistry — weekend class" />
+          <input className="pro-input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} maxLength={140} placeholder="e.g. Algebra — weekend study group" />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Subject">

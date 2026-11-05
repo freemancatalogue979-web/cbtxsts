@@ -22,6 +22,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'} | ${name}${!ok && detail ? ` -> ${String(detail).slice(0, 240)}` : ''}`);
 };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const waitFor = async (predicate, timeout = 10000, step = 150) => {
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    if (predicate()) return true;
+    await wait(step);
+  }
+  return predicate();
+};
 
 const problems = [];
 const virtualConsole = new VirtualConsole();
@@ -43,8 +51,9 @@ window.matchMedia =
   ((media) => ({matches: false, media, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}}));
 window.print = () => {};
 window.scrollTo = () => {};
+window.HTMLElement.prototype.scrollIntoView = () => {};
 window.HTMLCanvasElement.prototype.getContext = () => null;
-window.confirm = () => true;
+window.confirm = () => { throw new Error('native confirm must not be used'); };
 
 const text = () => window.document.querySelector('#root')?.textContent ?? '';
 const buttons = (needle) => [...window.document.querySelectorAll('button')].filter((node) => (node.textContent || '').includes(needle));
@@ -183,10 +192,10 @@ async function main() {
   /* ---------------------------------------- study lab: mind match mini game */
   click(byText('button', 'Dashboard')); // leave the result slip, back into the shell
   await wait(900);
-  click(byText('button', 'Study'));
+  click(byText('button', 'Study Lab'));
   await wait(1600);
-  check('study lab hub advertises Mind Match', text().includes('Mind Match'), text().slice(0, 160));
-  click(byText('button', 'Mind Match'));
+  check('Study Lab hub advertises the Match pairs activity', text().includes('Match pairs'), text().slice(0, 240));
+  click(byText('button', 'Match pairs'));
   await wait(1200);
   const faceDown = () => [...window.document.querySelectorAll('button[aria-label="Face-down card"]')];
   check('mind match deals twelve face-down tiles', faceDown().length === 12, `${faceDown().length} tiles`);
@@ -196,10 +205,10 @@ async function main() {
   click(faceDown()[0]);
   await wait(1000);
   check('flip counter advances after a pair attempt', text().includes('Flips: 1'), text().slice(0, 120));
-  const labBack = [...window.document.querySelectorAll('main button')].find((node) => (node.textContent || '').trim() === 'Lab');
+  const labBack = window.document.querySelector('button[aria-label="Back to Study Lab"]');
   click(labBack);
   await wait(700);
-  check('back header returns to the study hub', text().includes('Daily challenge') && text().includes('Mind Match'), text().slice(0, 140));
+  check('back header returns to the Study Lab hub', text().includes('Daily challenge') && text().includes('Match pairs'), text().slice(0, 180));
 
   /* ---------------------------------------------------- live duel */
   click(byText('button', 'Dashboard'));
@@ -208,8 +217,12 @@ async function main() {
   await wait(1200);
   click(byText('button', 'New duel'));
   await wait(600);
-  const courseChip = byText('button', 'LAW 421');
-  check('duel creator offers course banks', Boolean(courseChip), text().slice(0, 160));
+  const courseChip = byText('button', 'ENG 101');
+  check(
+    'duel creator shows only supported English and Mathematics banks',
+    Boolean(courseChip) && text().includes('MTH 101') && ['LAW ', 'BIO ', 'PHY ', 'CS '].every((code) => !text().includes(code)),
+    text().slice(0, 240),
+  );
   click(courseChip);
   await wait(200);
   click(byText('button', 'Open to anyone'));
@@ -217,12 +230,12 @@ async function main() {
   click(byText('button', 'Publish open duel'));
   await wait(1600);
 
-  const code = text().match(/Share code ([A-Z0-9]{6})/)?.[1];
-  check('open duel published with a join code', Boolean(code), text().slice(0, 200));
+  const code = text().match(/Code\s*([A-Z0-9]{6})/)?.[1];
+  check('open duel published with a join code', Boolean(code), text().slice(0, 240));
 
   click(byText('button', 'Open waiting room') || byText('button', 'View duel'));
   await wait(1400);
-  check('waiting room shows the code', text().includes('Challenge sent') && text().includes(code ?? '___'), text().slice(0, 160));
+  check('waiting room shows the open seat and join code', text().includes('Waiting for an opponent') && text().includes(code ?? '___'), text().slice(0, 200));
 
   // Player B joins over REST — the server pushes duel_start to A's socket.
   const bLogin = await apiCall('/api/auth/register', {
@@ -232,10 +245,14 @@ async function main() {
   check('rival signed in over REST', bLogin.status === 200, JSON.stringify(bLogin.data).slice(0, 120));
   const bToken = bLogin.data?.token;
   const joined = await apiCall(`/api/duels/join/${code}`, {method: 'POST', token: bToken});
-  check('rival joined by code', joined.status === 200 && joined.data?.status === 'live', JSON.stringify(joined.data).slice(0, 160));
+  check(
+    'rival joined by code and received a private question set',
+    joined.status === 200 && ['starting', 'live'].includes(joined.data?.status) && (joined.data?.questions?.length ?? 0) === joined.data?.question_count,
+    JSON.stringify(joined.data).slice(0, 200),
+  );
 
-  await wait(2500);
-  check('arena opened automatically for player A', text().includes('Live duel'), text().slice(0, 160));
+  const liveQuestion = await waitFor(() => text().includes('Round 1/'), 12000);
+  check('the shared countdown opens the first live round for player A', liveQuestion, text().slice(0, 220));
 
   /* The question stage reads like a fight round: which round, what it is worth,
      how fast the answer still pays. */
@@ -259,18 +276,37 @@ async function main() {
   check('the duel shows the server verdict banner', Boolean(verdict), verdict || 'no verdict banner after an answer');
 
   const duelQuestions = joined.data?.question_count ?? 10;
-  const duelIds = (joined.data?.questions ?? []).map((question) => question.id);
+  const duelRows = joined.data?.questions ?? [];
+  let rivalError = '';
 
-  // Both sides answer; B plays over REST while A clicks.
+  // Both sides answer. B waits for each server-owned round before posting its
+  // own separately dealt question, so it cannot race the countdown or answer
+  // a future round early.
   const rival = (async () => {
-    for (const questionId of duelIds) {
-      const pick = ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)];
-      await apiCall(`/api/duels/${joined.data.id}/answer`, {
-        method: 'POST',
-        token: bToken,
-        body: {question_id: questionId, selected: pick, elapsed_ms: 1500 + Math.floor(Math.random() * 4000)},
-      });
-      await wait(120);
+    try {
+      for (const [position, question] of duelRows.entries()) {
+        let state = null;
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const response = await apiCall(`/api/duels/${joined.data.id}`, {token: bToken});
+          if (response.status !== 200) throw new Error(`state ${response.status}: ${JSON.stringify(response.data)}`);
+          state = response.data;
+          if (state.status === 'finished') return;
+          if (state.status === 'live' && state.round_index === position) break;
+          await wait(150);
+        }
+        if (!state || state.status !== 'live' || state.round_index !== position) {
+          throw new Error(`round ${position + 1} never opened: ${JSON.stringify(state)}`);
+        }
+        const pick = ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)];
+        const answer = await apiCall(`/api/duels/${joined.data.id}/answer`, {
+          method: 'POST',
+          token: bToken,
+          body: {question_id: question.id, selected: pick, elapsed_ms: 1500 + Math.floor(Math.random() * 4000)},
+        });
+        if (answer.status !== 200) throw new Error(`answer ${position + 1} ${answer.status}: ${JSON.stringify(answer.data)}`);
+      }
+    } catch (error) {
+      rivalError = error instanceof Error ? error.message : String(error);
     }
   })();
 
@@ -285,6 +321,7 @@ async function main() {
     }
   }
   await rival;
+  check('REST rival answered each server-paced round', !rivalError && duelRows.length === duelQuestions, rivalError || `${duelRows.length}/${duelQuestions} questions`);
   for (let attempt = 0; attempt < 20 && !settled(); attempt += 1) await wait(500);
   await wait(1200);
 
@@ -312,8 +349,9 @@ async function main() {
   };
   fw.print = () => {};
   fw.scrollTo = () => {};
+  fw.HTMLElement.prototype.scrollIntoView = () => {};
   fw.HTMLCanvasElement.prototype.getContext = () => null;
-  fw.confirm = () => true;
+  fw.confirm = () => { throw new Error('native confirm must not be used'); };
   fw.eval(readFileSync(BUNDLE, 'utf8'));
   await wait(1600);
 
@@ -335,42 +373,56 @@ async function main() {
 
   const contentTab = [...fw.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Courses & exams'));
   click(contentTab);
-  await wait(1600);
-  const contentText = fw.document.querySelector('#root')?.textContent ?? '';
-  check('exam management lists quizzes', contentText.includes('Exams') && /questions/.test(contentText), contentText.slice(0, 180));
-
-  // Open the bank of an exam that actually has questions — the seeded "coming soon"
-  // exam is deliberately empty, and the segmented tab defaults to it.
-  const examRows = [...fw.document.querySelectorAll('li')];
-  const stockedRow = examRows.find((node) => {
-    const match = (node.textContent || '').match(/(\d+)\s+questions/);
-    return match && Number(match[1]) > 0 && [...node.querySelectorAll('button')].some((b) => (b.textContent || '').includes('Questions'));
-  });
-  const questionButton = stockedRow
-    ? [...stockedRow.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Questions'))
-    : [...fw.document.querySelectorAll('button')].find((node) => (node.textContent || '').trim() === 'Questions');
-  click(questionButton);
-  await wait(1800);
-  const questionText = fw.document.querySelector('#root')?.textContent ?? '';
+  const adminMain = () => fw.document.querySelector('main')?.textContent ?? '';
+  await waitFor(() => adminMain().includes('ENG 101') && adminMain().includes('MTH 101'));
+  const courseListText = adminMain();
   check(
-    'question bank renders',
-    questionText.includes('Import questions') && (questionText.includes('pts') || questionText.includes('No questions yet')),
-    questionText.slice(0, 180),
+    'course management lists only the supported English and Mathematics courses',
+    courseListText.includes('ENG 101') && courseListText.includes('MTH 101') && ['LAW ', 'BIO ', 'PHY ', 'CS '].every((code) => !courseListText.includes(code)),
+    courseListText.slice(0, 300),
   );
 
-  const drawButton = [...fw.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Draw from bank'));
-  check('question bank offers draw-from-bank', Boolean(drawButton), drawButton ? 'found' : 'missing');
-  click(drawButton);
-  await wait(800);
-  const drawText = fw.document.querySelector('#root')?.textContent ?? '';
+  const examsPane = [...fw.document.querySelectorAll('main button')].find((node) => (node.textContent || '').trim() === 'Exams');
+  click(examsPane);
+  await waitFor(() => adminMain().includes('New exam') && adminMain().includes('per player'));
+  const examText = adminMain();
+  check('exam management lists the live English and Mathematics exams', examText.includes('New exam') && examText.includes('Random') && examText.includes('per player'), examText.slice(0, 360));
+
+  const questionsPane = [...fw.document.querySelectorAll('main button')].find((node) => (node.textContent || '').trim() === 'Questions');
+  click(questionsPane);
+  await waitFor(() => adminMain().includes('Course question bank') && adminMain().includes('Add question'));
+  const questionsMain = adminMain();
   check(
-    'draw modal explains the course bank',
-    drawText.includes('Draw from Question Bank') && (drawText.includes('originals in bank') || drawText.includes('choose a course first')),
-    drawText.slice(0, 180),
+    'the supported course question bank renders with import and edit actions',
+    questionsMain.includes('Course question bank') && questionsMain.includes('Add question') && questionsMain.includes('Import'),
+    questionsMain.slice(0, 360),
   );
-  const cancelDraw = [...fw.document.querySelectorAll('button')].find((node) => (node.textContent || '').trim() === 'Cancel');
-  click(cancelDraw);
-  await wait(400);
+
+  const coursePicker = fw.document.querySelector('main button[aria-haspopup="listbox"]');
+  click(coursePicker);
+  await wait(300);
+  const courseOptions = [...fw.document.querySelectorAll('[role="option"]')];
+  const optionText = courseOptions.map((node) => node.textContent || '').join(' ');
+  check(
+    'admin course dropdown is a picker restricted to English and Mathematics',
+    optionText.includes('ENG 101') && optionText.includes('MTH 101') && ['LAW ', 'BIO ', 'PHY ', 'CS '].every((code) => !optionText.includes(code)),
+    optionText,
+  );
+  click(courseOptions.find((node) => (node.textContent || '').includes('ENG 101')));
+  await wait(350);
+
+  const importButton = [...fw.document.querySelectorAll('main button')].find((node) => (node.textContent || '').trim() === 'Import');
+  check('course bank offers the import workflow', Boolean(importButton), '');
+  click(importButton);
+  await wait(350);
+  const importDialog = fw.document.querySelector('[role="dialog"]');
+  check(
+    'import dialog states which supported course bank it will update',
+    Boolean(importDialog) && (importDialog.textContent || '').includes('Import questions') && (importDialog.textContent || '').includes('ENG 101') && !(importDialog.textContent || '').includes('Supreme Court'),
+    importDialog?.textContent?.slice(0, 300),
+  );
+  click([...fw.document.querySelectorAll('[role="dialog"] button')].find((node) => (node.textContent || '').trim() === 'Cancel'));
+  await wait(300);
 
   const playersTab = [...fw.document.querySelectorAll('button')].find((node) => (node.textContent || '').includes('Players'));
   click(playersTab);

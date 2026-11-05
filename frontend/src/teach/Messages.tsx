@@ -1,15 +1,16 @@
 /** Messages — one inbox for teacher ↔ student (and existing friend) conversations. */
-import {ArrowLeft, Check, CheckCheck, Copy, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MessagesSquare, MoreVertical, Paperclip, Pencil, Reply, Search, Send, Share2, ShieldOff, Trash2, Users} from 'lucide-react';
+import {ArrowDown, ArrowLeft, Check, CheckCheck, FileText, Flag, GraduationCap, ListChecks, Loader2, Lock, MessageSquare, MessagesSquare, MoreVertical, Paperclip, Pencil, Reply, Search, Send, Share2, ShieldOff, Users} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent} from 'react';
 import {ApiError, api} from '../lib/api';
 import {fileUrl, formatBytes, teachers, type Conversation, type TMaterial, type TQuiz} from '../lib/teachers';
-import {Holdable} from '../components/Holdable';
+import {ChatActionSurface, ChatReactionChips, ChatReactionPicker, ChatReplyQuote} from '../components/chat/shared';
+import {useChatNav} from '../components/AppShell';
 import {sfx} from '../lib/sfx';
 import type {ChatMessage} from '../lib/types';
 import {Empty, LoadingRows, PageHeader} from '../pro/ui';
 import {useSession} from '../store/session';
 import {MaterialSheet, QuizRunner, ReportSheet} from './content';
-import {ActionMenu, PersonAvatar, ProScope, activeLabel, Sheet, clockTime, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
+import {ActionMenu, PersonAvatar, ProScope, activeLabel, Sheet, dayLabel, goTo, takeIntent, timeAgo, useLive} from './ui';
 import {askConfirm} from '../components/ui';
 
 const errText = (error: unknown) => (error instanceof ApiError ? error.message : 'Something went wrong. Try again.');
@@ -17,13 +18,17 @@ const ROLE_LABEL: Record<Conversation['role'], string> = {teacher: 'Your teacher
 
 export default function Messages() {
   const {profile, onlineIds, setChatFocus, refreshChatUnread} = useSession();
+  const chatNav = useChatNav();
   const [items, setItems] = useState<Conversation[] | null>(null);
-  const [activeId, setActiveId] = useState<number | null>(() => {
-    const raw = takeIntent('ag.msg.with');
-    return raw ? Number(raw) : null;
-  });
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [term, setTerm] = useState('');
   const [blockedOpen, setBlockedOpen] = useState(false);
+
+  useEffect(() => {
+    const raw = takeIntent('ag.msg.with');
+    const id = raw ? Number(raw) : null;
+    if (id !== null && Number.isSafeInteger(id) && id > 0) setActiveId(id);
+  }, []);
 
   const load = useCallback(() => {
     teachers
@@ -51,8 +56,12 @@ export default function Messages() {
 
   useEffect(() => {
     setChatFocus(activeId);
-    return () => setChatFocus(null);
-  }, [activeId, setChatFocus]);
+    chatNav.setThreadOpen(Boolean(activeId));
+    return () => {
+      setChatFocus(null);
+      chatNav.setThreadOpen(false);
+    };
+  }, [activeId, chatNav.setThreadOpen, setChatFocus]);
 
   const filtered = useMemo(() => {
     const needle = term.trim().toLowerCase();
@@ -61,7 +70,8 @@ export default function Messages() {
   const active = items?.find((c) => c.with.id === activeId) ?? null;
 
   return (
-    <ProScope>
+    <ProScope className="t-messages-shell">
+      <div className={`t-messages-page ${activeId ? 't-messages-thread-open' : ''}`}>
       <div className={activeId ? 'max-md:hidden' : ''}>
         <PageHeader eyebrow="Inbox" hue="blue" icon={<MessagesSquare />} title="Messages" description="Conversations with your teachers, students and friends. Contact details stay private." />
       </div>
@@ -147,6 +157,7 @@ export default function Messages() {
         </div>
       </section>
       <BlockedSheet open={blockedOpen} onClose={() => setBlockedOpen(false)} onChanged={load} />
+      </div>
     </ProScope>
   );
 }
@@ -157,8 +168,18 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [editTo, setEditTo] = useState<ChatMessage | null>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
+  const [reactFor, setReactFor] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [unseen, setUnseen] = useState(0);
   const highlightTimer = useRef<number | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const hasMoreRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const atBottomRef = useRef(true);
+  const prependAnchor = useRef<{height: number; top: number} | null>(null);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -184,7 +205,10 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
     api
       .chatWith(otherId)
       .then((res) => {
+        messagesRef.current = res.messages;
+        hasMoreRef.current = res.has_more;
         setMessages(res.messages);
+        setHasMore(res.has_more);
         markRead();
         onChanged();
       })
@@ -193,18 +217,44 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   }, [otherId]);
 
   useEffect(() => {
+    messagesRef.current = messages ?? [];
+    hasMoreRef.current = hasMore;
+  }, [messages, hasMore]);
+
+  useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const anchor = prependAnchor.current;
+    if (anchor) {
+      el.scrollTop = anchor.top + el.scrollHeight - anchor.height;
+      prependAnchor.current = null;
+      return;
+    }
+    if (atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
 
-  useLive('chat', (data) => {
+  const scrollToLatest = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({top: el.scrollHeight, behavior: 'smooth'});
+    atBottomRef.current = true;
+    setUnseen(0);
+  }, []);
+
+  useLive('chat', (data) => { 
     const msg = data as ChatMessage;
     const mine = msg.sender_id === meId && msg.recipient_id === otherId;
     const theirs = msg.sender_id === otherId && msg.recipient_id === meId;
     if (!mine && !theirs) return;
-    setMessages((current) => (current && !current.some((m) => m.id === msg.id) ? [...current, msg] : current));
+    setMessages((current) => {
+      if (!current || current.some((m) => m.id === msg.id)) return current;
+      const next = [...current, msg];
+      messagesRef.current = next;
+      return next;
+    });
     if (theirs) {
       setTyping(false);
+      if (!atBottomRef.current) setUnseen((current) => current + 1);
       markRead();
     }
   });
@@ -225,23 +275,62 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   });
 
 
-  const jumpToMessage = useCallback((messageId: number) => {
-    const node = scrollRef.current?.querySelector(`[data-mid="${messageId}"]`) as HTMLElement | null;
+  const loadOlder = useCallback(async (): Promise<boolean> => {
+    const current = messagesRef.current;
+    const oldestId = current[0]?.id;
+    if (!oldestId || !hasMoreRef.current || loadingOlderRef.current) return false;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const node = scrollRef.current;
+    prependAnchor.current = node ? {height: node.scrollHeight, top: node.scrollTop} : null;
+    try {
+      const result = await api.chatWith(otherId, {beforeId: oldestId, limit: 60});
+      const existing = new Set(messagesRef.current.map((row) => row.id));
+      const older = result.messages.filter((row) => !existing.has(row.id));
+      const next = [...older, ...messagesRef.current];
+      messagesRef.current = next;
+      hasMoreRef.current = result.has_more && older.length > 0;
+      setMessages(next);
+      setHasMore(hasMoreRef.current);
+      return older.length > 0;
+    } catch (e) {
+      prependAnchor.current = null;
+      toast('error', 'Could not load older messages', errText(e));
+      return false;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [otherId, toast]);
+
+  const jumpToMessage = useCallback(async (messageId: number) => {
+    let node = scrollRef.current?.querySelector(`[data-mid=\"${messageId}\"]`) as HTMLElement | null;
+    let pages = 0;
+    while (!node && hasMoreRef.current && pages < 40) {
+      if (!(await loadOlder())) break;
+      pages += 1;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      node = scrollRef.current?.querySelector(`[data-mid=\"${messageId}\"]`) as HTMLElement | null;
+    }
     if (!node) {
-      toast('info', 'Message not loaded', 'Scroll up to load older messages.');
+      toast('info', 'Message unavailable', 'This reply points to a message that is no longer in the conversation.');
       return;
     }
     node.scrollIntoView({behavior: 'smooth', block: 'center'});
     setHighlight(messageId);
     if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
-    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1600);
-  }, [toast]);
+    highlightTimer.current = window.setTimeout(() => setHighlight(null), 1700);
+  }, [loadOlder, toast]);
 
   const reactTo = useCallback(
     async (message: ChatMessage, emoji: string) => {
       try {
         const updated = await api.reactChat(message.id, emoji);
-        setMessages((current) => current?.map((row) => (row.id === message.id ? {...row, ...updated} : row)) ?? null);
+        setMessages((current) => {
+          const next = current?.map((row) => (row.id === message.id ? {...row, ...updated} : row)) ?? null;
+          if (next) messagesRef.current = next;
+          return next;
+        });
         sfx.play('tick');
       } catch (e) {
         toast('error', 'Could not react', errText(e));
@@ -269,6 +358,8 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   );
 
   const send = async (payload: {kind?: ChatMessage['kind']; body?: string; meta?: Record<string, unknown>}) => {
+    atBottomRef.current = true;
+    setUnseen(0);
     setSending(true);
     try {
       const msg = await api.sendChat({to: otherId, ...payload});
@@ -283,7 +374,46 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
     }
   };
 
+  const startEdit = (message: ChatMessage) => {
+    setEditTo(message);
+    setReplyTo(null);
+    setDraft(message.body);
+  };
+
+  const saveEdit = async () => {
+    if (!editTo || sending) return;
+    const body = draft.trim();
+    if (!body) return;
+    if (body === editTo.body) {
+      setEditTo(null);
+      setDraft('');
+      return;
+    }
+    setSending(true);
+    try {
+      const updated = await api.editChat(editTo.id, body);
+      setMessages((current) => {
+        if (!current) return current;
+        const next = current.map((row) => (row.id === editTo.id ? {...row, ...updated} : row));
+        messagesRef.current = next;
+        return next;
+      });
+      setEditTo(null);
+      setDraft('');
+      onChanged();
+      sfx.play('tap');
+    } catch (e) {
+      toast('error', 'Could not save the edit', errText(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const sendText = async () => {
+    if (editTo) {
+      await saveEdit();
+      return;
+    }
     const body = draft.trim();
     if (!body || sending) return;
     const meta: Record<string, unknown> = {};
@@ -359,9 +489,9 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
   const lastMine = [...(messages ?? [])].reverse().find((m) => m.sender_id === meId);
 
   return (
-    <>
+    <div className="t-thread-root">
       <header className="t-chat-head">
-        <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm min-[900px]:hidden" onClick={onBack} aria-label="Back to conversations">
+        <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon pro-btn-sm lg:hidden" onClick={onBack} aria-label="Back to conversations">
           <ArrowLeft className="size-4" />
         </button>
         <PersonAvatar id={otherId} name={other?.name ?? '…'} hue={other?.avatar_hue} hasPhoto={other?.has_photo} size={40} online={online} ring={conversation?.role === 'teacher' ? 'brand' : conversation?.role === 'student' ? 'hue' : undefined} />
@@ -388,7 +518,23 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
         />
       </header>
 
-      <div className="t-chat-scroll" ref={scrollRef} aria-live="polite">
+      <div
+        className="t-chat-scroll"
+        ref={scrollRef}
+        aria-live="polite"
+        onScroll={(event) => {
+          const node = event.currentTarget;
+          atBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 56;
+          if (atBottomRef.current) setUnseen(0);
+          if (node.scrollTop < 44 && hasMoreRef.current && !loadingOlderRef.current) void loadOlder();
+        }}
+      >
+        {hasMore && (
+          <button type="button" className="t-load-older" onClick={() => void loadOlder()} disabled={loadingOlder}>
+            {loadingOlder ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowLeft className="size-3.5 rotate-90" />}
+            {loadingOlder ? 'Loading older messages…' : 'Load older messages'}
+          </button>
+        )}
         {error && <p className="pro-secondary p-4 text-center">{error}</p>}
         {messages === null && !error && <LoadingRows rows={4} />}
         {messages && messages.length === 0 && (
@@ -416,7 +562,10 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
               onReport={() => setReport({kind: 'chat_message', id: row.msg.id, label: 'Message'})}
               onReply={() => setReplyTo(row.msg)}
               onReact={(emoji) => void reactTo(row.msg, emoji)}
+              onOpenReactions={() => setReactFor((current) => current === row.msg.id ? null : row.msg.id)}
+              showPicker={reactFor === row.msg.id}
               onDelete={() => void dropMessage(row.msg)}
+              onEdit={() => startEdit(row.msg)}
               onJump={jumpToMessage}
             />
           ),
@@ -434,6 +583,12 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
         )}
       </div>
 
+      {unseen > 0 && (
+        <button type="button" className="t-scroll-latest" onClick={scrollToLatest} aria-label="Scroll to latest messages">
+          <ArrowDown className="size-4" /> {unseen} new message{unseen === 1 ? '' : 's'}
+        </button>
+      )}
+
       {replyTo && !conversation?.blocked && (
         <div className="flex items-center gap-2 border-t px-3 py-2 text-[0.75rem]" style={{borderColor: 'var(--pro-border)', background: 'var(--pro-elevated)'}}>
           <Reply className="size-3.5 shrink-0 opacity-70" />
@@ -445,24 +600,31 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
           </button>
         </div>
       )}
+      {editTo && !conversation?.blocked && (
+        <div className="flex items-center gap-2 border-t px-3 py-2 text-[0.75rem]" style={{borderColor: 'var(--pro-border)', background: 'var(--pro-elevated)'}}>
+          <Pencil className="size-3.5 shrink-0 opacity-70" />
+          <span className="min-w-0 flex-1 truncate"><b>Editing message</b> · {editTo.body.slice(0, 80)}</span>
+          <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon shrink-0" onClick={() => { setEditTo(null); setDraft(''); }} aria-label="Cancel edit">×</button>
+        </div>
+      )}
       {conversation?.blocked ? (
         <div className="t-composer justify-center">
           <p className="pro-meta">You blocked this person. Unblock from Blocked people to message again.</p>
         </div>
       ) : (
         <div className="t-composer">
-          <input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.gif" onChange={(e) => void attach(e.target.files?.[0])} />
-          <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon shrink-0" onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Attach a file" title="Attach a file (max 15 MB)">
+          <input ref={fileRef} type="file" hidden disabled={Boolean(editTo) || uploading} accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.gif" onChange={(e) => void attach(e.target.files?.[0])} />
+          <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon shrink-0" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(editTo)} aria-label="Attach a file" title="Attach a file (max 15 MB)">
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
           </button>
           {isTeacherHere && (
-            <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon shrink-0" onClick={() => setShare(true)} aria-label="Share a material or quiz" title="Share a material or quiz">
+            <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon shrink-0" onClick={() => setShare(true)} disabled={Boolean(editTo)} aria-label="Share a material or quiz" title="Share a material or quiz">
               <Share2 className="size-4" />
             </button>
           )}
-          <textarea className="pro-input" rows={1} value={draft} onChange={(e) => onDraft(e.target.value)} onKeyDown={onKey} placeholder="Write a message" maxLength={600} aria-label="Message" />
-          <button type="button" className="pro-btn pro-btn-primary pro-btn-icon shrink-0" onClick={() => void sendText()} disabled={!draft.trim() || sending} aria-label="Send" title="Send">
-            <Send className="size-4" />
+          <textarea className="pro-input" rows={1} value={draft} onChange={(e) => onDraft(e.target.value)} onKeyDown={onKey} placeholder={editTo ? 'Edit your message' : 'Write a message'} maxLength={600} aria-label={editTo ? 'Edit message' : 'Message'} />
+          <button type="button" className="pro-btn pro-btn-primary pro-btn-icon shrink-0" onClick={() => void sendText()} disabled={!draft.trim() || sending} aria-label={editTo ? 'Save edit' : 'Send'} title={editTo ? 'Save edit' : 'Send'}>
+            {editTo ? <Check className="size-4" /> : <Send className="size-4" />}
           </button>
         </div>
       )}
@@ -478,7 +640,7 @@ function Thread({meId, otherId, conversation, online, onBack, onChanged}: {meId:
       <ReportSheet target={report} onClose={() => setReport(null)} />
       <MaterialSheet id={material} onClose={() => setMaterial(null)} />
       <QuizRunner quizId={quiz} onClose={() => setQuiz(null)} />
-    </>
+    </div>
   );
 }
 
@@ -492,8 +654,11 @@ function MessageBubble({
   onReport,
   onReply,
   onReact,
+  onOpenReactions,
   onDelete,
+  onEdit,
   onJump,
+  showPicker = false,
 }: {
   msg: ChatMessage;
   mine: boolean;
@@ -504,27 +669,17 @@ function MessageBubble({
   onReport: () => void;
   onReply: () => void;
   onReact: (emoji: string) => void;
+  onOpenReactions: () => void;
   onDelete: () => void;
+  onEdit: () => void;
   onJump: (id: number) => void;
+  showPicker?: boolean;
 }) {
   const meta = msg.meta as {
-    id?: number;
-    name?: string;
-    size?: number;
-    mime?: string;
-    is_image?: boolean;
-    title?: string;
-    topic?: string;
-    subject?: string;
-    questions?: number;
-    minutes?: number;
-    reply_to?: {id?: number; name?: string; snippet?: string};
+    id?: number; name?: string; size?: number; mime?: string; is_image?: boolean;
+    title?: string; topic?: string; subject?: string; questions?: number; minutes?: number;
   };
-  const reply = meta?.reply_to;
-  const reactionEntries = Object.entries(msg.reactions ?? {}).filter(([, n]) => (n as number) > 0);
-  const mineSet = new Set(msg.my_reactions ?? []);
   const gone = Boolean(msg.deleted);
-
   let content: React.ReactNode;
   if (gone) content = <div className="t-bubble opacity-60">This message was deleted</div>;
   else if (msg.kind === 'file' && meta.id) {
@@ -536,9 +691,7 @@ function MessageBubble({
           </a>
         ) : (
           <a className="t-attach" href={fileUrl(meta.id, true)}>
-            <span className="t-attach-icon">
-              <FileText />
-            </span>
+            <span className="t-attach-icon"><FileText /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[0.85rem] font-semibold">{meta.name}</span>
               <span className="pro-meta">{formatBytes(meta.size ?? 0)} · Download</span>
@@ -563,112 +716,45 @@ function MessageBubble({
       </button>
     );
   } else if (msg.kind === 'duel') content = <div className="t-bubble">⚔ Duel invite{msg.body ? ` — ${msg.body}` : ''}</div>;
+  else if (msg.kind === 'quiz') content = <div className="t-bubble">Quiz plan{msg.body ? ` — ${msg.body}` : ''}</div>;
   else content = <div className="t-bubble">{msg.body || '…'}</div>;
-
-  const quick = ['👍', '🔥', '😂', '💯'];
-  const actions = [
-    ...(gone
-      ? []
-      : [
-          {key: 'reply', label: 'Reply', icon: <Reply className="size-4" />, tone: 'accent' as const, onAction: onReply},
-          ...quick.map((emoji) => ({
-            key: `react-${emoji}`,
-            label: `${emoji} React`,
-            icon: <span className="text-[0.95rem] leading-none">{emoji}</span>,
-            tone: 'neutral' as const,
-            onAction: () => onReact(emoji),
-          })),
-        ]),
-    ...(msg.body && !gone
-      ? [
-          {
-            key: 'copy',
-            label: 'Copy text',
-            icon: <Copy className="size-4" />,
-            tone: 'neutral' as const,
-            onAction: () => {
-              void navigator.clipboard?.writeText(msg.body).catch(() => undefined);
-            },
-          },
-        ]
-      : []),
-    {
-      key: 'delete',
-      label: mine && !gone ? 'Delete for both' : 'Hide for me',
-      icon: <Trash2 className="size-4" />,
-      tone: 'danger' as const,
-      onAction: onDelete,
-    },
-    ...(!mine && !gone
-      ? [
-          {
-            key: 'report',
-            label: 'Report',
-            icon: <Flag className="size-4" />,
-            tone: 'danger' as const,
-            onAction: onReport,
-          },
-        ]
-      : []),
-  ];
 
   return (
     <div
       data-mid={msg.id}
       id={`tm-${msg.id}`}
-      className={`flex min-w-0 items-start gap-2 rounded-xl px-1 py-1 ${highlight ? 'bg-nova-500/20 ring-1 ring-nova-400/40' : ''}`}
+      className={`t-msg group ${highlight ? 't-msg-highlight' : ''}`}
+      data-mine={mine ? '' : undefined}
     >
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/8 text-[0.62rem] font-black text-mist-200">{mine ? 'You' : 'T'}</span>
       <div className="min-w-0 flex-1 teacher-name-row">
-        <div className="flex items-baseline gap-2">
-          <span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : 'Them'}</span>
-        </div>
-      <Holdable actions={actions} hint="Hold for actions" menuWidth={214} className="max-w-[min(88%,28rem)]">
-        <div>
-          {reply && !gone && (
-            <button
-              type="button"
-              className="mb-1 block w-full border-l-2 pl-2 text-left text-[0.68rem] leading-snug opacity-90"
-              style={{borderColor: 'var(--pro-accent, #8b5cf6)'}}
-              onClick={() => (typeof reply.id === 'number' ? onJump(reply.id) : undefined)}
-            >
-              <span className="font-black">{reply.name}</span>
-              {reply.snippet ? `: ${reply.snippet}` : ''}
-            </button>
-          )}
-          {content}
-          {reactionEntries.length > 0 && !gone && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {reactionEntries.map(([emoji, count]) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onReact(emoji)}
-                  className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[0.72rem] ${
-                    mineSet.has(emoji) ? 'border-nova-400/50 bg-nova-500/15' : 'border-white/10 bg-black/20'
-                  }`}
-                >
-                  <span>{emoji}</span>
-                  <span className="tabular-nums opacity-80">{Number(count)}</span>
-                </button>
-              ))}
+        <div className="flex items-baseline gap-2"><span className="truncate text-[0.72rem] font-extrabold text-mist-200">{mine ? 'You' : 'Them'}</span></div>
+        <ChatActionSurface
+          message={msg}
+          mine={mine}
+          onReply={onReply}
+          onOpenReactions={onOpenReactions}
+          onDelete={onDelete}
+          onEdit={onEdit}
+          onReport={onReport}
+          className="max-w-[min(88%,34rem)]"
+        >
+          <div className="min-w-0">
+            {!gone && <ChatReplyQuote meta={msg.meta} mine={mine} variant="pro" onJump={onJump} />}
+            {content}
+            <ChatReactionChips message={msg} mine={mine} variant="pro" onToggle={onReact} />
+            {showPicker && !gone && <ChatReactionPicker variant="pro" onPick={onReact} onClose={onOpenReactions} />}
+            <div className="t-msg-meta">
+              {msg.edited_at && !gone && <span>edited · </span>}
+              {showSeen && mine && !gone && <span className="inline-flex items-center gap-0.5">{msg.read ? <CheckCheck className="size-3" /> : <Check className="size-3" />}</span>}
+              {showSeen && mine && !gone && <span>{msg.read ? 'Seen' : 'Sent'}</span>}
             </div>
-          )}
-          <div className="t-msg-meta">
-            {msg.edited_at && !gone && <span>edited · </span>}
-            {showSeen && mine && !gone && (
-              <span className="inline-flex items-center gap-0.5">
-                {msg.read_at ? <CheckCheck className="size-3" /> : <Check className="size-3" />}
-              </span>
-            )}
           </div>
-        </div>
-      </Holdable>
+        </ChatActionSurface>
       </div>
     </div>
   );
 }
-
 
 function ShareSheet({open, onClose, onPick}: {open: boolean; onClose: () => void; onPick: (kind: 'material' | 'tquiz', item: {id: number}) => Promise<void>}) {
   const [materials, setMaterials] = useState<TMaterial[] | null>(null);

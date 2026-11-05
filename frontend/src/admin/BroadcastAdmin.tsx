@@ -173,7 +173,7 @@ function NoticesTab({onChanged}: {onChanged: () => void}) {
               />
             </Field>
             <Field label="Target course code" hint="Optional — shown as a tag only.">
-              <TextInput value={form.target_course} placeholder="LAW 411" onChange={(event) => setForm({...form, target_course: event.target.value.toUpperCase()})} />
+              <TextInput value={form.target_course} placeholder="ENG 101" onChange={(event) => setForm({...form, target_course: event.target.value.toUpperCase()})} />
             </Field>
             <SwitchRow
               className="sm:col-span-2"

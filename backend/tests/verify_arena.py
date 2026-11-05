@@ -141,11 +141,14 @@ def check_answer_contract(admin: str, student: str) -> None:
     status, quizzes = call("GET", "/admin/quizzes", token=admin)
     quiz_id = None
     for row in quizzes if isinstance(quizzes, list) else quizzes.get("rows", []):
-        if row.get("question_count", 0) >= 3:
+        # Scheduled exams are visible to staff but cannot be started by players.
+        # Choose one that is actually open so this checks answer handling rather
+        # than relying on the seed's display order or calendar.
+        if row.get("status") == "active" and row.get("question_count", 0) >= 3:
             quiz_id = row["id"]
             break
     if quiz_id is None:
-        check("an exam with questions exists", False, "no quiz found")
+        check("an active exam with questions exists", False, "no active quiz found")
         return
     status, exam = call("GET", f"/admin/quizzes/{quiz_id}", token=admin)
     check("staff can read an exam", status == 200, status)
@@ -362,6 +365,27 @@ def check_chat() -> None:
     token_b, profile_b = new_student("cb")
     status, _ = call("POST", "/friends", {"student_id": profile_b["id"]}, token=token_a)
     check("players can become friends", status == 200, status)
+    status, global_rows = call("GET", "/activity/global?limit=100", token=token_a)
+    global_ids = [row.get("id") for row in global_rows] if isinstance(global_rows, list) else []
+    check("the new-friend badge appears in global activity",
+          status == 200 and any(row.get("kind") == "badge" for row in global_rows if isinstance(row, dict)),
+          (status, global_rows))
+    check("global activity emits each record only once",
+          len(global_ids) == len(set(global_ids)), global_ids)
+    status, card = call("GET", f"/players/{profile_b['id']}", token=token_a)
+    check("player card gets viewer-specific friend state", status == 200 and card.get("is_friend") is True and card.get("friendship_status") == "accepted", (status, card))
+    check("public profile includes safe ranked, season, achievement, history and stat blocks",
+          isinstance(card.get("ranked", {}).get("tier"), dict)
+          and isinstance(card.get("season", {}).get("rank"), dict)
+          and isinstance(card.get("badges"), list)
+          and isinstance(card.get("history"), list)
+          and isinstance(card.get("stats", {}).get("accuracy"), (int, float)),
+          {key: type(card.get(key)).__name__ for key in ("ranked", "season", "badges", "history", "stats")})
+    private_fields = {"username", "email", "reg_no", "player_code", "faculty", "campus", "last_active"}
+    check("public profile allowlist does not expose private account fields",
+          not private_fields.intersection(card), sorted(private_fields.intersection(card)))
+    status, duplicate = call("POST", "/friends", {"student_id": profile_b["id"]}, token=token_a)
+    check("adding an existing friend never toggles relationship state", status == 409, (status, duplicate))
     status, sent = call("POST", "/chat", {"to": profile_b["id"], "kind": "text", "body": "hold me"}, token=token_a)
     check("a message sends", status == 200 and sent.get("id"), (status, sent))
     message_id = sent["id"]
@@ -444,14 +468,18 @@ def check_season(admin: str, student: str) -> None:
     # Earning XP must move the ladder, and it must move it by exactly what the
     # XP events said — never by a client-supplied number.
     before_xp = me["xp"]
-    status, daily = call("POST", "/me/daily-bonus", token=student)
-    if status == 200:
+    before_level = me["level"]
+    daily_status, daily = call("POST", "/me/daily-bonus", token=student)
+    daily_rewards = (daily or {}).get("rewards", []) if isinstance(daily, dict) else []
+    daily_gained = sum(int(event.get("amount", 0)) for event in daily_rewards if event.get("type") == "xp")
+    daily_climbs = [event for event in daily_rewards if event.get("type") == "season_level"]
+    after = {"me_season": me}
+    if daily_status == 200:
         remember(daily)
-        gained = sum(int(event.get("amount", 0)) for event in daily.get("rewards", []) if event.get("type") == "xp")
         status, after = call("GET", "/arena/season", token=student)
         check("season XP only moves by the granted amount",
-              status == 200 and after["me_season"]["xp"] == before_xp + gained,
-              (before_xp, gained, after.get("me_season", {}).get("xp")))
+              status == 200 and after["me_season"]["xp"] == before_xp + daily_gained,
+              (before_xp, daily_gained, after.get("me_season", {}).get("xp")))
 
     # A season reward must not push the player up the season ladder.
     status, claim = call("POST", "/arena/season/claim", token=student)
@@ -580,12 +608,25 @@ def check_season(admin: str, student: str) -> None:
             check("a climb carries the badge for that level",
                   event["rank"]["key"] == next(row["key"] for row in ladder if row["level_from"] <= event["level"] <= row["level_to"]),
                   event["rank"])
-        # The very last XP event of this run was the daily bonus, so the standing
-        # the profile reports right now must be exactly what that climb said.
-        last = climbs[-1]
-        check("the last climb matches the standing the season reports",
-              last["level"] == badge.get("level") and last["xp"] == badge.get("xp"),
-              (last["level"], badge.get("level"), last["xp"], badge.get("xp")))
+        # A grant only produces a climb when it crosses a level threshold. If
+        # the daily bonus adds XP within the current level, the profile can be
+        # ahead of the last climb event without any inconsistency.
+        if daily_status == 200 and daily_gained:
+            expected_daily_xp = before_xp + daily_gained
+            expected_daily_level = max(row["level"] for row in levels if row["xp"] <= expected_daily_xp)
+            crossed_level = expected_daily_level > before_level
+            check("daily bonus only reports a climb when XP crosses a level",
+                  bool(daily_climbs) == crossed_level,
+                  (before_level, expected_daily_level, daily_gained, daily_climbs))
+            if daily_climbs:
+                last_daily_climb = daily_climbs[-1]
+                check("the daily climb matches the resulting standing",
+                      last_daily_climb["level"] == expected_daily_level
+                      and last_daily_climb["xp"] == expected_daily_xp
+                      and last_daily_climb["level"] == badge.get("level")
+                      and last_daily_climb["xp"] == badge.get("xp"),
+                      (last_daily_climb.get("level"), expected_daily_level,
+                       last_daily_climb.get("xp"), expected_daily_xp, badge.get("level"), badge.get("xp")))
         check("a promotion only fires when the badge actually changes",
               all((event["rank"]["key"] != event["previous_rank"]["key"]) is event["promoted"] for event in climbs),
               [(event["rank"]["key"], event["previous_rank"]["key"], event["promoted"]) for event in climbs])

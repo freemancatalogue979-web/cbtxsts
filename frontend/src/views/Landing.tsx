@@ -163,8 +163,7 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
       <div className="pointer-events-none fixed -bottom-32 left-1/4 size-[22rem] rounded-full bg-pulse-600/16 blur-[110px]" />
 
       {/* ---------------------------------------------------- branded head
-          The official lockup on a floating glass bar: crest in a ray halo,
-          two-tone wordmark and tagline, controls on the right. */}
+          The official lockup pairs the crest and wordmark with compact controls. */}
       <BrandBar>
             {(stats?.online ?? 0) > 0 && (
               <span className="hidden items-center gap-1.5 rounded-full border border-mint-500/25 bg-mint-500/10 px-2.5 py-1 text-[0.62rem] font-black tracking-wide text-mint-300 md:inline-flex">
@@ -185,7 +184,7 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
             >
               Staff
             </Button>
-            <InstallApp variant="icon" className="sm:hidden" />
+            <InstallApp variant="icon" className="hidden min-[420px]:grid sm:hidden" />
             <InstallApp variant="pill" className="hidden sm:inline-flex" />
             <Button size="sm" onClick={onSignIn} className="agb-cta">
               Sign in
@@ -320,10 +319,10 @@ export default function Landing({onSignIn, onStaff}: {onSignIn: () => void; onSt
         {/* ------------------------------------------------------- footer */}
         <footer className="mt-10 border-t border-white/6 pt-5 pb-2 text-center sm:mt-14">
           <p className="text-[0.72rem] font-bold text-mist-500">
-            {config?.institution || 'University of Nigeria'} · {config?.faculty || 'Faculty of Law'}
+            {config?.institution || 'Absolute Genesis Academy'} · {config?.faculty || 'English & Mathematics'}
           </p>
           <p className="mt-1 text-[0.66rem] font-semibold text-mist-600">
-            {config?.campus || 'Enugu, Nigeria'} · Powered by the Absolute Genesis engine
+            {config?.campus || 'Online Campus'} · Powered by the Absolute Genesis engine
           </p>
         </footer>
       </main>

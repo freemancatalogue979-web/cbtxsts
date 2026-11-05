@@ -6,10 +6,8 @@
 (or simply ``./start-arena.sh demo`` / ``start-arena.bat demo`` while the app runs)
 
 What it does
-  1. Removes the old Law demo content (LAW 411 / 421 / 431 courses, their exams,
-     questions and materials) and the Naira-era notices/prize names.
-  2. Makes sure the general-subject courses exist (English, Maths, Biology,
-     Chemistry, Physics, Computer Science) with questions, exams and materials.
+  1. Keeps English and Mathematics active while retaining legacy course history.
+  2. Makes sure English and Mathematics have starter questions, exams and materials.
   3. Creates students — mostly United States and United Kingdom — and gives them
      real history through the normal API: exams taken, practice runs, friends,
      study groups with chat / announcements / Q&A / group quizzes, private chats,
@@ -17,8 +15,8 @@ What it does
   4. Polishes profiles (schools, bios, streaks, ratings) and spreads activity
      over the last few weeks so feeds and leaderboards look natural.
 
-It only touches content it owns (the Law demo courses and the demo usernames
-below) — your own accounts, courses and uploads are left alone. Safe to re-run:
+It keeps historical course, quiz and attempt records intact, and only changes
+catalogue visibility plus the demo usernames below. Safe to re-run:
 existing demo accounts are reused and social steps are skipped once done.
 
 Every demo account uses the password  demo1234 .
@@ -33,7 +31,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +42,7 @@ from sqlalchemy import or_, select  # noqa: E402
 
 from app.config import DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD  # noqa: E402
 from app.db import SessionLocal, init_db  # noqa: E402
+from app.course_catalog import ACTIVE_COURSE_CODES  # noqa: E402
 from app.models import (  # noqa: E402
     Activity,
     Attempt,
@@ -56,60 +55,50 @@ from app.models import (  # noqa: E402
     Quiz,
     Student,
     StudyGroup,
-    utcnow,
 )
 
 PASSWORD = "demo1234"
-LAW_CODES = ("LAW 411", "LAW 421", "LAW 431")
 MARKER_GROUP = "London Maths Circle"
 rng = random.Random(2026)
 
 # username, display name, phone, school/campus, country, level, bio, status, skill 0..1
 STUDENTS = [
-    ("emma", "Emma Wilson", "+447700900101", "King's College London", "UK", "Year 2", "Maths & biology nerd from London. Coffee, flashcards and a 6am study club.", "Revising for mocks ☕", 0.86),
-    ("oliver", "Oliver Bennett", "+447700900102", "University of Manchester", "UK", "Year 1", "Physics first, football second. Ask me about Newton's laws.", "Speed round anyone?", 0.78),
-    ("amelia", "Amelia Hughes", "+447700900103", "University of Leeds", "UK", "Year 2", "Future doctor. Biology flashcards are my love language.", "", 0.82),
-    ("harry", "Harry Clarke", "+447700900104", "University of Birmingham", "UK", "Year 1", "Coding, chess and chemistry.", "In the library 📚", 0.64),
+    ("emma", "Emma Wilson", "+447700900101", "King's College London", "UK", "Year 2", "Maths and reading nerd from London. Coffee, flashcards and a 6am study club.", "Revising for mocks ☕", 0.86),
+    ("oliver", "Oliver Bennett", "+447700900102", "University of Manchester", "UK", "Year 1", "Maths first, football second. Ask me about tricky word problems.", "Speed round anyone?", 0.78),
+    ("amelia", "Amelia Hughes", "+447700900103", "University of Leeds", "UK", "Year 2", "Future doctor. English and maths flashcards are my love language.", "", 0.82),
+    ("harry", "Harry Clarke", "+447700900104", "University of Birmingham", "UK", "Year 1", "Chess, puzzles and a good mystery novel.", "In the library 📚", 0.64),
     ("isla", "Isla Murray", "+447700900105", "University of Edinburgh", "UK", "Year 3", "Scottish, sarcastic, and strangely good at algebra.", "", 0.74),
-    ("george", "George Patel", "+447700900106", "University of Leicester", "UK", "Year 2", "Computer science student. I explain binary at parties.", "Building a study bot", 0.8),
+    ("george", "George Patel", "+447700900106", "University of Leicester", "UK", "Year 2", "Maths student. I explain probability at parties.", "Building a study bot", 0.8),
     ("charlotte", "Charlotte Evans", "+447700900107", "Cardiff University", "UK", "Year 1", "English literature + a bit of everything.", "", 0.69),
-    ("jack", "Jack Robinson", "+447700900108", "University of Bristol", "UK", "Year 2", "Engineering student. Physics duels at 9pm.", "", 0.71),
-    ("priya", "Priya Sharma", "+447700900109", "University College London", "UK", "Year 3", "Chemistry is just cooking with more maths.", "Mock exam Friday!", 0.88),
+    ("jack", "Jack Robinson", "+447700900108", "University of Bristol", "UK", "Year 2", "Engineering student. Maths duels at 9pm.", "", 0.71),
+    ("priya", "Priya Sharma", "+447700900109", "University College London", "UK", "Year 3", "Essay structure is just maths for ideas.", "Mock exam Friday!", 0.88),
     ("freya", "Freya Morgan", "+447700900110", "University of Oxford", "UK", "Year 1", "Languages and linguistics. Grammar police (friendly).", "", 0.84),
-    ("liam", "Liam Johnson", "+12025550101", "University of Texas at Austin", "US", "Sophomore", "Pre-med from Austin. Bio + chem all day.", "Grinding practice sets", 0.79),
+    ("liam", "Liam Johnson", "+12025550101", "University of Texas at Austin", "US", "Sophomore", "Pre-med from Austin. Reading and maths all day.", "Grinding practice sets", 0.79),
     ("olivia", "Olivia Martinez", "+12025550102", "UCLA", "US", "Junior", "LA born. Writing, debate and way too much iced coffee.", "", 0.75),
     ("noah", "Noah Williams", "+12025550103", "University of Chicago", "US", "Freshman", "Math major. Probability puzzles welcome.", "", 0.83),
     ("ava", "Ava Thompson", "+12025550104", "New York University", "US", "Sophomore", "SAT/AP tutor on weekends. Running the Prep Squad.", "Group quiz tonight 8pm", 0.87),
-    ("ethan", "Ethan Brooks", "+12025550105", "University of Washington", "US", "Junior", "Seattle. CS + physics. Rainy days = study days.", "", 0.72),
-    ("mia", "Mia Rodriguez", "+12025550106", "University of Miami", "US", "Freshman", "Marine biology dreams 🐠", "", 0.66),
-    ("lucas", "Lucas Kim", "+12025550107", "UC Berkeley", "US", "Senior", "Software engineering. Running Code Club 101.", "Shipping side projects", 0.9),
-    ("harper", "Harper Davis", "+12025550108", "Boston University", "US", "Sophomore", "Biology night owl. Ask me about genetics.", "", 0.77),
+    ("ethan", "Ethan Brooks", "+12025550105", "University of Washington", "US", "Junior", "Seattle. Maths puzzles and rainy-day reading.", "", 0.72),
+    ("mia", "Mia Rodriguez", "+12025550106", "University of Miami", "US", "Freshman", "Poetry and beach walks 🐠", "", 0.66),
+    ("lucas", "Lucas Kim", "+12025550107", "UC Berkeley", "US", "Senior", "Building a study group. Running the Friday quiz.", "Shipping side projects", 0.9),
+    ("harper", "Harper Davis", "+12025550108", "Boston University", "US", "Sophomore", "English night owl. Ask me about essay structure.", "", 0.77),
     ("jayden", "Jayden Carter", "+12025550109", "Georgia Tech", "US", "Junior", "Atlanta. Engineering + basketball.", "", 0.68),
-    ("chloe", "Chloe Anderson", "+12025550110", "University of Colorado Boulder", "US", "Freshman", "Environmental science, hiking, and ecology quizzes.", "", 0.7),
-    ("mason", "Mason Lee", "+12025550111", "Rice University", "US", "Sophomore", "Houston. Chemistry lab rat.", "", 0.73),
+    ("chloe", "Chloe Anderson", "+12025550110", "University of Colorado Boulder", "US", "Freshman", "Hiking, reading, and vocabulary quizzes.", "", 0.7),
+    ("mason", "Mason Lee", "+12025550111", "Rice University", "US", "Sophomore", "Houston. Algebra problem-solver.", "", 0.73),
     ("zoe", "Zoe Mitchell", "+12025550112", "University of Pennsylvania", "US", "Junior", "Economics + statistics. Spreadsheets are art.", "", 0.81),
     ("sarah", "Sarah Chen", "+14165550113", "University of Toronto", "CA", "Year 2", "Toronto. Life sciences and piano.", "", 0.85),
     ("daniel", "Daniel Okoro", "08035550114", "University of Lagos", "NG", "200 Level", "Lagos. Maths and computing.", "", 0.76),
-    ("aisha", "Aisha Bello", "08035550115", "University of Abuja", "NG", "300 Level", "Abuja. Biochemistry and good vibes.", "", 0.74),
+    ("aisha", "Aisha Bello", "08035550115", "University of Abuja", "NG", "300 Level", "Abuja. Maths practice and good vibes.", "", 0.74),
 ]
 
 # username, name, phone, headline, bio, specialties, years, institution, languages, verify(True/False/None=pending)
 TEACHERS = [
-    ("mr_whitaker", "James Whitaker", "+447700900201", "Maths & physics tutor — GCSE to first-year university",
+    ("mr_whitaker", "James Whitaker", "+447700900201", "Mathematics tutor — GCSE to first-year university",
      "Former secondary-school head of maths in London. I build intuition first, then exam technique, with short weekly check-ins and worked examples for every topic.",
-     [{"subject": "Mathematics", "topics": ["Algebra", "Geometry", "Statistics"]}, {"subject": "Physics", "topics": ["Mechanics", "Electricity"]}], 12, "University College London", ["English"], True),
+     [{"subject": "Mathematics", "topics": ["Algebra", "Geometry", "Statistics"]}], 12, "University College London", ["English"], True),
     ("ms_adams", "Rachel Adams", "+12025550201", "English writing & comprehension coach",
      "I help students write clearly and read critically: grammar, essays and comprehension with detailed written feedback on every piece you send me.",
      [{"subject": "English", "topics": ["Grammar", "Essay Writing", "Comprehension"]}], 9, "Columbia University", ["English", "French"], True),
-    ("dr_thompson", "Michael Thompson", "+12025550202", "Chemistry & biology made simple",
-     "PhD chemist and former lab instructor. I break hard topics into small steps, then practise with real exam-style questions every week.",
-     [{"subject": "Chemistry", "topics": ["Chemical Bonding", "Stoichiometry"]}, {"subject": "Biology", "topics": ["Cell Biology", "Genetics"]}], 7, "University of Michigan", ["English"], False),
-    ("ms_price", "Hannah Price", "+447700900202", "Computer science & coding mentor",
-     "Software engineer turned teacher. Algorithms, programming basics and networks taught through small projects you can actually run.",
-     [{"subject": "Computer Science", "topics": ["Programming", "Algorithms", "Computer Networks"]}], 6, "University of Cambridge", ["English"], True),
-    ("ms_liu", "Grace Liu", "+14165550203", "Biology tutor — genetics and ecology",
-     "Graduate student in molecular biology. Friendly, patient and big on diagrams.",
-     [{"subject": "Biology", "topics": ["Genetics", "Ecology"]}], 3, "McGill University", ["English", "French"], None),
+
 ]
 
 COUNTRY_HUE = {"UK": 226, "US": 348, "CA": 0, "NG": 140}
@@ -157,37 +146,24 @@ def say(text: str) -> None:
 
 # ------------------------------------------------------------- phase 0: content
 def clean_content() -> None:
-    """Remove the Law demo bank and Naira-era copy; ensure the general courses exist."""
+    """Keep only English/Maths active without deleting legacy course history."""
     from app.seed import PRIZES, seed_all
 
     init_db()
     with SessionLocal() as db:
         seed_all(db)  # idempotent — creates the general courses/exams/materials if missing
-        removed_q = removed_quiz = removed_mat = 0
-        for code in LAW_CODES:
-            course = db.scalar(select(Course).where(Course.code == code))
-            if course is None:
-                continue
-            for material in db.scalars(select(Material).where(Material.course_id == course.id)).all():
-                db.delete(material)
-                removed_mat += 1
-            quizzes = db.scalars(select(Quiz).where(Quiz.course_id == course.id)).all()
-            quiz_ids = [q.id for q in quizzes]
-            questions = db.scalars(select(Question).where(or_(Question.course_id == course.id, Question.quiz_id.in_(quiz_ids or [-1])))).all()
-            for question in questions:
-                db.delete(question)
-                removed_q += 1
-            db.flush()
-            for quiz in quizzes:
-                db.delete(quiz)
-                removed_quiz += 1
-            db.flush()
-            db.delete(course)
-            db.flush()
+        allowed = ACTIVE_COURSE_CODES
+        for course in db.scalars(select(Course)).all():
+            course.is_active = course.code in allowed
         for note in db.scalars(select(Notification)).all():
             text = f"{note.title} {note.message} {note.target_course or ''}"
-            if "LAW " in text or "Constitutional" in text or "₦" in text or "Jurisprudence" in text:
-                db.delete(note)
+            if "LAW " in text or "Jurisprudence" in text:
+                # Preserve the historical row, but do not keep obsolete subject copy
+                # in the student-facing notice feed.
+                note.title = "Archived historical announcement"
+                note.message = "This announcement is retained for records and is no longer active."
+                note.target_course = None
+                note.is_pinned = False
         by_order = {row["sort_order"]: row for row in PRIZES}
         for prize in db.scalars(select(Prize)).all():
             if ("₦" in prize.title or "Arena Champion" in prize.title) and prize.sort_order in by_order:
@@ -204,52 +180,17 @@ def clean_content() -> None:
             if "₦" in (config.prize_pool_note or ""):
                 config.prize_pool_note = "Season prizes: champion trophy, data bundles, merch and vouchers."
         db.commit()
-        courses = db.scalars(select(Course).order_by(Course.id)).all()
-        say(f"Removed Law demo content: {removed_q} questions, {removed_quiz} exams, {removed_mat} materials.")
-        say("Courses now: " + ", ".join(c.code for c in courses))
+        courses = db.scalars(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).all()
+        say("Active courses: " + ", ".join(c.code for c in courses))
 
 
 # ------------------------------------------------------------- phase 1: people
 def ensure_account(api: Api, username: str, name: str, phone: str) -> str:
-    """Register demo user, or sign in. If password drifted, reset to demo1234 via DB."""
-    status, payload = api.call(
-        "POST",
-        "/auth/register",
-        {"username": username, "phone": phone, "password": PASSWORD, "display_name": name},
-    )
-    if status in (200, 201):
-        return payload.get("token") or payload.get("access_token")
-
-    status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
-    if status == 200:
-        return payload.get("token") or payload.get("access_token")
-
-    # Account exists but password is not demo1234 (or phone mismatch left a
-    # stale row). Reset the demo password in-DB so re-runs are idempotent.
-    from app.security import hash_password
-
-    with SessionLocal() as db:
-        student = db.scalar(select(Student).where(Student.username == username.lower()))
-        if student is None and phone:
-            student = db.scalar(select(Student).where(Student.phone == phone))
-        if student is None:
+    status, payload = api.call("POST", "/auth/register", {"username": username, "phone": phone, "password": PASSWORD, "display_name": name})
+    if status not in (200, 201):
+        status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
+        if status != 200:
             raise RuntimeError(f"cannot create or sign in {username}: {payload}")
-        student.password_hash = hash_password(PASSWORD)
-        student.username = username.lower()
-        if phone:
-            # Keep phone unique — only set if free or already ours
-            clash = db.scalar(
-                select(Student).where(Student.phone == phone, Student.id != student.id)
-            )
-            if clash is None:
-                student.phone = phone
-        if name and not (student.name or "").strip():
-            student.name = name
-        db.commit()
-
-    status, payload = api.call("POST", "/auth/student", {"identifier": username, "password": PASSWORD})
-    if status != 200:
-        raise RuntimeError(f"cannot create or sign in {username} after password reset: {payload}")
     return payload.get("token") or payload.get("access_token")
 
 
@@ -292,7 +233,7 @@ def take_exams(api: Api, tokens: dict, skills: dict, key: dict) -> int:
 
 def run_practice(api: Api, tokens: dict, skills: dict, key: dict) -> int:
     with SessionLocal() as db:
-        courses = [(c.id, c.code) for c in db.scalars(select(Course).where(Course.code.notin_(LAW_CODES))).all()]
+        courses = [(c.id, c.code) for c in db.scalars(select(Course).where(Course.is_active.is_(True))).all()]
     status, catalog = api.call("GET", "/arena/practice/catalog", tok=next(iter(tokens.values())))
     topics = {row["id"]: [t["key"] for t in row.get("topics", [])] for row in (catalog or {}).get("courses", [])} if status == 200 else {}
     counts = {(row["id"], t["key"]): t["count"] for row in (catalog or {}).get("courses", []) for t in row.get("topics", [])} if status == 200 else {}
@@ -362,7 +303,7 @@ def build_groups(api: Api, tokens: dict, ids: dict, course_ids: dict) -> list[in
         },
         {
             "owner": "ava", "name": "SAT & AP Prep Squad", "course": "ENG 101", "goal": "Hit our target scores this spring",
-            "description": "US students prepping grammar, reading and math sections. Weekly group quizzes and accountability check-ins.",
+            "description": "US students prepping English and maths. Weekly group quizzes and accountability check-ins.",
             "members": ["olivia", "noah", "liam", "zoe", "jayden", "chloe", "mason", "emma", "sarah"], "mod": "olivia",
             "chat": [
                 ("ava", "Welcome to the squad! 🎯 Group quiz every Thursday at 8pm ET."),
@@ -377,40 +318,7 @@ def build_groups(api: Api, tokens: dict, ids: dict, course_ids: dict) -> list[in
                          "olivia", "Use a semicolon to join two complete sentences that are closely related: 'It rained; the match was cancelled.' A comma alone there would be a comma splice."),
             "quiz": ("Grammar Showdown", "Grammar", 8),
         },
-        {
-            "owner": "harper", "name": "Biology Night Owls", "course": "BIO 101", "goal": "Master cells, genetics and the human body",
-            "description": "Late-night biology sessions for pre-med and life-science students on both sides of the Atlantic.",
-            "members": ["amelia", "liam", "mia", "sarah", "aisha", "emma", "chloe"], "mod": "amelia",
-            "chat": [
-                ("harper", "Tonight: genetics. Bring your Punnett squares 🧬"),
-                ("amelia", "Tt × Tt → 1 TT : 2 Tt : 1 tt. So 1/4 show the recessive trait."),
-                ("mia", "Wait, so 3/4 look dominant even though only 1/4 are TT?"),
-                ("sarah", "Exactly — Tt still shows the dominant trait."),
-                ("liam", "Can someone explain osmosis vs diffusion simply?"),
-                ("aisha", "Osmosis is just diffusion of WATER across a partially permeable membrane 💧"),
-            ],
-            "announcement": ("New material: Cells, Genes & the Human Body", "Read sections 1–2 before Thursday — we'll quiz on them.", "normal"),
-            "question": ("Why are mitochondria called the powerhouse?", "Is it just a nickname or is there a real reason?", "Cell Biology",
-                         "sarah", "They carry out aerobic respiration, releasing the energy (as ATP) that the cell uses for almost everything."),
-            "quiz": ("Genetics Quickfire", "Genetics", 6),
-        },
-        {
-            "owner": "lucas", "name": "Code Club 101", "course": "CSC 101", "goal": "From binary to building our first app",
-            "description": "Beginner-friendly computer science: binary, algorithms, networks and programming basics.",
-            "members": ["george", "ethan", "harry", "daniel", "noah", "emma"], "mod": "george",
-            "chat": [
-                ("lucas", "Hey coders 👩‍💻 This week: binary and hexadecimal."),
-                ("george", "Quick one: 1010 in binary = 8 + 2 = 10."),
-                ("ethan", "And F in hex is 15 — everything clicked once I learned that."),
-                ("daniel", "Binary search next? It's my favourite algorithm."),
-                ("harry", "Why does it need the list to be sorted?"),
-                ("lucas", "Because it throws away half each step — it only works if order tells you which half to drop."),
-            ],
-            "announcement": ("Project week", "Build a tiny program that converts decimal to binary. Share it here by Sunday!", "normal"),
-            "question": ("What does 17 % 5 mean?", "I saw % in some Python code and it's not percent?", "Programming Basics",
-                         "george", "% is the modulus operator — it gives the remainder. 17 = 3 × 5 + 2, so 17 % 5 = 2."),
-            "quiz": ("Binary & Algorithms", "Number Systems", 6),
-        },
+
     ]
     made = []
     for plan in plans:
@@ -469,16 +377,11 @@ def build_teachers(api: Api, admin: str, tokens: dict, ids: dict) -> None:
 
     links = [
         ("mr_whitaker", "emma", "Mathematics", "Algebra", "I'd love help with factorising and quadratics before my mock.", True),
-        ("mr_whitaker", "jack", "Physics", "Mechanics", "Struggling with F = ma problems with friction.", True),
         ("mr_whitaker", "noah", "Mathematics", "Statistics", "Probability questions with two events confuse me.", True),
         ("mr_whitaker", "isla", "Mathematics", "Geometry", "Circle theorems please!", False),
         ("ms_adams", "olivia", "English", "Essay Writing", "Can you review my argumentative essays weekly?", True),
         ("ms_adams", "charlotte", "English", "Grammar", "I want to fix my comma splices for good.", True),
         ("ms_adams", "emma", "English", "Comprehension", "Help with inference questions.", False),
-        ("dr_thompson", "liam", "Chemistry", "Chemical Bonding", "Ionic vs covalent keeps tripping me up.", True),
-        ("dr_thompson", "priya", "Biology", "Genetics", "Monohybrid crosses practice please.", True),
-        ("ms_price", "harry", "Computer Science", "Programming", "Complete beginner — want to learn Python basics.", True),
-        ("ms_price", "daniel", "Computer Science", "Algorithms", "Binary search and sorting.", True),
     ]
     rels = {}
     for teacher, student, subject, topic, message, accept in links:
@@ -511,7 +414,6 @@ def build_teachers(api: Api, admin: str, tokens: dict, ids: dict) -> None:
         ("emma", "mr_whitaker", "That makes so much sense now 🙌"),
         ("ms_adams", "olivia", "Got your essay — strong argument! Let's tighten the introduction together."),
         ("olivia", "ms_adams", "Thank you, I'll send the revised version tonight."),
-        ("ms_price", "harry", "Welcome Harry! First task: write a program that prints 1 to 10."),
     ]
     for sender, receiver, body in convo:
         to_id = ids.get(receiver) or teacher_student_id(receiver)
@@ -539,8 +441,6 @@ def build_teachers(api: Api, admin: str, tokens: dict, ids: dict) -> None:
     reviews = [
         ("mr_whitaker", "noah", 5, "Mr Whitaker made probability finally click. My practice scores went from 55% to 85% in three weeks!", "Brilliant work, Noah — keep that momentum!"),
         ("ms_adams", "charlotte", 5, "Clear, kind and really detailed feedback on every essay.", "Thank you Charlotte, your writing has improved so much."),
-        ("dr_thompson", "liam", 4, "Great explanations of bonding with loads of practice questions.", ""),
-        ("ms_price", "daniel", 5, "Hannah explains algorithms with real code you can run. Highly recommend.", "Thanks Daniel! Can't wait to see your next project."),
     ]
     for teacher, student, rating, body, reply in reviews:
         status, learning = api.call("GET", "/teachers/me/learning", tok=tokens[student])
@@ -555,9 +455,9 @@ def build_teachers(api: Api, admin: str, tokens: dict, ids: dict) -> None:
 
 def broadcast(api: Api, admin: str) -> None:
     notices = [
-        {"title": "Welcome to the new season 🎉", "message": "Six subjects, fresh exams and new study groups. Jump into the English Mock or a Maths Speed Round to start climbing the leaderboard.", "kind": "exam", "is_pinned": True},
+        {"title": "Welcome to the new season 🎉", "message": "English and Mathematics exams, plus new study groups. Jump into the English Mock or a Maths Speed Round to start climbing the leaderboard.", "kind": "exam", "is_pinned": True},
         {"title": "Mixed-topic practice is here", "message": "Pick several topics at once in Practice — perfect for revision before a mock exam.", "kind": "general"},
-        {"title": "Find a teacher", "message": "Verified teachers in Maths, English, Sciences and Computer Science are now accepting students.", "kind": "general"},
+        {"title": "Find a teacher", "message": "Verified English and Mathematics teachers are now accepting students.", "kind": "general"},
     ]
     for row in notices:
         api.call("POST", "/admin/notifications", row, admin)
@@ -565,42 +465,57 @@ def broadcast(api: Api, admin: str) -> None:
 
 # ------------------------------------------------------------- phase 2: polish
 def polish() -> None:
-    now = utcnow()
+    # Anchor demo history to the start of today and use a per-record random
+    # stream. A completed seed can be run again without changing stats or
+    # pushing exam/activity timestamps further into the past.
+    anchor = datetime.combine(date.today(), datetime.min.time())
     with SessionLocal() as db:
         by_user = {s.username: s for s in db.scalars(select(Student).where(Student.username.in_([r[0] for r in STUDENTS] + [t[0] for t in TEACHERS]))).all()}
         for username, name, _phone, school, country, level, bio, status_text, skill in STUDENTS:
             s = by_user.get(username)
             if not s:
                 continue
+            profile_rng = random.Random(f"absolute-genesis-demo-profile:{username}")
             s.name, s.bio, s.status_text = name, bio, status_text
             s.campus, s.faculty, s.level = school, {"UK": "United Kingdom", "US": "United States", "CA": "Canada", "NG": "Nigeria"}[country], level
+            s.country = {"UK": "GB", "US": "US", "CA": "CA", "NG": "NG"}[country]
             s.class_name = f"{country} Students"
-            s.avatar_hue = (COUNTRY_HUE[country] + rng.randint(-25, 25)) % 360
-            s.created_at = now - timedelta(days=rng.randint(20, 75))
-            s.streak = 12 if username == "emma" else rng.randint(0, 9)
-            s.best_streak = max(s.streak, rng.randint(s.streak, s.streak + 10))
-            s.last_active = date.today() if s.streak else date.today() - timedelta(days=rng.randint(1, 4))
-            s.ranked_rating = int(1000 + (skill - 0.6) * 1400 + rng.randint(-60, 60))
-            s.ranked_played = rng.randint(4, 30)
-            s.ranked_won = int(s.ranked_played * min(0.9, skill * rng.uniform(0.6, 0.9)))
-            s.duels_played = rng.randint(3, 25)
-            s.duels_won = int(s.duels_played * min(0.9, skill * rng.uniform(0.5, 0.9)))
+            s.avatar_hue = (COUNTRY_HUE[country] + profile_rng.randint(-25, 25)) % 360
+            s.created_at = anchor - timedelta(days=profile_rng.randint(20, 75))
+            s.streak = 12 if username == "emma" else profile_rng.randint(0, 9)
+            s.best_streak = max(s.streak, profile_rng.randint(s.streak, s.streak + 10))
+            s.last_active = date.today() if s.streak else date.today() - timedelta(days=profile_rng.randint(1, 4))
+            s.ranked_rating = int(1000 + (skill - 0.6) * 1400 + profile_rng.randint(-60, 60))
+            s.ranked_played = profile_rng.randint(4, 30)
+            s.ranked_won = int(s.ranked_played * min(0.9, skill * profile_rng.uniform(0.6, 0.9)))
+            s.duels_played = profile_rng.randint(3, 25)
+            s.duels_won = int(s.duels_played * min(0.9, skill * profile_rng.uniform(0.5, 0.9)))
             s.duels_lost = s.duels_played - s.duels_won
-            s.coins = max(s.coins, rng.randint(250, 1400))
-            s.diamonds = max(s.diamonds, rng.randint(5, 60))
+            s.coins = max(s.coins, profile_rng.randint(250, 1400))
+            s.diamonds = max(s.diamonds, profile_rng.randint(5, 60))
         for t in TEACHERS:
             s = by_user.get(t[0])
             if s:
                 s.campus, s.bio = t[7], t[3]
+                s.country = "GB" if t[2].startswith("+44") else "US" if t[2].startswith("+1") else ""
+
         ids = [s.id for s in by_user.values()]
-        # Spread history across the past three weeks so feeds look natural.
-        for attempt in db.scalars(select(Attempt).where(Attempt.student_id.in_(ids))).all():
-            shift = timedelta(days=rng.randint(0, 20), hours=rng.randint(0, 12))
-            for field in ("started_at", "deadline_at", "submitted_at"):
-                if getattr(attempt, field, None):
-                    setattr(attempt, field, getattr(attempt, field) - shift)
-        for activity in db.scalars(select(Activity).where(Activity.student_id.in_(ids))).all():
-            activity.created_at = activity.created_at - timedelta(days=rng.randint(0, 14), hours=rng.randint(0, 20))
+        username_by_id = {s.id: s.username for s in by_user.values()}
+        for attempt in db.scalars(select(Attempt).where(Attempt.student_id.in_(ids)).order_by(Attempt.id)).all():
+            username = username_by_id.get(attempt.student_id, "demo")
+            history_rng = random.Random(f"absolute-genesis-demo-attempt:{username}:{attempt.id}")
+            if attempt.started_at:
+                target_start = anchor - timedelta(days=history_rng.randint(0, 20), hours=history_rng.randint(0, 12))
+                shift = target_start - attempt.started_at
+                for field in ("started_at", "deadline_at", "submitted_at"):
+                    value = getattr(attempt, field, None)
+                    if value:
+                        setattr(attempt, field, value + shift)
+
+        for activity in db.scalars(select(Activity).where(Activity.student_id.in_(ids)).order_by(Activity.id)).all():
+            username = username_by_id.get(activity.student_id, "demo")
+            history_rng = random.Random(f"absolute-genesis-demo-activity:{username}:{activity.id}")
+            activity.created_at = anchor - timedelta(days=history_rng.randint(0, 14), hours=history_rng.randint(0, 20))
         db.commit()
 
 
@@ -650,8 +565,8 @@ def main() -> None:
             ("oliver", "emma", "Duel me after — loser buys coffee ☕"),
             ("ava", "emma", "Thanks for joining the Prep Squad! Grammar round is Thursday."),
             ("emma", "ava", "Can't wait 🙌"),
-            ("liam", "harper", "Did you finish the genetics section in the new material?"),
-            ("harper", "liam", "Yes! The Punnett square example is so clear."),
+            ("liam", "harper", "Did you finish the algebra section in the new material?"),
+            ("harper", "liam", "Yes! The worked example made the method click."),
         ])
         print("▸ Study groups")
         build_groups(api, tokens, ids, course_ids)

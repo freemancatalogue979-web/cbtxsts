@@ -275,9 +275,95 @@ def open_info(room: Room) -> dict | None:
     return OPEN.get(room.id)
 
 
+def _round_reveals(db: Session, room: Room, info: dict) -> tuple[dict, list[tuple[int, dict]]]:
+    """Build one room-safe standings payload and per-player answer reveals."""
+    members = room_members(db, room)
+    standings = sorted(members_payload(db, room), key=lambda row: (-row["score"], row["name"]))
+    grades: dict[int, RoomAnswer | None] = {}
+    for member in members:
+        question = _question_at(db, room, member, info["index"])
+        grades[member.student_id] = (
+            db.scalar(
+                select(RoomAnswer).where(
+                    RoomAnswer.room_id == room.id,
+                    RoomAnswer.question_id == question.id,
+                    RoomAnswer.student_id == member.student_id,
+                )
+            )
+            if question is not None
+            else None
+        )
+    answered = sum(1 for row in grades.values() if row is not None)
+    correct_count = sum(1 for row in grades.values() if row is not None and row.correct)
+    meta = {"index": info["index"], "answered": answered, "correct_count": correct_count, "standings": standings}
+    per_student: list[tuple[int, dict]] = []
+    for member in members:
+        question = _question_at(db, room, member, info["index"])
+        if question is None:
+            continue
+        row = grades.get(member.student_id)
+        per_student.append(
+            (
+                member.student_id,
+                {
+                    "index": info["index"],
+                    "question_id": question.id,
+                    "correct": question.correct,
+                    "explanation": question.explanation or "",
+                    # Keep each answer private; only its count is shared.
+                    "correct_ids": [member.student_id] if row is not None and row.correct else [],
+                    "correct_count": correct_count,
+                    "selected": row.selected if row is not None else None,
+                    "answered": answered,
+                    "standings": standings,
+                },
+            )
+        )
+    return meta, per_student
+
+
+def current_round_state(db: Session, room: Room, viewer_id: int) -> dict:
+    """Return only this member's current question and, during reveal, their key.
+
+    Room sockets send question events once. This snapshot lets a refresh or
+    reconnect recover the active round without exposing another member's deal.
+    """
+    info = OPEN.get(room.id)
+    member = _member(db, room.id, viewer_id)
+    if room.status != "live" or info is None or member is None:
+        return {"question": None, "reveal": None}
+    index = int(info["index"])
+    question = _question_at(db, room, member, index)
+    if question is None:
+        return {"question": None, "reveal": None}
+    answer = db.scalar(
+        select(RoomAnswer).where(
+            RoomAnswer.room_id == room.id,
+            RoomAnswer.question_id == question.id,
+            RoomAnswer.student_id == viewer_id,
+        )
+    )
+    total = _room_total(db, room)
+    question_payload = {
+        "index": index,
+        "total": total,
+        "seconds": room.per_question_seconds,
+        "deadline": info["deadline"].isoformat() + "Z",
+        "server_now": utcnow().isoformat() + "Z",
+        "question": question_public(question, reveal=False),
+        "answered": answer is not None,
+        "selected": answer.selected if answer is not None else None,
+    }
+    reveal_payload = None
+    if "revealed_at" in info:
+        _meta, reveals = _round_reveals(db, room, info)
+        reveal_payload = next((payload for student_id, payload in reveals if student_id == viewer_id), None)
+    return {"question": question_payload, "reveal": reveal_payload}
+
+
 def submit_answer(db: Session, room: Room, student: Student, selected: str, elapsed_ms: int) -> tuple[dict, bool]:
     info = OPEN.get(room.id)
-    if info is None or room.status != "live":
+    if info is None or room.status != "live" or "revealed_at" in info:
         raise RoomError("No question is open right now.")
     if utcnow() > info["deadline"]:
         raise RoomError("Too slow — the clock on that question already ran out.")
@@ -343,50 +429,15 @@ def close_question(db: Session, room: Room) -> tuple[dict, list[tuple[int, dict]
     """Close the open round. Returns (room-safe meta, per-player reveals).
 
     Each member sees THEIR OWN question's answer key and their own grade;
-    only scores/standings (meta) are room-wide.
+    only aggregate counts and standings are room-wide. Keep the revealed round
+    in memory until the host opens the next one so reconnecting players can
+    restore the same reveal without starting another clock.
     """
-    info = OPEN.pop(room.id, None)
-    if info is None:
+    info = OPEN.get(room.id)
+    if info is None or "revealed_at" in info:
         return None
-    members = room_members(db, room)
-    standings = sorted(members_payload(db, room), key=lambda row: (-row["score"], row["name"]))
-    grades: dict[int, RoomAnswer | None] = {}
-    for member in members:
-        question = _question_at(db, room, member, info["index"])
-        grades[member.student_id] = (
-            db.scalar(
-                select(RoomAnswer).where(
-                    RoomAnswer.room_id == room.id,
-                    RoomAnswer.question_id == question.id,
-                    RoomAnswer.student_id == member.student_id,
-                )
-            )
-            if question is not None
-            else None
-        )
-    answered = sum(1 for row in grades.values() if row is not None)
-    meta = {"index": info["index"], "answered": answered, "standings": standings}
-    per_student: list[tuple[int, dict]] = []
-    for member in members:
-        question = _question_at(db, room, member, info["index"])
-        if question is None:
-            continue
-        row = grades.get(member.student_id)
-        per_student.append(
-            (
-                member.student_id,
-                {
-                    "index": info["index"],
-                    "question_id": question.id,
-                    "correct": question.correct,
-                    "explanation": question.explanation or "",
-                    "correct_ids": [member.student_id] if row is not None and row.correct else [],
-                    "answered": answered,
-                    "standings": standings,
-                },
-            )
-        )
-    return meta, per_student
+    info["revealed_at"] = utcnow()
+    return _round_reveals(db, room, info)
 
 
 def finish_run(db: Session, room: Room) -> dict:

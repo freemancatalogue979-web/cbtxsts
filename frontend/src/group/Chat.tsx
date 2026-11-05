@@ -5,7 +5,7 @@
  * carry a referenced-message preview that scrolls to and highlights the
  * original; long-press (or hover) opens message actions.
  */
-import {Check, CornerDownLeft, MessageSquareReply, MoreHorizontal, Pencil, Send, Smile, Trash2} from 'lucide-react';
+import {Check, ChevronDown, ChevronLeft, CornerDownLeft, MessageSquareReply, MoreHorizontal, Pencil, Send, Smile, Trash2} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Button, IconButton, Skeleton, TextInput} from '../components/ui';
@@ -29,7 +29,7 @@ function upsert(rows: GroupChatMessage[], message: GroupChatMessage): GroupChatM
 }
 
 export default function Chat() {
-  const {groupId, myId, myName, can, room, presence, notify, openMember} = useGroup();
+  const {groupId, group, myId, myName, can, room, presence, notify, openMember, go} = useGroup();
   const [messages, setMessages] = useState<GroupChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -37,20 +37,24 @@ export default function Chat() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [reactFor, setReactFor] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [typing, setTyping] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const pageRef = useRef(1);
+  const hasMoreRef = useRef(false);
+  const loadingOlderRef = useRef(false);
   const stickToBottom = useRef(true);
   const typingSent = useRef(0);
-  const highlightRef = useRef<number | null>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
+  const [showLatest, setShowLatest] = useState(false);
 
   const loadPage = useCallback(
     async (target: number, prepend: boolean) => {
       const payload = await api.groups.messages(groupId, {page: target, size: PAGE_SIZE});
-      setHasMore(payload.page < payload.pages);
+      pageRef.current = payload.page;
+      hasMoreRef.current = payload.page < payload.pages;
+      setHasMore(hasMoreRef.current);
       setMessages((current) => {
         if (!prepend) return payload.items;
         const seen = new Set(current.map((row) => row.id));
@@ -69,7 +73,6 @@ export default function Chat() {
       try {
         await loadPage(1, false);
         if (alive) {
-          setPage(1);
           setLoading(false);
           requestAnimationFrame(() => {
             listRef.current?.scrollTo({top: listRef.current.scrollHeight});
@@ -117,33 +120,54 @@ export default function Chat() {
 
   /* Auto-scroll only when the reader is already at the bottom. */
   useEffect(() => {
-    if (!stickToBottom.current) return;
+    if (!stickToBottom.current) {
+      setShowLatest(true);
+      return;
+    }
     const list = listRef.current;
-    if (list) list.scrollTo({top: list.scrollHeight, behavior: 'smooth'});
+    if (list) {
+      list.scrollTo({top: list.scrollHeight, behavior: 'smooth'});
+      setShowLatest(false);
+    }
   }, [messages.length, typing]);
 
   const onScroll = () => {
     const list = listRef.current;
     if (!list) return;
-    stickToBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+    stickToBottom.current = atBottom;
+    setShowLatest(!atBottom);
   };
 
-  const loadOlder = async () => {
-    if (loadingOlder || !hasMore) return;
+  const scrollToLatest = () => {
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTo({top: list.scrollHeight, behavior: 'smooth'});
+    stickToBottom.current = true;
+    setShowLatest(false);
+  };
+
+  const loadOlder = useCallback(async (): Promise<boolean> => {
+    if (loadingOlderRef.current || !hasMoreRef.current) return false;
+    loadingOlderRef.current = true;
     setLoadingOlder(true);
     const list = listRef.current;
     const prevHeight = list?.scrollHeight ?? 0;
-    const next = page + 1;
+    const next = pageRef.current + 1;
     try {
-      await loadPage(next, true);
-      setPage(next);
+      const payload = await loadPage(next, true);
       requestAnimationFrame(() => {
         if (list) list.scrollTop = list.scrollHeight - prevHeight;
       });
+      return payload.items.length > 0;
+    } catch (error) {
+      notify('error', 'Could not load older messages', (error as Error).message);
+      return false;
     } finally {
+      loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  };
+  }, [loadPage, notify]);
 
   const send = async () => {
     const body = text.trim();
@@ -232,46 +256,57 @@ export default function Chat() {
     }
   };
 
-  const jumpTo = (messageId: number) => {
-    const node = listRef.current?.querySelector<HTMLElement>(`[data-mid="${messageId}"]`);
-    if (node) {
-      node.scrollIntoView({behavior: 'smooth', block: 'center'});
-      highlightRef.current = messageId;
-      setHighlight(messageId);
-      window.setTimeout(() => setHighlight((current) => (current === messageId ? null : current)), 1600);
+  const jumpTo = useCallback(async (messageId: number) => {
+    const findMessage = () => listRef.current?.querySelector<HTMLElement>(`[data-mid="${messageId}"]`) ?? null;
+    let node = findMessage();
+    /* Load each older page using the live page cursor; never repeat a stale page. */
+    for (let step = 0; !node && step < 40 && hasMoreRef.current; step += 1) {
+      const loaded = await loadOlder();
+      if (!loaded) {
+        if (hasMoreRef.current) return; // the loader already reported a failure, or another load is active
+        break;
+      }
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      node = findMessage();
+    }
+    if (!node) {
+      notify('info', 'Message unavailable', 'This reply points to a message that is no longer in the loaded conversation.');
       return;
     }
-    /* Not loaded yet — walk back through history a few pages to find it. */
-    if (hasMore) {
-      void (async () => {
-        for (let step = 0; step < 5 && hasMore; step += 1) {
-          await loadOlder();
-          const found = listRef.current?.querySelector<HTMLElement>(`[data-mid="${messageId}"]`);
-          if (found) {
-            found.scrollIntoView({behavior: 'smooth', block: 'center'});
-            setHighlight(messageId);
-            window.setTimeout(() => setHighlight(null), 1600);
-            return;
-          }
-        }
-      })();
-    }
-  };
+    node.scrollIntoView({behavior: 'smooth', block: 'center'});
+    setHighlight(messageId);
+    window.setTimeout(() => setHighlight((current) => (current === messageId ? null : current)), 1600);
+  }, [loadOlder, notify]);
 
   const sorted = useMemo(() => messages, [messages]);
+  const mobileHeader = (
+    <header className="group-chat-mobile-head">
+      <IconButton label="Back to group overview" variant="outline" onClick={() => go('overview')}>
+        <ChevronLeft className="size-5" />
+      </IconButton>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[0.86rem] font-extrabold text-mist-50">{group.name}</p>
+        <p className="text-[0.66rem] font-semibold text-mist-500">Group chat</p>
+      </div>
+    </header>
+  );
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col gap-2 p-3">
-        <Skeleton className="h-12 w-2/3" />
-        <Skeleton className="ml-auto h-12 w-1/2" />
-        <Skeleton className="h-12 w-2/3" />
+      <div className="group-chat-root relative flex h-full min-h-0 flex-col">
+        {mobileHeader}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+          <Skeleton className="h-12 w-2/3" />
+          <Skeleton className="ml-auto h-12 w-1/2" />
+          <Skeleton className="h-12 w-2/3" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="group-chat-root relative flex h-full min-h-0 flex-col">
+      {mobileHeader}
       {/* reply preview */}
       <AnimatePresence>
         {replyTo && (
@@ -339,7 +374,7 @@ export default function Chat() {
 
                 <Holdable
                   hint="Hold for actions"
-                  actions={[
+                  actions={message.deleted ? [] : [
                     {key: 'reply', label: 'Reply', icon: <MessageSquareReply className="size-4" />, onAction: () => setReplyTo(message)},
                     {key: 'react', label: 'React', icon: <Smile className="size-4" />, onAction: () => setReactFor(message.id)},
                     ...(mine
@@ -414,7 +449,7 @@ export default function Chat() {
 
                 {/* inline emoji picker */}
                 <AnimatePresence>
-                  {reactFor === message.id && (
+                  {reactFor === message.id && !message.deleted && (
                     <motion.div initial={{opacity: 0, y: -4}} animate={{opacity: 1, y: 0}} exit={{opacity: 0}} className="mt-1 flex flex-wrap gap-1">
                       {EMOJIS.map((emoji) => (
                         <button
@@ -432,7 +467,7 @@ export default function Chat() {
               </div>
 
               {/* desktop hover toolbar */}
-              <div className="hidden shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/msg:opacity-100 sm:flex">
+              {!message.deleted && <div className="hidden shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/msg:opacity-100 sm:flex">
                 <IconButton label="Reply" onClick={() => setReplyTo(message)}>
                   <MessageSquareReply className="size-4 text-mist-500" />
                 </IconButton>
@@ -444,7 +479,7 @@ export default function Chat() {
                     <Pencil className="size-4 text-mist-500" />
                   </IconButton>
                 )}
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -462,6 +497,12 @@ export default function Chat() {
         )}
       </div>
 
+      {showLatest && (
+        <button type="button" className="group-chat-latest" onClick={scrollToLatest} aria-label="Scroll to latest messages">
+          <ChevronDown className="size-4" /> Latest
+        </button>
+      )}
+
       {/* composer */}
       <div className="shrink-0 border-t border-white/8 bg-ink-900/60 p-2.5 safe-bottom">
         <div className="flex items-end gap-2">
@@ -476,8 +517,9 @@ export default function Chat() {
             }}
             placeholder={replyTo ? `Reply to ${replyTo.name}…` : 'Message the group…'}
             maxLength={2000}
+            aria-label="Message the group"
           />
-          <Button variant="primary" onClick={() => void send()} disabled={!text.trim()} icon={<Send className="size-4" />} className="shrink-0">
+          <Button variant="primary" onClick={() => void send()} disabled={!text.trim()} icon={<Send className="size-4" />} className="shrink-0" label="Send message">
             <span className="hidden sm:inline">Send</span>
           </Button>
         </div>

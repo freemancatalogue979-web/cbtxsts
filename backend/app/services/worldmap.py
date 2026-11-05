@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..game import level_from_xp, title_for_level, xp_for_level  # noqa: F401 (xp_for_level optional)
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..models import (
     Answer,
     Attempt,
@@ -345,7 +346,7 @@ def _node_state(answered: int, mastery: float, first_open: bool) -> str:
 
 def build_world_map(db: Session, student: Student) -> dict:
     """Assemble the whole adventure: worlds, their nodes, bosses, quests, totals."""
-    courses = list(db.scalars(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).all())
+    courses = list(db.scalars(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).all())
 
     # mastery lookups (topic mastery keys are the raw Question.topic strings)
     topic_mastery = {

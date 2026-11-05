@@ -20,7 +20,7 @@ import {MoreHorizontal} from 'lucide-react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import type {ReactNode} from 'react';
-import {HOLD_MS, HOLD_TOLERANCE, holdAbandoned, menuPosition, menuSize} from '../lib/hold';
+import {HOLD_MS, HOLD_TOLERANCE, MOUSE_HOLD_MS, holdAbandoned, menuPosition, menuSize} from '../lib/hold';
 import {HAPTICS} from '../lib/haptics';
 import {sfx} from '../lib/sfx';
 
@@ -146,17 +146,21 @@ export function Holdable({
     opened.current = false;
     origin.current = point;
     lastPoint.current = point;
-    activePointer.current = event.pointerId;
-
-    // Keep move/up/cancel on this element even if the finger drifts or a
-    // scroll parent tries to take over (main mobile chat failure mode).
-    try {
-      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    } catch {
-      /* older browsers */
+    // Capture touch only: capturing a mouse pointer retargets the browser's
+    // follow-up click to this wrapper, which prevents nested buttons (friend
+    // rows, reply controls) from receiving ordinary clicks in Chromium.
+    if (pointerKind.current === 'touch') {
+      activePointer.current = event.pointerId;
+      try {
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      } catch {
+        /* older browsers */
+      }
+    } else {
+      activePointer.current = null;
     }
 
-    const holdMs = pointerKind.current === 'touch' ? Math.min(HOLD_MS, 400) : HOLD_MS;
+    const holdMs = pointerKind.current === 'touch' ? HOLD_MS : MOUSE_HOLD_MS;
     timer.current = window.setTimeout(() => {
       timer.current = null;
       const at = lastPoint.current || origin.current || point;
@@ -244,6 +248,10 @@ export function Holdable({
         }}
         onClickCapture={(event) => {
           if (!suppressClick.current) return;
+          // Ignore the synthetic click that can follow a long press on the
+          // message itself, but allow an immediate tap on a button revealed by
+          // that hold (for example, choosing an emoji from the reaction picker).
+          if ((event.target as HTMLElement).closest('button, a, input, textarea, select, [role="button"]')) return;
           event.preventDefault();
           event.stopPropagation();
         }}

@@ -66,7 +66,12 @@ def main() -> None:
     check("four students registered", all([t1, t2, t3, t4]))
 
     status, courses = call("GET", "/admin/courses", token=T)
-    course = max(courses, key=lambda row: row["question_count"])
+    offered_codes = {"ENG 101", "MTH 101"}
+    offered = [row for row in courses if row.get("code") in offered_codes and row.get("is_active", True)]
+    check("verification uses an active English or Mathematics course", status == 200 and bool(offered), [row.get("code") for row in courses])
+    if not offered:
+        raise SystemExit("No active English or Mathematics course is available for wave-2 verification.")
+    course = max(offered, key=lambda row: row.get("question_count", 0))
     cid = course["id"]
     print(f"== course {course['code']} bank={course['question_count']} ==")
 
@@ -92,23 +97,37 @@ def main() -> None:
         aid = att.get("attempt_id") or att.get("id") or (att.get("attempt") or {}).get("id")
         status, again = call("POST", f"/exams/{quiz['id']}/start", {}, token=t1)
         check("paper stable across refresh", [q["id"] for q in att["questions"]] == [q["id"] for q in again["questions"]])
-        paper = []
+        paper_by_id = {}
         for q in att["questions"]:
             _, full = call("GET", f"/admin/questions/{q['id']}", token=T)
-            paper.append(full)
-        check("topic purity on drawn paper", all((q.get("topic") or "").lower() == big_topic.lower() for q in paper))
-        keys = {q["id"]: (q.get("correct") or "A") for q in paper}
-        correct_ids = [q["id"] for q in paper][:2]
-        for q in paper:
+            paper_by_id[q["id"]] = full
+        check("topic purity on drawn paper", all((q.get("topic") or "").lower() == big_topic.lower() for q in paper_by_id.values()))
+        correct_ids = {q["id"] for q in att["questions"][:2]}
+        for q in att["questions"]:
+            bank = paper_by_id[q["id"]]
+            stored_key = str(bank.get("correct") or "A").strip().upper()[:1]
+            correct_text = str(bank.get(f"option_{stored_key.lower()}") or "").strip()
+            options = q.get("options") or {}
+            # Exam answers use the displayed letter. Resolve the canonical key
+            # through the actual shuffled option text so this setup produces
+            # exactly the intended two correct and four incorrect answers.
+            displayed_correct = next(
+                (letter for letter, text in options.items() if str(text).strip() == correct_text),
+                None,
+            )
+            if displayed_correct is None:
+                check("correct answer is present in the displayed options", False, q)
+                continue
             want_right = q["id"] in correct_ids
-            selected = keys[q["id"]] if want_right else ({"A": "B", "B": "A", "C": "A", "D": "A"}.get(keys[q["id"]], "B"))
+            selected = displayed_correct if want_right else next(letter for letter in options if letter != displayed_correct)
             call("POST", f"/exams/attempts/{aid}/answer", {"question_id": q["id"], "selected": selected, "seconds_spent": 4}, token=t1)
         status, result = call("POST", f"/exams/attempts/{aid}/submit", {}, token=t1)
         check("exam submitted", status == 200)
+        check("display-letter answers produce the planned two correct and four wrong", result.get("correct_count") == 2 and result.get("wrong_count") == 4, str(result)[:140])
         check("passed flag false at 33% vs 70 bar", result.get("passed") is False and result.get("pass_score") == 70, str(result)[:120])
     else:
         aid = None
-    small = min(courses, key=lambda row: row["question_count"])  # draws are capped at 500, so use a bank below that
+    small = min(offered, key=lambda row: row["question_count"])  # draws are capped at 500, so use an active bank below that
     status, res = call("POST", "/admin/quizzes", {"title": f"W2 TooBig {SUFFIX}", "course_id": small["id"], "question_count": small["question_count"] + 50}, token=T)
     check("over-pool creation rejected with real message", status == 400 and "Not enough" in str(res.get("detail", "")), str(res)[:120])
     status, res = call("POST", "/admin/quizzes", {"title": f"W2 NoCourse {SUFFIX}", "question_count": 5}, token=T)
@@ -372,6 +391,66 @@ def main() -> None:
         check("no current question once finished", st.get("current") is None)
         status, mine = call("GET", "/ranked/lobby", token=t1)
         check("launched lobby clears after finish", mine.get("lobby") in (None, False) or (mine.get("lobby") or {}).get("status") not in ("open", "matching"), str(mine)[:120])
+
+    # ------------------------------------------------------ multiplayer rooms
+    print("== multiplayer room recovery ==")
+    status, room_created = call(
+        "POST",
+        "/rooms",
+        {"title": f"W2 Reconnect {SUFFIX}", "course_id": cid, "question_count": 3, "per_question_seconds": 10},
+        token=t1,
+    )
+    room = room_created.get("room") if isinstance(room_created, dict) else None
+    check("room created for two players", status == 200 and bool(room), str(room_created)[:140])
+    if room:
+        room_id = room["id"]
+        status, joined_room = call("POST", f"/rooms/join/{room['code']}", token=t2)
+        check("second player joins before start", status == 200, str(joined_room)[:100])
+        status, started = call("POST", f"/rooms/{room_id}/start", {}, token=t1)
+        host_question = started.get("question") if isinstance(started, dict) else None
+        check("host receives their first question", status == 200 and bool(host_question), str(started)[:140])
+        status, host_snapshot = call("GET", f"/rooms/{room_id}", token=t1)
+        status2, guest_snapshot = call("GET", f"/rooms/{room_id}", token=t2)
+        host_live = host_snapshot.get("question") if isinstance(host_snapshot, dict) else None
+        guest_live = guest_snapshot.get("question") if isinstance(guest_snapshot, dict) else None
+        check("room refresh restores the active host question and its deadline",
+              status == 200 and host_live and host_live.get("deadline") and host_live["question"]["id"] == host_question["question"]["id"])
+        check("each opponent restores only their own question",
+              status2 == 200 and guest_live and host_live["question"]["id"] != guest_live["question"]["id"])
+        check("reconnect snapshots never include answer keys",
+              host_live and guest_live and "correct" not in host_live["question"] and "correct" not in guest_live["question"])
+
+        host_id = (call("GET", "/me", token=t1)[1] or {}).get("id")
+        guest_id = (call("GET", "/me", token=t2)[1] or {}).get("id")
+        status, host_answer = call("POST", f"/rooms/{room_id}/answer", {"selected": "A", "elapsed_ms": 900}, token=t1)
+        check("host answer is accepted", status == 200, str(host_answer)[:100])
+        status, guest_answer = call("POST", f"/rooms/{room_id}/answer", {"selected": "A", "elapsed_ms": 900}, token=t2)
+        check("last answer closes the room question", status == 200 and guest_answer.get("all_answered") is True, str(guest_answer)[:120])
+        status, host_reveal = call("GET", f"/rooms/{room_id}", token=t1)
+        status2, guest_reveal = call("GET", f"/rooms/{room_id}", token=t2)
+        reveal_host = host_reveal.get("reveal") if isinstance(host_reveal, dict) else None
+        reveal_guest = guest_reveal.get("reveal") if isinstance(guest_reveal, dict) else None
+        expected_correct = int(bool(host_answer.get("result", {}).get("correct"))) + int(bool(guest_answer.get("result", {}).get("correct")))
+        check("reconnect restores the private reveal and selected answer",
+              status == 200 and status2 == 200 and reveal_host and reveal_guest
+              and host_reveal["question"]["selected"] == "A" and guest_reveal["question"]["selected"] == "A")
+        check("reveal shares an aggregate count without exposing opponents' answer ids",
+              reveal_host and reveal_guest and reveal_host["correct_count"] == expected_correct
+              and reveal_guest["correct_count"] == expected_correct
+              and set(reveal_host["correct_ids"]).issubset({host_id})
+              and set(reveal_guest["correct_ids"]).issubset({guest_id}))
+
+        # The first timer must not reveal a later round early after the host
+        # advances. Open round two two seconds in, then inspect between the old
+        # timer and the new deadline.
+        time.sleep(2)
+        status, next_round = call("POST", f"/rooms/{room_id}/next", {}, token=t1)
+        check("host advances into the next round", status == 200 and next_round.get("question"), str(next_round)[:120])
+        time.sleep(8.6)
+        status, still_open = call("GET", f"/rooms/{room_id}", token=t1)
+        check("an old round timer cannot close the newly opened question early",
+              status == 200 and still_open.get("question") and still_open["question"]["index"] == 1
+              and still_open.get("reveal") is None)
 
     # ------------------------------------------------------------------ 30-36 events
     print("== events hub ==")

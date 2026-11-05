@@ -936,6 +936,9 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
   const [items, setItems] = useState<SavedItem[] | null>(null);
   const [counts, setCounts] = useState<SavedCounts | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
+  const [renameFor, setRenameFor] = useState<SavedItem | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
   const load = useMemo(() => (kind: string, q: string) => {
     tutorApi.saved(kind, q).then((r) => {
       setItems(r.items);
@@ -953,12 +956,13 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
   const reload = () => load(filter === 'all' ? '' : filter, query.trim());
   const act = async (item: SavedItem, action: 'rename' | 'duplicate' | 'delete') => {
     setMenu(null);
+    if (action === 'rename') {
+      setRenameFor(item);
+      setRenameTitle(item.title);
+      return;
+    }
     try {
-      if (action === 'rename') {
-        const title = window.prompt('New name', item.title)?.trim();
-        if (!title || title === item.title) return;
-        await tutorApi.updateSaved(item.kind, item.id, {title});
-      } else if (action === 'duplicate') {
+      if (action === 'duplicate') {
         await tutorApi.duplicateSaved(item.kind, item.id);
         toast('success', 'Copy made');
       } else {
@@ -969,6 +973,22 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
       reload();
     } catch (error) {
       toast('error', 'That did not work', errorText(error));
+    }
+  };
+  const saveRename = async () => {
+    if (!renameFor || renameBusy) return;
+    const title = renameTitle.trim();
+    if (!title || title === renameFor.title) return;
+    setRenameBusy(true);
+    try {
+      await tutorApi.updateSaved(renameFor.kind, renameFor.id, {title});
+      setRenameFor(null);
+      toast('success', 'Resource renamed');
+      reload();
+    } catch (error) {
+      toast('error', 'Could not rename', errorText(error));
+    } finally {
+      setRenameBusy(false);
     }
   };
   const kinds: SavedKind[] = ['notes', 'material', 'flashcards', 'practice', 'plan'];
@@ -1055,6 +1075,18 @@ export function LibraryView({uploads, onBack, onOpen, onUpload, uploading, onUse
           </div>
         </div>
       </div>
+      <Modal icon={Pencil} tone="nova" open={Boolean(renameFor)} onClose={() => { if (!renameBusy) setRenameFor(null); }} title="Rename resource" subtitle={renameFor?.kind ? `${KIND_LABEL[renameFor.kind]} · This title is only visible to you.` : undefined} size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={renameBusy} onClick={() => setRenameFor(null)}>Cancel</Button>
+            <Button loading={renameBusy} onClick={() => void saveRename()} disabled={!renameTitle.trim() || renameTitle.trim() === renameFor?.title}>Save name</Button>
+          </>
+        }
+      >
+        <Field label="Resource name">
+          <TextInput autoFocus value={renameTitle} onChange={(event) => setRenameTitle(event.target.value.slice(0, 200))} maxLength={200} />
+        </Field>
+      </Modal>
     </div>
   );
 }

@@ -11,7 +11,7 @@ It proves the contract ranked play is judged on, in the order players hit it:
   2. the queue      — join per course, cancel, no cross-course mixing
   3. matchmaking    — patience ladder (30s→12 … 2min→4 … anyone), cap 15
   4. the lobby      — server countdown, roster with rating/tier/level
-  5. the match      — shared question windows, hidden answers before reveal
+  5. the match      — private question sets on one shared clock; no answer leaks
   6. scoring        — accuracy-dominant points, streaks, wrong = 0
   7. standings      — live order updates as answers land
   8. the finish     — positions, Elo rating movement (zero-sum-ish), rewards
@@ -236,16 +236,30 @@ def main() -> int:
     live = wait_for(lambda: (call("GET", f"/ranked/match/{match_id}", token=p1)[1] or {}).get("match", {}).get("status") == "live")
     check("match goes live on the server clock", bool(live), "never went live")
 
-    status, detail1 = call("GET", f"/ranked/match/{match_id}", token=p1)
-    state = detail1["match"]
-    question = state.get("question")
-    check("a question is open", bool(question), str(state)[:200])
-    check("answers stay hidden before the reveal", "correct" not in (question or {}), str(question)[:160])
-    check("question window is server-deadlined", bool(state.get("question")) , "")
-
     def fetch(token):
         status, payload = call("GET", f"/ranked/match/{match_id}", token=token)
         return (payload or {}).get("match", {}) if status == 200 else {}
+
+    player_tokens = (p1, p2, p3)
+    player_states = {token: fetch(token) for token in player_tokens}
+    state = player_states[p1]
+    questions = {token: player_states[token].get("question") for token in player_tokens}
+    question = questions[p1]
+    question_ids = [row.get("id") if isinstance(row, dict) else None for row in questions.values()]
+    check("every opponent receives an open question", all(question_ids), str(question_ids))
+    check("each player receives a private question", len(set(question_ids)) == len(player_tokens), str(question_ids))
+    check(
+        "question windows share one index and deadline",
+        len({player_states[token].get("round_index") for token in player_tokens}) == 1
+        and len({player_states[token].get("question_deadline") for token in player_tokens}) == 1
+        and bool(state.get("question_deadline")),
+        str({token: (player_states[token].get("round_index"), player_states[token].get("question_deadline")) for token in player_tokens}),
+    )
+    check(
+        "answers stay hidden before the reveal",
+        all(isinstance(row, dict) and "correct" not in row for row in questions.values()),
+        str({token: row for token, row in questions.items()}),
+    )
 
     def answer(token, letter):
         return call("POST", f"/ranked/match/{match_id}/answer", {"selected": letter, "elapsed_ms": 900}, token=token)
@@ -259,16 +273,28 @@ def main() -> int:
 
     deadline = time.time() + 300  # whole match budget
     while time.time() < deadline:
-        state = fetch(p1)
+        states = {token: fetch(token) for token in player_tokens}
+        state = states[p1]
         if state.get("status") == "finished":
             break
-        question = state.get("question")
+        round_questions = {token: states[token].get("question") for token in player_tokens}
+        question = round_questions[p1]
         reveal = state.get("reveal")
         if question and not state.get("me", {}).get("answered"):
             asked += 1
-            key = admin_answer_key(admin, question["id"])
-            # player 1 and 3 always right, player 2 always wrong
-            status, result = answer(p1, key)
+            ids = [row.get("id") if isinstance(row, dict) else None for row in round_questions.values()]
+            check(f"all opponents see question {asked}", all(ids), str(ids))
+            check(f"question {asked} stays private per player", len(set(ids)) == len(player_tokens), str(ids))
+            if not all(isinstance(row, dict) for row in round_questions.values()):
+                break
+            keys = {token: admin_answer_key(admin, round_questions[token]["id"]) for token in player_tokens}
+            if not all(keys.values()):
+                check(f"staff can resolve each player's question {asked}", False, str(keys))
+                break
+
+            # P1 and P3 use the keys for their own questions. P2 deliberately
+            # picks a different option from the key on P2's own question.
+            status, result = answer(p1, keys[p1])
             if status != 200:
                 check(f"answer {asked} accepted for p1", False, detail(result))
                 break
@@ -276,16 +302,28 @@ def main() -> int:
             if asked == 1:
                 check("correct answer scores accuracy-dominant points", result["result"]["points"] >= 60, str(result["result"]))
                 # guards, once: double answer + foreign player
-                status, dup = answer(p1, key)
+                status, dup = answer(p1, keys[p1])
                 double_locked = status == 400
-                status, foreign = answer(outsider, key)
+                status, foreign = answer(outsider, keys[p1])
                 foreign_locked = status == 403
-            answer(p3, key)
-            status, wrong = answer(p2, "Z" if key != "Z" else "Y")
-            if status == 200 and wrong["result"]["points"] == 0:
+            if not result["result"].get("correct"):
+                check(f"p1's own key grades correct on question {asked}", False, str(result["result"]))
+                break
+
+            status, result3 = answer(p3, keys[p3])
+            if status != 200 or not result3.get("result", {}).get("correct"):
+                check(f"p3's own key grades correct on question {asked}", False, detail(result3))
+                break
+
+            options2 = round_questions[p2].get("options") or {}
+            wrong_key = next((str(key).upper() for key in options2 if str(key).upper() != keys[p2]), None)
+            if wrong_key is None:
+                wrong_key = "Z" if keys[p2] != "Z" else "Y"
+            status, wrong = answer(p2, wrong_key)
+            if status == 200 and wrong.get("result", {}).get("correct") is False and wrong["result"].get("points") == 0:
                 scorecard[p2]["correct"] = 0
-            elif status != 200 and "closed" not in detail(wrong):
-                check(f"wrong answer accepted for p2 (q{asked})", False, detail(wrong))
+            else:
+                check(f"p2's wrong pick is rejected as incorrect on question {asked}", False, detail(wrong))
                 break
         elif reveal:
             time.sleep(0.4)  # let the reveal window pass on the server clock

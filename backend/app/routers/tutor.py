@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from .. import config as app_config
 from ..db import get_db, session_scope
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..deps import require_admin, require_student
 from ..models import (
     Admin,
@@ -150,7 +151,7 @@ def tutor_usage(db: Session = Depends(get_db), student: Student = Depends(requir
 
 @core.get("/options")
 def tutor_options(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
-    courses = db.execute(select(Course).where(Course.is_active.is_(True)).order_by(Course.code)).scalars().all()
+    courses = db.execute(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.code)).scalars().all()
     topics = db.execute(select(CourseTopic).order_by(CourseTopic.course_id, CourseTopic.position, CourseTopic.name)).scalars().all()
     by_course: dict[int, list] = {}
     for topic in topics:

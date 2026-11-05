@@ -251,13 +251,43 @@ export function registerServiceWorker(): void {
       .then(() => navigator.serviceWorker.ready)
       .then((registration) => {
         if (!import.meta.env.PROD) return;
-        // Chunks fetched before the worker took over: ask it to keep them too.
-        const urls = performance
-          .getEntriesByType('resource')
-          .map((entry) => new URL(entry.name, location.href))
-          .filter((entry) => entry.origin === location.origin && entry.pathname.startsWith('/assets/'))
-          .map((entry) => entry.pathname);
-        registration.active?.postMessage({type: 'arena:cache-assets', urls});
+        // Keep modules loaded before the worker took over, plus lazy chunks
+        // fetched afterward. A one-time snapshot races with route boot on
+        // phones: a screen can finish downloading just after `ready` resolves
+        // and otherwise be missing on the first offline reopen.
+        const sent = new Set<string>();
+        const sendAssets = (entries: PerformanceEntry[], force = false) => {
+          const urls = [...new Set(entries.flatMap((entry) => {
+            try {
+              const resource = new URL(entry.name, location.href);
+              return resource.origin === location.origin && resource.pathname.startsWith('/assets/')
+                ? [resource.pathname]
+                : [];
+            } catch {
+              return [];
+            }
+          }))];
+          const fresh = force ? urls : urls.filter((url) => !sent.has(url));
+          urls.forEach((url) => sent.add(url));
+          const worker = navigator.serviceWorker.controller ?? registration.active;
+          if (!worker) return;
+          for (let start = 0; start < fresh.length; start += 80) {
+            worker.postMessage({type: 'arena:cache-assets', urls: fresh.slice(start, start + 80)});
+          }
+        };
+        // Cached assets stay same-origin and immutable under their hashed name.
+        sendAssets(performance.getEntriesByType('resource'));
+        if (typeof PerformanceObserver !== 'undefined') {
+          const observer = new PerformanceObserver((list) => sendAssets(list.getEntries()));
+          try {
+            observer.observe({type: 'resource', buffered: true});
+          } catch {
+            observer.observe({entryTypes: ['resource']});
+          }
+        }
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          sendAssets(performance.getEntriesByType('resource'), true);
+        });
       })
       .catch(() => undefined);
   };

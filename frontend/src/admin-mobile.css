@@ -42,3 +42,54 @@
     transition-duration: .001ms !important;
   }
 }
+
+/* The staff AI conversation owns the mobile viewport; its back control returns
+   to the AI tools/overview without changing the desktop split layout. */
+@media (max-width: 1023px) {
+  .admin-ai-chat-fullscreen {
+    position: fixed !important;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    background: var(--color-ink-950, #080610);
+    overscroll-behavior: none;
+  }
+  .admin-ai-chat-fullscreen .admin-ai-mobile-chat-content {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 0%;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .admin-ai-chat-fullscreen .admin-ai-chat-card-fullscreen {
+    width: 100%;
+    height: 100% !important;
+    max-height: none;
+    min-height: 0 !important;
+    flex: 1 1 0%;
+    border-radius: 0 !important;
+    border-inline: 0;
+    border-block: 0;
+    box-shadow: none;
+  }
+  .admin-ai-chat-fullscreen .admin-ai-chat-header {
+    flex-shrink: 0;
+    padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+  }
+  .admin-ai-chat-fullscreen .admin-ai-chat-composer {
+    flex-shrink: 0;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  }
+  .admin-ai-chat-fullscreen .admin-ai-chat-composer textarea {
+    min-height: 2.25rem !important;
+  }
+}

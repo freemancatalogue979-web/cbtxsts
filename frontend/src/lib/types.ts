@@ -44,6 +44,50 @@ export interface PlayerSummary {
   country?: string;
   flag?: string;
   is_friend?: boolean;
+  /** Public, earned-only profile details from GET /players/{id}. */
+  badges?: PublicAchievement[];
+  badges_total?: number;
+  season?: SeasonBadgeBlock;
+  ranked?: PublicRankedProfile;
+  stats?: PublicPlayerStats;
+  history?: PublicPlayerActivity[];
+}
+
+export interface PublicAchievement {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  tier: Tier;
+  awarded_at?: string | null;
+}
+
+export interface PublicRankedProfile {
+  rating: number;
+  tier: RankedTier;
+  played: number;
+  won: number;
+  win_rate: number;
+  rank: number | null;
+}
+
+export interface PublicPlayerStats {
+  exams_won: number;
+  questions_answered: number;
+  correct_answers: number;
+  accuracy: number;
+  best_run: number;
+  ranked_played: number;
+  ranked_won: number;
+}
+
+export interface PublicPlayerActivity {
+  id: number;
+  kind: string;
+  title: string;
+  detail: string;
+  amount: number;
+  created_at: string;
 }
 
 export interface BadgeItem {
@@ -502,6 +546,8 @@ export interface LeaderboardRow {
   initials: string;
   avatar_hue: number;
   has_photo?: boolean;
+  country?: string;
+  flag?: string;
   cosmetics?: CosmeticsRef;
   level: number;
   title: string;
@@ -933,6 +979,9 @@ export interface RoomQuestionPayload {
   seconds: number;
   deadline: string;
   question: QuestionPublic;
+  /** Present in reconnect snapshots so a locked answer stays locked. */
+  answered?: boolean;
+  selected?: string | null;
 }
 
 export interface RoomRevealPayload {
@@ -941,6 +990,8 @@ export interface RoomRevealPayload {
   correct: string;
   explanation: string;
   correct_ids: number[];
+  correct_count?: number;
+  selected?: string | null;
   answered: number;
   standings: RoomMember[];
 }
@@ -1492,6 +1543,8 @@ export interface RankedMatchState {
   round_index: number;
   questions_total: number;
   lobby_at: string;
+  /** Deadline for the reconnecting viewer's currently open question. */
+  question_deadline?: string | null;
   /** Length of the lobby countdown in seconds (server-owned). */
   lobby_seconds?: number;
   server_now: string;
@@ -1500,6 +1553,7 @@ export interface RankedMatchState {
   reveal: RankedReveal | null;
   me: {answered: boolean; selected: string | null; correct: boolean | null; points: number | null} | null;
   activity: {text: string; at: string}[];
+  lobby_chat?: {match_id: number; student_id: number; name: string; body: string; at: string}[];
 }
 
 /** A player standing in a ranked course queue (shown while you wait). */

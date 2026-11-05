@@ -439,26 +439,25 @@ async def main() -> None:
     status_code, _ = call("DELETE", f"/api/admin/quizzes/{draw_quiz_id}", token=admin_token)
     check("drawn quizzes clean up", status_code == 200, str(status_code))
 
-    # ---------------- duels honour a course ----------------
-    status_code, empty_course = call(
+    # ---------------- duels honour the supported course scope ----------------
+    status_code, unsupported_course = call(
         "POST", "/api/admin/courses", token=admin_token,
-        body={"code": "SMK101", "title": "Smoke Empty Course"},
+        body={"code": "SMK101", "title": "Unsupported smoke-test course"},
     )
-    empty_course_id = empty_course.get("id") if isinstance(empty_course, dict) else None
+    check("unsupported courses cannot be created", status_code == 422, str(unsupported_course)[:160])
     status_code, dead_duel = call(
         "POST", "/api/duels/open", token=token_a,
-        body={"course_id": empty_course_id, "question_count": 5, "topic": "Empty course duel"},
+        body={"course_id": 999999999, "question_count": 5, "topic": "Empty course duel"},
     )
-    check("a course with no bank cannot host duels", status_code == 400, str(status_code))
+    check("a course with no question bank cannot host duels", status_code == 400, str(status_code))
 
-    status_code, law_duel = call(
+    status_code, course_duel = call(
         "POST", "/api/duels/open", token=token_a,
-        body={"course_id": 1, "question_count": 5, "topic": "Course duel"},
+        body={"course_id": 1, "question_count": 5, "topic": "English course duel"},
     )
-    check("course duel publishes with its course", status_code == 200 and law_duel.get("course_id") == 1, str(law_duel)[:160])
-    if isinstance(law_duel, dict) and law_duel.get("id"):
-        call("POST", f"/api/duels/{law_duel['id']}/cancel", token=token_a)
-    call("DELETE", f"/api/admin/courses/{empty_course_id}", token=admin_token)
+    check("supported-course duel publishes with its course", status_code == 200 and course_duel.get("course_id") == 1, str(course_duel)[:160])
+    if isinstance(course_duel, dict) and course_duel.get("id"):
+        call("POST", f"/api/duels/{course_duel['id']}/cancel", token=token_a)
 
     # ---------------- profile photos ----------------
     png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
@@ -485,8 +484,8 @@ async def main() -> None:
     status_code, unreacted = call("POST", f"/api/activity/{target_activity}/react", token=token_a)
     check("feed reactions toggle off", status_code == 200 and unreacted["mine"] is False, str(unreacted)[:160])
 
-    status_code, patched = call("PATCH", "/api/me", token=token_b, body={"bio": "Law student, duel addict.", "status_text": "Grinding jurisprudence"})
-    check("profile bio + status update", status_code == 200 and patched["bio"] == "Law student, duel addict.", str(patched)[:160])
+    status_code, patched = call("PATCH", "/api/me", token=token_b, body={"bio": "English and maths fan, duel addict.", "status_text": "Practising grammar and algebra"})
+    check("profile bio + status update", status_code == 200 and patched["bio"] == "English and maths fan, duel addict.", str(patched)[:160])
 
     status_code, analytics = call("GET", "/api/study/analytics", token=token_a)
     check(

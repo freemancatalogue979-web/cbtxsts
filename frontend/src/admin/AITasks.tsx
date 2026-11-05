@@ -184,7 +184,7 @@ export default function TasksView({course, focusId, onOpenProposal, onChanged}: 
           </p>
           <div className="flex shrink-0 rounded-full border border-white/8 bg-black/20 p-0.5">
             {(['course', 'all'] as const).map((s) => (
-              <button key={s} onClick={() => setScope(s)} className={`rounded-full px-2.5 py-1 text-[0.68rem] font-extrabold transition ${scope === s ? 'bg-white/[0.1] text-white' : 'text-mist-400 hover:text-mist-200'}`}>
+              <button key={s} onClick={() => setScope(s)} className={`rounded-full px-2.5 py-1 text-[0.68rem] font-extrabold transition ${scope === s ? 'bg-white/[0.1] text-mist-50' : 'text-mist-400 hover:text-mist-200'}`}>
                 {s === 'course' ? 'This course' : 'All'}
               </button>
             ))}
@@ -373,7 +373,7 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
                       type="number" min={1} max={limits?.max_questions ?? 1000} value={count || ''}
                       onChange={(e) => setCount(Math.max(0, Math.min(limits?.max_questions ?? 1000, Number(e.target.value) || 0)))}
                       aria-label="How many questions"
-                      className="h-8 w-20 rounded-lg border border-white/12 bg-black/25 px-2 text-center text-[0.82rem] font-extrabold text-white outline-none focus:border-nova-400/60"
+                      className="h-8 w-20 rounded-lg border border-white/12 bg-black/25 px-2 text-center text-[0.82rem] font-extrabold text-mist-50 outline-none focus:border-nova-400/60"
                     />
                     {COUNTS.map((n) => <Chip key={n} on={count === n} onClick={() => setCount(n)}>{n}</Chip>)}
                   </div>
@@ -397,13 +397,13 @@ function Builder({course, limits, prefill, onStarted}: {course: Course | null; l
           </button>
           {more && (
             <div className="mt-1.5 space-y-2">
-              <TextArea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={1500} placeholder="e.g. Final-year law school level. Focus on case law. Use Nigerian examples. About 12 topics." />
+              <TextArea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={1500} placeholder="e.g. First-year mathematics level. Focus on algebra and worked examples. Keep explanations step by step. About 12 topics." />
               <label className="flex items-center gap-2 text-[0.74rem] font-bold text-mist-300">
                 <Coins className="size-4 text-amber-300" /> Stop if cost reaches $
                 <input
                   type="number" step="0.1" min={0.05} max={limits?.hard_max_cost ?? 10} value={maxCost ?? ''} placeholder={String(limits?.default_max_cost ?? 1)}
                   onChange={(e) => setMaxCost(e.target.value ? Math.max(0.05, Math.min(limits?.hard_max_cost ?? 10, Number(e.target.value))) : null)}
-                  className="h-8 w-20 rounded-lg border border-white/12 bg-black/25 px-2 text-[0.8rem] font-extrabold text-white outline-none focus:border-nova-400/60"
+                  className="h-8 w-20 rounded-lg border border-white/12 bg-black/25 px-2 text-[0.8rem] font-extrabold text-mist-50 outline-none focus:border-nova-400/60"
                 />
               </label>
             </div>

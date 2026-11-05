@@ -29,7 +29,7 @@ import {motion} from 'motion/react';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import Character from '../components/Character';
 import {AnswerTile} from '../components/GameQuestion';
-import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, SectionHeading, Segmented, Skeleton} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, Segmented, Skeleton} from '../components/ui';
 import FlashcardsPanel from './FlashcardsPanel';
 import StudyLabPanel from './StudyLabPanel';
 import InsightsPanel from './InsightsPanel';

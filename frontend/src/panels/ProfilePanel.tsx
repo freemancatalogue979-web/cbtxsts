@@ -37,13 +37,13 @@ import {
   Zap, Gem}from 'lucide-react';
 import {motion} from 'motion/react';
 import {useCallback, useEffect, useRef, useState, useSyncExternalStore} from 'react';
-import {Avatar, Button, Card, Chip, EmptyState, Field, ProgressRing, SectionHeading, Skeleton, TextInput} from '../components/ui';
+import {Avatar, Button, Card, Chip, EmptyState, Field, ProgressRing, SectionHeading, Skeleton, TextInput, Select} from '../components/ui';
 import {titleOf, themeOf} from '../lib/cosmetics';
 import SeasonBadge from '../components/SeasonBadge';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
-import {COUNTRIES, countryFlag} from '../components/PlayerCard';
+import {COUNTRIES, countryFlag, openPlayer} from '../components/PlayerCard';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES, isValidPhone, normalizePhoneInput, TIER_STYLES} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -190,9 +190,13 @@ export default function ProfilePanel({
   const [hue, setHue] = useState(260);
   const [saving, setSaving] = useState(false);
   const [bio, setBio] = useState('');
-  const [country, setCountry] = useState('');
   const [statusText, setStatusText] = useState('');
+  const [country, setCountry] = useState('');
   const [cardSaving, setCardSaving] = useState(false);
+  // Responsive measurements are hooks: keep them above the nullable-profile return.
+  const ringSize = useSize(92, 112);
+  const faceSize = useSize(70, 86);
+  const friendFace = useSize(34, 38);
 
   const [friends, setFriends] = useState<{friends: PlayerSummary[]; requests: PlayerSummary[]; rivals: PlayerSummary[]} | null>(null);
   const [results, setResults] = useState<ResultRow[] | null>(null);
@@ -219,8 +223,8 @@ export default function ProfilePanel({
     setName(profile.name);
     setHue(profile.avatar_hue);
     setBio(profile.bio ?? '');
-    setCountry(profile.country ?? '');
     setStatusText(profile.status_text ?? '');
+    setCountry(profile.country ?? '');
   }, [profile]);
 
   useEffect(() => on('friend_added', load), [on, load]);
@@ -238,11 +242,6 @@ export default function ProfilePanel({
     }, 250);
     return () => window.clearTimeout(id);
   }, [friendPhone]);
-
-  /* useSize must run every render - never after a conditional return. */
-  const ringSize = useSize(92, 112);
-  const faceSize = useSize(70, 86);
-  const friendFace = useSize(34, 38);
 
   if (!profile) return <Skeleton className="h-96" />;
 
@@ -469,19 +468,25 @@ export default function ProfilePanel({
               <TextInput
                 value={statusText}
                 onChange={(event) => setStatusText(event.target.value.slice(0, 80))}
-                placeholder="e.g. Grinding jurisprudence 📚"
+                placeholder="e.g. Revising algebra 📚"
               />
             </Field>
             <Field label="Bio">
               <TextInput value={bio} onChange={(event) => setBio(event.target.value.slice(0, 240))} placeholder="Tell the arena who you are…" />
-            <label className="mt-2 block text-[0.68rem] font-black tracking-wider text-mist-500">Country flag</label>
-            <select value={country} onChange={(event) => setCountry(event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-ink-900 px-3 py-2 text-[0.84rem] font-bold text-mist-100">
-              <option value="">🌍 Not set</option>
-              {COUNTRIES.map((row) => (
-                <option key={row.code} value={row.code}>{row.flag} {row.name}</option>
-              ))}
-            </select>
-            {country && <p className="mt-1 text-[0.72rem] font-semibold text-mist-400">Showing as {countryFlag(country)}</p>}
+            </Field>
+            <Field label="Country flag">
+              <Select
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+                className="w-full"
+                aria-label="Country flag"
+              >
+                <option value="">🌍 Not set</option>
+                {COUNTRIES.map((row) => <option key={row.code} value={row.code}>{row.flag} {row.name}</option>)}
+              </Select>
+              <p className="mt-1 text-[0.7rem] font-semibold text-mist-500">
+                {country ? `Showing as ${countryFlag(country)}` : 'Choose a country to show a flag on your player card.'}
+              </p>
             </Field>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -987,20 +992,25 @@ export default function ProfilePanel({
               <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
                 {searching.map((player) => (
                   <li key={player.id}>
-                    <button
-                      onClick={() => addFriend(player)}
-                      disabled={addBusy}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5 text-left transition-colors hover:border-mint-400/40 hover:bg-mint-500/10 disabled:opacity-50"
-                    >
-                      <Avatar name={player.name} hue={player.avatar_hue} initials={player.initials} size={34} online={onlineIds.includes(player.id)} photo={{id: player.id, has: player.has_photo}} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[0.84rem] font-bold text-mist-100">{player.name}</span>
-                        <span className="block truncate text-[0.72rem] font-semibold text-mist-500">
-                          Lv {player.level} · {formatPhone(player.phone)}
+                    <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2 transition-colors hover:border-mint-400/40 hover:bg-mint-500/10">
+                      <button
+                        type="button"
+                        onClick={() => openPlayer(player.id)}
+                        aria-label={`Open ${player.name}'s profile`}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <Avatar name={player.name} hue={player.avatar_hue} initials={player.initials} size={34} online={onlineIds.includes(player.id)} photo={{id: player.id, has: player.has_photo}} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[0.84rem] font-bold text-mist-100">{player.name}</span>
+                          <span className="block truncate text-[0.72rem] font-semibold text-mist-500">
+                            Lv {player.level} · {formatPhone(player.phone)}
+                          </span>
                         </span>
-                      </span>
-                      <UserPlus className="size-4 shrink-0 text-mint-300" />
-                    </button>
+                      </button>
+                      <Button size="sm" variant="outline" onClick={() => addFriend(player)} disabled={addBusy} className="shrink-0" icon={<UserPlus className="size-3.5" />}>
+                        Add
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

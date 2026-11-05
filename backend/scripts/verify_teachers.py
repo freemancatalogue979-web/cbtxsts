@@ -122,12 +122,18 @@ def main() -> None:
     print("\n— application & verification")
     code, body = call("GET", "/teachers/studio/overview", token=teacher)
     check("studio locked before approval", code == 403, body)
+    code, rejected = call("PUT", "/teachers/me/profile", {
+        "headline": "Physics tutor",
+        "bio": "I teach mechanics and exam technique with clear worked examples for every student.",
+        "specialties": [{"subject": "Physics", "topics": ["Mechanics"]}],
+    }, token=teacher)
+    check("unoffered teacher subject rejected", code == 422 and "Only English and Mathematics" in str(rejected), rejected)
     code, body = call("PUT", "/teachers/me/profile", {
-        "headline": "Calculus and Physics tutor for 100-level students",
-        "bio": "I help first-year students master calculus, mechanics and exam technique with clear worked examples.",
+        "headline": "Calculus and Algebra tutor for first-year students",
+        "bio": "I help first-year students master calculus, algebra and exam technique with clear worked examples.",
         "experience_years": 6, "institution": "University of Port Harcourt", "languages": ["English", "Pidgin"], "formats": "both",
         "availability": [{"day": d, "start": "00:00", "end": "23:59"} for d in range(7)],
-        "specialties": [{"subject": "Mathematics", "topics": ["Calculus", "Algebra"]}, {"subject": "Physics", "topics": ["Mechanics"]}],
+        "specialties": [{"subject": "Mathematics", "topics": ["Calculus", "Algebra"]}],
     }, token=teacher)
     check("save draft profile", code == 200 and body["profile"]["status"] == "draft", body)
     code, body = call("POST", "/teachers/me/submit", token=teacher)
@@ -211,12 +217,12 @@ def main() -> None:
     extra_ids = []
     for i in range(5):
         tok, _ = player(f"T{i}")
-        call("PUT", "/teachers/me/profile", {"headline": "Biology teacher for secondary school", "bio": "x" * 80, "languages": ["English"], "specialties": [{"subject": "Biology", "topics": ["Genetics"]}]}, token=tok)
+        call("PUT", "/teachers/me/profile", {"headline": "English comprehension coach", "bio": "I make reading comprehension easier with short, clear practice sessions for every learner.", "languages": ["English"], "specialties": [{"subject": "English", "topics": ["Comprehension"]}]}, token=tok)
         upload("/teachers/me/qualifications", {"title": "B.Sc."}, None, None, tok)
         _, b = call("POST", "/teachers/me/submit", token=tok)
         call("POST", f"/admin/teachers/{b['profile']['id']}/action", {"action": "approve"}, token=admin)
         extra_ids.append(b["profile"]["id"])
-    results = [call("POST", f"/teachers/{tid}/requests", {"message": "Please help me understand genetics better.", "format": "either"}, token=other)[0] for tid in extra_ids]
+    results = [call("POST", f"/teachers/{tid}/requests", {"message": "Please help me improve my reading comprehension skills.", "format": "either"}, token=other)[0] for tid in extra_ids]
     check("five pending requests allowed", results == [200] * 5, results)
     code, body = call("POST", f"/teachers/{teacher_id}/requests", {"message": "Please help me understand calculus better.", "format": "either"}, token=other)
     check("sixth pending request rate-limited", code == 429, body)

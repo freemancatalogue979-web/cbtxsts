@@ -72,7 +72,7 @@ function MiniExamStartCard({card}: {card: MiniExamCard}) {
         <div aria-hidden className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-nova-500/20 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-10 size-36 rounded-full bg-sky-500/10 blur-3xl" />
         <div className="relative flex items-start gap-3">
-          <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-300 to-pulse-600 text-white shadow-lg shadow-nova-900/50">
+          <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-nova-300 to-pulse-600 text-white shadow-lg shadow-nova-700/50">
             <FileQuestion className="size-5" />
             <span className="absolute -right-1.5 -bottom-1.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-ink-950 bg-mint-400 px-1 text-[0.6rem] font-black text-ink-950 tabular">{card.question_count}</span>
           </span>
@@ -100,7 +100,7 @@ function MiniExamStartCard({card}: {card: MiniExamCard}) {
         </div>
         <button
           onClick={() => openMiniExam(card.id)}
-          className="relative mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-b from-nova-300 to-nova-600 text-[0.84rem] font-black tracking-wide text-white shadow-lg shadow-nova-900/50 transition hover:brightness-110 active:scale-[0.99]"
+          className="relative mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-b from-nova-300 to-nova-600 text-[0.84rem] font-black tracking-wide text-white shadow-lg shadow-nova-700/50 transition hover:brightness-110 active:scale-[0.99]"
         >
           <Play className="size-4 fill-current" /> Open exam <ChevronRight className="size-4 opacity-70" />
         </button>

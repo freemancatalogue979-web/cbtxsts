@@ -1021,7 +1021,8 @@ export function askConfirm(input: string | ConfirmOptions): Promise<boolean> {
   const confirmLabel = opts.confirmLabel ?? (danger && verb ? verb[0].toUpperCase() + verb.slice(1).toLowerCase() : /^(mark|withdraw|leave|restore|send|publish|approve)\b/i.test(head) && verb ? verb[0].toUpperCase() + verb.slice(1).toLowerCase() : 'Confirm');
   return new Promise((resolve) => {
     if (!confirmSink) {
-      resolve(typeof window !== 'undefined' ? window.confirm([head, typeof opts.message === 'string' ? opts.message : ''].filter(Boolean).join('\n\n')) : false);
+      // Fail closed if the host is not mounted; never fall back to a browser dialog.
+      resolve(false);
       return;
     }
     confirmSink({...opts, danger, confirmLabel, resolve});
@@ -1580,7 +1581,7 @@ export function Segmented<T extends string>({
   // Four or five icon tabs: on phones stack icon over label so none scroll away.
   const stacked = options.length >= 4 && options.length <= 5 && options.some((option) => option.icon);
   return (
-    <div className={`flex w-full min-w-0 flex-wrap gap-1 rounded-xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${className}`}>
+    <div className={`no-scrollbar flex gap-1 ${stacked ? '' : 'overflow-x-auto'} rounded-xl border border-white/8 bg-black/25 p-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${className}`}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -1590,8 +1591,10 @@ export function Segmented<T extends string>({
               uiClick('select');
               onChange(option.value);
             }}
-            className={`relative isolate flex min-w-0 flex-1 basis-[46%] items-center justify-center rounded-lg px-2 py-2 text-center text-[0.72rem] font-semibold leading-tight break-words whitespace-normal transition-colors sm:basis-0 sm:text-[0.8rem] ${
-              stacked ? 'flex-col gap-0.5 sm:flex-row sm:gap-1.5' : 'gap-1.5'
+            className={`relative isolate flex flex-1 items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors ${
+              stacked
+                ? 'min-w-0 flex-col gap-0.5 px-1.5 py-1.5 text-[0.7rem] sm:flex-row sm:gap-1.5 sm:px-3 sm:py-2 sm:text-[0.8rem]'
+                : 'min-w-max gap-1.5 px-3 py-2 text-[0.8rem]'
             } ${
               active ? 'text-white' : 'text-mist-400 hover:bg-white/[0.04] hover:text-mist-100'
             }`}
@@ -1857,7 +1860,7 @@ export function Stepper({
 }) {
   const set = (next: number) => onChange(clamp(Math.round(next), min, max));
   const btn =
-    'grid w-11 shrink-0 place-items-center text-mist-300 transition hover:bg-white/[0.06] hover:text-white active:scale-90 disabled:opacity-30 disabled:hover:bg-transparent';
+    'grid w-11 shrink-0 place-items-center text-mist-300 transition hover:bg-white/[0.06] hover:text-mist-50 active:scale-90 disabled:opacity-30 disabled:hover:bg-transparent';
   return (
     <div
       className={`flex h-[2.8rem] items-stretch overflow-hidden rounded-xl border border-white/10 bg-white/[0.045] shadow-[inset_0_1px_2px_rgba(0,0,0,0.28)] transition focus-within:border-nova-400/70 focus-within:ring-4 focus-within:ring-nova-500/15 ${className}`}

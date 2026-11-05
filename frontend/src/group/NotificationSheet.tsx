@@ -85,7 +85,7 @@ export default function NotificationSheet({open, onClose, onRead}: {open: boolea
                     row.read ? 'border-white/8 bg-ink-900/40' : 'border-nova-500/30 bg-nova-500/8'
                   } hover:border-nova-400/40`}
                 >
-                  <span className={`mt-1.5 size-2 shrink-0 rounded-full ${row.read ? 'bg-mist-700' : 'bg-nova-400'}`} />
+                  <span className={`mt-1.5 size-2 shrink-0 rounded-full ${row.read ? 'bg-mist-500' : 'bg-nova-400'}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[0.82rem] font-extrabold text-mist-50">{row.title}</p>
                     {row.message && <p className="mt-0.5 line-clamp-2 text-[0.74rem] font-medium text-mist-400">{row.message}</p>}

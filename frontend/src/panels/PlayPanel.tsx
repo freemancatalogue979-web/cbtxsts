@@ -370,7 +370,7 @@ export default function PlayPanel({onStartExam, onOpenDuels}: {onStartExam: (qui
 
             <div className="grid gap-3 p-3 sm:gap-4 sm:p-6">
               {/* ---- resources */}
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2.5">
                 {[
                   {label: 'Week XP', value: formatNumber(profile.weekly_xp ?? 0), icon: Zap, color: 'var(--color-nova-400)'},
                   {label: 'Streak', value: `${profile.streak}d`, icon: Flame, color: 'var(--color-flare-400)'},

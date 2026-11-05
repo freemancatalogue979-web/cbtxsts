@@ -179,7 +179,7 @@ function StartCard({exam, busy, onStart, onExit}: {exam: Exam; busy: boolean; on
 
       <div className="mt-4 flex items-start gap-3.5 sm:gap-4">
         <div className="relative shrink-0">
-          <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-lg shadow-nova-900/50 sm:size-16">
+          <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-lg shadow-nova-700/50 sm:size-16">
             <FileQuestion className="size-7" />
           </span>
           <span className="absolute -right-1.5 -bottom-1.5 grid min-w-6 place-items-center rounded-full border-2 border-ink-950 bg-mint-400 px-1 text-[0.66rem] font-black text-ink-950 tabular">{exam.question_count}</span>
@@ -357,7 +357,7 @@ function Runner({exam, onFinished, onReload}: {exam: Exam; onFinished: (e: Exam)
       <Card raised className="relative overflow-hidden p-4 sm:p-6">
         <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 size-56 rounded-full bg-nova-500/10 blur-3xl" />
         <div className="relative flex items-center gap-2.5">
-          <span className="grid h-10 min-w-10 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 px-2 text-[0.95rem] font-black text-white tabular shadow-lg shadow-nova-900/40">
+          <span className="grid h-10 min-w-10 place-items-center rounded-2xl bg-gradient-to-br from-nova-400 to-pulse-600 px-2 text-[0.95rem] font-black text-white tabular shadow-lg shadow-nova-700/40">
             {index + 1}
           </span>
           <div className="min-w-0 flex-1 leading-tight">
@@ -420,7 +420,7 @@ function Runner({exam, onFinished, onReload}: {exam: Exam; onFinished: (e: Exam)
                 aria-current={i === index}
                 className={`relative h-10 rounded-xl text-[0.76rem] font-black tabular transition ${
                   i === index ? 'ring-2 ring-nova-200 ring-offset-2 ring-offset-ink-950' : ''
-                } ${done ? 'bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-md shadow-nova-900/30' : 'border border-white/12 bg-ink-950/40 text-mist-400 hover:bg-white/[0.06]'}`}
+                } ${done ? 'bg-gradient-to-br from-nova-400 to-pulse-600 text-white shadow-md shadow-nova-700/30' : 'border border-white/12 bg-ink-950/40 text-mist-400 hover:bg-white/[0.06]'}`}
               >
                 {i + 1}
                 {isFlagged && <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-ink-950 bg-amber-400" />}
@@ -576,7 +576,7 @@ function Results({exam, setExam, onOpen, onExit}: {exam: Exam; setExam: (e: Exam
       <section className="relative overflow-hidden rounded-3xl border border-nova-400/25 bg-gradient-to-br from-nova-500/[0.12] via-ink-900/70 to-pulse-500/[0.06] p-4 sm:p-5">
         <div aria-hidden className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-nova-500/15 blur-3xl" />
         <div className="relative flex flex-wrap items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-lg shadow-nova-900/40"><Sparkles className="size-4" /></span>
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-nova-400 to-pulse-500 text-white shadow-lg shadow-nova-700/40"><Sparkles className="size-4" /></span>
           <div className="min-w-0 flex-1">
             <p className="text-[0.9rem] font-black text-mist-50">Tutor feedback</p>
             <p className="text-[0.7rem] font-medium text-mist-400">A personal read of this result</p>

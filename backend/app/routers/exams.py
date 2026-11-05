@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..deps import require_student
 from ..events import dispatch, to_admins
 from ..game import rank_suffix
-from ..models import Attempt, Quiz, Student
+from ..models import Attempt, Course, Quiz, Student
 from ..schemas import AnswerIn, ExamSyncIn, SubmitIn
 from ..serializers import attempt_state, attempt_summary
 from ..services import exam as exam_service
@@ -66,6 +67,12 @@ async def start_exam(
     quiz = db.get(Quiz, quiz_id)
     if quiz is None or bool(getattr(quiz, "is_bank", False)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
+    if quiz.course_id:
+        course = db.get(Course, quiz.course_id)
+        if course is None or (not course.is_active or course.code not in ACTIVE_COURSE_CODES):
+            existing = db.scalar(select(Attempt).where(Attempt.quiz_id == quiz.id, Attempt.student_id == student.id, Attempt.status == "in_progress"))
+            if existing is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found.")
     try:
         attempt, events = exam_service.open_attempt(db, student, quiz)
         db.commit()

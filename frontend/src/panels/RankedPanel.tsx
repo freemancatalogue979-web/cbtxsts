@@ -14,7 +14,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import RankedTeams from './RankedTeams';
 import {AnimatePresence, motion} from 'motion/react';
-import {ArrowLeft, ArrowRight, Award, BookOpen, Brain, Calculator, Check, ChevronUp, Cpu, Crown, Eye, FileText, Flame, FlaskConical, Globe2, GraduationCap, Landmark, ListChecks, Loader2, Lock, Medal, Microscope, Radio, RefreshCw, Scale, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
+import {ArrowLeft, ArrowRight, Award, BookOpen, Calculator, Check, ChevronUp, Crown, Eye, FileText, Flame, ListChecks, Loader2, Lock, Medal, Radio, RefreshCw, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile, Segmented} from '../components/ui';
 import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
 import {api, tokenStore} from '../lib/api';
@@ -44,10 +44,7 @@ type Phase = 'loading' | 'idle' | 'queue' | 'lobby' | 'live' | 'results' | 'revi
 
 const QUEUE_REFRESH_MS = 2000;
 
-/* Course picker dressing: every course gets a stable icon (keyed off its id)
-   and wears its own accent colour so the grid reads at a glance. Accents are
-   hex pairs (deep → bright) so cards can paint real gradients and glows. */
-const COURSE_ICONS = [BookOpen, FlaskConical, Calculator, Globe2, Cpu, Scale, Landmark, Microscope, Brain, GraduationCap];
+/* Keep the two active course cards unmistakable even if database ids differ. */
 const COURSE_ACCENTS: Record<string, {deep: string; bright: string}> = {
   red: {deep: '#92145a', bright: '#ff7ab3'},
   violet: {deep: '#6d28d9', bright: '#c9a8fc'},
@@ -57,7 +54,7 @@ const COURSE_ACCENTS: Record<string, {deep: string; bright: string}> = {
 const FALLBACK_ACCENT = COURSE_ACCENTS.violet;
 
 function courseIcon(course: Course) {
-  return COURSE_ICONS[course.id % COURSE_ICONS.length];
+  return /^MTH(?:\s|$)/i.test(course.code) ? Calculator : BookOpen;
 }
 
 function parseTime(iso: string): number {
@@ -80,7 +77,7 @@ function useServerClock() {
   const remaining = useCallback((deadlineIso: string) => Math.max(0, parseTime(deadlineIso) - (Date.now() - offsetRef.current)), []);
   /** Raw server-synced time — may sit in the past (used to measure queue waits). */
   const now = useCallback(() => Date.now() - offsetRef.current, []);
-  return {sync, remaining, now};
+  return useMemo(() => ({sync, remaining, now}), [sync, remaining, now]);
 }
 
 function ConnectionDot({connected}: {connected: boolean}) {
@@ -168,7 +165,7 @@ function RankedCourseCard({
       <span
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-14 opacity-[0.05]"
-        style={{backgroundImage: 'repeating-linear-gradient(180deg, #fff 0 1px, transparent 1px 5px)'}}
+        style={{backgroundImage: 'repeating-linear-gradient(180deg, var(--color-mist-50) 0 1px, transparent 1px 5px)'}}
       />
       {!locked && (
         <span
@@ -441,11 +438,13 @@ function RankedSoloPanel() {
   const [ladder, setLadder] = useState<RankedLadder | null>(null);
   const [review, setReview] = useState<ReviewItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  /* Lobby chat: relayed by the ranked socket, never persisted. */
+  /* Lobby chat is ephemeral, with a short server-held history for reconnects. */
   const [lobbyChat, setLobbyChat] = useState<RankedChatLine[]>([]);
   const [chatDraft, setChatDraft] = useState('');
+  const [lobbyChatConnected, setLobbyChatConnected] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const lobbyChatMatchId = useRef<number | null>(null);
+  const lobbyChatSequence = useRef(0);
   const socketRef = useRef<LiveSocket | null>(null);
   const questionStartRef = useRef<number>(0);
 
@@ -476,22 +475,46 @@ function RankedSoloPanel() {
 
   const applyState = useCallback(
     (state: RankedMatchState) => {
-      /* Fresh match = fresh lobby chat. */
-      if (lobbyChatMatchId.current !== null && lobbyChatMatchId.current !== state.id) setLobbyChat([]);
+      /* Fresh match = fresh lobby chat and result state. */
+      if (lobbyChatMatchId.current !== null && lobbyChatMatchId.current !== state.id) {
+        setLobbyChat([]);
+        setFinish(null);
+        setReview(null);
+      }
       lobbyChatMatchId.current = state.id;
+      if (state.status === 'lobby') {
+        setLobbyChat((state.lobby_chat ?? []).slice(-80).map((line, index) => ({
+          key: `snapshot-${state.id}-${index}-${line.student_id}`,
+          student_id: line.student_id,
+          name: line.name,
+          body: line.body,
+          mine: line.student_id === meId,
+        })));
+      }
       setMatch(state);
       setMatchId(state.id);
       if (state.server_now) clock.sync(state.server_now);
-      if (state.question) {
-        setWindow({index: state.round_index, total: state.questions_total, seconds: state.per_question_seconds, deadline: '', server_now: state.server_now, question: state.question});
-        questionStartRef.current = Date.now();
-      }
-      if (state.reveal) setReveal(state.reveal);
+      setWindow(
+        state.question
+          ? {
+              index: state.round_index,
+              total: state.questions_total,
+              seconds: state.per_question_seconds,
+              deadline: state.question_deadline ?? '',
+              server_now: state.server_now,
+              question: state.question,
+            }
+          : null,
+      );
+      questionStartRef.current = Date.now();
+      setReveal(state.reveal ?? null);
+      setMyPick(state.me?.selected ?? (state.me?.answered ? 'LOCKED' : null));
+      setBusy(false);
       if (state.status === 'lobby') setPhase('lobby');
-      else if (state.status === 'live') setPhase(state.reveal ? 'live' : 'live');
+      else if (state.status === 'live') setPhase('live');
       else setPhase('results');
     },
-    [clock],
+    [clock, meId],
   );
 
   /* Boot: figure out where the player is right now. */
@@ -556,11 +579,16 @@ function RankedSoloPanel() {
     const socket = new LiveSocket({
       token,
       path: `/ws/ranked/${matchId}`,
+      onStatus: (connection) => setLobbyChatConnected(connection === 'open'),
       onEvent: (event, data) => {
         switch (event) {
           case 'ranked_state': {
-            const payload = (data as {match?: RankedMatchState}).match;
-            if (payload) applyState(payload);
+            // The handshake sends a direct state snapshot; accept the older
+            // {match: state} envelope too so a reconnect always restores the
+            // currently open question instead of waiting for the next round.
+            const snapshot = data as (RankedMatchState & {match?: RankedMatchState}) | null;
+            const payload = snapshot?.match ?? snapshot;
+            if (payload && typeof payload.id === 'number') applyState(payload);
             break;
           }
           case 'ranked_question': {
@@ -576,14 +604,18 @@ function RankedSoloPanel() {
           }
           case 'ranked_answered': {
             const payload = data as {standings?: RankedPlayer[]; student_id?: number};
-            if (payload.standings && match) setMatch({...match, participants: payload.standings});
+            if (payload.standings) {
+              setMatch((current) => (current ? {...current, participants: payload.standings!} : current));
+            }
             break;
           }
           case 'ranked_reveal': {
             const payload = data as unknown as RankedReveal;
             setReveal(payload);
             setWindow(null);
-            if (payload.standings?.length && match) setMatch({...match, participants: payload.standings});
+            if (payload.standings?.length) {
+              setMatch((current) => (current ? {...current, participants: payload.standings} : current));
+            }
             sfx.play(payload.correct_ids.includes(meId) ? 'correct' : 'wrong');
             break;
           }
@@ -608,9 +640,11 @@ function RankedSoloPanel() {
           }
           case 'ranked_chat': {
             const event = data as {match_id: number; student_id: number; name: string; body: string};
+            if (event.match_id !== lobbyChatMatchId.current) break;
+            const sequence = ++lobbyChatSequence.current;
             setLobbyChat((current) => [
               ...current.slice(-79),
-              {key: `${event.student_id}-${current.length}-${event.body.length}`, student_id: event.student_id, name: event.name, body: event.body, mine: event.student_id === meId},
+              {key: `live-${event.match_id}-${sequence}`, student_id: event.student_id, name: event.name, body: event.body, mine: event.student_id === meId},
             ]);
             break;
           }
@@ -634,8 +668,7 @@ function RankedSoloPanel() {
       socket.close();
       socketRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inMatch, matchId]);
+  }, [inMatch, matchId, applyState, clock, meId]);
 
   /* Poll a finished match's results if we never saw the finish event. */
   useEffect(() => {
@@ -680,8 +713,11 @@ function RankedSoloPanel() {
   /** Lobby chat rides the ranked socket; the server gates it to the lobby. */
   const sendLobbyChat = () => {
     const body = chatDraft.trim();
-    if (!body || !socketRef.current) return;
-    socketRef.current.send({type: 'chat', body});
+    if (!body) return;
+    if (!socketRef.current?.send({type: 'chat', body})) {
+      toast('info', 'Lobby reconnecting', 'Your message is still here. Send it again when the connection returns.');
+      return;
+    }
     setChatDraft('');
   };
 
@@ -1119,9 +1155,13 @@ function RankedSoloPanel() {
 
             {/* Lobby chat: open until the first question fires. */}
             <div className="flex min-w-0 flex-col rounded-2xl border border-white/8 bg-white/[0.03]">
-              <p className="border-b border-white/8 px-3 py-2 text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">
-                Lobby chat
-              </p>
+              <div className="flex items-center justify-between gap-2 border-b border-white/8 px-3 py-2">
+                <p className="text-[0.62rem] font-black tracking-[0.18em] text-mist-500 uppercase">Lobby chat</p>
+                <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5 text-[0.6rem] font-bold text-mist-500">
+                  <ConnectionDot connected={lobbyChatConnected} />
+                  {lobbyChatConnected ? 'Live' : 'Reconnecting…'}
+                </span>
+              </div>
               <div className="min-h-[9rem] flex-1 space-y-1.5 overflow-y-auto px-3 py-2.5" style={{maxHeight: '16rem'}}>
                 {lobbyChat.length === 0 && (
                   <p className="text-[0.68rem] font-medium text-mist-600">Say good luck — chat locks the moment questions start.</p>
@@ -1148,7 +1188,7 @@ function RankedSoloPanel() {
                   placeholder="Good luck everyone…"
                   className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[0.76rem] font-semibold text-mist-100 outline-none placeholder:text-mist-600 focus:border-nova-400/50"
                 />
-                <Button size="sm" onClick={sendLobbyChat} disabled={!chatDraft.trim()} icon={<Send className="size-3.5" />}>
+                <Button size="sm" onClick={sendLobbyChat} disabled={!chatDraft.trim() || !lobbyChatConnected} icon={<Send className="size-3.5" />}>
                   Send
                 </Button>
               </div>
@@ -1499,7 +1539,7 @@ function QueueMeter({
           ? `Waiting ${mmss(elapsed)} — at ${mmss(nextDrop.wait)} only ${nextDrop.players} players are enough.`
           : 'Past the last rung — the match starts with whoever shows up.'}
       </p>
-      <p className="mt-1 text-[0.6rem] font-semibold text-mist-700">
+      <p className="mt-1 text-[0.6rem] font-semibold text-mist-500">
         The longer you wait, the fewer players you need — you will never wait forever.
       </p>
     </div>

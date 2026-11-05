@@ -71,7 +71,7 @@ const money = (n: number, digits = 3) => `$${(n || 0).toFixed(digits)}`;
 const pct = (n: number) => `${Math.round((n || 0) * 10) / 10}%`;
 const errText = (e: unknown) => (e as Error).message || 'Something went wrong.';
 
-export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
+export default function TutorAdmin({initialPrompt, onBackChat}: {initialPrompt?: string; onBackChat?: () => void}) {
   const {toast, profile} = useSession();
   const teacherOnly = String((profile as unknown as {role?: string} | null)?.role || '') === 'teacher';
   const [savedTab, setTab] = useSessionState<Tab>('ag.admin.tutor.tab', 'overview', (v) => ['overview', 'assistant', 'settings', 'usage', 'costs', 'users', 'conversations', 'models', 'limits', 'logs', 'features'].includes(v));
@@ -117,7 +117,7 @@ export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
     return (
       <div className="space-y-3">
         <PageBanner eyebrow="Teacher tools" tone="pulse" title="Teacher AI workspace" subtitle="Analyze learning evidence and draft lessons with read-only platform tools." icon={<Wand2 className="size-4" />} />
-        <AIAssistant initialPrompt={initialPrompt} />
+        <AIAssistant initialPrompt={initialPrompt} onBack={onBackChat} />
       </div>
     );
   }
@@ -173,7 +173,7 @@ export default function TutorAdmin({initialPrompt}: {initialPrompt?: string}) {
       ) : (
         <>
           {tab === 'overview' && <OverviewTab range={range} providers={providers} settings={settings} onGo={setTab} />}
-          {tab === 'assistant' && <AIAssistant initialPrompt={initialPrompt} />}
+          {tab === 'assistant' && <AIAssistant initialPrompt={initialPrompt} onBack={() => setTab('overview')} />}
           {tab === 'settings' && <SettingsTab settings={settings} set={set} />}
           {tab === 'usage' && <UsageTab range={range} />}
           {tab === 'costs' && <CostsTab range={range} settings={settings} set={set} />}

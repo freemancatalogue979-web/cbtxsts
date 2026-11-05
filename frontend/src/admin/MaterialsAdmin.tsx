@@ -731,7 +731,7 @@ function MaterialEditor({
                 </Field>
               )}
               <Field label="Topic">
-                <TextInput list="material-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Cell Biology" />
+                <TextInput list="material-topics" value={draft.topic} onChange={(event) => setDraft({...draft, topic: event.target.value})} placeholder="Grammar" />
                 <datalist id="material-topics">
                   {topicNames.map((name) => (
                     <option key={name} value={name} />

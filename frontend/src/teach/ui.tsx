@@ -33,9 +33,9 @@ export function takeIntent(key: string): string | null {
 /* ------------------------------------------------------------------ scope */
 /** Pro renders the workspace in its own theme. Standard wraps the same screens in
  *  `.t-game`, which maps the shared tokens onto the live arena palette (game.css). */
-export function ProScope({children}: {children: ReactNode}) {
+export function ProScope({children, className = ''}: {children: ReactNode; className?: string}) {
   const {pro} = useExperience();
-  return <div className={`${pro ? '' : 't-game '}grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5`}>{children}</div>;
+  return <div className={`${pro ? '' : 't-game '}grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 ${className}`.trim()}>{children}</div>;
 }
 
 /** True in Standard (arena) mode — for the few places that add game-only flourishes. */

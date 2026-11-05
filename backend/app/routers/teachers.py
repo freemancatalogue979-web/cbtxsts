@@ -20,6 +20,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..deps import require_student
 from ..events import dispatch, to_student
 from ..models import (
@@ -55,6 +56,44 @@ from ..services.group import log_activity
 
 logger = logging.getLogger("arena.teachers")
 router = APIRouter(prefix="/teachers", tags=["teachers"])
+
+
+def _current_subject_topic(subject: str, topic: str = "", *, allow_empty: bool = True) -> tuple[str, str]:
+    raw_subject = T.clean(subject, 80)
+    raw_topic = T.clean(topic, 120)
+    subject_by_fold = {name.casefold(): name for name in T.SUBJECTS}
+    if not raw_subject:
+        if not raw_topic:
+            if allow_empty:
+                return "", ""
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choose English or Mathematics.")
+        matches = [(name, candidate) for name, topics in T.SUBJECTS.items() for candidate in topics if candidate.casefold() == raw_topic.casefold()]
+        if len(matches) == 1:
+            return matches[0]
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choose a topic from English or Mathematics.")
+    canonical_subject = subject_by_fold.get(raw_subject.casefold())
+    if canonical_subject is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Only English and Mathematics are currently offered.")
+    if not raw_topic:
+        return canonical_subject, ""
+    canonical_topic = next((candidate for candidate in T.SUBJECTS[canonical_subject] if candidate.casefold() == raw_topic.casefold()), None)
+    if canonical_topic is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Choose a current {canonical_subject} topic.")
+    return canonical_subject, canonical_topic
+
+
+def _course_for_teacher_group(db: Session, course_id: int | None, subject: str, topic: str) -> tuple[int | None, str, str]:
+    if course_id is None:
+        current_subject, current_topic = _current_subject_topic(subject, topic)
+        return None, current_subject, current_topic
+    course = db.get(Course, course_id)
+    if course is None or not course.is_active or course.code not in ACTIVE_COURSE_CODES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choose an active English or Mathematics course.")
+    course_subject = "English" if course.code == "ENG 101" else "Mathematics"
+    current_subject, current_topic = _current_subject_topic(subject or course_subject, topic)
+    if current_subject != course_subject:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The selected subject must match the course.")
+    return course.id, current_subject, current_topic
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +395,7 @@ def _group_public(db: Session, group: StudyGroup, viewer: Student | None) -> dic
 
 
 def _profile_private(db: Session, profile: TeacherProfile) -> dict:
-    specialties = db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id == profile.id)).all()
+    specialties = db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id == profile.id, TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))).all()
     quals = db.scalars(select(TeacherQualification).where(TeacherQualification.teacher_id == profile.id).order_by(TeacherQualification.id)).all()
     history = db.scalars(
         select(TeacherVerificationLog)
@@ -412,25 +451,30 @@ def _group_member_count(db: Session, group_id: int) -> int:
 # ---------------------------------------------------------------------------
 @router.get("/catalog")
 def catalog(db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
-    live_ids = select(TeacherProfile.id).where(TeacherProfile.status == "approved")
+    live_ids = (
+        select(TeacherSpecialty.teacher_id)
+        .join(TeacherProfile, TeacherProfile.id == TeacherSpecialty.teacher_id)
+        .where(TeacherProfile.status == "approved", TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))
+        .distinct()
+    )
     popular = db.execute(
         select(func.coalesce(func.nullif(TeacherSpecialty.topic, ""), TeacherSpecialty.subject), func.count(TeacherSpecialty.id))
-        .where(TeacherSpecialty.teacher_id.in_(live_ids))
+        .where(TeacherSpecialty.teacher_id.in_(live_ids), TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))
         .group_by(func.coalesce(func.nullif(TeacherSpecialty.topic, ""), TeacherSpecialty.subject))
         .order_by(func.count(TeacherSpecialty.id).desc())
         .limit(10)
     ).all()
     chips = [name for name, _ in popular]
-    for fallback in ["Calculus", "Physics", "Chemistry", "Biology", "English", "Constitutional Law"]:
+    for fallback in ["Algebra", "Statistics", "Essay Writing", "Grammar", "Comprehension"]:
         if len(chips) >= 8:
             break
         if fallback not in chips:
             chips.append(fallback)
     return {
-        "subjects": [{"subject": s, "topics": topics} for s, topics in T.SUBJECTS.items()],
+        "subjects": [{"subject": subject, "topics": topics} for subject, topics in T.SUBJECTS.items()],
         "languages": T.LANGUAGES,
         "popular": chips,
-        "teacher_count": int(db.scalar(select(func.count(TeacherProfile.id)).where(TeacherProfile.status == "approved")) or 0),
+        "teacher_count": int(db.scalar(select(func.count(func.distinct(TeacherProfile.id))).join(TeacherSpecialty, TeacherSpecialty.teacher_id == TeacherProfile.id).where(TeacherProfile.status == "approved", TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))) or 0),
     }
 
 
@@ -451,7 +495,12 @@ def search_teachers(
     db: Session = Depends(get_db),
     student: Student = Depends(require_student),
 ) -> dict:
-    profiles = db.scalars(select(TeacherProfile).where(TeacherProfile.status == "approved")).all()
+    profiles = db.scalars(
+        select(TeacherProfile)
+        .join(TeacherSpecialty, TeacherSpecialty.teacher_id == TeacherProfile.id)
+        .where(TeacherProfile.status == "approved", TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))
+        .distinct()
+    ).all()
     blocked = {
         row.blocked_id if row.blocker_id == student.id else row.blocker_id
         for row in db.scalars(select(UserBlock).where(or_(UserBlock.blocker_id == student.id, UserBlock.blocked_id == student.id))).all()
@@ -459,7 +508,7 @@ def search_teachers(
     profiles = [p for p in profiles if p.student_id not in blocked]
     ids = [p.id for p in profiles]
     specs: dict[int, list[TeacherSpecialty]] = {}
-    for row in db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id.in_(ids))).all() if ids else []:
+    for row in db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id.in_(ids), TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))).all() if ids else []:
         specs.setdefault(row.teacher_id, []).append(row)
     stats = T.stats_for(db, ids)
 
@@ -620,11 +669,26 @@ def discover_groups(
     rows = db.scalars(
         select(StudyGroup).where(StudyGroup.teacher_id.is_not(None), StudyGroup.privacy.in_(["public", "request"])).order_by(StudyGroup.id.desc()).limit(200)
     ).all()
-    live = {p.id for p in db.scalars(select(TeacherProfile).where(TeacherProfile.status == "approved")).all()}
+    live = {
+        p.id for p in db.scalars(
+            select(TeacherProfile)
+            .join(TeacherSpecialty, TeacherSpecialty.teacher_id == TeacherProfile.id)
+            .where(TeacherProfile.status == "approved", TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))
+            .distinct()
+        ).all()
+    }
     needle = q.strip().lower()
     items = []
     for group in rows:
         if group.teacher_id not in live:
+            continue
+        if group.subject and group.subject not in T.SUBJECTS:
+            continue
+        if group.course_id:
+            course = db.get(Course, group.course_id)
+            if course is None or not course.is_active or course.code not in ACTIVE_COURSE_CODES:
+                continue
+        if not T.has_current_specialty(db, group.teacher_id):
             continue
         if needle and needle not in f"{group.name} {group.description} {group.subject} {group.topic}".lower():
             continue
@@ -718,9 +782,10 @@ def save_profile(payload: ProfileIn, db: Session = Depends(get_db), student: Stu
     db.flush()
     seen: set[tuple[str, str]] = set()
     for spec in payload.specialties:
-        subject = T.clean(spec.subject, 80)
+        subject, _ = _current_subject_topic(spec.subject, allow_empty=False)
         topics = [T.clean(t, 120) for t in spec.topics if t.strip()] or [""]
-        for topic in topics:
+        for raw_topic in topics:
+            _, topic = _current_subject_topic(subject, raw_topic)
             key = (subject.lower(), topic.lower())
             if key in seen:
                 continue
@@ -1359,7 +1424,8 @@ def save_notes(student_id: int, payload: NoteIn, db: Session = Depends(get_db), 
 
 
 # ----- materials -------------------------------------------------------------
-def _validate_material_target(db: Session, profile: TeacherProfile, payload: MaterialIn) -> None:
+def _validate_material_target(db: Session, profile: TeacherProfile, payload: MaterialIn) -> tuple[str, str]:
+    subject, topic = _current_subject_topic(payload.subject, payload.topic)
     if payload.visibility == "group":
         if not payload.group_id:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Choose a group for a group material.")
@@ -1372,6 +1438,7 @@ def _validate_material_target(db: Session, profile: TeacherProfile, payload: Mat
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Links must start with https://")
     if payload.kind == "text" and len(payload.body.strip()) < 10:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Write the material's text (at least a sentence).")
+    return subject, topic
 
 
 async def _announce_material(db: Session, profile: TeacherProfile, row: TeacherMaterial) -> list:
@@ -1396,13 +1463,13 @@ def studio_materials(db: Session = Depends(get_db), student: Student = Depends(r
 @router.post("/studio/materials")
 async def create_material(payload: MaterialIn, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     profile = T.require_teacher(db, student)
-    _validate_material_target(db, profile, payload)
+    subject, topic = _validate_material_target(db, profile, payload)
     row = TeacherMaterial(
         teacher_id=profile.id,
         title=T.clean(payload.title, 200),
         description=payload.description.strip(),
-        subject=T.clean(payload.subject, 80),
-        topic=T.clean(payload.topic, 120),
+        subject=subject,
+        topic=topic,
         kind=payload.kind,
         body=payload.body if payload.kind == "text" else "",
         link=payload.link.strip() if payload.kind == "link" else "",
@@ -1435,12 +1502,12 @@ async def update_material(material_id: int, payload: MaterialIn, db: Session = D
     row = db.get(TeacherMaterial, material_id)
     if row is None or row.teacher_id != profile.id or row.status != "active":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Material not found.")
-    _validate_material_target(db, profile, payload)
+    subject, topic = _validate_material_target(db, profile, payload)
     widened = payload.visibility != row.visibility or payload.group_id != row.group_id
     row.title = T.clean(payload.title, 200)
     row.description = payload.description.strip()
-    row.subject = T.clean(payload.subject, 80)
-    row.topic = T.clean(payload.topic, 120)
+    row.subject = subject
+    row.topic = topic
     row.kind = payload.kind
     row.body = payload.body if payload.kind == "text" else ""
     row.link = payload.link.strip() if payload.kind == "link" else ""
@@ -1518,10 +1585,11 @@ def _apply_quiz(db: Session, profile: TeacherProfile, quiz: TeacherQuiz, payload
         _my_group(db, profile, payload.group_id)
     for q in payload.questions:
         _validate_question(q)
+    subject, topic = _current_subject_topic(payload.subject, payload.topic)
     quiz.title = T.clean(payload.title, 200)
     quiz.description = payload.description.strip()
-    quiz.subject = T.clean(payload.subject, 80)
-    quiz.topic = T.clean(payload.topic, 120)
+    quiz.subject = subject
+    quiz.topic = topic
     quiz.time_limit_minutes = payload.time_limit_minutes
     quiz.pass_mark = payload.pass_mark
     quiz.visibility = payload.visibility
@@ -1752,16 +1820,17 @@ async def create_teacher_group(payload: GroupIn, db: Session = Depends(get_db), 
         raise HTTPException(status.HTTP_409_CONFLICT, "You can run up to 20 groups.")
     from .groups import _make_group_code
 
+    current_course_id, current_subject, current_topic = _course_for_teacher_group(db, payload.course_id, payload.subject, payload.topic)
     group = StudyGroup(
         code=_make_group_code(db),
         name=T.clean(payload.name, 140),
         description=payload.description.strip()[:300],
         owner_id=student.id,
-        course_id=payload.course_id,
-        goal=(payload.topic or payload.subject)[:200],
+        course_id=current_course_id,
+        goal=(current_topic or current_subject)[:200],
         teacher_id=profile.id,
-        subject=T.clean(payload.subject, 80),
-        topic=T.clean(payload.topic, 120),
+        subject=current_subject,
+        topic=current_topic,
         privacy=payload.privacy,
         capacity=payload.capacity,
     )
@@ -1779,10 +1848,13 @@ async def create_teacher_group(payload: GroupIn, db: Session = Depends(get_db), 
 def update_teacher_group(group_id: int, payload: GroupIn, db: Session = Depends(get_db), student: Student = Depends(require_student)) -> dict:
     profile = T.require_teacher(db, student)
     group = _my_group(db, profile, group_id)
+    current_subject, current_topic = _current_subject_topic(payload.subject, payload.topic)
+    if group.course_id:
+        _course_for_teacher_group(db, group.course_id, current_subject, current_topic)
     group.name = T.clean(payload.name, 140)
     group.description = payload.description.strip()[:300]
-    group.subject = T.clean(payload.subject, 80)
-    group.topic = T.clean(payload.topic, 120)
+    group.subject = current_subject
+    group.topic = current_topic
     group.privacy = payload.privacy
     group.capacity = payload.capacity
     db.commit()
@@ -1858,15 +1930,22 @@ def teacher_profile(teacher_id: int, db: Session = Depends(get_db), student: Stu
     own = profile is not None and profile.student_id == student.id
     if profile is None or (not T.is_live(profile) and not own) or (not own and T.is_blocked(db, profile.student_id, student.id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Teacher not found.")
+    specs = db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id == profile.id, TeacherSpecialty.subject.in_(T.SUBJECTS.keys()))).all()
+    if not own and not specs:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Teacher not found.")
     T.expire_requests(db)
     db.commit()
-    specs = db.scalars(select(TeacherSpecialty).where(TeacherSpecialty.teacher_id == profile.id)).all()
     stats = T.stats_for(db, [profile.id])[profile.id]
     card = T.teacher_card_safe(db, profile, stats, list(specs))
     quals = db.scalars(select(TeacherQualification).where(TeacherQualification.teacher_id == profile.id, TeacherQualification.status != "rejected")).all()
     groups = db.scalars(select(StudyGroup).where(StudyGroup.teacher_id == profile.id, StudyGroup.privacy != "invite")).all()
-    materials = db.scalars(select(TeacherMaterial).where(TeacherMaterial.teacher_id == profile.id, TeacherMaterial.visibility == "public", TeacherMaterial.status == "active").order_by(TeacherMaterial.created_at.desc()).limit(12)).all()
-    quizzes = db.scalars(select(TeacherQuiz).where(TeacherQuiz.teacher_id == profile.id, TeacherQuiz.visibility == "public", TeacherQuiz.status == "published").order_by(TeacherQuiz.published_at.desc()).limit(12)).all()
+    groups = [g for g in groups if (not g.subject or g.subject in T.SUBJECTS) and (not g.course_id or (db.get(Course, g.course_id) is not None and db.get(Course, g.course_id).is_active and db.get(Course, g.course_id).code in ACTIVE_COURSE_CODES))]
+    materials = db.scalars(select(TeacherMaterial).where(TeacherMaterial.teacher_id == profile.id, TeacherMaterial.visibility == "public", TeacherMaterial.status == "active").order_by(TeacherMaterial.created_at.desc()).limit(30)).all()
+    materials = [m for m in materials if not m.subject or m.subject in T.SUBJECTS]
+    materials = materials[:12]
+    quizzes = db.scalars(select(TeacherQuiz).where(TeacherQuiz.teacher_id == profile.id, TeacherQuiz.visibility == "public", TeacherQuiz.status == "published").order_by(TeacherQuiz.published_at.desc()).limit(30)).all()
+    quizzes = [q for q in quizzes if not q.subject or q.subject in T.SUBJECTS]
+    quizzes = quizzes[:12]
     reviews = db.scalars(select(TeacherReview).where(TeacherReview.teacher_id == profile.id, TeacherReview.status == "visible").order_by(TeacherReview.created_at.desc()).limit(30)).all()
     rel = T.relationship_between(db, profile.id, student.id)
     pending = db.scalar(select(TeacherRequest).where(TeacherRequest.teacher_id == profile.id, TeacherRequest.student_id == student.id, TeacherRequest.status == "pending"))
@@ -1914,11 +1993,12 @@ async def request_teacher(teacher_id: int, payload: RequestIn, db: Session = Dep
     spam = T.looks_like_spam(payload.message)
     if spam:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, spam)
+    request_subject, request_topic = _current_subject_topic(payload.subject, payload.topic)
     row = TeacherRequest(
         student_id=student.id,
         teacher_id=profile.id,
-        subject=T.clean(payload.subject, 80),
-        topic=T.clean(payload.topic, 120),
+        subject=request_subject,
+        topic=request_topic,
         message=payload.message.strip(),
         format=payload.format,
         preferred_time=T.clean(payload.preferred_time, 160),

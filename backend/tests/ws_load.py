@@ -48,6 +48,10 @@ FAILED = 0
 READERS = 10          # normal draining clients on the live channel
 PRESENCE_BLAST = 300  # rapid-fire broadcasts from one client
 CHAT_BLAST = 100      # rapid-fire room chat messages from the host
+# Keep this in sync with the API's ARENA_HEARTBEAT_SECONDS setting. The server
+# emits its first periodic heartbeat after a full interval, so add a little
+# scheduling/DB-I/O grace rather than racing the exact boundary.
+HEARTBEAT_SECONDS = float(os.environ.get("ARENA_HEARTBEAT_SECONDS", "25"))
 
 
 def check(label: str, condition: bool, extra="") -> None:
@@ -390,7 +394,7 @@ async def reconnect_and_heartbeat(token: str) -> None:
     # heartbeats arrive on the async snapshot path (send a ping now and then —
     # with fast test windows a silent socket gets reaped before the heartbeat)
     got_heartbeat = False
-    deadline = time.monotonic() + 25
+    deadline = time.monotonic() + max(10.0, HEARTBEAT_SECONDS + 10.0)
     while time.monotonic() < deadline:
         try:
             await ws.send(json.dumps({"type": "ping"}))

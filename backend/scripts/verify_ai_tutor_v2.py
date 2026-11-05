@@ -152,11 +152,11 @@ def run_v2(me: str, other: str, staff: str, course: dict, cid: int, q_id, hidden
     check("context_type recorded", conv.get("context_type") in {"course", "question", "general", "topic", "material"}, conv)
 
     print("learning profile (spec 107)")
-    code, prof = call("PUT", "/tutor/profile", {"explanation_style": "simple", "language": "Pidgin English", "goals": "Pass LAW 411 with an A"}, me)
+    code, prof = call("PUT", "/tutor/profile", {"explanation_style": "simple", "language": "Pidgin English", "goals": "Pass MTH 101 with an A"}, me)
     check("profile saved", code == 200 and prof["explanation_style"] == "simple", prof)
     say(me, cid, "What is negligence?")
     sysp = system_of(h.last_stream())
-    check("profile goes into the prompt after exam rules", "LEARNING PROFILE" in sysp and "Pass LAW 411" in sysp and "Pidgin English" in sysp and sysp.find("LEARNING PROFILE") > sysp.find("PLATFORM RULES"))
+    check("profile goes into the prompt after exam rules", "LEARNING PROFILE" in sysp and "Pass MTH 101" in sysp and "Pidgin English" in sysp and sysp.find("LEARNING PROFILE") > sysp.find("PLATFORM RULES"))
     call("PUT", "/tutor/profile", {"explanation_style": "balanced", "language": "English", "goals": ""}, me)
     say(me, cid, "Guide me", context={"socratic": True})
     check("Socratic toggle adds the Socratic rules", "SOCRATIC MODE" in system_of(h.last_stream()))

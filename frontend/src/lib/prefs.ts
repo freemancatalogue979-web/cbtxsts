@@ -80,20 +80,18 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
 
 /* ------------------------------------------------------------------ skins */
 /**
- * Day / night. The arena boots into the **night** deep-ink arena glow; the
- * daylight cartoon world stays one tap away for anyone who wants sky, meadow
- * and parchment. The skin only re-maps tokens (surfaces, type, edges) — themes
- * still tint the accents on top of either.
+ * Day / night. New devices start in daylight; a saved choice always wins.
+ * The skin re-maps surfaces, type and edges while accent themes remain intact.
  */
 export type SkinName = 'day' | 'night';
 
 export const SKINS: {id: SkinName; name: string; blurb: string; short: string; dots: string[]}[] = [
-  {id: 'night', name: 'Night', blurb: 'Deep-ink arena glow — the default.', short: 'Deep-ink arena glow.', dots: ['#0b1030', '#a855f7', '#3b82f6']},
-  {id: 'day', name: 'Daylight', blurb: 'Bright adventure world — sky, meadow and parchment panels.', short: 'Bright adventure world.', dots: ['#5ac8fa', '#34c759', '#ffcc00']},
+  {id: 'day', name: 'Daylight', blurb: 'Bright adventure world — sky, meadow and parchment panels. The default.', short: 'Bright adventure world.', dots: ['#5ac8fa', '#34c759', '#ffcc00']},
+  {id: 'night', name: 'Night', blurb: 'Deep-ink arena glow for a darker workspace.', short: 'Deep-ink arena glow.', dots: ['#0b1030', '#a855f7', '#3b82f6']},
 ];
 
 const SKIN_KEY = 'arena.skin';
-export const DEFAULT_SKIN: SkinName = 'night';
+export const DEFAULT_SKIN: SkinName = 'day';
 
 export function currentSkin(): SkinName {
   const stored = read(SKIN_KEY, DEFAULT_SKIN);
@@ -103,14 +101,16 @@ export function currentSkin(): SkinName {
 export function applySkin(name: SkinName): void {
   document.documentElement.dataset.skin = name;
   write(SKIN_KEY, name);
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  themeColor?.setAttribute('content', name === 'day' ? '#eaf4ff' : '#07030f');
 }
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v6 makes Helvetica Oblique the house default. A versioned key ensures
-// devices that stored the previous default receive the new one; from
-// now on only an explicit pick in settings is stored.
-const FONT_KEY = 'arena.font.v6';
+// v7 stores explicit font choices; no saved value means use the device default.
+// Legacy explicit choices are migrated instead of silently discarded.
+const FONT_KEY = 'arena.font.v7';
+const LEGACY_FONT_KEYS = ['arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';
@@ -208,12 +208,24 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Helvetica Oblique is the house default; a stored choice always wins. */
-export const DEFAULT_FONT: FontName = 'helvetica-oblique';
+/** Non-browser fallback; actual defaults are selected by device, unless saved. */
+export const DEFAULT_FONT: FontName = 'grotesk';
+
+function deviceDefaultFont(): FontName {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return DEFAULT_FONT;
+  const mobileOrTablet =
+    window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches;
+  return mobileOrTablet ? 'grotesk' : 'helvetica-oblique';
+}
 
 export function currentFont(): FontName {
-  const stored = read(FONT_KEY, DEFAULT_FONT);
-  return (FONTS.some((font) => font.id === stored) ? stored : DEFAULT_FONT) as FontName;
+  const current = read(FONT_KEY, '');
+  const legacy = current ? '' : LEGACY_FONT_KEYS.map((key) => read(key, '')).find(Boolean) ?? '';
+  const stored = current || legacy;
+  const fallback = deviceDefaultFont();
+  const choice = (FONTS.some((font) => font.id === stored) ? stored : fallback) as FontName;
+  if (!current && legacy && choice === legacy) write(FONT_KEY, choice);
+  return choice;
 }
 
 /** Paint a font pack. `persist` is false for boot/mode switches so only a real pick is remembered. */

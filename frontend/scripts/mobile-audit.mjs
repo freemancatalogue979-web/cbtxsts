@@ -49,7 +49,10 @@ function yieldFile(file) {
       const bare = [...classes.matchAll(/(?<![a-z-])grid-cols-(\d+)/g)].filter((m) => Number(m[1]) >= 4);
       const responsive = /(?:sm|md|lg|xl):grid-cols-/.test(classes) || /grid-cols-\d+\s+(?:sm|md|lg|xl):/.test(classes);
       const preceded = /(?:sm|md|lg|xl):grid-cols-\d+/.test(classes);
-      if (bare.length && !preceded && !responsive) {
+      // Fixed five-item mobile navigation is intentionally one row: each item
+      // is a compact, equal-width tap target, not a content grid.
+      const compactBottomNav = /\bpro-bottom-nav\b/.test(classes);
+      if (bare.length && !preceded && !responsive && !compactBottomNav) {
         issues.push(`${at} grid-cols-${bare[0][1]} with no responsive variant`);
       }
       // 4. Anything allowed to grow past the viewport.
@@ -61,7 +64,7 @@ function yieldFile(file) {
     // 5. Wide tables must sit in a horizontal scroller (look back a few lines).
     if (/<table/.test(line) && /min-w-\[/.test(line)) {
       const context = lines.slice(Math.max(0, i - 4), i + 1).join('\n');
-      if (!context.includes('overflow-x-auto')) issues.push(`${at} wide <table> without an overflow-x-auto wrapper`);
+      if (!context.includes('overflow-x-auto') && !context.includes('pro-scroll-x')) issues.push(`${at} wide <table> without a horizontal scroller wrapper`);
     }
   });
 }

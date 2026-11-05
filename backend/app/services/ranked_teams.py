@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from .. import game
 from ..events import Event, to_student
+from ..course_catalog import ACTIVE_COURSE_CODES
 from ..models import (
     Course,
     Friendship,
@@ -868,7 +869,7 @@ def open_lobbies(db: Session, student: Student, limit: int = 8) -> list[dict]:
 
 
 def ranked_courses(db: Session) -> list[dict]:
-    rows = db.scalars(select(Course).where(Course.is_active.is_(True)).order_by(Course.title)).all()
+    rows = db.scalars(select(Course).where(Course.is_active.is_(True), Course.code.in_(ACTIVE_COURSE_CODES)).order_by(Course.title)).all()
     out = []
     for course in rows:
         pool = int(

@@ -17,7 +17,6 @@ import {
   Gift,
   Layers,
   Lock,
-  Map,
   MapPin,
   Play,
   Sparkles,
@@ -34,10 +33,8 @@ import {
   Avatar,
   Button,
   Card,
-  Chip,
   EmptyState,
   GameTag,
-  IconOrb,
   Modal,
   ProgressBar,
   SectionHeading,
@@ -94,7 +91,7 @@ const STATE_META: Record<
   mastered: {
     label: 'Conquered',
     ring: 'border-mint-300/80',
-    face: 'from-mint-300 via-emerald-400 to-mint-700',
+    face: 'from-mint-300 via-emerald-400 to-mint-600',
     glow: '',
     badge: 'bg-mint-500/25 text-mint-200',
     glyph: 'star',
@@ -205,13 +202,11 @@ function QuestCard({
 function MapNodeButton({
   node,
   index,
-  total,
   offset,
   onOpen,
 }: {
   node: MapNode;
   index: number;
-  total: number;
   offset: number;
   onOpen: (node: MapNode) => void;
 }) {
@@ -602,7 +597,6 @@ export default function WorldMapPanel({
                   key={`${world.course_id}-${node.topic}`}
                   node={node}
                   index={index}
-                  total={world.nodes.length}
                   offset={index}
                   onOpen={setOpenNode}
                 />

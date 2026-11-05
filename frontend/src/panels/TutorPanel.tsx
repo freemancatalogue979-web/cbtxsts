@@ -7,7 +7,7 @@
  * this screen only shows them).
  */
 import {
-  Archive, ArchiveRestore, ArrowDown, BarChart3, BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
+  Archive, ArchiveRestore, ArrowDown, ArrowLeft, BarChart3, BookOpen, Bot, Brain, CalendarCheck, Copy, FileText, GraduationCap, History, ImagePlus, Layers, Lightbulb,
   ListChecks, Lock, MessageSquarePlus, MoreHorizontal, Paperclip, Pencil, RefreshCw, Save, Search, Send, Settings2, ShieldCheck, Sparkles, Square,
   Target, ThumbsDown, ThumbsUp, Trash2, X, Ghost, FileTextIcon, FlagIcon, MessagesSquareIcon, SlidersHorizontalIcon
 } from 'lucide-react';
@@ -23,6 +23,7 @@ import {
 } from '../lib/tutor';
 import {ActionCards, ToolTrail, mergeTool} from '../components/tutor/AgentBits';
 import {useSession} from '../store/session';
+import {useChatNav} from '../components/AppShell';
 import {useExperience} from '../lib/mode';
 
 const LAST_CHAT_KEY = 'arena.tutor.chat';
@@ -84,6 +85,11 @@ interface Attached {
 export default function TutorPanel() {
   const {toast} = useSession();
   const {pro} = useExperience();
+  const chatNav = useChatNav();
+  useEffect(() => {
+    chatNav.setThreadOpen(true);
+    return () => chatNav.setThreadOpen(false);
+  }, [chatNav.setThreadOpen]);
   const [status, setStatus] = useState<TutorStatus | null>(null);
   const [courses, setCourses] = useState<TutorCourse[]>([]);
   const [uploads, setUploads] = useState<TutorUpload[]>([]);
@@ -599,8 +605,17 @@ export default function TutorPanel() {
   );
 
   return (
-    <div className={`mx-auto w-full max-w-6xl ${pro ? 'pro-tutor' : ''}`}>
-      <div className={`flex flex-wrap items-center gap-2 ${pro ? 'pro-hero pro-hero-compact mb-4 gap-3' : 'mb-2.5'}`} data-hue={pro ? 'violet' : undefined}>
+    <div className={`tutor-page mx-auto w-full max-w-6xl ${pro ? 'pro-tutor' : ''}`}>
+      <div className={`tutor-page-heading flex flex-wrap items-center gap-2 ${pro ? 'pro-hero pro-hero-compact mb-4 gap-3' : 'mb-2.5'}`} data-hue={pro ? 'violet' : undefined}>
+        <button
+          type="button"
+          className="tutor-back grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 text-mist-300 transition-colors hover:border-nova-400/40 hover:text-mist-50 lg:hidden"
+          onClick={() => window.dispatchEvent(new CustomEvent('ag:navigate', {detail: {tab: 'play'}}))}
+          aria-label="Back to the arena"
+          title="Back to the arena"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
         {pro ? (
           <span className="pro-hero-icon" aria-hidden>
             <Sparkles />
@@ -617,8 +632,8 @@ export default function TutorPanel() {
           </p>
         </div>
         {remaining !== null && status?.configured && (
-          <span className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${remaining <= 3 ? 'border-flare-400/40 text-flare-200' : 'border-white/10 text-mist-300'}`} title={`${status.usage.today} used today · ${status.usage.month} this month`}>
-            {remaining} left today
+          <span className={`rounded-full border px-2.5 py-1 text-[0.72rem] font-bold ${remaining <= 3 ? 'border-flare-400/40 text-flare-200' : 'border-white/10 text-mist-300'}`} aria-label={`${remaining} prompts remaining today`} title={`${status.usage.today} used today · ${status.usage.month} this month`}>
+            {remaining}
           </span>
         )}
         <button className="grid size-9 place-items-center rounded-lg border border-white/10 text-mist-300 hover:bg-white/[0.06]" aria-label="Tutor settings" title="How the tutor explains" onClick={() => setProfileOpen(true)}>
@@ -651,7 +666,7 @@ export default function TutorPanel() {
         </div>
       )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="tutor-layout grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="tutor-side card hidden h-[calc(100dvh-11rem)] min-h-[28rem] flex-col p-2.5 lg:flex">{chatList}</aside>
 
         <section className="tutor-main card flex min-w-0 h-[calc(100dvh-12.5rem)] min-h-[26rem] flex-col p-2.5 sm:p-3 lg:h-[calc(100dvh-11rem)]">
@@ -918,29 +933,51 @@ export default function TutorPanel() {
 
 function ChatRow({chat, active, onOpen, onRename, onArchive, onDelete}: {chat: Conversation; active: boolean; onOpen: () => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void}) {
   const [menu, setMenu] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState(chat.title);
+  const saveRename = () => {
+    const title = renameTitle.trim();
+    if (!title || title === chat.title) return;
+    onRename(title);
+    setRenameOpen(false);
+  };
   return (
-    <div className={`group relative flex items-center rounded-lg ${active ? 'bg-nova-500/15' : 'hover:bg-white/[0.05]'}`}>
-      <button onClick={onOpen} className="min-w-0 flex-1 px-2.5 py-2 text-left">
-        <span className={`block truncate text-[0.8rem] font-bold ${active ? 'text-white' : 'text-mist-200'}`}>{chat.title}</span>
-        <span className="block truncate text-[0.66rem] text-mist-500">{chat.snippet ? chat.snippet : formatRelative(chat.last_message_at)}</span>
-      </button>
-      <button className="grid size-8 shrink-0 place-items-center rounded-md text-mist-500 hover:text-mist-200" aria-label="Chat options" onClick={() => setMenu((v) => !v)}>
-        <MoreHorizontal className="size-4" />
-      </button>
-      {menu && (
-        <div className="absolute top-full right-1 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-ink-900 shadow-xl" onMouseLeave={() => setMenu(false)}>
-          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); const title = window.prompt('Rename chat', chat.title); if (title?.trim()) onRename(title.trim()); }}>
-            <Pencil className="size-3.5" /> Rename
-          </button>
-          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); onArchive(); }}>
-            {chat.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} {chat.archived ? 'Unarchive' : 'Archive'}
-          </button>
-          <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-flare-300 hover:bg-flare-500/10" onClick={async () => { setMenu(false); if (await askConfirm('Delete this chat?')) onDelete(); }}>
-            <Trash2 className="size-3.5" /> Delete
-          </button>
-        </div>
-      )}
-    </div>
+    <>
+      <div className={`group relative flex items-center rounded-lg ${active ? 'bg-nova-500/15' : 'hover:bg-white/[0.05]'}`}>
+        <button onClick={onOpen} className="min-w-0 flex-1 px-2.5 py-2 text-left">
+          <span className={`block truncate text-[0.8rem] font-bold ${active ? 'text-white' : 'text-mist-200'}`}>{chat.title}</span>
+          <span className="block truncate text-[0.66rem] text-mist-500">{chat.snippet ? chat.snippet : formatRelative(chat.last_message_at)}</span>
+        </button>
+        <button className="grid size-8 shrink-0 place-items-center rounded-md text-mist-500 hover:text-mist-200" aria-label="Chat options" onClick={() => setMenu((v) => !v)}>
+          <MoreHorizontal className="size-4" />
+        </button>
+        {menu && (
+          <div className="absolute top-full right-1 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-ink-900 shadow-xl" onMouseLeave={() => setMenu(false)}>
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); setRenameTitle(chat.title); setRenameOpen(true); }}>
+              <Pencil className="size-3.5" /> Rename
+            </button>
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-mist-200 hover:bg-white/[0.06]" onClick={() => { setMenu(false); onArchive(); }}>
+              {chat.archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />} {chat.archived ? 'Unarchive' : 'Archive'}
+            </button>
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-[0.78rem] text-flare-300 hover:bg-flare-500/10" onClick={async () => { setMenu(false); if (await askConfirm('Delete this chat?')) onDelete(); }}>
+              <Trash2 className="size-3.5" /> Delete
+            </button>
+          </div>
+        )}
+      </div>
+      <Modal icon={Pencil} tone="nova" open={renameOpen} onClose={() => setRenameOpen(false)} title="Rename chat" subtitle="Choose a short title you’ll recognize in your history." size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRenameOpen(false)}>Cancel</Button>
+            <Button onClick={saveRename} disabled={!renameTitle.trim() || renameTitle.trim() === chat.title}>Save name</Button>
+          </>
+        }
+      >
+        <Field label="Chat title">
+          <TextInput autoFocus value={renameTitle} onChange={(event) => setRenameTitle(event.target.value.slice(0, 60))} maxLength={60} />
+        </Field>
+      </Modal>
+    </>
   );
 }
 
@@ -1182,7 +1219,7 @@ function ProfileModal({open, onClose, socratic, onSocratic}: {open: boolean; onC
             </Field>
           </div>
           <Field label="My goals (optional)">
-            <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Pass LAW 411 with an A, understand case law better" />
+            <TextArea rows={2} value={profile.goals} onChange={(e) => setProfile({...profile, goals: e.target.value})} maxLength={300} placeholder="e.g. Improve at algebra, master grammar, or prepare for an English exam" />
           </Field>
           <SwitchRow label="Socratic mode for this chat" description="The tutor asks guiding questions before explaining." checked={socratic} onChange={onSocratic} />
         </div>

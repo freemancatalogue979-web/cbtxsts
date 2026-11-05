@@ -3,8 +3,8 @@
 *A completely new beginning.*
 
 A real-time computer-based testing **and** quiz-competition platform: timed exams, live 1v1 duels,
-XP, levels, streaks, coins, badges, leaderboards and a prize vault — for the UNN Faculty of Law
-(or any institution you configure).
+XP, levels, streaks, coins, badges, leaderboards and a prize vault. The active starter catalogue is
+English and Mathematics; staff can configure the institution and manage approved course content.
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite + WebSockets   → http://localhost:3000
@@ -66,9 +66,9 @@ npm run dev
 
 Open **http://localhost:5173**.
 
-* First boot creates `backend/data/arena.db` and seeds **content only**: **93 questions** across
-  **4 exams**, **16 badges**, **9 prizes** and a few announcements. **No students are seeded** —
-  every account is a real registration.
+* First boot creates `backend/data/arena.db` and seeds **content only**: **80 English and
+  Mathematics questions** across **5 quizzes**, **16 badges**, **9 prizes** and announcements.
+  **No students are seeded** — every account is a real registration.
 * The front face is a branded landing page (animated picture reel of the uploaded game splash art, live
   stats, current top five) wearing the **Absolute Genesis crest** everywhere the brand appears —
   header, sign-in, favicon — with a game-HUD look (glossy coin/gem pills, gold XP bars, violet washes)
@@ -599,19 +599,15 @@ See `backend/.env.example`.
 
 ---
 
-## Notes on the migration
+## Course scope and historical data
 
-This repository previously held a client-side CBT app (localStorage + optional Firestore,
-registration-number login, answers shipped to the browser). That implementation was removed and
-its **data** was migrated into the database layer:
+Only **ENG 101 (English)** and **MTH 101 (Mathematics)** are active in the student catalogue. The
+seed process does not create student accounts, and the demo seed scripts create a separate,
+UK/US-heavy showcase cohort. Existing unsupported course and attempt records are kept for history;
+they are not reactivated or offered to students.
 
-* `students.json` (356 records) → `students` table, each assigned a deterministic Nigerian phone
-  number because login is now phone-based. Original names, reg numbers, levels and classes kept.
-* `seedQuestions.json` (70 Constitutional Law questions) → `questions` table, attached to the
-  *Constitutional Law Arena Exam*, plus three smaller exams built from the same bank.
-* Firebase config, Firestore rules and the ~9 MB of duplicate logo imagery were deleted.
-
-Nothing is stored in the browser except the session token; the database is the only source of truth.
+The old browser-side CBT flow has been replaced with server-authoritative exams and stored results.
+The browser keeps only the session token; the database remains the source of truth.
 
 ---
 

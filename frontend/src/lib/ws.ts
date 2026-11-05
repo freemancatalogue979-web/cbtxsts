@@ -152,9 +152,13 @@ export class LiveSocket {
     }
   }
 
-  send(payload: Record<string, unknown>): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+  send(payload: Record<string, unknown>): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    try {
       this.socket.send(JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
     }
   }
 

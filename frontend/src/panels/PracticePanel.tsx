@@ -1038,7 +1038,7 @@ export function CustomRun({run, expired, onNewPractice}: {run: CustomRunPayload;
         progress={(stats.answered / Math.max(total, 1)) * 100}
       />
 
-      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap">
+      <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
         <ScoreChip value={stats.answered} label="done" className="text-pulse-300" icon={<ListChecks />} />
         <ScoreChip value={stats.correct} label="correct" className="text-mint-300" icon={<CheckCircle2 />} />
         <ScoreChip value={stats.wrong} label="wrong" className="text-flare-300" icon={<XCircle />} />
@@ -1396,4 +1396,3 @@ function RunHud({clock, title, position, total, progress}: {clock: ReactNode; ti
     </div>
   );
 }
-

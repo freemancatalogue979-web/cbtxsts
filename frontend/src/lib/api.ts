@@ -191,6 +191,8 @@ interface RequestOptions {
   body?: unknown;
   token?: string | null;
   raw?: boolean;
+  /** Optional timeout for quick boot/profile reads; long-running jobs stay unbounded. */
+  timeoutMs?: number;
 }
 
 /** Random, per-browser id. The exam server lets one device hold a paper at a
@@ -217,7 +219,7 @@ export function deviceId(): string {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const {method = 'GET', body, token = tokenStore.get(), raw = false} = options;
+  const {method = 'GET', body, token = tokenStore.get(), raw = false, timeoutMs} = options;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const headers: Record<string, string> = {'Accept': 'application/json'};
   // FormData must set its own multipart boundary.
@@ -226,10 +228,30 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (path.startsWith('/api/exams/')) headers['X-Arena-Device'] = deviceId();
 
   let response: Response;
+  const controller = timeoutMs && timeoutMs > 0 ? new AbortController() : null;
+  let timedOut = false;
+  const timer = controller
+    ? setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs)
+    : undefined;
   try {
-    response = await fetch(path, {method, headers, body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body)});
+    response = await fetch(path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
+      signal: controller?.signal,
+    });
   } catch {
-    throw new ApiError('Cannot reach the arena server. Is the API running on port 3000?', 0);
+    throw new ApiError(
+      timedOut
+        ? 'The server did not respond in time. Check your connection and try again.'
+        : 'Cannot reach the arena server. Is the API running on port 3000?',
+      0,
+    );
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 
   const text = await response.text();
@@ -304,7 +326,7 @@ export const api = {
       method: 'POST',
     }),
   roomDetail: (roomId: number) =>
-    request<{room: RoomState; messages: RoomMessage[]}>(`/api/rooms/${roomId}`),
+    request<{room: RoomState; messages: RoomMessage[]; question: RoomQuestionPayload | null; reveal: RoomRevealPayload | null}>(`/api/rooms/${roomId}`),
   startRoom: (roomId: number) =>
     request<{room: RoomState; question: RoomQuestionPayload | null}>(`/api/rooms/${roomId}/start`, {method: 'POST'}),
   answerRoom: (roomId: number, selected: string, elapsedMs: number) =>
@@ -428,7 +450,8 @@ export const api = {
   adminDeleteEvent: (eventId: number) => request<{ok: boolean}>(`/api/admin/events/${eventId}`, {method: 'DELETE'}),
 
   /* ---------------------------------------------------------------- chat */
-  chatWith: (friendId: number) => request<{messages: ChatMessage[]}>(`/api/chat?with=${friendId}`),
+  chatWith: (friendId: number, options: {beforeId?: number; limit?: number} = {}) =>
+    request<{messages: ChatMessage[]; has_more: boolean}>(`/api/chat?with=${friendId}${query({before_id: options.beforeId, limit: options.limit}).replace('?', '&')}`),
   sendChat: (body: {to: number; kind?: ChatMessage['kind']; body?: string; meta?: Record<string, unknown>}) =>
     request<ChatMessage>('/api/chat', {method: 'POST', body}),
   markChatRead: (friendId: number) =>
@@ -441,7 +464,7 @@ export const api = {
   reportChat: (id: number, reason: string) =>
     request<{ok: boolean; report_id: number; status: string}>(`/api/chat/${id}/report`, {method: 'POST', body: {reason}}),
   chatUnread: () => request<{total: number; per_friend: Record<number, number>}>('/api/chat/unread'),
-  me: () => request<Profile>('/api/me'),
+  me: () => request<Profile>('/api/me', {timeoutMs: 12_000}),
   updateMe: (body: {name?: string; avatar_hue?: number; bio?: string; status_text?: string; country?: string}) =>
     request<Profile>('/api/me', {method: 'PATCH', body}),
   uploadPhoto: (image: string) => request<Profile>('/api/me/photo', {method: 'POST', body: {image}}),
@@ -488,7 +511,7 @@ export const api = {
     request<{profile: Profile; rewards: unknown[]; season: string}>('/api/me/daily-bonus', {method: 'POST'}),
 
   /* ------------------------------------------------------------ catalogue */
-  bootstrap: () => request<Bootstrap>('/api/bootstrap', {token: null}),
+  bootstrap: () => request<Bootstrap>('/api/bootstrap', {token: null, timeoutMs: 12_000}),
   courses: () => request<Course[]>('/api/courses', {token: null}),
   quizzes: () => request<Quiz[]>('/api/quizzes'),
   quiz: (id: number) => request<Quiz>(`/api/quizzes/${id}`),
