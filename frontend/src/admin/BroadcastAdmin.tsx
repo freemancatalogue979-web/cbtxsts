@@ -291,7 +291,14 @@ function PrizesTab({onChanged}: {onChanged: () => void}) {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing({...prize})} icon={<Pencil className="size-3.5" />} />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      /* A prize carries one of the four prize tiers, not the whole
+                         lifetime ladder — narrow it before it hits the form. */
+                      onClick={() => setEditing({...prize, tier: (TIERS as readonly string[]).includes(prize.tier) ? (prize.tier as (typeof TIERS)[number]) : 'gold'})}
+                      icon={<Pencil className="size-3.5" />}
+                    />
                     <Button size="sm" variant="ghost" onClick={() => toggleActive(prize)}>
                       {prize.is_active ? 'Hide' : 'Show'}
                     </Button>

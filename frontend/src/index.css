@@ -3954,11 +3954,19 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-plate[data-tier='silver'] { --rank-metal: #aebdd1; }
 .profile-rank-plate[data-tier='gold'] { --rank-metal: #e7bb52; }
 .profile-rank-plate[data-tier='platinum'] { --rank-metal: #69d4e5; }
+.profile-rank-plate[data-tier='diamond'] { --rank-metal: #7de3f4; }
+.profile-rank-plate[data-tier='obsidian'] { --rank-metal: #9d7cf5; }
+.profile-rank-plate[data-tier='mythril'] { --rank-metal: #5cc8f8; }
+.profile-rank-plate[data-tier='aurora'] { --rank-metal: #b39cfb; }
 .profile-rank-gem { display: grid; place-items: center; width: 36px; height: 40px; flex-shrink: 0; color: var(--rank-metal); font-size: 30px; filter: drop-shadow(0 0 8px var(--rank-metal)); }
 .profile-competitive-rank { box-shadow: inset 0 1px color-mix(in srgb, var(--color-nova-400) 20%, transparent); }
 .profile-record-tile { background-image: radial-gradient(at 100% 0, color-mix(in srgb, var(--color-nova-400) 12%, transparent), transparent 75%); }
 .profile-achievement[data-tier='gold'] { border-color: color-mix(in srgb, #e7bb52 40%, transparent); }
 .profile-achievement[data-tier='platinum'] { border-color: color-mix(in srgb, #69d4e5 40%, transparent); }
+.profile-achievement[data-tier='diamond'] { border-color: color-mix(in srgb, #7de3f4 40%, transparent); }
+.profile-achievement[data-tier='obsidian'] { border-color: color-mix(in srgb, #9d7cf5 40%, transparent); }
+.profile-achievement[data-tier='mythril'] { border-color: color-mix(in srgb, #5cc8f8 40%, transparent); }
+.profile-achievement[data-tier='aurora'] { border-color: color-mix(in srgb, #b39cfb 40%, transparent); }
 [data-skin='day'] .profile-scenery { opacity: .22; }
 [data-skin='day'] .profile-showcase > .profile-scenery { opacity: .35; }
 .room-race-board { background-image: radial-gradient(at 100% 0, color-mix(in srgb, var(--color-nova-500) 15%, transparent), transparent 65%); }
@@ -4010,6 +4018,12 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-plate::before { content: ''; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--rank-metal) 22%, transparent); border-radius: 13px; pointer-events: none; }
 .profile-rank-plate::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 30%, #ffffff06 44%, transparent 45%); }
 .rank-crest { display: block; width: 84px; height: 90px; flex-shrink: 0; filter: drop-shadow(0 7px 6px #0008); }
+/* The high metals are lit from within, so the crest reads at a glance even
+   at the 84px it wears on the profile. */
+.rank-crest[data-tier='diamond'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 7px #7de3f455); }
+.rank-crest[data-tier='obsidian'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 9px #9d7cf566); }
+.rank-crest[data-tier='mythril'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 10px #5cc8f877); }
+.rank-crest[data-tier='aurora'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 13px #b39cfbaa); }
 .profile-rank-copy { position: relative; z-index: 1; }
 .profile-rank-eyebrow { color: #b7bdcf; font-size: .52rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
 .profile-rank-name { margin-top: 2px; color: var(--rank-metal); font-size: clamp(1.12rem, 4vw, 1.5rem); font-weight: 900; text-transform: capitalize; letter-spacing: -.025em; text-shadow: 0 1px #000; }
@@ -4023,6 +4037,10 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 [data-skin='day'] .profile-rank-plate[data-tier='silver'] .profile-rank-name { color: #475b76; }
 [data-skin='day'] .profile-rank-plate[data-tier='gold'] .profile-rank-name { color: #835809; }
 [data-skin='day'] .profile-rank-plate[data-tier='platinum'] .profile-rank-name { color: #14657a; }
+[data-skin='day'] .profile-rank-plate[data-tier='diamond'] .profile-rank-name { color: #0d6d86; }
+[data-skin='day'] .profile-rank-plate[data-tier='obsidian'] .profile-rank-name { color: #4c2a8f; }
+[data-skin='day'] .profile-rank-plate[data-tier='mythril'] .profile-rank-name { color: #0b4a72; }
+[data-skin='day'] .profile-rank-plate[data-tier='aurora'] .profile-rank-name { color: #4b1d95; }
 [data-skin='day'] .profile-rank-level { background: #ffffff8c; }
 [data-skin='day'] .profile-rank-level strong { color: #27314c; }
 @media (max-width: 359px) { .rank-crest { width: 65px; height: 76px; } .profile-rank-plate { gap: 5px; padding-right: 9px; } .profile-rank-subtitle { font-size: .53rem; } }
@@ -4049,3 +4067,27 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-dossier-tabs { display: flex; gap: 5px; margin-top: 12px; padding: 4px; border: 1px solid color-mix(in srgb,var(--color-mist-500) 18%,transparent); border-radius: 12px; background: color-mix(in srgb,var(--color-ink-900) 75%,transparent); }
 .profile-dossier-tabs button { flex: 1; min-width: 0; min-height: 34px; border-radius: 8px; padding: 5px; color: var(--color-mist-300); font-size: .64rem; font-weight: 800; transition: background .15s,color .15s; }
 .profile-dossier-tabs button:hover, .profile-dossier-tabs button:focus-visible { color: var(--color-nova-300); background: color-mix(in srgb,var(--color-nova-500) 12%,transparent); }
+
+/* ------------------------------------------------------------- fitting a number */
+
+/**
+ * A number that must never leave its box.
+ *
+ * The tile is the query container, so the value works out for itself how large
+ * it is allowed to be: 10,018,588 shrinks to fit a 73px column instead of
+ * bursting out of the rounded card it sits in. The coefficient assumes a
+ * tabular digit around 0.62em wide — deliberately pessimistic, so a wide font
+ * still fits inside the box.
+ */
+.stat-fit { container-type: inline-size; }
+.stat-fit__value {
+  margin: 0;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* 16.4cqi assumes the widest a glyph can be here — about 0.64em a digit,
+     0.7em a comma — so even a monospace fallback stays inside the box. */
+  font-size: min(0.86rem, 16.4cqi);
+  line-height: 1.2;
+}
+.stat-fit__value--lg { font-size: min(0.92rem, 16.4cqi); }

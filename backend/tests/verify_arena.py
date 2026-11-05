@@ -423,14 +423,21 @@ def check_season(admin: str, student: str) -> None:
     levels = season.get("levels") or []
     me = season.get("me_season") or {}
 
-    check("twelve ranks", len(ladder) == 12, len(ladder))
+    check("a hundred realms", len(ladder) == 100, len(ladder))
     check("a hundred levels", len(levels) == 100, len(levels))
     keys = [row["key"] for row in ladder]
-    check("ranks are unique and ordered", len(set(keys)) == 12 and keys[0] == "bronze", keys)
-    check("first five ranks are the classic metals",
-          keys[:5] == ["bronze", "silver", "gold", "platinum", "diamond"], keys[:5])
-    check("every rank carries a badge palette",
+    check("realms are unique and ordered", len(set(keys)) == 100 and keys[0] == "ember", keys[:5])
+    check("the ladder opens on Ember and climbs to Absolute Genesis",
+          ladder[0]["label"] == "Ember" and ladder[-1]["label"] == "Absolute Genesis",
+          (ladder[0]["label"], ladder[-1]["label"]))
+    check("platinum is not the ceiling — the first mystical realm is Aurora",
+          ladder[39]["label"] == "Polaris" and ladder[40]["label"] == "Aurora"
+          and ladder[39]["mystical"] is False and ladder[40]["mystical"] is True,
+          (ladder[39]["label"], ladder[40]["label"]))
+    check("every realm carries a badge palette",
           all({"deep", "bright", "glyph", "label"} <= set(row) for row in ladder), ladder[0])
+    check("every realm carries its own frame",
+          all({"shape", "band", "family"} <= set(row) for row in ladder), ladder[0])
 
     # The bands must tile 1..100 exactly: no gaps, no overlaps, nothing outside.
     covered: list[int] = []

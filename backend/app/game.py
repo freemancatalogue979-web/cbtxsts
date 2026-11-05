@@ -71,14 +71,27 @@ def title_for_level(level: int) -> str:
     return title
 
 
+# The lifetime metals, lowest to highest. Platinum is no longer the ceiling:
+# each step up is a rarer metal, and the ladder runs all the way to the cap.
+TIER_LEVELS = (
+    (1, "bronze"),
+    (3, "silver"),
+    (5, "gold"),
+    (7, "platinum"),
+    (10, "diamond"),
+    (15, "obsidian"),
+    (23, "mythril"),
+    (35, "aurora"),
+)
+
+
 def tier_for_level(level: int) -> str:
-    if level >= 7:
-        return "platinum"
-    if level >= 5:
-        return "gold"
-    if level >= 3:
-        return "silver"
-    return "bronze"
+    """The lifetime metal a level earns. Unknown levels fall back to bronze."""
+    tier = TIER_LEVELS[0][1]
+    for threshold, name in TIER_LEVELS:
+        if level >= threshold:
+            tier = name
+    return tier
 
 
 # ---------------------------------------------------------------------------

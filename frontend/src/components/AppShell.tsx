@@ -364,8 +364,10 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
                 {label: 'Coins', value: formatNumber(profile.coins)},
                 {label: 'Streak', value: `${profile.streak}d`},
               ].map((stat) => (
-                <div key={stat.label} className="rounded-xl bg-white/5 py-2">
-                  <p className="text-[0.86rem] font-black tabular text-mist-50">{stat.value}</p>
+                <div key={stat.label} className="stat-fit rounded-xl bg-white/5 py-2">
+                  {/* The value sizes itself to the column, so a big XP total
+                      stays inside the tile instead of bursting out of it. */}
+                  <p className="stat-fit__value text-mist-50">{stat.value}</p>
  <p className="text-[0.6rem] font-bold tracking-wider text-mist-500">{stat.label}</p>
                 </div>
               ))}

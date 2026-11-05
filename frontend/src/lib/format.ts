@@ -154,11 +154,19 @@ export function avatarStyle(hue: number): React.CSSProperties {
   };
 }
 
+/**
+ * The lifetime metals. Platinum is not the ceiling — above it the ladder keeps
+ * climbing to aurora, the only metal that is allowed to glow.
+ */
 export const TIER_STYLES: Record<string, {label: string; className: string; ring: string}> = {
   bronze: {label: 'Bronze', className: 'text-gold-400 bg-gold-500/12 border-gold-500/30', ring: '#f59e0b'},
   silver: {label: 'Silver', className: 'text-mist-200 bg-white/8 border-white/18', ring: '#cbd5e1'},
   gold: {label: 'Gold', className: 'text-gold-300 bg-gold-400/14 border-gold-400/34', ring: '#fbbf24'},
   platinum: {label: 'Platinum', className: 'text-pulse-300 bg-pulse-500/14 border-pulse-400/34', ring: '#93c5fd'},
+  diamond: {label: 'Diamond', className: 'text-pulse-200 bg-pulse-400/12 border-pulse-300/34', ring: '#7de3f4'},
+  obsidian: {label: 'Obsidian', className: 'text-nova-200 bg-nova-500/16 border-nova-400/36', ring: '#9d7cf5'},
+  mythril: {label: 'Mythril', className: 'text-mist-100 bg-mist-300/12 border-mist-200/28', ring: '#5cc8f8'},
+  aurora: {label: 'Aurora', className: 'text-mint-200 bg-mint-400/14 border-mint-300/40', ring: '#5eead4'},
 };
 
 export const GRADE_STYLES: Record<string, string> = {

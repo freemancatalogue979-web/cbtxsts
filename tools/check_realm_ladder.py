@@ -25,8 +25,8 @@ app.__path__ = [str(ROOT / "backend/app")]
 services = types.ModuleType("app.services")
 services.__path__ = [str(ROOT / "backend/app/services")]
 models = types.ModuleType("app.models")
-models.SeasonStat = type("SeasonStat", (), {})
-models.Student = type("Student", (), {})
+for _name in ("SeasonStat", "Student", "Activity", "Attempt", "Badge", "Friendship", "StudentBadge"):
+    setattr(models, _name, type(_name, (), {}))
 models.utcnow = lambda: None
 sys.modules["app"] = app
 sys.modules["app.services"] = services
@@ -75,4 +75,41 @@ assert xp == sorted(xp) and len(set(xp)) == 100
 keys = {season.rank_for_level(level)["key"] for level in range(1, 101)}
 assert len(keys) == 100, len(keys)
 
+# --- the lifetime metals ----------------------------------------------------
+spec = importlib.util.spec_from_file_location("app.game", ROOT / "backend/app/game.py")
+game = importlib.util.module_from_spec(spec)
+sys.modules["app.game"] = game
+spec.loader.exec_module(game)
+
+# Platinum is not the ceiling: the ladder climbs to aurora.
+LADDER = [
+    (1, "bronze"),
+    (3, "silver"),
+    (5, "gold"),
+    (7, "platinum"),
+    (10, "diamond"),
+    (15, "obsidian"),
+    (23, "mythril"),
+    (35, "aurora"),
+]
+assert game.TIER_LEVELS == tuple(LADDER), game.TIER_LEVELS
+
+for level in range(1, game.MAX_LEVEL + 1):
+    expected = LADDER[0][1]
+    for threshold, name in LADDER:
+        if level >= threshold:
+            expected = name
+    assert game.tier_for_level(level) == expected, (level, game.tier_for_level(level))
+
+# every band boundary lands on the metal it names
+for threshold, name in LADDER:
+    assert game.tier_for_level(threshold) == name, (threshold, name)
+    if threshold > 1:
+        assert game.tier_for_level(threshold - 1) != name, (threshold, name)
+
+assert game.tier_for_level(0) == "bronze"
+assert game.tier_for_level(60) == "aurora"
+assert game.tier_for_level(100) == "aurora"
+
 print("realm ladder OK — 100 realms, first mystical realm:", ladder[40]["label"])
+print("lifetime metals OK —", " → ".join(name for _, name in LADDER))

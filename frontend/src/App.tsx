@@ -120,12 +120,15 @@ function Splash() {
   return (
     <div className="ag-splash ag-splash--live" role="status" aria-label="Loading Absolute Genesis">
       <div className="ag-splash__stack">
+        {/* The same mark the pre-paint splash in index.html shows. Anything
+            else and the logo swaps the moment React mounts. */}
         <img
           className="ag-splash__logo"
-          src="/brand/ag-icon-192.png"
+          src="/brand/ag-sigil.svg"
           alt="Absolute Genesis"
-          width={616}
-          height={629}
+          width={120}
+          height={120}
+          fetchPriority="high"
           draggable={false}
         />
         <p className="ag-splash__tag">A completely new beginning</p>

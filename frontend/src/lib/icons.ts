@@ -73,6 +73,10 @@ export const TIER_ICON_COLOR: Record<string, string> = {
   silver: 'text-mist-200',
   gold: 'text-gold-300',
   platinum: 'text-pulse-300',
+  diamond: 'text-pulse-200',
+  obsidian: 'text-nova-200',
+  mythril: 'text-mist-100',
+  aurora: 'text-mint-200',
 };
 
 export const TIER_GRADIENT: Record<string, string> = {
@@ -80,4 +84,8 @@ export const TIER_GRADIENT: Record<string, string> = {
   silver: 'from-mist-500/60 to-mist-200/70',
   gold: 'from-gold-500 to-gold-300',
   platinum: 'from-pulse-600 to-nova-400',
+  diamond: 'from-pulse-500 to-pulse-200',
+  obsidian: 'from-nova-600 to-nova-300',
+  mythril: 'from-mist-400 to-pulse-300',
+  aurora: 'from-nova-400 to-mint-300',
 };

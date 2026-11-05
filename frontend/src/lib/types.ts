@@ -2,7 +2,16 @@
 
 export type OptionKey = 'A' | 'B' | 'C' | 'D';
 export type QuizStatus = 'draft' | 'scheduled' | 'active' | 'completed';
-export type Tier = 'bronze' | 'silver' | 'gold' | 'platinum';
+/** The lifetime metals, lowest to highest. Platinum is not the ceiling. */
+export type Tier =
+  | 'bronze'
+  | 'silver'
+  | 'gold'
+  | 'platinum'
+  | 'diamond'
+  | 'obsidian'
+  | 'mythril'
+  | 'aurora';
 
 export interface LevelProgress {
   level: number;
