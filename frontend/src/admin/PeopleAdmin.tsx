@@ -21,10 +21,12 @@ import {motion} from 'motion/react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Avatar, Button, Card, Chip, EmptyState, Field, Modal, PageBanner, Select, Skeleton, TextArea, TextInput, askConfirm} from '../components/ui';
 import {api, tokenStore} from '../lib/api';
+import {AchievementBadge, TIER_METALS} from '../components/Badge';
+import {iconFor} from '../lib/icons';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES} from '../lib/format';
 import {useSession} from '../store/session';
 import {IntegrityChip, IntegrityModal, ItemAnalysisModal} from './ExamInsights';
-import type {AttemptSummary, IntegritySummary, PlayerSummary, PrizeClaim, Profile, Quiz} from '../lib/types';
+import type {AttemptSummary, IntegritySummary, PlayerSummary, PrizeClaim, Profile, Quiz, Tier} from '../lib/types';
 
 interface ResultRow {
   id?: number;
@@ -300,9 +302,14 @@ function PlayersTab({onChanged}: {onChanged: () => void}) {
  <p className="text-[0.68rem] font-black tracking-[0.18em] text-mist-500">Badges</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {detail.badges.map((badge) => (
-                    <Chip key={badge.key} tone="gold">
-                      {badge.name}
-                    </Chip>
+                    <span
+                      key={badge.key}
+                      className="tier-pill"
+                      style={{borderColor: `${TIER_METALS[badge.tier as Tier]?.bright ?? '#fbbf24'}59`}}
+                    >
+                      <AchievementBadge tier={badge.tier} icon={iconFor(badge.icon, Award)} size="xs" label={badge.name} />
+                      <span className="truncate font-extrabold tracking-wide whitespace-nowrap text-mist-100">{badge.name}</span>
+                    </span>
                   ))}
                 </div>
               </div>

@@ -11,6 +11,7 @@ import {AURAS, FRAMES, THEMES, titleOf} from '../lib/cosmetics';
 import {iconFor} from '../lib/icons';
 import RankedBadge from './RankedBadge';
 import SeasonBadge from './SeasonBadge';
+import {AchievementBadge} from './Badge';
 import ProfileScenery, {OverallRankPlate, prestigeFor} from './ProfileScenery';
 import {useSession} from '../store/session';
 import CountryFlag from './CountryFlag';
@@ -23,12 +24,9 @@ export function openPlayer(id: number) {
 
 function Achievement({badge}: {badge: PublicAchievement}) {
   const Icon = iconFor(badge.icon);
-  const tone = badge.tier === 'platinum' ? 'text-pulse-300' : badge.tier === 'gold' ? 'text-gold-400' : badge.tier === 'silver' ? 'text-mist-300' : 'text-gold-600';
   return (
-    <div className="profile-achievement flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2" data-tier={badge.tier}>
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/8">
-        <Icon className={`size-4 ${tone}`} />
-      </span>
+    <div className="profile-achievement flex min-w-0 items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2" data-tier={badge.tier}>
+      <AchievementBadge tier={badge.tier} icon={Icon} size="sm" label={badge.name} />
       <span className="min-w-0">
         <span className="block truncate text-[0.74rem] font-extrabold text-mist-100">{badge.name}</span>
         <span className="block truncate text-[0.62rem] font-semibold text-mist-500">{badge.description}</span>

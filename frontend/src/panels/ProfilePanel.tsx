@@ -41,6 +41,7 @@ import {Avatar, Button, Card, Chip, EmptyState, Field, ProgressRing, SectionHead
 import {titleOf, themeOf} from '../lib/cosmetics';
 import ProfileScenery, {OverallRankPlate, PROFILE_BANNERS} from '../components/ProfileScenery';
 import SeasonBadge from '../components/SeasonBadge';
+import {AchievementBadge} from '../components/Badge';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
@@ -48,7 +49,7 @@ import {openPlayer} from '../components/PlayerCard';
 import CountryFlag from '../components/CountryFlag';
 import {COUNTRIES, countryName} from '../lib/countries';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES, isValidPhone, normalizePhoneInput, TIER_STYLES} from '../lib/format';
-import {iconFor, TIER_GRADIENT} from '../lib/icons';
+import {iconFor} from '../lib/icons';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {useSize} from '../lib/responsive';
 import Mascot from '../components/Mascot';
@@ -1001,13 +1002,7 @@ export default function ProfilePanel({
             return (
               <motion.div key={badge.key} variants={staggerItem} initial="hidden" animate="show">
                 <Card className={`flex h-full flex-col items-center gap-1.5 p-3 text-center sm:gap-2 sm:p-4 ${unlocked ? '' : 'opacity-45'}`}>
-                  <span
-                    className={`grid size-11 place-items-center rounded-2xl sm:size-14 ${
-                      unlocked ? `bg-gradient-to-br ${TIER_GRADIENT[badge.tier] ?? TIER_GRADIENT.gold} text-ink-950` : 'bg-white/6 text-mist-500'
-                    }`}
-                  >
-                    <BadgeIcon className="size-6 sm:size-7" strokeWidth={2.1} />
-                  </span>
+                  <AchievementBadge tier={badge.tier} icon={BadgeIcon} size={unlocked ? 'lg' : 'md'} locked={!unlocked} label={badge.name} />
                   <p className="text-[0.8rem] font-extrabold text-mist-100 sm:text-[0.86rem]">{badge.name}</p>
                   <p className="line-clamp-2 text-[0.7rem] font-medium leading-snug text-mist-500 sm:text-[0.74rem]">{badge.description}</p>
  <p className="mt-auto pt-1 text-[0.62rem] font-bold tracking-wider text-gold-300 sm:text-[0.68rem]">

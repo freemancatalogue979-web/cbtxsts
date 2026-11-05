@@ -6,6 +6,7 @@ import {useCallback, useEffect, useState} from 'react';
 import SeasonPanel from './SeasonPanel';
 import {TournamentsPanel} from './CommunityPanel';
 import {Avatar, Card, Chip, EmptyState, SectionHeading, Segmented, Skeleton} from '../components/ui';
+import {PositionMedal} from '../components/Badge';
 import {api} from '../lib/api';
 import {formatNumber, TIER_STYLES} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -90,19 +91,7 @@ function RankRow({row, unit, me}: {row: LeaderboardRow; unit: string; me?: boole
         me ? 'border-nova-400/40 bg-nova-500/12' : 'border-white/6 bg-white/[0.025] hover:border-white/14'
       }`}
     >
-      <span
-        className={`grid size-7 shrink-0 place-items-center rounded-xl text-[0.78rem] font-black tabular sm:size-8 sm:text-[0.82rem] ${
-          row.rank === 1
-            ? 'bg-gold-400/20 text-gold-300'
-            : row.rank === 2
-              ? 'bg-mist-200/14 text-mist-200'
-              : row.rank === 3
-                ? 'bg-flare-500/16 text-flare-300'
-                : 'bg-white/5 text-mist-500'
-        }`}
-      >
-        {row.rank}
-      </span>
+      <PositionMedal position={row.rank} className="sm:size-8 sm:text-[0.82rem]" />
       <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ag:player", {detail: {id: row.id}}))} className="shrink-0" aria-label={`Open ${row.name}`}><Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={face} photo={{id: row.id, has: row.has_photo}} cosmetics={row.cosmetics} /></button>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.82rem] font-extrabold text-mist-100 sm:text-[0.86rem]">

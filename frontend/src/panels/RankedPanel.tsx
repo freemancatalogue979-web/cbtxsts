@@ -14,13 +14,15 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import RankedTeams from './RankedTeams';
 import {AnimatePresence, motion} from 'motion/react';
-import {ArrowLeft, ArrowRight, Award, BookOpen, Calculator, Check, ChevronUp, Crown, Eye, FileText, Flame, ListChecks, Loader2, Lock, Medal, Radio, RefreshCw, Send, SignalHigh, SkipForward, Swords, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
+import {ArrowLeft, ArrowRight, Award, BookOpen, Calculator, Check, ChevronRight, ChevronUp, Crown, Eye, FileText, Flame, ListChecks, Loader2, Lock, Medal, Radio, RefreshCw, Send, Shield, SignalHigh, SkipForward, Swords, Target, TrendingDown, TrendingUp, Trophy, Users, X, Zap} from 'lucide-react';
 import {Avatar, Button, Card, Chip, EmptyState, ProgressBar, ReviewOptions, Skeleton, StatTile, Segmented} from '../components/ui';
 import RankedBadge, {RankedTierPill} from '../components/RankedBadge';
+import {PositionMedal} from '../components/Badge';
 import {api, tokenStore} from '../lib/api';
 import {formatNumber, formatRelative} from '../lib/format';
 import {sfx, uiClick} from '../lib/sfx';
 import {LiveSocket} from '../lib/ws';
+import {useSize} from '../lib/responsive';
 import {useSession} from '../store/session';
 import type {
   Course,
@@ -97,6 +99,220 @@ function TierBadge({tier, tierName}: {tier: RankedTier | undefined; tierName: st
     <span className="rounded-full border border-white/14 bg-white/6 px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide text-mist-300">
       {tierName}
     </span>
+  );
+}
+
+/* -------------------------------------------------------------- ranked hero */
+
+/**
+ * The ranked hero.
+ *
+ * The same banner-and-ledger shape the home screen wears — a ring around the
+ * badge you hold, the division's own name, the climb to the next one, four
+ * numbers and a lifetime ledger — but dressed in the colours of the division
+ * the server has actually placed you in.
+ */
+export function RankedHero({
+  tier,
+  nextTier,
+  status,
+  meta,
+  ladder,
+  history,
+}: {
+  tier: RankedTier | undefined;
+  nextTier: RankedTier | undefined;
+  status: RankedStatus | null | undefined;
+  meta: RankedMeta | null | undefined;
+  ladder: RankedLadder | null | undefined;
+  history: RankedHistoryRow[];
+}) {
+  const bright = tier?.bright ?? '#a855f7';
+  const deep = tier?.deep ?? '#4c1d95';
+  const rating = status?.rating ?? 1000;
+  const played = status?.played ?? 0;
+  const won = status?.won ?? 0;
+  const winRate = played > 0 ? Math.round((won / played) * 100) : 0;
+  const floor = tier?.min ?? rating;
+  const span = nextTier ? Math.max(1, nextTier.min - floor) : 1;
+  const progress = nextTier ? Math.max(3, Math.min(100, Math.round(((rating - floor) / span) * 100))) : 100;
+  const bestFinish = history.length > 0 ? Math.min(...history.map((row) => row.position)) : null;
+  const ring = useSize(72, 116);
+  const stroke = 8;
+  const radius = (ring - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  return (
+    <Card className="ag-hero relative overflow-hidden">
+      <div className="ag-hero__banner px-4 pt-4 pb-4 sm:px-7 sm:pt-6 sm:pb-5">
+        {/* the division's own light spilling into the banner */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{background: `radial-gradient(520px 220px at 12% -35%, ${bright}33, transparent 72%)`}}
+        />
+        <div className="relative flex items-center gap-3.5 sm:gap-6">
+          <div className="relative shrink-0">
+            <div className="relative grid place-items-center" style={{width: ring, height: ring}}>
+              <svg width={ring} height={ring} className="-rotate-90">
+                <defs>
+                  <linearGradient id="ring-ranked" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor={bright} />
+                    <stop offset="55%" stopColor={deep} />
+                    <stop offset="100%" stopColor="#0b1024" />
+                  </linearGradient>
+                </defs>
+                <circle cx={ring / 2} cy={ring / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth={stroke} />
+                <circle
+                  cx={ring / 2}
+                  cy={ring / 2}
+                  r={radius}
+                  fill="none"
+                  stroke="url(#ring-ranked)"
+                  strokeWidth={stroke}
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference - (progress / 100) * circumference}
+                />
+              </svg>
+              <span className="absolute inset-0 grid place-items-center">
+                {tier ? (
+                  <RankedBadge tier={tier} size={ring > 100 ? 'lg' : 'md'} current />
+                ) : (
+                  <span className="grid size-16 place-items-center rounded-2xl border border-white/10 bg-white/4">
+                    <Trophy className="size-7 text-mist-500" />
+                  </span>
+                )}
+              </span>
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="ag-eyebrow">
+              <Swords className="size-3.5 text-nova-300" />
+              Ranked · {meta?.min_players ?? 2}–{meta?.match_size ?? 15} players
+            </p>
+            <h1
+              className="ag-title ag-title-tier mt-1 line-clamp-2 text-[1.25rem] leading-none hyphens-auto [overflow-wrap:anywhere] sm:text-[2.05rem]"
+              style={{['--tier-bright' as string]: bright, ['--tier-deep' as string]: deep}}
+            >
+              {tier?.name ?? status?.tier_name ?? 'Unranked'}
+            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="ag-rank">
+                <i>
+                  <Crown />
+                </i>
+                {status?.tier_name ?? 'Bronze III'}
+              </span>
+              <span className="ag-league" style={{['--lg' as string]: bright}}>
+                <i>
+                  <Award />
+                </i>
+                {formatNumber(rating)} rating
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* the climb to the next division */}
+        <div className="relative mt-4 sm:mt-5">
+          <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[0.66rem] font-extrabold tracking-[0.08em] text-mist-500 uppercase sm:text-[0.7rem]">
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <span className="truncate">{tier?.name ?? 'Bronze'}</span>
+              <ChevronRight className="size-3 shrink-0 text-nova-300" />
+              <span className="truncate">{nextTier?.name ?? 'Top of the ladder'}</span>
+            </span>
+            <span className="tabular shrink-0 text-right whitespace-nowrap text-mist-300 normal-case">
+              {nextTier ? (
+                <>
+                  <b className="text-mist-50">{formatNumber(Math.max(0, nextTier.min - rating))}</b> rating to climb
+                </>
+              ) : (
+                <b className="text-gold-300">Top of the ladder</b>
+              )}
+            </span>
+          </div>
+          <div
+            className="ag-xp"
+            role="progressbar"
+            aria-valuenow={Math.round(progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Rating to the next division"
+          >
+            <i style={{width: `${progress}%`, background: `linear-gradient(90deg, ${deep}, ${bright})`}} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-3 sm:gap-4 sm:p-6">
+        {/* the four numbers that decide a match */}
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2.5">
+          {[
+            {label: 'Rating', value: formatNumber(rating), icon: TrendingUp, color: bright},
+            {label: 'Wins', value: String(won), icon: Trophy, color: 'var(--color-gold-400)'},
+            {label: 'Matches', value: String(played), icon: Swords, color: 'var(--color-nova-400)'},
+            {label: 'Win rate', value: `${winRate}%`, icon: Target, color: 'var(--color-mint-400)'},
+          ].map((res) => {
+            const Icon = res.icon;
+            return (
+              <div key={res.label} className="ag-res" style={{['--res' as string]: res.color}}>
+                <Icon />
+                <b>{res.value}</b>
+                <small>{res.label}</small>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* the ledger */}
+        <div className="ag-ledger">
+          {[
+            {label: 'Division', value: tier?.name ?? '—', icon: Shield, tone: 'text-nova-300'},
+            {label: 'Best finish', value: bestFinish ? `#${bestFinish}` : '—', icon: Trophy, tone: 'text-gold-300'},
+            {label: 'Board', value: ladder ? `#${ladder.mine}` : '—', icon: Medal, tone: 'text-pulse-300'},
+            {label: 'Questions', value: meta?.question_count ?? 0, icon: ListChecks, tone: 'text-mist-300'},
+          ].map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div key={stat.label}>
+                <b className="tabular">
+                  <Icon className={stat.tone} />
+                  <span className="truncate">{stat.value}</span>
+                </b>
+                <small>{stat.label}</small>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** A ladder row: the position, the player, the division badge they hold. */
+function LadderRow({
+  row,
+  tier,
+  tierName,
+  isMe,
+}: {
+  row: {position: number; name: string; initials: string; avatar_hue: number; has_photo: boolean; student_id: number; rating: number};
+  tier: RankedTier | undefined;
+  tierName: string;
+  isMe: boolean;
+}) {
+  return (
+    <li
+      className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${isMe ? 'bg-nova-400/10 ring-1 ring-nova-400/25' : ''}`}
+    >
+      <PositionMedal position={row.position} className="size-6 font-display text-[0.7rem]" />
+      <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={28} photo={{id: row.student_id, has: row.has_photo}} />
+      <p className="min-w-0 flex-1 truncate text-[0.76rem] font-bold text-mist-100">{row.name}</p>
+      <TierBadge tier={tier} tierName={tierName} />
+      <span className="font-display text-[0.8rem] font-black text-mist-50 tabular">{formatNumber(row.rating)}</span>
+    </li>
   );
 }
 
@@ -845,75 +1061,17 @@ function RankedSoloPanel() {
 
   /* ------------------------------------------------- course select */
   if (phase === 'idle') {
-    const heroBright = myTier?.bright ?? '#a855f7';
     const queueTotal = Object.values(courseStats).reduce((sum, s) => sum + (s.in_queue || 0), 0);
     return (
       <div className="w-full min-w-0 space-y-4 p-3 sm:p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Swords className="size-5 text-nova-300" />
-          <h1 className="font-display text-[1.15rem] font-black tracking-tight text-mist-50 sm:text-[1.35rem]">Ranked</h1>
-          {status && <TierBadge tier={myTier} tierName={status.tier_name} />}
-        </div>
+        {/* Your standing: the division you hold and the climb to the next one. */}
+        <RankedHero tier={myTier} nextTier={nextTier} status={status} meta={meta} ladder={ladder} history={history} />
+
         <p className="max-w-2xl text-[0.82rem] font-medium text-mist-400">
           Same questions, one shared clock, live standings. Your rating moves with every result — accuracy
           always outweighs a fast click. Higher tiers play longer sets on a tighter clock, fast answers pay
           bonus XP, and you can skip a question you would rather not guess.
         </p>
-
-        {/* Your standing: the badge you currently hold and the climb to the next one. */}
-        <Card className="relative overflow-hidden p-4 sm:p-5">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{background: `radial-gradient(560px 190px at 18% -30%, ${heroBright}2e, transparent 70%)`}}
-          />
-          <div className="relative flex items-center gap-3.5 sm:gap-4">
-            {myTier ? (
-              <RankedBadge tier={myTier} size="lg" current />
-            ) : (
-              <span className="grid size-18 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/4">
-                <Trophy className="size-8 text-mist-500" />
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Your rank</p>
-              <p className="mt-0.5 truncate font-display text-[1.2rem] leading-tight font-black text-mist-50 sm:text-[1.35rem]">
-                {myTier?.name ?? status?.tier_name ?? 'Unranked'}
-              </p>
-              {nextTier ? (
-                <p className="mt-0.5 text-[0.68rem] font-bold text-mist-400">
-                  <span className="tabular">{Math.max(0, nextTier.min - (status?.rating ?? 1000))}</span> rating to{' '}
-                  <span style={{color: nextTier.bright}}>{nextTier.name}</span>
-                </p>
-              ) : (
-                <p className="mt-0.5 text-[0.68rem] font-bold text-gold-300">Top of the ladder — defend the crown.</p>
-              )}
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="font-display text-[1.6rem] leading-none font-black text-mist-50 tabular sm:text-[1.9rem]">
-                {formatNumber(status?.rating ?? 1000)}
-              </p>
-              <p className="mt-1 text-[0.6rem] font-black tracking-[0.18em] text-mist-500 uppercase">Rating</p>
-            </div>
-          </div>
-          {nextTier && myTier && (
-            <div className="relative mt-3.5">
-              <ProgressBar
-                value={Math.max(2, Math.min(98, Math.round(((status?.rating ?? 1000) - myTier.min) / Math.max(1, nextTier.min - myTier.min)) * 100))}
-              />
-              <div className="mt-1.5 flex items-center justify-between text-[0.58rem] font-bold text-mist-500">
-                <span className="tabular">{myTier.min}</span>
-                <span className="tabular">{nextTier.min}</span>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatTile label="Rating" value={formatNumber(status?.rating ?? 1000)} hint={status?.tier_name ?? 'Bronze III'} />
-          <StatTile label="Matches" value={String(status?.played ?? 0)} hint={`${status?.won ?? 0} won`} />
-          <StatTile label="Players per match" value={`${meta?.min_players ?? 2}–${meta?.match_size ?? 15}`} hint="server-matchmade" />
-        </div>
 
         <Card className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
@@ -988,13 +1146,7 @@ function RankedSoloPanel() {
             </div>
             <ul className="mt-3 space-y-1.5">
               {ladder.top.slice(0, 10).map((row) => (
-                <li key={row.student_id} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${row.student_id === meId ? 'bg-nova-400/10' : ''}`}>
-                  <span className="w-6 text-center font-display text-[0.74rem] font-black text-mist-400">{row.position}</span>
-                  <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={28} photo={{id: row.student_id, has: row.has_photo}} />
-                  <p className="min-w-0 flex-1 truncate text-[0.76rem] font-bold text-mist-100">{row.name}</p>
-                  <TierBadge tier={tierOf(row.tier)} tierName={row.tier_name} />
-                  <span className="font-display text-[0.8rem] font-black text-mist-50">{formatNumber(row.rating)}</span>
-                </li>
+                <LadderRow key={row.student_id} row={row} tier={tierOf(row.tier)} tierName={row.tier_name} isMe={row.student_id === meId} />
               ))}
             </ul>
             {ladder.nearby.length > 0 && ladder.mine > 10 && (
@@ -1002,12 +1154,7 @@ function RankedSoloPanel() {
                 <p className="mt-2 text-[0.62rem] font-extrabold text-mist-500">Near you</p>
                 <ul className="mt-1.5 space-y-1.5">
                   {ladder.nearby.map((row) => (
-                    <li key={row.student_id} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${row.student_id === meId ? 'bg-nova-400/10' : ''}`}>
-                      <span className="w-6 text-center font-display text-[0.74rem] font-black text-mist-400">{row.position}</span>
-                      <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={28} photo={{id: row.student_id, has: row.has_photo}} />
-                      <p className="min-w-0 flex-1 truncate text-[0.76rem] font-bold text-mist-100">{row.name}</p>
-                      <span className="font-display text-[0.8rem] font-black text-mist-50">{formatNumber(row.rating)}</span>
-                    </li>
+                    <LadderRow key={row.student_id} row={row} tier={tierOf(row.tier)} tierName={row.tier_name} isMe={row.student_id === meId} />
                   ))}
                 </ul>
               </>
@@ -1036,14 +1183,36 @@ function RankedSoloPanel() {
                 return (
                   <div
                     key={tier.key}
-                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl border px-1 py-2.5 text-center ${
+                    className={`relative flex min-w-0 flex-col items-center gap-1.5 overflow-hidden rounded-2xl border px-1 py-3 text-center ${
                       isMe ? '' : 'border-white/8 bg-white/[0.025]'
                     }`}
-                    style={isMe ? {borderColor: `${tier.bright}88`, background: `${tier.bright}14`} : undefined}
+                    style={
+                      isMe
+                        ? {
+                            borderColor: `${tier.bright}88`,
+                            background: `linear-gradient(160deg, ${tier.bright}1f, ${tier.deep}14)`,
+                            boxShadow: `0 0 0 1px ${tier.bright}44, 0 14px 30px -18px ${tier.bright}`,
+                          }
+                        : undefined
+                    }
                   >
-                    <RankedBadge tier={tier} size="md" current={isMe} locked={!reached} />
-                    <p className="w-full truncate text-[0.62rem] font-black text-mist-100">{tier.name}</p>
-                    <p className="text-[0.54rem] font-bold text-mist-500 tabular">
+                    {isMe ? (
+                      <>
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0"
+                          style={{background: `radial-gradient(90px 60px at 50% 0%, ${tier.bright}33, transparent 70%)`}}
+                        />
+                        <span className="relative mb-0.5 rounded-full border border-white/20 bg-black/30 px-1.5 py-0.5 text-[0.46rem] font-black tracking-[0.14em] text-mist-100 uppercase">
+                          Yours
+                        </span>
+                      </>
+                    ) : null}
+                    <span className="relative">
+                      <RankedBadge tier={tier} size="md" current={isMe} locked={!reached} />
+                    </span>
+                    <p className="relative w-full truncate text-[0.62rem] font-black text-mist-100">{tier.name}</p>
+                    <p className="relative text-[0.54rem] font-bold text-mist-500 tabular">
                       {tier.min}+{rules ? ` · ${rules.questions}Q/${rules.seconds}s` : ''}
                     </p>
                   </div>

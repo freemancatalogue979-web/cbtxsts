@@ -25,6 +25,8 @@ import {celebrate} from '../lib/confetti';
 import {HAPTICS} from '../lib/haptics';
 import Character from './Character';
 import SeasonBadge from './SeasonBadge';
+import {AchievementBadge} from './Badge';
+import {iconFor} from '../lib/icons';
 import {sfx} from '../lib/sfx';
 
 const TOAST_STYLES: Record<Toast['kind'], {className: string; icon: typeof Info}> = {
@@ -118,6 +120,17 @@ function CelebrationCard({celebration, onClose}: {celebration: Celebration; onCl
                 {celebration.season.label}
               </p>
             </motion.div>
+          ) : celebration.badge ? (
+            /* An earned badge wears its own metal: the medallion from the
+               badge kit, in the tier the award was minted at. */
+            <motion.div variants={popIn} initial="hidden" animate="show" transition={{delay: 0.08}} className="mx-auto w-fit">
+              <AchievementBadge
+                tier={celebration.badge.tier}
+                icon={iconFor(celebration.badge.icon, Award)}
+                size="lg"
+                label={celebration.badge.name}
+              />
+            </motion.div>
           ) : (
             <motion.span
               variants={popIn}
@@ -126,11 +139,7 @@ function CelebrationCard({celebration, onClose}: {celebration: Celebration; onCl
               transition={{delay: 0.08}}
               className={`mx-auto grid size-20 place-items-center rounded-[1.5rem] bg-gradient-to-br ${meta.accent} text-white shadow-[0_24px_60px_-20px_rgba(168,85,247,0.9)] sm:size-24 sm:rounded-[1.8rem]`}
             >
-              {celebration.badge ? (
-                <BadgeGlyph name={celebration.badge.icon} />
-              ) : (
-                <Icon className="size-10 sm:size-12" strokeWidth={2.1} />
-              )}
+              <Icon className="size-10 sm:size-12" strokeWidth={2.1} />
             </motion.span>
           )}
 
@@ -256,30 +265,6 @@ function CelebrationCard({celebration, onClose}: {celebration: Celebration; onCl
       </motion.div>
     </motion.div>
   );
-}
-
-const BADGE_GLYPHS: Record<string, typeof Trophy> = {
-  first_steps: Flame,
-  sharp_shooter: Zap,
-  perfectionist: Crown,
-  scholar: Award,
-  speed_demon: Zap,
-  duelist: Swords,
-  champion: Trophy,
-  socialite: Info,
-  collector: Gift,
-  streaker: Flame,
-  veteran: Medal,
-  top_rank: Crown,
-  night_owl: Info,
-  comeback: Flame,
-  legend: Crown,
-  deity: Crown,
-};
-
-function BadgeGlyph({name}: {name: string}) {
-  const Glyph = BADGE_GLYPHS[name] ?? Award;
-  return <Glyph className="size-10 sm:size-12" strokeWidth={2.1} />;
 }
 
 export function CelebrationLayer() {

@@ -2314,44 +2314,88 @@
   width: 100%;
 }
 
-/* ---------------------------------------------------------- season badges ---
-   A rank badge is a metal shield built from the server's rank palette: an
-   outer ring, a brushed face and a warm bevel. Everything is CSS, so a badge
-   is equally crisp at 26px next to a name and at 104px as a hero. */
-.season-badge {
-  filter: drop-shadow(0 3px 5px rgba(6, 10, 30, 0.35));
+/* --------------------------------------------------------------- badge kit ---
+   One crest for every badge in the app: vector metal, a bevelled rim, a lit
+   core and a ribbon across the base that carries the level. The art is SVG;
+   the emblem and the number are HTML on top of it, so they inherit the app's
+   fonts instead of an SVG text node. */
+.tier-badge,
+.achievement-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
 }
-.season-badge-shell {
-  background: linear-gradient(160deg, var(--badge-bright) 0%, var(--badge-deep) 62%, #1a1230 100%);
-  box-shadow:
-    inset 0 0 0 var(--badge-ring) rgba(255, 255, 255, 0.5),
-    inset 0 -6px 10px -6px rgba(0, 0, 0, 0.6);
+.tier-badge {
+  filter: drop-shadow(0 5px 9px rgba(6, 10, 30, 0.45));
 }
-.season-badge-face {
-  background: linear-gradient(170deg, var(--badge-bright) 0%, var(--badge-deep) 88%);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+.tier-badge__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.tier-badge__glyph {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+}
+/* The level is carved into the ribbon: dark ink on metal. */
+.tier-badge__level {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-title);
+  font-weight: 850;
+  font-style: normal;
+  font-synthesis: none;
+  letter-spacing: -0.03em;
+  line-height: 1;
   color: #1b1030;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
 }
-.season-badge-level {
-  color: #1b1030;
-}
-/* Locked ranks keep their identity but read as "not yet". */
-.season-badge-locked {
-  filter: grayscale(0.85) brightness(0.72) drop-shadow(0 2px 3px rgba(6, 10, 30, 0.3));
-  opacity: 0.75;
-}
-.season-badge-locked .season-badge-level {
-  color: #2b2440;
+/* Locked badges keep their identity but read as "not yet". */
+.tier-badge-locked,
+.achievement-badge-locked {
+  filter: grayscale(0.88) brightness(0.68) drop-shadow(0 3px 5px rgba(6, 10, 30, 0.35));
+  opacity: 0.78;
 }
 /* The badge you are standing on breathes. */
-.season-badge-current {
+.tier-badge-current {
   animation: badge-breathe 2.8s ease-in-out infinite;
 }
 @keyframes badge-breathe {
   0%, 100% { transform: translateY(0) scale(1); }
   50% { transform: translateY(-2px) scale(1.04); }
+}
+/* The inline tag: a small badge beside the tier name, tinted with its metal. */
+.tier-pill {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 999px;
+  padding: 2px 10px 2px 2px;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  color: var(--color-mist-50);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
+}
+[data-skin='day'] .tier-pill {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8);
+}
+.tier-pill-current {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+/* The achievement medallion. */
+.achievement-badge {
+  filter: drop-shadow(0 5px 9px rgba(6, 10, 30, 0.45));
 }
 .season-level-now {
   animation: level-now 1.6s ease-in-out infinite;
@@ -2441,6 +2485,14 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
   background-image: linear-gradient(180deg, #fff3c4 0%, var(--color-gold-300) 55%, var(--color-gold-500) 100%);
 }
 [data-skin='day'] .ag-title-gold { background-image: linear-gradient(180deg, var(--color-gold-500), #92400e); }
+/* The ranked/season title wears the division's own metal. The daylight skin
+   needs the tier's deep stop — white on paper would disappear. */
+.ag-title-tier {
+  background-image: linear-gradient(180deg, #ffffff 24%, var(--tier-bright));
+}
+[data-skin='day'] .ag-title-tier {
+  background-image: linear-gradient(180deg, var(--tier-deep) 10%, var(--color-mist-50));
+}
 .ag-eyebrow {
   display: inline-flex; align-items: center; gap: 0.4rem;
   font-family: var(--font-label);

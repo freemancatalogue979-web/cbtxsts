@@ -732,9 +732,22 @@ export default function QuestionManager({
                       onClick={() => setEditing({...editing, correct: letter})}
                       aria-pressed={isCorrect}
                       aria-label={`Mark option ${letter} as the correct answer`}
-                      className={`grid size-11 shrink-0 place-items-center rounded-xl border font-display text-[0.9rem] font-black transition-colors touch-manipulation ${
-                        isCorrect ? 'border-mint-500/60 bg-mint-500/25 text-mint-100' : 'border-white/12 bg-white/6 text-mist-300 hover:border-white/30'
-                      }`}
+                      className="grid size-11 shrink-0 place-items-center rounded-xl border font-display text-[0.9rem] font-black transition-colors touch-manipulation"
+                      style={
+                        isCorrect
+                          ? {
+                              background: 'linear-gradient(150deg, #6ee7b7, #047857)',
+                              color: '#02150e',
+                              borderColor: 'rgba(255,255,255,0.4)',
+                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -3px 6px -3px rgba(0,0,0,0.65)',
+                            }
+                          : {
+                              background: 'linear-gradient(150deg, #3b3552, #181426)',
+                              color: '#cdc8e0',
+                              borderColor: 'rgba(255,255,255,0.14)',
+                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -3px 6px -3px rgba(0,0,0,0.6)',
+                            }
+                      }
                     >
                       {letter}
                     </button>

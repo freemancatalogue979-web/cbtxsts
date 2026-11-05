@@ -21,6 +21,39 @@ import type {CosmeticsRef} from '../lib/cosmetics';
 export type AnswerState = 'idle' | 'picked' | 'correct' | 'wrong' | 'muted';
 
 /**
+ * The letter plate.
+ *
+ * The letter IS the selector, so it is a badge in its own right: a metal tile
+ * with a bevelled top edge and a carved face, in the metal that matches the
+ * answer's state. Idle is brushed steel, a picked answer is cyan chrome, a
+ * correct one is green gold and a wrong one is hot copper.
+ */
+const LETTER_METAL: Record<AnswerState, {from: string; to: string; ink: string; edge: string}> = {
+  idle: {from: '#3b3552', to: '#181426', ink: '#cdc8e0', edge: 'rgba(255,255,255,0.16)'},
+  picked: {from: '#67e8f9', to: '#2563eb', ink: '#04121f', edge: 'rgba(255,255,255,0.4)'},
+  correct: {from: '#6ee7b7', to: '#047857', ink: '#02150e', edge: 'rgba(255,255,255,0.4)'},
+  wrong: {from: '#fb7185', to: '#b91c1c', ink: '#2b0606', edge: 'rgba(255,255,255,0.32)'},
+  muted: {from: '#2a2740', to: '#131120', ink: '#7a7590', edge: 'rgba(255,255,255,0.08)'},
+};
+
+function LetterPlate({letter, state}: {letter: string; state: AnswerState}) {
+  const metal = LETTER_METAL[state];
+  return (
+    <span
+      className="grid size-9 shrink-0 place-items-center rounded-[0.55rem] border text-[0.88rem] font-black sm:size-10"
+      style={{
+        background: `linear-gradient(150deg, ${metal.from}, ${metal.to})`,
+        color: metal.ink,
+        borderColor: metal.edge,
+        boxShadow: `inset 0 1px 0 ${metal.edge}, inset 0 -3px 6px -3px rgba(0,0,0,0.65), 0 5px 12px -7px rgba(0,0,0,0.9)`,
+      }}
+    >
+      {letter}
+    </span>
+  );
+}
+
+/**
  * One answer. `letter` is whatever the server told us to display — the tile
  * never maps letters itself, which is what keeps shuffled exams honest.
  */
@@ -47,13 +80,6 @@ export function AnswerTile({
     wrong: 'border-red-500/80 bg-red-950/35 text-red-100 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]',
     muted: 'border-white/8 bg-ink-900 opacity-50',
   };
-  const badges: Record<AnswerState, string> = {
-    idle: 'bg-white/8 text-mist-300 border border-white/12',
-    picked: 'bg-gradient-to-br from-nova-400 to-nova-500 text-black font-black border border-nova-300',
-    correct: 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-black font-black border border-emerald-300',
-    wrong: 'bg-gradient-to-br from-red-500 to-red-600 text-white font-black border border-red-400',
-    muted: 'bg-white/6 text-mist-500 border border-white/8',
-  };
   const animate =
     state === 'correct' ? 'feedback-good' : state === 'wrong' ? 'feedback-bad' : '';
 
@@ -68,9 +94,7 @@ export function AnswerTile({
       data-answer-state={state}
       className={`gbtn flex w-full min-w-0 items-center gap-2.5 rounded-lg border px-3 py-3 text-left touch-manipulation disabled:cursor-default sm:gap-3 sm:px-4 sm:py-3.5 ${faces[state]} ${animate}`}
     >
-      <span className={`grid size-9 shrink-0 place-items-center rounded-md border text-[0.88rem] font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] sm:size-10 ${badges[state]}`}>
-        {letter}
-      </span>
+      <LetterPlate letter={letter} state={state} />
       <span className="min-w-0 flex-1 text-[0.88rem] leading-snug font-semibold break-words text-mist-100 [overflow-wrap:anywhere] sm:text-[0.92rem]">
         {text}
       </span>

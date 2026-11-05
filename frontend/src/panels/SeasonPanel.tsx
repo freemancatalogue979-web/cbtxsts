@@ -8,7 +8,7 @@
  * casually.
  */
 import {useEffect, useState} from 'react';
-import {CalendarClock, ChevronLeft, Coins, Flame, Sparkles, TrendingUp, Trophy} from 'lucide-react';
+import {Award, CalendarClock, ChevronLeft, Coins, Crown, Flame, Sparkles, TrendingUp, Trophy} from 'lucide-react';
 
 import SeasonBadge, {LevelTrack, RankLadder, type SeasonRank} from '../components/SeasonBadge';
 import Scenery from '../components/Scenery';
@@ -76,57 +76,70 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
         <div className="relative p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
- <p className="text-[0.62rem] font-black tracking-[0.2em] text-mist-400">
+              <p className="ag-eyebrow">
+                <CalendarClock className="size-3.5 text-gold-300" />
                 Season {season.number} · {season.label}
               </p>
-              <h2 className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[1.15rem] font-black text-mist-50 sm:text-[1.35rem]">
+              <h2
+                className="ag-title ag-title-tier mt-1 line-clamp-2 text-[1.5rem] leading-none hyphens-auto [overflow-wrap:anywhere] sm:text-[1.9rem]"
+                style={{['--tier-bright' as string]: me.rank.bright, ['--tier-deep' as string]: me.rank.deep}}
+              >
                 {me.rank.label}
-                <span className="text-[0.8rem] font-bold text-mist-400">season level {me.level}/100</span>
               </h2>
-              <p className="mt-1 text-[0.78rem] font-semibold text-mist-400">{me.rank.blurb}</p>
+              <p className="mt-1.5 text-[0.78rem] font-semibold text-mist-400">{me.rank.blurb}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="ag-rank">
+                  <i>
+                    <Crown />
+                  </i>
+                  Level {me.level}/100
+                </span>
+                <span className="ag-league" style={{['--lg' as string]: me.rank.bright}}>
+                  <i>
+                    <Award />
+                  </i>
+                  #{me.board_rank} on the board
+                </span>
+              </div>
             </div>
             <SeasonBadge rank={me.rank} level={me.level} size="xl" current />
           </div>
 
-          <div className="mt-4">
- <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[0.7rem] font-black tracking-wide text-mist-400">
+          <div className="relative mt-4">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[0.7rem] font-black tracking-wide text-mist-400">
               <span>
                 {formatNumber(me.progress.into_level)} / {formatNumber(me.progress.level_ceiling - me.progress.level_floor)} XP into level {me.level}
               </span>
               <span className="tabular">{formatNumber(me.progress.needed)} XP to level {me.level + 1}</span>
             </div>
-            <div className="xpbar">
-              <span className="xpbar-fill" style={{width: `${Math.max(3, me.progress.percent)}%`}} />
+            <div
+              className="ag-xp"
+              role="progressbar"
+              aria-valuenow={Math.round(me.progress.percent)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`XP into level ${me.level}`}
+            >
+              <i style={{width: `${Math.max(3, me.progress.percent)}%`, background: `linear-gradient(90deg, ${me.rank.deep}, ${me.rank.bright})`}} />
             </div>
           </div>
 
-          <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
- <p className="flex items-center gap-1.5 text-[0.6rem] font-black tracking-wide text-mist-500">
-                <TrendingUp className="size-3" /> Season XP
-              </p>
-              <p className="mt-0.5 text-lg font-black text-nova-300 tabular">{formatNumber(me.xp)}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
- <p className="flex items-center gap-1.5 text-[0.6rem] font-black tracking-wide text-mist-500">
-                <Trophy className="size-3" /> Board
-              </p>
-              <p className="mt-0.5 text-lg font-black text-gold-300 tabular">#{me.board_rank}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
- <p className="flex items-center gap-1.5 text-[0.6rem] font-black tracking-wide text-mist-500">
-                <CalendarClock className="size-3" /> Resets in
-              </p>
-              <p className="mt-0.5 text-lg font-black text-pulse-300 tabular">{season.days_left}d</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
- <p className="flex items-center gap-1.5 text-[0.6rem] font-black tracking-wide text-mist-500">
-                <Flame className="size-3" /> Next badge
-              </p>
-              <p className="mt-0.5 truncate text-lg font-black text-flare-300">
-                {me.next_rank ? me.next_rank.label : 'Maxed'}
-              </p>
-            </div>
+          <div className="mt-3.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2.5">
+            {[
+              {label: 'Season XP', value: formatNumber(me.xp), icon: TrendingUp, color: 'var(--color-nova-400)'},
+              {label: 'Board', value: `#${me.board_rank}`, icon: Trophy, color: 'var(--color-gold-400)'},
+              {label: 'Resets in', value: `${season.days_left}d`, icon: CalendarClock, color: 'var(--color-pulse-400)'},
+              {label: 'Next badge', value: me.next_rank ? me.next_rank.label : 'Maxed', icon: Flame, color: 'var(--color-flare-400)'},
+            ].map((res) => {
+              const Icon = res.icon;
+              return (
+                <div key={res.label} className="ag-res" style={{['--res' as string]: res.color}}>
+                  <Icon />
+                  <b className="truncate">{res.value}</b>
+                  <small>{res.label}</small>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
