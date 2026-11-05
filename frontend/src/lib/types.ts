@@ -166,19 +166,13 @@ export interface Profile {
   online?: boolean;
 }
 
-export type SeasonRankKey =
-  | 'bronze'
-  | 'silver'
-  | 'gold'
-  | 'platinum'
-  | 'diamond'
-  | 'master'
-  | 'grandmaster'
-  | 'elite'
-  | 'champion'
-  | 'legend'
-  | 'mythic'
-  | 'celestial';
+/**
+ * The realm a season level sits on.
+ *
+ * There are a hundred of them and every one has its own name, so the key is
+ * open rather than a fixed union — the ladder is data, not a type.
+ */
+export type SeasonRankKey = string;
 
 export interface SeasonRank {
   key: SeasonRankKey;
@@ -191,6 +185,16 @@ export interface SeasonRank {
   xp_to: number;
   deep: string;
   bright: string;
+  /** The realm number, 1-100 — it is also the season level it sits on. */
+  realm?: number;
+  /** The family of realms it was born into (Ember, Iron, Astral, ...). */
+  band?: string;
+  /** The machine-readable family (bronze, astral, absolute, ...). */
+  family?: string;
+  /** The outer silhouette of the badge. */
+  shape?: string;
+  /** True past platinum — these badges glow. */
+  mystical?: boolean;
 }
 
 export interface SeasonBadgeBlock {
@@ -911,6 +915,8 @@ export type RewardEvent =
       next_rank: SeasonRank | null;
       levels_to_next_rank: number;
       progress: SeasonBadgeBlock['progress'];
+      /** Set when the climb crossed into a new family of realms. */
+      payout?: {type: string; amount: number; milestone: string; label: string};
     };
 
 export interface DuelProgressEvent {

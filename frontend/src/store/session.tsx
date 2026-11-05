@@ -189,16 +189,22 @@ export function SessionProvider({children}: {children: ReactNode}) {
         return;
       }
 
-      /* A new badge is worth stopping for — twelve of them exist per season and
-         you only pass one every few levels. Ordinary season levels ride along
-         in the reward toast instead of interrupting play. */
-      if (seasonClimb?.promoted) {
+      /* A realm is worth stopping for — but only the ones that matter. Early
+         realms arrive every few minutes and would interrupt play every time,
+         so the screen only celebrates the loud ones: a family milestone, a
+         realm past platinum (where the badges start to glow) and the last
+         realm on the ladder. The rest ride along in the reward toast. */
+      const climbRealm = seasonClimb?.rank;
+      const loudClimb =
+        !!seasonClimb?.promoted &&
+        (!!seasonClimb.payout || !!climbRealm?.mystical || climbRealm?.realm === 100);
+      if (loudClimb) {
         celebrate({big: true});
         sfx.play('levelup');
         pushCelebration({
           kind: 'season_rank',
-          title: `${seasonClimb.rank.label} badge`,
-          subtitle: `Season level ${seasonClimb.level}`,
+          title: `${seasonClimb.rank.label} realm`,
+          subtitle: `Realm ${climbRealm?.realm ?? seasonClimb.level} · season level ${seasonClimb.level}`,
           detail: `+${xp} XP${coins ? ` • +${coins} coins` : ''}`,
           level: seasonClimb.level,
           season: {

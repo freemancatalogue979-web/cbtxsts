@@ -423,6 +423,21 @@ export default function ProfilePanel({
                 ) : (
                   <>
                     <h1 className="text-xl leading-tight font-black tracking-tight text-mist-50 sm:text-2xl"><CountryFlag code={profile.country} /> {profile.name}</h1>
+                    {/* The realm badge is the account's signature — it sits with
+                        the name, not buried further down the page. */}
+                    {profile.season ? (
+                      <div className="mt-2.5 flex items-center gap-2.5">
+                        <SeasonBadge rank={profile.season.rank} level={profile.season.level} size="lg" current />
+                        <div className="min-w-0">
+                          <p className="text-[0.58rem] font-black tracking-[0.2em] text-mist-500">YOUR REALM</p>
+                          <p className="truncate text-[0.95rem] font-black text-mist-50">{profile.season.rank.label}</p>
+                          <p className="truncate text-[0.66rem] font-bold text-mist-500 tabular">
+                            Realm {profile.season.rank.realm ?? profile.season.level} of 100
+                            {profile.season.rank.mystical ? ' · glowing' : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="mt-3"><OverallRankPlate tier={profile.tier} level={progress.level} /></div>
                     <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-[0.78rem] font-semibold text-mist-400 sm:justify-start sm:gap-2 sm:text-[0.82rem]">
                       <span className="text-nova-300">
@@ -975,9 +990,9 @@ export default function ProfilePanel({
             <div className="flex flex-wrap items-center gap-4">
               <SeasonBadge rank={profile.season.rank} level={profile.season.level} size="lg" current />
               <div className="min-w-0 flex-1">
- <p className="text-[0.62rem] font-black tracking-[0.18em] text-mist-500">Season badge</p>
+ <p className="text-[0.62rem] font-black tracking-[0.18em] text-mist-500">This season's realm</p>
                 <p className="mt-0.5 text-[1.05rem] font-black text-mist-50">
-                  {profile.season.rank.label} · level {profile.season.level}/100
+                  {profile.season.rank.label} · realm {profile.season.rank.realm ?? profile.season.level}/100
                 </p>
                 <p className="text-[0.76rem] font-semibold text-mist-400">{profile.season.rank.blurb}</p>
                 <div className="mt-2">
@@ -994,9 +1009,17 @@ export default function ProfilePanel({
                   </p>
                 </div>
               </div>
-              <div className="flex shrink-0 flex-col gap-1.5 text-right">
+              <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
  <p className="text-[0.62rem] font-black tracking-wide text-mist-500">Board</p>
                 <p className="text-xl font-black text-gold-300 tabular">#{profile.season.board_rank}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Gem className="size-3.5" />}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ag:navigate', {detail: {tab: 'vault'}}))}
+                >
+                  The Vault
+                </Button>
               </div>
             </div>
           </Card>
