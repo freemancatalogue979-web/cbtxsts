@@ -71,3 +71,18 @@ backend/.venv/bin/python backend/tests/archive_regressions.py
 ```
 
 Run the browser audits only against a disposable/test API database. They create accounts, friendships, groups, rooms, ranked matches and profile images. Build the frontend and run `npm run preview` with the API on port 3000, install a Playwright Chromium if needed, then run the three `audit:*` scripts above. `VISUAL_BASE_URL`, `PLAYWRIGHT_CHROMIUM_EXECUTABLE` and optional JSON `PLAYWRIGHT_CHROMIUM_ARGS` configure the browser runs.
+
+## Profile-art follow-up
+
+The subsequent profile request adds six original AI-generated 3D-style environment
+wallpapers (space, volcano, forest, ocean, academy, city), compressed WebP thumbnail
+previews, layered lighting/foreground/mote animation and original bevelled vector rank
+crests. Existing SVG scenery is retained as the image-error fallback. Uploaded banners,
+account-saved motion, reduced motion and authentic server-provided ranks are preserved.
+This is rendered 3D-style artwork with depth animation, not an interactive WebGL world.
+
+`npm run audit:profile-art` checks all six full scenes and their thumbnails, public card
+containment at four widths in both skins, reduced/stored motion settings, and distinct
+Bronze/Silver/Gold/Platinum metal crests with collision-free SVG gradient IDs. This audit,
+the archive and chat/profile browser audits, typecheck and production build passed.
+Arsenica Sans still requires the actual licensed font binary; no font was impersonated.

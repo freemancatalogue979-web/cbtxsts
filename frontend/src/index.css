@@ -3652,3 +3652,54 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 
 .profile-scenery[data-motion='off'] * { animation: none !important; }
 .profile-backdrop-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* Cinematic profile worlds — local 3D-rendered art, layered without WebGL. */
+.profile-scenery[data-art] { opacity: 1; perspective: 900px; background: #11192e; }
+.profile-scene-depth { position: absolute; inset: -3%; transform-style: preserve-3d; }
+.profile-scene-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 65% 45%; transform: translateZ(-18px) scale(1.09); animation: profile-depth-drift 22s ease-in-out infinite alternate; }
+.profile-scene-volume { position: absolute; inset: 0; transform: translateZ(12px); background: radial-gradient(ellipse at 85% 20%, color-mix(in srgb, var(--scene-accent) 28%, transparent), transparent 60%), linear-gradient(0deg, #070e2780, transparent 55%); mix-blend-mode: screen; animation: profile-volume 10s ease-in-out infinite alternate; }
+.profile-scene-near { position: absolute; inset: 45% -5% -8%; transform: translateZ(38px); border-radius: 50% 40% 0 0; background: radial-gradient(ellipse at 95% 100%, color-mix(in srgb, var(--scene-accent) 35%, #060e28) 0%, transparent 65%); opacity: .65; filter: blur(12px); animation: profile-foreground-drift 17s ease-in-out infinite alternate; }
+.profile-scene-motes { position: absolute; inset: 0; transform: translateZ(45px); }
+.profile-scene-motes i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff9e6; box-shadow: 0 0 9px var(--scene-accent); opacity: .65; animation: profile-mote 7s ease-in-out infinite alternate; }
+.profile-scenery[data-art]::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #080c24e8, #080c2478 55%, #080c2408), linear-gradient(0deg, #080c24 0%, transparent 65%); }
+[data-skin='day'] .profile-scenery[data-art] { opacity: 1; }
+[data-skin='day'] .profile-scenery[data-art]::after { background: linear-gradient(90deg, #f5f8fff5, #f5f8ffb3 48%, #f5f8ff10), linear-gradient(0deg, #f5f8ff 0%, #f5f8ff10 70%); }
+.profile-showcase > .profile-scenery[data-art] { height: 390px; mask-image: linear-gradient(#000 55%, transparent); }
+.profile-scenery[data-preview]::after { background: linear-gradient(0deg, #050b27bf, transparent 80%); }
+[data-skin='day'] .profile-scenery[data-preview]::after { background: linear-gradient(0deg, #050b27bf, transparent 80%); }
+.profile-scenery[data-preview] .profile-scene-art { object-position: 70% center; }
+.profile-scenery[data-preview] .profile-scene-near { display: none; }
+.profile-scene-option { box-shadow: inset 0 1px #ffffff35, 0 7px 16px -12px #0009; transition: border-color .2s, box-shadow .2s; }
+.profile-scene-option[aria-pressed='true'] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-nova-400) 22%, transparent), 0 10px 20px -13px var(--color-nova-500); }
+.profile-scene-option-tag { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 3px 6px; border-radius: 5px; border: 1px solid #ffffff40; background: #09112b99; color: #f5e6bd !important; font-size: .47rem; font-weight: 900; letter-spacing: .12em; }
+.profile-scene-option-name { position: relative; z-index: 1; display: block; color: #fff !important; font-size: .7rem; font-weight: 800; text-shadow: 0 1px 5px #000; }
+@keyframes profile-depth-drift { from { transform: translate3d(-.7%, -.5%, -18px) scale(1.09); } to { transform: translate3d(.7%, .5%, -18px) scale(1.12); } }
+@keyframes profile-foreground-drift { from { transform: translate3d(-1%, 0, 38px); } to { transform: translate3d(1%, -1%, 38px); } }
+@keyframes profile-volume { from { opacity: .45; } to { opacity: .85; } }
+@keyframes profile-mote { from { transform: translateY(6px); opacity: .25; } to { transform: translateY(-12px); opacity: .75; } }
+/* Keep both stored motion choice and OS reduced-motion authoritative. */
+.profile-scenery[data-motion='off'] * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .profile-scenery * { animation: none !important; transition: none !important; } }
+
+/* Sculpted metal crest and an engraved rank plate, separate from paid status. */
+.profile-rank-plate { gap: 8px; padding: 8px 12px 8px 4px; min-height: 104px; border-radius: 18px; border-color: color-mix(in srgb, var(--rank-metal) 65%, transparent); background: radial-gradient(ellipse at 20% 0, color-mix(in srgb, var(--rank-metal) 15%, transparent), transparent 70%), linear-gradient(115deg, #141a30, #0b1021); color: #f3f5fd; box-shadow: inset 0 1px #ffffff35, inset 0 -3px #0007, 0 12px 22px -17px #000a; }
+.profile-rank-plate::before { content: ''; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--rank-metal) 22%, transparent); border-radius: 13px; pointer-events: none; }
+.profile-rank-plate::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 30%, #ffffff06 44%, transparent 45%); }
+.rank-crest { display: block; width: 84px; height: 90px; flex-shrink: 0; filter: drop-shadow(0 7px 6px #0008); }
+.profile-rank-copy { position: relative; z-index: 1; }
+.profile-rank-eyebrow { color: #b7bdcf; font-size: .52rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+.profile-rank-name { margin-top: 2px; color: var(--rank-metal); font-size: clamp(1.12rem, 4vw, 1.5rem); font-weight: 900; text-transform: capitalize; letter-spacing: -.025em; text-shadow: 0 1px #000; }
+.profile-rank-subtitle { margin-top: 3px; color: #aeb8ce; font-size: .58rem; font-weight: 600; line-height: 1.4; }
+.profile-rank-level { position: relative; z-index: 1; display: grid; justify-items: center; gap: 2px; flex-shrink: 0; min-width: 44px; padding: 7px 8px; border: 1px solid color-mix(in srgb, var(--rank-metal) 35%, transparent); border-radius: 11px; background: #ffffff05; box-shadow: inset 0 1px #ffffff12; }
+.profile-rank-level small { color: #aeb8ce; font-size: .42rem; font-weight: 900; letter-spacing: .14em; }
+.profile-rank-level strong { color: #f5e5c9; font-size: 1.05rem; font-weight: 900; line-height: 1.2; }
+[data-skin='day'] .profile-rank-plate { background: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--rank-metal) 16%, transparent), transparent 70%), linear-gradient(135deg, #fffdf9, #f2f5fc); box-shadow: inset 0 1px #fff, inset 0 -2px #25355b12, 0 9px 18px -16px #25355b66; }
+[data-skin='day'] .profile-rank-eyebrow, [data-skin='day'] .profile-rank-subtitle, [data-skin='day'] .profile-rank-level small { color: #526079; }
+[data-skin='day'] .profile-rank-name { color: #65432f; text-shadow: none; }
+[data-skin='day'] .profile-rank-plate[data-tier='silver'] .profile-rank-name { color: #475b76; }
+[data-skin='day'] .profile-rank-plate[data-tier='gold'] .profile-rank-name { color: #835809; }
+[data-skin='day'] .profile-rank-plate[data-tier='platinum'] .profile-rank-name { color: #14657a; }
+[data-skin='day'] .profile-rank-level { background: #ffffff8c; }
+[data-skin='day'] .profile-rank-level strong { color: #27314c; }
+@media (max-width: 359px) { .rank-crest { width: 65px; height: 76px; } .profile-rank-plate { gap: 5px; padding-right: 9px; } .profile-rank-subtitle { font-size: .53rem; } }
+[data-skin='day'] .profile-prestige-label { color: #4b3d72 !important; }

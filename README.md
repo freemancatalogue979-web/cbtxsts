@@ -664,7 +664,7 @@ the rendering fallback. No different font is renamed to impersonate Arsenica.
 
 ### Restored profile and chat features
 
-- **Profile → Your profile backdrop:** choose a scene, toggle its animation, or upload a
+- **Profile → Your profile backdrop:** choose from six locally bundled 3D-style worlds, toggle layered lighting/depth animation, or upload a
   JPEG/PNG/WebP banner. These choices are stored on your account and appear behind identity
   information in other players' profile modals. Banner uploads are cropped to 2:1, resized,
   validated and served only to signed-in players. Reduced-motion preferences are respected.
@@ -673,6 +673,7 @@ the rendering fallback. No different font is renamed to impersonate Arsenica.
   group moderation retain their existing server permissions.
 - Rooms are automatically paced by a persisted server clock; reloading restores each
   player's private question and answer state. Team Ranked restores its own round feedback.
+- Lifetime rank plates use original bevelled metal crests for Bronze, Silver, Gold and Platinum; displayed ranks still come from the server.
 - The requested slingshot prototype is **not included**.
 
 See [the archive audit](docs/archive-restoration-audit.md) for scope decisions, remaining

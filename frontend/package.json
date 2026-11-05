@@ -14,7 +14,8 @@
     "check:music": "node scripts/music-check.mjs",
     "check:fonts": "node scripts/font-check.mjs",
     "audit:archive": "node scripts/archive-audit.mjs",
-    "audit:chat-profile": "node scripts/chat-profile-audit.mjs"
+    "audit:chat-profile": "node scripts/chat-profile-audit.mjs",
+    "audit:profile-art": "node scripts/profile-art-audit.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -31,6 +32,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "esbuild": "^0.25.12",
     "jsdom": "^30.0.1",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.1.14",

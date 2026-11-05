@@ -2,6 +2,7 @@
 import {useEffect, useId, useState, type CSSProperties} from 'react';
 import {THEMES} from '../lib/cosmetics';
 import {tokenStore} from '../lib/api';
+import RankCrest from './RankCrest';
 import type {Tier} from '../lib/types';
 
 export function prestigeFor(level: number) {
@@ -17,12 +18,13 @@ export function prestigeFor(level: number) {
 export function OverallRankPlate({tier, level}: {tier: Tier; level: number}) {
   return (
     <div className="profile-rank-plate" data-tier={tier}>
-      <span className="profile-rank-gem" aria-hidden="true">◆</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] opacity-70">Overall rank</p>
-        <p className="text-sm font-black capitalize">{tier}</p>
+      <RankCrest tier={tier} />
+      <div className="profile-rank-copy min-w-0 flex-1">
+        <p className="profile-rank-eyebrow">Overall rank</p>
+        <p className="profile-rank-name">{tier}</p>
+        <p className="profile-rank-subtitle">Lifetime progression · {prestigeFor(level).name}</p>
       </div>
-      <span className="shrink-0 text-xs font-black">LV {level}</span>
+      <span className="profile-rank-level"><small>LEVEL</small><strong>{level}</strong></span>
     </div>
   );
 }
@@ -34,9 +36,9 @@ export const PROFILE_BANNERS = [
   {id: 'city', name: 'Neon city'},
 ];
 
-export default function ProfileScenery({theme, level = 1, banner, motion = true, playerId, hasImage, version = ''}: {
+export default function ProfileScenery({theme, level = 1, banner, motion = true, playerId, hasImage, version = '', preview = false}: {
   theme?: string | null; level?: number; banner?: string; motion?: boolean;
-  playerId?: number; hasImage?: boolean; version?: string;
+  playerId?: number; hasImage?: boolean; version?: string; preview?: boolean;
 }) {
   const id = useId().replace(/:/g, '');
   const imageKey = `${playerId}:${version}`;
@@ -62,11 +64,25 @@ export default function ProfileScenery({theme, level = 1, banner, motion = true,
   const ocean = name.includes('ocean');
   const city = /city|futuristic/.test(name);
   const academy = /academy|royal|golden|castle|library|haunted/.test(name);
-  const color = (theme && THEMES[theme]?.swatch) || prestigeFor(level).color;
+  const scene = volcano ? 'volcano' : forest ? 'forest' : ocean ? 'ocean' : academy ? 'academy' : city ? 'city' : 'space';
+  const colors = {space:'#a78bfa', forest:'#34d399', ocean:'#38bdf8', volcano:'#fb923c', academy:'#e8c578', city:'#e879f9'};
+  const color = (banner && banner !== 'auto' ? colors[scene] : theme && THEMES[theme]?.swatch) || colors[scene];
+  const artSrc = imageUrl || `/profile-scenes/${scene}${preview ? '-thumb' : ''}.webp`;
+  const [failedArt, setFailedArt] = useState<string | null>(null);
+  const showArt = failedArt !== artSrc;
   return (
-    <div className="profile-scenery" data-motion={motion ? undefined : 'off'} data-scene={volcano ? 'volcano' : forest ? 'forest' : ocean ? 'ocean' : academy ? 'academy' : city ? 'city' : 'space'} style={{'--scene-accent': color} as CSSProperties} aria-hidden="true">
-      {imageUrl && <img className="profile-backdrop-image" src={imageUrl} alt="" />}
-      <svg style={imageUrl ? {visibility: 'hidden'} : undefined} viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice" focusable="false">
+    <div className="profile-scenery" data-preview={preview || undefined} data-motion={motion ? undefined : 'off'} data-art={showArt || undefined} data-scene={scene} style={{'--scene-accent': color} as CSSProperties} aria-hidden="true">
+      <div className="profile-scene-depth">
+        <img key={artSrc} className={imageUrl ? 'profile-scene-art profile-backdrop-image' : 'profile-scene-art'}
+          src={artSrc} width="1280" height="640" loading={preview ? 'lazy' : 'eager'} alt="" draggable={false}
+          style={showArt ? undefined : {visibility:'hidden'}} onError={() => setFailedArt(artSrc)} />
+        {showArt && <>
+          <span className="profile-scene-volume" />
+          <span className="profile-scene-near" />
+          {!imageUrl && <span className="profile-scene-motes">{Array.from({length:8},(_,i)=><i key={i} style={{left:`${8+i*12}%`, top:`${15+(i*19)%67}%`, animationDelay:`${i*-.9}s`}} />)}</span>}
+        </>}
+      </div>
+      <svg style={showArt ? {visibility: 'hidden'} : undefined} viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice" focusable="false">
         <defs>
           <linearGradient id={`${id}-sky`} x2="0" y2="1">
             <stop stopColor={volcano ? '#230d25' : forest ? '#062d2a' : '#0b133b'} />

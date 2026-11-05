@@ -192,7 +192,7 @@ export default function PlayerCard({
         >
           <ProfileScenery theme={cosmetics?.theme} level={player?.level} banner={player?.profile_banner} motion={player?.profile_motion} playerId={player?.id} hasImage={player?.has_banner} version={player?.banner_version} />
           <div className="profile-showcase-content p-4 sm:p-5">
-            {player && <p className="mb-3 text-[0.62rem] font-black uppercase tracking-[0.24em]" style={{color: prestige.color}}>{prestige.name} · Level {player.level}</p>}
+            {player && <p className="profile-prestige-label mb-3 text-[0.62rem] font-black uppercase tracking-[0.24em]" style={{color: prestige.color}}>{prestige.name} · Level {player.level}</p>}
             <header className="flex min-w-0 items-start gap-3">
               <Avatar
                 name={player?.name || 'Player'}

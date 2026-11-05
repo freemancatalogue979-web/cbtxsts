@@ -552,15 +552,17 @@ export default function ProfilePanel({
       </section>
 
       <section aria-label="Profile backdrop customization">
-        <SectionHeading title="Your profile backdrop" subtitle="Saved to your account. Everyone sees it behind your avatar, name and ranks." icon={<Sparkles className="size-4" />} />
+        <SectionHeading title="Your profile backdrop" subtitle="Layered 3D worlds, soft lighting and cinematic depth. Saved to your account for everyone to see." icon={<Sparkles className="size-4" />} />
         <Card className="space-y-3 p-3.5 sm:p-5">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Profile scenes">
             {PROFILE_BANNERS.map((scene) => <button type="button" key={scene.id} disabled={bannerBusy}
+              aria-label={scene.name}
               aria-pressed={!profile.has_banner && (profile.profile_banner || 'auto') === scene.id}
               onClick={() => void updateBackdrop({profile_banner: scene.id})}
-              className={`relative min-w-0 overflow-hidden rounded-xl border-2 px-2 pb-2 pt-16 text-left disabled:opacity-60 ${!profile.has_banner && (profile.profile_banner || 'auto') === scene.id ? 'border-nova-400' : 'border-white/12'}`}>
-              <ProfileScenery banner={scene.id} theme={profile.cosmetics?.theme} motion={false} />
-              <span className="relative z-10 block rounded-md bg-ink-950/80 px-1.5 py-1 text-[0.7rem] font-extrabold text-mist-100">{scene.name}</span>
+              className={`profile-scene-option relative min-w-0 overflow-hidden rounded-xl border-2 px-2 pb-2 pt-24 text-left disabled:opacity-60 ${!profile.has_banner && (profile.profile_banner || 'auto') === scene.id ? 'border-nova-400' : 'border-white/12'}`}>
+              <ProfileScenery banner={scene.id} theme={profile.cosmetics?.theme} motion={false} preview />
+              <span className="profile-scene-option-tag" aria-hidden="true">3D WORLD</span>
+              <span className="profile-scene-option-name">{scene.name}</span>
             </button>)}
           </div>
           <div className="flex flex-wrap items-center gap-2">
