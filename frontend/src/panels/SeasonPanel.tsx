@@ -2,7 +2,7 @@
  * The season screen — where the ladder lives.
  *
  * A season is one calendar month, so this is the part of the arena that starts
- * fresh: twelve rank badges, a hundred levels and the countdown to the reset.
+ * fresh: a hundred realms, a hundred levels and the countdown to the reset.
  * Lifetime XP, coins, mastery and badges are a different ledger and are never
  * touched by a rollover, which is why "Season reset" is safe to show so
  * casually.
@@ -10,7 +10,7 @@
 import {useEffect, useState} from 'react';
 import {Award, CalendarClock, ChevronLeft, Coins, Crown, Flame, Sparkles, TrendingUp, Trophy} from 'lucide-react';
 
-import SeasonBadge, {LevelTrack, RankLadder, type SeasonRank} from '../components/SeasonBadge';
+import SeasonBadge, {LevelTrack, RealmBands, type SeasonRank} from '../components/SeasonBadge';
 import Scenery from '../components/Scenery';
 import {Button, Card, Chip, SectionHeading, Skeleton} from '../components/ui';
 import {api} from '../lib/api';
@@ -78,7 +78,7 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
             <div className="min-w-0">
               <p className="ag-eyebrow">
                 <CalendarClock className="size-3.5 text-gold-300" />
-                Season {season.number} · {season.label}
+                Season {season.number} · {season.label} · Realm {me.rank.realm ?? me.level}
               </p>
               <h2
                 className="ag-title ag-title-tier mt-1 line-clamp-2 text-[1.5rem] leading-none hyphens-auto [overflow-wrap:anywhere] sm:text-[1.9rem]"
@@ -168,8 +168,8 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
       {/* --------------------------------------------------------- ladder */}
       <Card className="min-w-0 p-4">
         <SectionHeading
-          title="The twelve ranks"
-          subtitle="Every badge is earned inside a single season and resets with it. Your lifetime level, coins and trophies never reset."
+          title="The hundred realms"
+          subtitle="Every level of a season is its own realm, with its own badge. You keep the one you reach when the month ends — but only until the next season opens."
           icon={<Trophy className="size-4" />}
           action={
             onOpenRanks ? (
@@ -179,7 +179,11 @@ export default function SeasonPanel({onBack, onOpenRanks}: {onBack?: () => void;
             ) : undefined
           }
         />
-        <RankLadder ranks={ladder} currentKey={me.rank.key} level={me.level} className="mt-3" />
+        <RealmBands ranks={ladder} currentKey={me.rank.key} level={me.level} className="mt-3" />
+        <p className="mt-3 flex items-center gap-1.5 text-[0.7rem] font-semibold text-mist-500">
+          <Sparkles className="size-3.5 text-nova-300" />
+          Everything from realm 41 upward glows — those badges are entities, not medals.
+        </p>
       </Card>
 
       {/* -------------------------------------------------------- history */}

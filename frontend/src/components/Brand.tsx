@@ -1,25 +1,21 @@
-/** Absolute Genesis brand mark: the AG crest under a rising star, violet and gold. */
+/** Absolute Genesis brand mark: the AG sigil — a violet shield, a gold star, a rising chevron. */
 import {useIsDesktop} from '../lib/viewport';
+import {GenesisCrest} from './Logo';
 import SkinToggle from './SkinToggle';
 import type React from 'react';
 
 /**
- * The Absolute Genesis crest — rising star, AG shield and open book — as the brand mark.
+ * The Absolute Genesis crest — the sigil, drawn as vector.
+ *
+ * It used to be a raster with the wordmark baked into the artwork, which turned
+ * to mush at the 40px it actually appears at in the header. Now it is drawn:
+ * crisp at 16px, sharp at 512px, and readable on both skins.
+ *
  * Pass a number for a fixed pixel size, or `size={null}` to size the crest with
  * responsive utility classes (used by the app header so it scales per breakpoint).
  */
 export function LogoMark({size = 42, className = ''}: {size?: number | null; className?: string}) {
-  return (
-    <img
-      src="/brand/ag-logo.webp"
-      alt=""
-      width={size ?? undefined}
-      height={size ?? undefined}
-      draggable={false}
-      className={`shrink-0 object-contain ${className}`}
-      style={size ? {width: size, height: size} : undefined}
-    />
-  );
+  return <GenesisCrest size={size} className={className} />;
 }
 
 export function Wordmark({
@@ -52,7 +48,7 @@ export function Wordmark({
     if (size !== 'brand') return null;
     return (
       <div className={`flex min-w-0 shrink items-center gap-2 ${className}`}>
-        <img src="/brand/ag-crest.webp" alt="" width={36} height={34} draggable={false} className="h-9 w-auto shrink-0 object-contain" />
+        <GenesisCrest size={36} />
         <span className="min-w-0 leading-tight">
           <span className="block truncate font-display text-[0.9rem] font-black tracking-[0.06em] text-mist-50">Absolute Genesis</span>
           {tagline && <span className="block truncate text-[0.6rem] font-bold tracking-[0.08em] text-mist-500">A completely new beginning</span>}
@@ -81,7 +77,7 @@ export function BrandLockup({className = '', tagline = true}: {className?: strin
   return (
     <div className={`agb-lockup ${className}`} aria-label="Absolute Genesis">
       <span className="agb-crest" aria-hidden="true">
-        <img src="/brand/ag-logo.webp" alt="" width={616} height={629} draggable={false} />
+        <GenesisCrest size={null} className="h-full w-full" />
       </span>
       <span className="agb-words">
         <span className="agb-name">

@@ -13,6 +13,7 @@ import type {Duel, GroupSection, Quiz} from '../lib/types';
 const StudyPanel = lazyScreen(() => import('../panels/StudyPanel'));
 const DuelsPanel = lazyScreen(() => import('../panels/DuelsPanel'));
 const RanksPanel = lazyScreen(() => import('../panels/RanksPanel'));
+const RealmVaultPanel = lazyScreen(() => import('../panels/RealmVaultPanel'));
 const PrizesPanel = lazyScreen(() => import('../panels/PrizesPanel'));
 const FeedPanel = lazyScreen(() => import('../panels/FeedPanel'));
 const FriendsPanel = lazyScreen(() => import('../panels/FriendsPanel'));
@@ -96,6 +97,7 @@ export default function Dashboard({
         {tab === 'duels' && <DuelsPanel onOpenDuel={onOpenDuel} onOpenRoom={onOpenRoom} />}
         {tab === 'friends' && <FriendsPanel onOpenDuel={onOpenDuel} onStartExam={onStartExam} onOpenGroup={onOpenGroup} />}
         {tab === 'ranks' && <RanksPanel />}
+        {tab === 'vault' && <RealmVaultPanel />}
         {tab === 'shop' && <ShopPanel />}
         {tab === 'prizes' && <PrizesPanel />}
         {tab === 'feed' && <FeedPanel />}

@@ -29,7 +29,10 @@ src/
     icons.ts              badge/prize icon slugs → lucide components
     nav.ts                tab model shared by desktop nav and mobile bottom bar
     sfx.ts                dependency-free WebAudio sound effects (tap, whoosh, correct, win, chat…)
-    Brand.tsx             the uploaded crest (public/brand/ag-logo.webp) as LogoMark/Wordmark
+    Brand.tsx             the crest lockup (LogoMark/Wordmark/BrandLockup)
+    Logo.tsx              the Genesis sigil — the vector brand mark
+    realms.ts             the hundred realms: names, colours, frames, emblems
+    Badge.tsx             the badge kit — tier plaque, medallion, realm badge
     music.ts              generative gaming soundtrack: 4 tracks (drums/bass/arps/pads),
                           volume + track prefs, autoplay-with-fallback state machine
     photos.ts             authenticated profile-photo fetcher with an object-URL cache + hook

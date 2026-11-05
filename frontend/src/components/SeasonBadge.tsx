@@ -1,23 +1,27 @@
 /**
- * Season badges.
+ * Season badges — the realm mark.
  *
- * A thin adapter over the badge kit: the art lives in `components/Badge.tsx`
- * and every badge in the app is drawn from it, so a season rank and a ranked
- * tier are the same sculpted object.
+ * A season is a hundred levels and every level is its own realm, so the badge
+ * a player wears is not "Platinum" or "Celestial": it is *their* realm, with
+ * its own frame, its own colour and its own rune ring. This file is a thin
+ * adapter over the badge kit — the art lives in `components/Badge.tsx` and
+ * every badge in the app is drawn from it.
  *
  * `deep`/`bright` come from the server (`/api/arena/season`), so the ladder the
- * player sees is the same ladder the API scores them against.
+ * player sees is the ladder the API scores them against.
  */
-import {TierBadge, type BadgeGlyph, type BadgeSize} from './Badge';
+import {RealmBadge, type BadgeSize} from './Badge';
+import {realmFromRank, type Realm} from '../lib/realms';
 import type {SeasonRank} from '../lib/types';
 
-export type {BadgeGlyph as RankGlyph, BadgeSize, SeasonRank};
+export type {BadgeSize, SeasonRank};
+export type RankGlyph = SeasonRank['glyph'];
 
 export default function SeasonBadge({
   rank,
   level,
   size = 'md',
-  /** Dimmed for ranks that are still ahead of the player. */
+  /** Dimmed for realms that are still ahead of the player. */
   locked = false,
   /** Rings the badge the player is standing on right now. */
   current = false,
@@ -25,7 +29,7 @@ export default function SeasonBadge({
   className = '',
   title,
 }: {
-  rank: Pick<SeasonRank, 'key' | 'label' | 'glyph' | 'deep' | 'bright'>;
+  rank: Pick<SeasonRank, 'key' | 'label' | 'glyph' | 'deep' | 'bright'> & Partial<SeasonRank>;
   level?: number;
   size?: BadgeSize;
   locked?: boolean;
@@ -34,27 +38,33 @@ export default function SeasonBadge({
   className?: string;
   title?: string;
 }) {
+  const realm = realmFromRank(rank);
   const label = title ?? `${rank.label}${typeof level === 'number' ? ` · level ${level}` : ''}`;
 
   return (
-    <TierBadge
+    <RealmBadge
+      realm={realm.realm}
+      label={rank.label}
       deep={rank.deep}
       bright={rank.bright}
-      glyph={rank.glyph}
+      glyph={rank.glyph ?? realm.glyph}
+      shape={rank.shape ?? realm.shape}
+      mystical={rank.mystical ?? realm.mystical}
       size={size}
-      level={level}
-      showLevel={showLevel}
       locked={locked}
       current={current}
-      label={label}
+      showNumber={showLevel && size !== 'xs'}
+      title={label}
       className={className}
     />
   );
 }
 
 /**
- * The full seasonal ladder: twelve badges, blurred until you reach them.
- * Used by the season panel so a player can see exactly what is next.
+ * The realm ladder: every realm in the season, dimmed until you reach it.
+ *
+ * A hundred badges is too many for a grid, so this walks the ladder in bands
+ * — ten families of ten realms — and puts the one you are standing on first.
  */
 export function RankLadder({
   ranks,
@@ -67,23 +77,82 @@ export function RankLadder({
   level: number;
   className?: string;
 }) {
+  const reached = (rank: SeasonRank) => level >= rank.level_from;
+  const current = (rank: SeasonRank) => rank.key === currentKey;
+  const sorted = [...ranks].sort((a, b) => a.level_from - b.level_from);
+  const currentRank = sorted.find(current);
+
+  // The band the player is standing in, first — then everything else, in order.
+  const ordered = currentRank ? [currentRank, ...sorted.filter((rank) => rank !== currentRank)] : sorted;
+
   return (
-    <div className={`grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 ${className}`}>
-      {ranks.map((rank) => {
-        const reached = level >= rank.level_from;
-        const current = rank.key === currentKey;
+    <div className={`grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 ${className}`}>
+      {ordered.map((rank) => (
+        <div
+          key={rank.key}
+          className={`flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-1 py-2 text-center ${
+            current(rank)
+              ? 'border-nova-400/70 bg-nova-500/12'
+              : reached(rank)
+                ? 'border-white/12 bg-white/[0.04]'
+                : 'border-white/8 bg-white/[0.02]'
+          }`}
+        >
+          <SeasonBadge rank={rank} level={current(rank) ? level : rank.level_from} size="sm" locked={!reached(rank)} current={current(rank)} />
+          <p className="w-full truncate text-[0.66rem] font-black text-mist-100">{rank.label}</p>
+          <p className="text-[0.56rem] font-bold tracking-wide text-mist-500 tabular">Lv {rank.level_from}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The ten families of realms — Ember, Iron, Gold, Platinum and the six
+ * mystical ones above them. This is the shape of the ladder in one glance.
+ */
+export function RealmBands({
+  ranks,
+  currentKey,
+  level,
+  className = '',
+}: {
+  ranks: SeasonRank[];
+  currentKey: string;
+  level: number;
+  className?: string;
+}) {
+  const families = new Map<string, {label: string; realms: SeasonRank[]}>();
+  for (const rank of ranks) {
+    const realm = realmFromRank(rank);
+    const key = realm.family || realm.band || 'realm';
+    const entry = families.get(key) ?? {label: realm.band || realm.label, realms: []};
+    entry.realms.push(rank);
+    families.set(key, entry);
+  }
+
+  return (
+    <div className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-5 ${className}`}>
+      {[...families.entries()].map(([key, family]) => {
+        const first = family.realms[0];
+        const last = family.realms[family.realms.length - 1];
+        const mine = family.realms.find((rank) => rank.key === currentKey);
+        const mystical = realmFromRank(first).mystical;
         return (
           <div
-            key={rank.key}
-            className={`flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border-2 px-1.5 py-2.5 text-center ${
-              current ? 'border-nova-400/70 bg-nova-500/12' : 'border-white/10 bg-white/[0.03]'
+            key={key}
+            className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 ${
+              mine ? 'border-nova-400/60 bg-nova-500/10' : 'border-white/10 bg-white/[0.03]'
             }`}
           >
-            <SeasonBadge rank={rank} level={current ? level : rank.level_from} size="md" locked={!reached} current={current} />
-            <p className="w-full truncate text-[0.68rem] font-black text-mist-100">{rank.label}</p>
-            <p className="text-[0.56rem] font-bold tracking-wide text-mist-500">
-              Lv {rank.level_from}–{rank.level_to}
-            </p>
+            <SeasonBadge rank={first} size="sm" locked={!mystical && level < first.level_from} />
+            <div className="min-w-0">
+              <p className="truncate text-[0.78rem] font-black text-mist-50">{family.label}</p>
+              <p className="truncate text-[0.62rem] font-bold tracking-wide text-mist-500 tabular">
+                Realms {first.level_from}–{last.level_to}
+                {mystical ? ' · glowing' : ''}
+              </p>
+            </div>
           </div>
         );
       })}
@@ -122,3 +191,5 @@ function colourKey(ranks: SeasonRank[], level: number) {
   const found = ranks.find((rank) => rank.level_from <= level && level <= rank.level_to);
   return found ? found.key : ranks[ranks.length - 1].key;
 }
+
+export type {Realm};

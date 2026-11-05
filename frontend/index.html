@@ -6,8 +6,9 @@
     <!-- One fixed scale: the arena is drawn for the viewport it lands on. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#eaf4ff" />
-    <link rel="icon" type="image/png" href="/brand/ag-logo-96.png" />
-    <link rel="preload" as="image" href="/brand/ag-logo.webp" fetchpriority="high" />
+    <link rel="icon" type="image/svg+xml" href="/brand/ag-sigil.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/brand/ag-logo-96.png" />
+    <link rel="preload" as="image" href="/brand/ag-sigil.svg" type="image/svg+xml" fetchpriority="high" />
     <link rel="apple-touch-icon" href="/brand/ag-apple-touch-180.png" />
     <!-- Installable app: manifest + standalone look on iPhone/Android. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
@@ -60,20 +61,32 @@
     <style>
       html, body { background: #07030f; }
       html[data-skin='day'], html[data-skin='day'] body { background-color: #eaf4ff; }
+      /* The splash is the brand's first breath, so it is the brand's own dark
+         stage in both skins — a deep violet field with a gold dawn behind the
+         sigil. The chosen skin takes over the moment React paints. */
       .ag-splash {
         position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
-        background: linear-gradient(180deg, #f8fcff 0%, #eaf4ff 58%, #fff8e7 100%);
-        color: #101a3a; -webkit-tap-highlight-color: transparent; user-select: none;
+        color: #fff; -webkit-tap-highlight-color: transparent; user-select: none;
+        background:
+          radial-gradient(58% 42% at 50% 42%, rgba(168, 85, 247, 0.28) 0%, rgba(168, 85, 247, 0) 70%),
+          radial-gradient(38% 30% at 50% 40%, rgba(250, 204, 21, 0.16) 0%, rgba(250, 204, 21, 0) 72%),
+          linear-gradient(180deg, #12062b 0%, #0a0419 55%, #050210 100%);
       }
-      html[data-skin='night'] .ag-splash {
-        background: linear-gradient(180deg, #0c0620 0%, #07030f 58%, #040208 100%);
-        color: #fff;
+      /* the starfield */
+      .ag-splash::before {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background:
+          radial-gradient(1.3px 1.3px at 18% 24%, rgba(255, 255, 255, 0.75), transparent),
+          radial-gradient(1px 1px at 62% 14%, rgba(255, 255, 255, 0.5), transparent),
+          radial-gradient(1.5px 1.5px at 82% 32%, rgba(250, 204, 21, 0.6), transparent),
+          radial-gradient(1px 1px at 34% 68%, rgba(255, 255, 255, 0.4), transparent),
+          radial-gradient(1.4px 1.4px at 74% 74%, rgba(196, 181, 253, 0.6), transparent),
+          radial-gradient(1px 1px at 8% 52%, rgba(255, 255, 255, 0.35), transparent);
       }
-      html[data-skin='day'] .ag-splash__bar { background: rgba(16, 26, 58, 0.1); }
-      html[data-skin='day'] .ag-splash__foot { color: rgba(16, 26, 58, 0.48); }
       .ag-splash__stack { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; }
       .ag-splash__logo {
-        display: block; width: min(60vw, 15.5rem); height: auto; margin-bottom: 1.6rem;
+        display: block; width: min(56vw, 14rem); height: auto; margin-bottom: 1.6rem;
+        filter: drop-shadow(0 0 26px rgba(250, 204, 21, 0.34)) drop-shadow(0 10px 26px rgba(0, 0, 0, 0.5));
         animation: ag-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       .ag-splash__tag {
@@ -115,7 +128,7 @@
     <div id="root">
       <div class="ag-splash" role="status" aria-label="Loading Absolute Genesis">
         <div class="ag-splash__stack">
-          <img class="ag-splash__logo" src="/brand/ag-logo.webp" alt="Absolute Genesis" width="616" height="629" fetchpriority="high" draggable="false" />
+          <img class="ag-splash__logo" src="/brand/ag-sigil.svg" alt="Absolute Genesis" width="120" height="120" fetchpriority="high" draggable="false" />
           <p class="ag-splash__tag">A completely new beginning</p>
           <div class="ag-splash__bar"><span></span></div>
         </div>

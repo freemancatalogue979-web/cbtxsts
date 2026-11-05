@@ -27,8 +27,8 @@
       "label": "Absolute Genesis on desktop"
     }
   ],
-  "background_color": "#eaf4ff",
-  "theme_color": "#eaf4ff",
+  "background_color": "#12062b",
+  "theme_color": "#12062b",
   "lang": "en-NG",
   "dir": "ltr",
   "categories": [
@@ -37,6 +37,12 @@
   ],
   "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "/brand/ag-sigil.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/brand/ag-icon-192.png",
       "sizes": "192x192",
