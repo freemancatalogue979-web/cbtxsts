@@ -118,7 +118,7 @@ export default function ProfilePanel({
   const [mode, setMode] = useState<ModeName>(() => currentMode());
   const [font, setFont] = useState<FontName>(() => currentFont());
   /* Whether the licensed Arsenica Sans webfont is really on this device. */
-  const arsenicaInstalled = useArsenicaSans();
+  const arsenicaStatus = useArsenicaSans();
   const [mascot, setMascotName] = useState<MascotName>(() => currentMascot());
   const [sound, setSound] = useState(() => sfx.isEnabled());
   const [musicEnabled, setMusicEnabled] = useState(() => music.isEnabled());
@@ -917,7 +917,7 @@ export default function ProfilePanel({
                      real thing when the webfont is installed on this device, so
                      the row says which of the two you are looking at. */
                   const licensed = option.id === 'arsenica-sans';
-                  const installed = !licensed || arsenicaInstalled === true;
+                  const installed = !licensed || arsenicaStatus === 'ready';
                   return (
                     <button
                       key={option.id}
@@ -935,7 +935,11 @@ export default function ProfilePanel({
                         <span className="block text-[0.78rem] font-extrabold text-mist-100">{option.name}</span>
                         {licensed && !installed ? (
                           <span className="block text-[0.66rem] font-semibold text-gold-300">
-                            {arsenicaInstalled === null ? 'Checking for the licensed webfont…' : 'Webfont not installed — showing Space Grotesk'}
+                            {arsenicaStatus === 'checking'
+                              ? 'Checking for the licensed webfont…'
+                              : arsenicaStatus === 'unreadable'
+                                ? 'A file was found but the browser could not read it as a font'
+                                : 'Webfont not installed — showing Space Grotesk'}
                           </span>
                         ) : (
                           <OptionBlurb short={option.short} blurb={option.blurb} />

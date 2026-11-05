@@ -29,6 +29,23 @@ let enabled = typeof window !== 'undefined' && soundOn();
 let noiseBuffer: AudioBuffer | null = null;
 let unlocked = false;
 
+/* When the player last touched the page. Chrome only lets an AudioContext
+   resume from inside a user gesture, so a sound triggered by a socket event
+   (a level-up pushed by the server, say) has to wait for the next tap. */
+let lastGesture = 0;
+
+if (typeof window !== 'undefined') {
+  const mark = () => {
+    lastGesture = Date.now();
+  };
+  for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+    window.addEventListener(type, mark, {capture: true, passive: true});
+  }
+}
+
+/** A gesture counts for a moment after it happens. */
+const JUST_GESTURED_MS = 1200;
+
 let lastClickTime = 0;
 const CLICK_COOLDOWN_MS = 38;
 
@@ -43,8 +60,33 @@ function ensure(): AudioContext | null {
     master.gain.value = 0.38;
     master.connect(ctx.destination);
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (ctx.state === 'suspended') resumeWhenAllowed(ctx);
   return ctx;
+}
+
+/**
+ * Resume a suspended context.
+ *
+ * Asking outside a user gesture makes the browser reject the promise with
+ * "The AudioContext was not allowed to start", which surfaces as an unhandled
+ * rejection in the console. So: resume now if the player has just touched the
+ * page, otherwise wait for the next tap.
+ */
+function resumeWhenAllowed(c: AudioContext): void {
+  if (c.state !== 'suspended') return;
+  if (Date.now() - lastGesture < JUST_GESTURED_MS) {
+    void c.resume().catch(() => {});
+    return;
+  }
+  const wait = () => {
+    window.removeEventListener('pointerdown', wait, true);
+    window.removeEventListener('keydown', wait, true);
+    window.removeEventListener('touchstart', wait, true);
+    void c.resume().catch(() => {});
+  };
+  window.addEventListener('pointerdown', wait, true);
+  window.addEventListener('keydown', wait, true);
+  window.addEventListener('touchstart', wait, true);
 }
 
 function tone(

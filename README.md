@@ -701,14 +701,28 @@ available under **Profile → Font**, and existing explicit font choices remain 
 Zetafonts), so its files are not redistributed with this repository — you need your own
 licence. The app is wired to pick them up the moment they are on the device:
 
-1. Download the webfont from your licence (the **WOFF2** variable font is ideal).
-2. Copy it to `frontend/public/fonts/arsenica-sans.woff2` (a `.woff` beside it also works).
+1. Buy the **web licence** from [Zetafonts](https://www.zetafonts.com/arsenica-sans) or
+   [MyFonts](https://www.myfonts.com/collections/arsenica-font-zetafonts) — perpetual, one
+   domain, WOFF2 and WOFF included. The free trial cut is personal, non-commercial use
+   only, and must not ship.
+2. Copy the file to `frontend/public/fonts/arsenica-sans.woff2` (`.woff`, `.ttf` and `.otf`
+   are accepted too — the format is read from the file itself).
 3. Restart the dev server. No rebuild, no code change.
 
-`frontend/src/lib/fonts.ts` probes for that file before registering the face, so a device
-**without** the licensed files falls through to the bundled Space Grotesk and never logs a
-404. **Profile → Font** states which of the two you are actually looking at instead of
-pretending. The family name is listed first in the stack on purpose: a copy installed on your
+`frontend/src/lib/fonts.ts` looks for that file at boot and **reads its first four bytes**
+before the browser ever sees it, so:
+
+* a device **with** the licensed files renders real Arsenica Sans;
+* a device **without** them falls through to the bundled Space Grotesk and logs nothing;
+* a server that answers a missing font with the app's HTML (an SPA fallback does exactly
+  that) is caught — the bytes are not a font, so the browser is never asked to decode them
+  and never shouts "OTS parsing error: invalid sfntVersion" at the console;
+* the **format is taken from the file, not from its name**, so a WOFF saved as `.woff2` — or
+  a TTF, which is what the free trial cut ships as — still loads.
+
+**Profile → Font** states which of the two you are actually looking at instead of
+pretending, and says "a file was found but the browser could not read it" when the bytes are
+wrong. The family name is listed first in the stack on purpose: a copy installed on your
 own machine is used too, so installing the font locally is enough to preview it.
 
 No different font is renamed to impersonate Arsenica.

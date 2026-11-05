@@ -186,8 +186,28 @@ export class LiveSocket {
     this.clearHeartbeat();
     this.rooms.clear();
     this.handlers.clear();
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    if (socket) {
+      if (socket.readyState === WebSocket.CONNECTING) {
+        /* Closing a socket that is still connecting makes the browser log
+           "WebSocket is closed before the connection is established". Let it
+           finish connecting and close it then — quietly, and without a
+           reconnect queued behind it. */
+        socket.onopen = () => {
+          try {
+            socket.close();
+          } catch {
+            /* already gone */
+          }
+        };
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+      } else {
+        socket.close();
+      }
+    }
     this.options.onStatus?.('closed');
   }
 }
