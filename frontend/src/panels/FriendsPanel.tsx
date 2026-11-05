@@ -1,3 +1,4 @@
+import CountryFlag from '../components/CountryFlag';
 /**
  * Friends tab — your circle, their live status, and a real chat.
  *
@@ -697,6 +698,7 @@ export default function FriendsPanel({
                       menuWidth={210}
                       hint={`Hold ${row.name.split(' ')[0]} for options`}
                       actions={[
+                        {key: 'profile', label: 'View profile', icon: <Users className="size-4" />, tone: 'accent', onAction: () => openPlayer(row.id)},
                         {
                           key: 'chat',
                           label: 'Open chat',
@@ -713,6 +715,7 @@ export default function FriendsPanel({
                         },
                       ]}
                     >
+                      <div className="flex min-w-0 items-center">
                       <button
                         type="button"
                         onClick={() => openThread(row)}
@@ -720,7 +723,7 @@ export default function FriendsPanel({
                       >
                         <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={36} online={row.online} photo={{id: row.id, has: row.has_photo}} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[0.84rem] font-extrabold text-mist-100">{row.name}</span>
+                          <span className="block truncate text-[0.84rem] font-extrabold text-mist-100"><CountryFlag code={row.country} /> {row.name}</span>
                           <span className="block truncate text-[0.66rem] font-bold text-mist-500">
                             {row.status_text || (row.online ? 'Online now' : `Offline · Lv ${row.level} ${row.title}`)}
                           </span>
@@ -732,6 +735,8 @@ export default function FriendsPanel({
                         )}
                         <MessageCircle className="size-4 shrink-0 text-mist-600" />
                       </button>
+                      <button type="button" aria-label={`View ${row.name}'s profile`} title="View player profile" onClick={() => openPlayer(row.id)} className="mr-2 grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-nova-300"><Users className="size-4" /></button>
+                      </div>
                     </Holdable>
                   ))
                 )}
@@ -794,7 +799,7 @@ export default function FriendsPanel({
                 <Avatar name={selected.name} hue={selected.avatar_hue} initials={selected.initials} size={34} online={selected.online} photo={{id: selected.id, has: selected.has_photo}} />
                 <span className="min-w-0 flex-1">
                   <button type="button" className="block max-w-full truncate text-left text-[0.86rem] font-extrabold text-mist-50 hover:text-nova-200" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: selected.id}}))}>
-                    {selected.flag || '🌍'} {selected.name}
+                    <CountryFlag code={selected.country} /> {selected.name}
                   </button>
                   <span className="block text-[0.64rem] font-bold text-mist-500">
                     {selected.online ? 'Online now' : `Lv ${selected.level} ${selected.title}`}

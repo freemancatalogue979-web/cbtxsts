@@ -1,3 +1,4 @@
+import CountryFlag from '../components/CountryFlag';
 /** Ranks tab: global / weekly / friends / duel leaderboards with a live podium. */
 import {BarChart3, Crown, Flame, Globe, HandHelping, Medal, Swords, Trophy, Users, Zap} from 'lucide-react';
 import {motion} from 'motion/react';
@@ -55,11 +56,11 @@ function Podium({rows, unit}: {rows: LeaderboardRow[]; unit: string}) {
             transition={{delay: index * 0.08}}
             className="flex w-[5.5rem] flex-col items-center sm:w-32"
           >
-            <div className="relative">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ag:player', {detail: {id: row.id}}))} aria-label={`View ${row.name}'s profile`} className="relative">
               <Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={first ? firstFace : otherFace} ring photo={{id: row.id, has: row.has_photo}} cosmetics={row.cosmetics} />
               {first && <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-gold-400 animate-float sm:-top-5"><Crown className="size-5 sm:size-6" /></span>}
-            </div>
-            <p className="mt-1.5 w-full truncate text-center text-[0.74rem] font-extrabold text-mist-100 sm:mt-2 sm:text-[0.8rem]">{row.name.split(' ')[0]}</p>
+            </button>
+            <p className="mt-1.5 w-full truncate text-center text-[0.74rem] font-extrabold text-mist-100 sm:mt-2 sm:text-[0.8rem]"><CountryFlag code={row.country} /> {row.name.split(' ')[0]}</p>
             <p className="truncate text-[0.66rem] font-bold tabular text-nova-300 sm:text-[0.7rem]">
               {formatNumber(row.value)} <span className="text-mist-500">{unit.split(' ')[0]}</span>
             </p>
@@ -105,7 +106,7 @@ function RankRow({row, unit, me}: {row: LeaderboardRow; unit: string; me?: boole
       <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ag:player", {detail: {id: row.id}}))} className="shrink-0" aria-label={`Open ${row.name}`}><Avatar name={row.name} hue={row.avatar_hue} initials={row.initials} size={face} photo={{id: row.id, has: row.has_photo}} cosmetics={row.cosmetics} /></button>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.82rem] font-extrabold text-mist-100 sm:text-[0.86rem]">
- {row.flag || '🌍'} {row.name} {me && <span className="ml-1 text-[0.66rem] font-black tracking-wider text-nova-300">You</span>}
+ <CountryFlag code={row.country} /> {row.name} {me && <span className="ml-1 text-[0.66rem] font-black tracking-wider text-nova-300">You</span>}
         </p>
         <p className="flex items-center gap-1.5 truncate text-[0.68rem] font-semibold text-mist-500 sm:gap-2 sm:text-[0.72rem]">
           <span>Lv {row.level}</span>

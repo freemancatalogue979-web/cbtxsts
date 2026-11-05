@@ -86,3 +86,32 @@ containment at four widths in both skins, reduced/stored motion settings, and di
 Bronze/Silver/Gold/Platinum metal crests with collision-free SVG gradient IDs. This audit,
 the archive and chat/profile browser audits, typecheck and production build passed.
 Arsenica Sans still requires the actual licensed font binary; no font was impersonated.
+
+## Country, dossier and World Map follow-up
+
+- Replaced emoji-based profile/friend/leaderboard flags with 249 bundled SVG flags
+  from `flag-icons` 7.6.0 (MIT; licence included). The country picker is searchable,
+  displays real flags and persists to the account. The API normalizes known ISO
+  codes and rejects invalid ones rather than silently saving unusable flags.
+- Added visible friend profile controls, podium profile access and a full-player
+  profile action from the group-specific dossier. The public dossier has country
+  identity and shortcuts to statistics, achievements and highlights.
+- Added moving light trails and luminous orbs above wallpaper/photo layers. Stored
+  motion and OS reduced-motion settings still stop all layers.
+- World Map now uses biome illustrations/vector icons and the player's actual level
+  progress rather than `xp % 1000`. Existing nodes, mastery, bosses and rewards are
+  preserved. Direct hash navigation now resolves the requested screen instead of
+  wrongly falling back to Home; new navigation resets the old page scroll position.
+- Fixed touch pointer capture on interactive children of hold menus, preserving both
+  normal taps (open profile/chat) and long-press actions.
+
+Seven backend regressions now include ISO validation/persistence. The additional
+`npm run audit:country-world` covers real touch profile/chat/group-dossier access,
+country search/save/reload, SVG loading, invalid-country rejection, dossier section
+navigation, World Map course switching/location dialogs and responsive day/night
+containment. This is a verified UI pass, not a claim that every historical screenshot
+or unavailable source implementation has been recovered.
+
+The supplied Zetafonts URL was checked: it is the correct family/licensing page, not
+an uploaded webfont package. Actual Arsenica Sans embedding remains blocked until the
+licensed font files are supplied. The publisher's specimen assets were not scraped.

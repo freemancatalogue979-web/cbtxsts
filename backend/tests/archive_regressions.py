@@ -175,6 +175,20 @@ class ArchiveRegressions(unittest.TestCase):
         upload_banner(PhotoIn(image=image), self.db, player)
         self.assertFalse(remove_banner(self.db, player)["has_banner"])
 
+    def test_country_codes_normalize_validate_and_round_trip(self):
+        from pydantic import ValidationError
+        from app.schemas import ProfileUpdateIn
+        from app.routers.auth import update_me
+        from app.countries import COUNTRY_CODES
+        from app.serializers import student_public
+        self.assertEqual(len(COUNTRY_CODES), 249)
+        for value in ["ng", "JP", "br", "FR", ""]:
+            update_me(ProfileUpdateIn(country=value), self.players[0], self.db)
+            self.assertEqual(student_public(self.players[0])["country"], value.upper())
+        for value in ["ZZ", "XX", "12", "<>"]:
+            with self.assertRaises(ValidationError):
+                ProfileUpdateIn(country=value)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

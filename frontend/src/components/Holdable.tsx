@@ -137,7 +137,8 @@ export function Holdable({
   const start = (event: React.PointerEvent) => {
     if (disabled || actions.length === 0) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
-    if (!allowOnButton && (event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+    const interactive = (event.target as HTMLElement).closest('button, a, input, textarea, select');
+    if (!allowOnButton && interactive) return;
 
     const point = {x: event.clientX, y: event.clientY};
     pointerKind.current =
@@ -146,10 +147,10 @@ export function Holdable({
     opened.current = false;
     origin.current = point;
     lastPoint.current = point;
-    // Capture touch only: capturing a mouse pointer retargets the browser's
-    // follow-up click to this wrapper, which prevents nested buttons (friend
-    // rows, reply controls) from receiving ordinary clicks in Chromium.
-    if (pointerKind.current === 'touch') {
+    // Capture non-interactive touch surfaces only. Capturing an interactive
+    // child retargets the follow-up click to this wrapper and breaks ordinary
+    // taps on friend rows/profile buttons, even when holding is allowed there.
+    if (pointerKind.current === 'touch' && !interactive) {
       activePointer.current = event.pointerId;
       try {
         (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);

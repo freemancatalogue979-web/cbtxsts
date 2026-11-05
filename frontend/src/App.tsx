@@ -226,6 +226,7 @@ export default function App() {
       }
     }
     setRoute(next);
+    window.scrollTo({top: 0, left: 0, behavior: 'instant'});
   }, []);
 
   /* The first entry is the page we opened on — never a push. */
@@ -234,12 +235,24 @@ export default function App() {
     const onPop = (event: PopStateEvent) => {
       depth.current = Math.max(0, depth.current - 1);
       const state = event.state as Route | null;
-      const next = state && typeof state === 'object' && 'view' in state ? state : {view: 'dashboard' as const, tab: 'play' as Tab};
+      const next = state && typeof state === 'object' && 'view' in state && routePath(state) === window.location.hash ? state : routeFromHash();
       if (next.view === 'dashboard') originTab.current = next.tab;
       setRoute(next);
     };
+    const onHash = () => {
+      const next = routeFromHash();
+      if (routePath(next) === routePath(routeRef.current)) return;
+      if (next.view === 'dashboard') originTab.current = next.tab;
+      window.history.replaceState(next, '', routePath(next));
+      setRoute(next);
+      window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+    };
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('hashchange', onHash);
+    };
   }, []);
 
   /* Back always means back: the previous screen when there is one, otherwise

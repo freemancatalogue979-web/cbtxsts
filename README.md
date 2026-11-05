@@ -673,6 +673,9 @@ the rendering fallback. No different font is renamed to impersonate Arsenica.
   group moderation retain their existing server permissions.
 - Rooms are automatically paced by a persisted server clock; reloading restores each
   player's private question and answer state. Team Ranked restores its own round feedback.
+- Country selection supports 249 searchable ISO countries/territories with bundled SVG flags (not OS-dependent emoji). Saved flags appear on public profiles, friends and leaderboards.
+- The public player dossier is reachable from friend profile buttons, chat identity, podiums and the in-group dossier. It includes country, ranks, statistics, achievements and history shortcuts.
+- World Map uses illustrated biome covers/vector symbols and actual level progress.
 - Lifetime rank plates use original bevelled metal crests for Bronze, Silver, Gold and Platinum; displayed ranks still come from the server.
 - The requested slingshot prototype is **not included**.
 

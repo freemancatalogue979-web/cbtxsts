@@ -742,6 +742,17 @@ class ProfileUpdateIn(BaseModel):
     profile_banner: Literal["auto", "space", "volcano", "forest", "ocean", "academy", "city"] | None = None
     profile_motion: bool | None = None
 
+    @field_validator("country")
+    @classmethod
+    def valid_country(cls, value: str | None) -> str | None:
+        from .countries import COUNTRY_CODES
+        if value is None:
+            return None
+        code = value.strip().upper()
+        if code and code not in COUNTRY_CODES:
+            raise ValueError("Choose a recognized country from the list.")
+        return code
+
 
 class RushItem(BaseModel):
     question_id: int

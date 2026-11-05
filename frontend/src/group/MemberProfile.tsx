@@ -8,6 +8,7 @@ import {ArrowLeft, MessageSquare, Swords, Trophy, UserPlus, Users} from 'lucide-
 import {useCallback, useEffect, useState} from 'react';
 import {Button, Card, Chip, ProgressBar, SectionHeading, Skeleton, StatTile} from '../components/ui';
 import {api} from '../lib/api';
+import {openPlayer} from '../components/PlayerCard';
 import {formatNumber, formatRelative} from '../lib/format';
 import {useGroup} from './context';
 import {MemberAvatar, RoleChip} from './bits';
@@ -55,8 +56,9 @@ export default function MemberProfile({studentId, onBack}: {studentId: number; o
 
   return (
     <div className="grid h-full min-h-0 gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" onClick={onBack} icon={<ArrowLeft className="size-4" />} label="Back" />
+        <Button size="sm" variant="ghost" onClick={() => openPlayer(studentId)} icon={<Users className="size-4" />}>View full player profile</Button>
       </div>
 
       {/* Identity card */}

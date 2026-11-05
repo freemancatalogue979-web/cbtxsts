@@ -44,7 +44,9 @@ import SeasonBadge from '../components/SeasonBadge';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
-import {COUNTRIES, countryFlag, openPlayer} from '../components/PlayerCard';
+import {openPlayer} from '../components/PlayerCard';
+import CountryFlag from '../components/CountryFlag';
+import {COUNTRIES, countryName} from '../lib/countries';
 import {formatDate, formatNumber, formatPhone, GRADE_STYLES, isValidPhone, normalizePhoneInput, TIER_STYLES} from '../lib/format';
 import {iconFor, TIER_GRADIENT} from '../lib/icons';
 import {staggerContainer, staggerItem} from '../lib/motion';
@@ -416,7 +418,7 @@ export default function ProfilePanel({
                   </div>
                 ) : (
                   <>
-                    <h1 className="text-xl leading-tight font-black tracking-tight text-mist-50 sm:text-2xl">{profile.name}</h1>
+                    <h1 className="text-xl leading-tight font-black tracking-tight text-mist-50 sm:text-2xl"><CountryFlag code={profile.country} /> {profile.name}</h1>
                     <div className="mt-3"><OverallRankPlate tier={profile.tier} level={progress.level} /></div>
                     <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-[0.78rem] font-semibold text-mist-400 sm:justify-start sm:gap-2 sm:text-[0.82rem]">
                       <span className="text-nova-300">
@@ -511,12 +513,13 @@ export default function ProfilePanel({
                 onChange={(event) => setCountry(event.target.value)}
                 className="w-full"
                 aria-label="Country flag"
+                countryFlags
               >
-                <option value="">🌍 Not set</option>
-                {COUNTRIES.map((row) => <option key={row.code} value={row.code}>{row.flag} {row.name}</option>)}
+                <option value="">Not set</option>
+                {COUNTRIES.map((row) => <option key={row.code} value={row.code}>{row.name}</option>)}
               </Select>
               <p className="mt-1 text-[0.7rem] font-semibold text-mist-500">
-                {country ? `Showing as ${countryFlag(country)}` : 'Choose a country to show a flag on your player card.'}
+                <span className="inline-flex items-center gap-1.5"><CountryFlag code={country} />{country ? countryName(country) : 'Choose a country to show a flag on your player card.'}</span>
               </p>
             </Field>
           </div>

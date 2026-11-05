@@ -1,3 +1,4 @@
+import CountryFlag from './CountryFlag';
 /** Shared UI primitives — buttons, cards, fields, progress, modals, skeletons. */
 import {AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, HelpCircle, Loader2, Minus, Phone, Plus, Search, X} from 'lucide-react';
 import {AnimatePresence, motion, useDragControls} from 'motion/react';
@@ -729,7 +730,7 @@ export function PhoneInput({
   const current = phoneCountry(country || 'NG');
   const prefix = (
     <>
-      {onCountry ? <span aria-hidden className="text-base leading-none">{current.flag}</span> : <Phone className="size-4 shrink-0 text-nova-400" />}
+      {onCountry ? <CountryFlag code={current.code} /> : <Phone className="size-4 shrink-0 text-nova-400" />}
       +{current.dial}
       {onCountry && <ChevronDown aria-hidden className="size-3.5 text-mist-500" />}
     </>
@@ -763,7 +764,7 @@ export function PhoneInput({
           <Modal open={open} onClose={() => setOpen(false)} title="Country code" subtitle="Where is your phone number from?" size="sm">
             <PickSearch value={query} onChange={setQuery} count={PHONE_COUNTRIES.length} />
             <PickList
-              options={PHONE_COUNTRIES.map((row) => ({value: row.code, label: `${row.flag}  ${row.name}`, hint: `+${row.dial}`}))}
+              options={PHONE_COUNTRIES.map((row) => ({value: row.code, label: `${row.code} · ${row.name}`, hint: `+${row.dial}`}))}
               isOn={(v) => v === current.code}
               onPick={(o) => { onCountry(o.value); setOpen(false); }}
               query={query}
@@ -798,7 +799,7 @@ function optionsFrom(children: ReactNode, group?: string, out: PickOption[] = []
 }
 
 /** The designed list shown inside the picker sheet (single or multi). */
-function PickList({options, isOn, onPick, multi, query}: {options: PickOption[]; isOn: (v: string) => boolean; onPick: (o: PickOption) => void; multi?: boolean; query: string}) {
+function PickList({options, isOn, onPick, multi, query, countryFlags}: {options: PickOption[]; isOn: (v: string) => boolean; onPick: (o: PickOption) => void; multi?: boolean; query: string; countryFlags?: boolean}) {
   const needle = query.trim().toLowerCase();
   const shown = needle ? options.filter((o) => `${o.label} ${o.hint ?? ''} ${o.group ?? ''}`.toLowerCase().includes(needle)) : options;
   const listRef = useRef<HTMLDivElement>(null);
@@ -819,6 +820,7 @@ function PickList({options, isOn, onPick, multi, query}: {options: PickOption[];
             <button
               type="button"
               role="option"
+              aria-label={countryFlags ? o.label : undefined}
               aria-selected={on}
               data-on={on}
               disabled={o.disabled}
@@ -827,6 +829,7 @@ function PickList({options, isOn, onPick, multi, query}: {options: PickOption[];
                 on ? 'border-nova-400/45 bg-nova-500/[0.13]' : 'border-white/6 bg-white/[0.025] hover:border-white/14 hover:bg-white/[0.05]'
               }`}
             >
+              {countryFlags && <CountryFlag code={o.value} />}
               <span className="min-w-0 flex-1">
                 <span className={`block text-[0.9rem] leading-snug font-semibold [overflow-wrap:anywhere] ${on ? 'text-mist-50' : 'text-mist-100'}`}>{o.label}</span>
                 {o.hint && <span className="mt-0.5 block text-[0.72rem] font-medium text-mist-400">{o.hint}</span>}
@@ -881,7 +884,8 @@ export function Select({
   id,
   name,
   'aria-label': ariaLabel,
-}: SelectHTMLAttributes<HTMLSelectElement> & {label?: string}) {
+  countryFlags = false,
+}: SelectHTMLAttributes<HTMLSelectElement> & {label?: string; countryFlags?: boolean}) {
   const options = useMemo(() => optionsFrom(children), [children]);
   const [inner, setInner] = useState(String(defaultValue ?? options[0]?.value ?? ''));
   const current = value !== undefined ? String(value) : inner;
@@ -907,6 +911,7 @@ export function Select({
         onClick={() => { setQuery(''); setOpen(true); }}
         className={`${className.includes('pro-input') ? '' : CONTROL} ag-picker relative flex items-center gap-2 !pr-10 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
+        {countryFlags && <CountryFlag code={current} />}
         <span className={`min-w-0 flex-1 truncate ${chosen ? '' : 'text-mist-500'}`}>{chosen?.label ?? 'Choose…'}</span>
         <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-mist-400" />
       </button>
@@ -914,7 +919,7 @@ export function Select({
       {portal(
         <Modal open={open} onClose={() => setOpen(false)} title={heading} subtitle={options.length > 1 ? `${options.length} options` : undefined} size="sm">
           {options.length > 8 && <PickSearch value={query} onChange={setQuery} count={options.length} />}
-          <PickList options={options} isOn={(v) => v === current} onPick={pick} query={query} />
+          <PickList options={options} isOn={(v) => v === current} onPick={pick} query={query} countryFlags={countryFlags} />
         </Modal>,
       )}
     </>

@@ -15,7 +15,8 @@
     "check:fonts": "node scripts/font-check.mjs",
     "audit:archive": "node scripts/archive-audit.mjs",
     "audit:chat-profile": "node scripts/chat-profile-audit.mjs",
-    "audit:profile-art": "node scripts/profile-art-audit.mjs"
+    "audit:profile-art": "node scripts/profile-art-audit.mjs",
+    "audit:country-world": "node scripts/country-world-audit.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

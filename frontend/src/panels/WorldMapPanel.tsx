@@ -7,6 +7,7 @@
  */
 import {
   BookOpen,
+  Waves, Snowflake, TreePine, Landmark, Mountain, Orbit, CircuitBoard,
   Brain,
   Check,
   ChevronRight,
@@ -44,12 +45,26 @@ import {
 import SeasonBadge from '../components/SeasonBadge';
 import DigitalEvolution from '../components/DigitalEvolution';
 import Scenery from '../components/Scenery';
+import ProfileScenery from '../components/ProfileScenery';
+import CountryFlag from '../components/CountryFlag';
+import {openPlayer} from '../components/PlayerCard';
 import {api} from '../lib/api';
 import {formatNumber} from '../lib/format';
 import {staggerContainer, staggerItem} from '../lib/motion';
 import {sfx} from '../lib/sfx';
 import {useSession} from '../store/session';
 import type {MapNode, QuestRow, Quiz, WorldMap, WorldRow} from '../lib/types';
+
+function biomeArt(world: WorldRow) {
+  const key=world.theme.key;
+  if (key.includes('ocean')) return {scene:'ocean', Icon:Waves};
+  if (key.includes('frozen')) return {scene:'space', Icon:Snowflake};
+  if (key.includes('forest') || key.includes('jungle') || key.includes('grove')) return {scene:'forest', Icon:TreePine};
+  if (key.includes('ancient')) return {scene:'academy', Icon:Landmark};
+  if (key.includes('desert')) return {scene:'volcano', Icon:Mountain};
+  if (key.includes('nexus')) return {scene:'city', Icon:CircuitBoard};
+  return {scene:'space', Icon:Orbit};
+}
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -418,7 +433,9 @@ export default function WorldMapPanel({
     );
   }
 
-  const levelPercent = data.player.xp % 1000 ? (data.player.xp % 1000) / 10 : 0;
+  const levelPercent = profile?.progress.percent ?? 0;
+  const art = biomeArt(world);
+  const BiomeIcon = art.Icon;
   const bossOpen = world.boss?.status === 'active';
   const cleared = world.nodes.filter((n) => n.state === 'mastered').length;
 
@@ -426,6 +443,7 @@ export default function WorldMapPanel({
     <div className="wm-root min-w-0 space-y-4 sm:space-y-5">
       {/* ------------------------------------------------------- expedition HUD */}
       <section className="wm-hero relative overflow-hidden">
+        <div className="wm-cinematic-cover" aria-hidden="true"><ProfileScenery banner={art.scene} /></div>
         <div className="wm-hero-aurora pointer-events-none absolute inset-0" aria-hidden />
         <Scenery layer="map" className="opacity-50" />
         <div className="relative p-4 sm:p-5">
@@ -454,9 +472,9 @@ export default function WorldMapPanel({
           </div>
 
           <div className="mt-4 flex min-w-0 items-center gap-3">
-            <Avatar name={profile?.name ?? 'Player'} hue={profile?.avatar_hue} initials={profile?.initials} size={48} ring />
+            <button type="button" onClick={() => profile && openPlayer(profile.id)} aria-label="View your player profile"><Avatar name={profile?.name ?? 'Player'} hue={profile?.avatar_hue} initials={profile?.initials} photo={{id: profile?.id ?? 0, has: profile?.has_photo}} size={48} ring /></button>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[0.95rem] font-extrabold text-mist-50">{profile?.name ?? 'Challenger'}</p>
+              <p className="truncate text-[0.95rem] font-extrabold text-mist-50"><CountryFlag code={profile?.country} /> {profile?.name ?? 'Challenger'}</p>
               <p className="text-[0.68rem] font-bold text-mist-400">
                 Lv {data.player.level} · {data.player.title}
               </p>
@@ -529,6 +547,8 @@ export default function WorldMapPanel({
         <div className="no-scrollbar -mx-1 flex min-w-0 gap-2.5 overflow-x-auto px-1 pb-1">
           {data.worlds.map((row) => {
             const active = row.course_id === world.course_id;
+            const rowArt = biomeArt(row);
+            const RowIcon = rowArt.Icon;
             return (
               <button
                 key={row.course_id}
@@ -537,9 +557,11 @@ export default function WorldMapPanel({
                   sfx.play('tap');
                   setWorldId(row.course_id);
                 }}
-                className={`wm-biome shrink-0 ${active ? 'wm-biome-active' : ''}`}
+                aria-pressed={active}
+                className={`wm-biome wm-biome-illustrated shrink-0 ${active ? 'wm-biome-active' : ''}`}
               >
-                <span className="text-[1.35rem] leading-none">{row.theme.emoji}</span>
+                <img className="wm-biome-thumbnail" src={`/profile-scenes/${rowArt.scene}-thumb.webp`} alt="" loading="lazy" />
+                <span className="wm-biome-symbol"><RowIcon className="size-5" /></span>
                 <span className="min-w-0">
                   <span className="block truncate text-[0.78rem] font-extrabold text-mist-100">{row.code}</span>
                   <span className="block truncate text-[0.62rem] font-bold text-mist-400">{row.theme.label}</span>
@@ -563,13 +585,14 @@ export default function WorldMapPanel({
         <div
           className={`pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b ${world.theme.sky ?? 'from-nova-500/30'} to-transparent`}
         />
+        <div className="wm-cinematic-cover wm-cinematic-path" aria-hidden="true"><ProfileScenery banner={art.scene} /></div>
         <div className="wm-path-stars pointer-events-none absolute inset-0 opacity-40" aria-hidden />
         <Scenery layer="map" />
 
         <div className="relative">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/8 bg-black/25 px-4 py-3 backdrop-blur-sm">
             <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-black/40 bg-gradient-to-br from-white/15 to-white/5 text-[1.35rem] shadow-[inset_0_2px_0_rgba(255,255,255,0.25)]">
-              {world.theme.emoji}
+              <BiomeIcon className="size-6" />
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-[1.05rem] font-extrabold text-mist-50 sm:text-[1.15rem]">{world.title}</h2>

@@ -13,29 +13,9 @@ import RankedBadge from './RankedBadge';
 import SeasonBadge from './SeasonBadge';
 import ProfileScenery, {OverallRankPlate, prestigeFor} from './ProfileScenery';
 import {useSession} from '../store/session';
+import CountryFlag from './CountryFlag';
+import {countryName} from '../lib/countries';
 import type {PlayerSummary, PublicAchievement, PublicPlayerActivity} from '../lib/types';
-
-export const COUNTRIES: {code: string; name: string; flag: string}[] = [
-  {code: 'NG', name: 'Nigeria', flag: '🇳🇬'},
-  {code: 'GH', name: 'Ghana', flag: '🇬🇭'},
-  {code: 'KE', name: 'Kenya', flag: '🇰🇪'},
-  {code: 'ZA', name: 'South Africa', flag: '🇿🇦'},
-  {code: 'IN', name: 'India', flag: '🇮🇳'},
-  {code: 'PK', name: 'Pakistan', flag: '🇵🇰'},
-  {code: 'BD', name: 'Bangladesh', flag: '🇧🇩'},
-  {code: 'GB', name: 'United Kingdom', flag: '🇬🇧'},
-  {code: 'CA', name: 'Canada', flag: '🇨🇦'},
-  {code: 'US', name: 'United States', flag: '🇺🇸'},
-  {code: 'AU', name: 'Australia', flag: '🇦🇺'},
-];
-
-export function countryFlag(code?: string): string {
-  return COUNTRIES.find((row) => row.code === (code || '').toUpperCase())?.flag || '🌍';
-}
-
-export function countryName(code?: string): string {
-  return COUNTRIES.find((row) => row.code === (code || '').toUpperCase())?.name || 'No country set';
-}
 
 export function openPlayer(id: number) {
   window.dispatchEvent(new CustomEvent('ag:player', {detail: {id}}));
@@ -155,7 +135,6 @@ export default function PlayerCard({
     }
   };
 
-  const flag = player?.flag || countryFlag(player?.country);
   const isFriend = player?.friendship_status === 'accepted' || (player?.friendship_status == null && player?.is_friend === true);
   const incomingRequest = player?.friendship_status === 'pending' && player.direction === 'incoming';
   const outgoingRequest = player?.friendship_status === 'pending' && player.direction === 'outgoing';
@@ -192,7 +171,7 @@ export default function PlayerCard({
         >
           <ProfileScenery theme={cosmetics?.theme} level={player?.level} banner={player?.profile_banner} motion={player?.profile_motion} playerId={player?.id} hasImage={player?.has_banner} version={player?.banner_version} />
           <div className="profile-showcase-content p-4 sm:p-5">
-            {player && <p className="profile-prestige-label mb-3 text-[0.62rem] font-black uppercase tracking-[0.24em]" style={{color: prestige.color}}>{prestige.name} · Level {player.level}</p>}
+            {player && <div className="mb-3 flex items-center justify-between gap-2"><span className="text-[0.52rem] font-black uppercase tracking-[0.2em] text-mist-500">Player dossier</span><span className="profile-prestige-label text-[0.58rem] font-black uppercase tracking-[0.13em]" style={{color: prestige.color}}>{prestige.name} · Level {player.level}</span></div>}
             <header className="flex min-w-0 items-start gap-3">
               <Avatar
                 name={player?.name || 'Player'}
@@ -206,11 +185,11 @@ export default function PlayerCard({
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <h2 className="min-w-0 max-w-full break-words text-[1.05rem] font-black leading-tight text-mist-50 sm:text-xl">
-                    {flag} {player?.name || 'Loading profile…'}
+                    {player?.name || 'Loading profile…'}
                   </h2>
                   {player?.online && <Chip tone="mint" size="xs" dot>Online</Chip>}
                 </div>
-                <p className="mt-1 text-[0.72rem] font-semibold text-mist-400">{countryName(player?.country)}</p>
+                <p className="mt-1 flex items-center gap-1.5 text-[0.72rem] font-semibold text-mist-400"><CountryFlag code={player?.country} />{countryName(player?.country)}</p>
                 {player?.status_text && <p className="mt-1 break-words text-[0.74rem] font-medium text-mist-300">{player.status_text}</p>}
                 {equippedTitle && <Chip className="mt-1.5" tone="gold" size="xs" icon={<Star className="size-3" />}>{equippedTitle}</Chip>}
               </div>
@@ -220,6 +199,14 @@ export default function PlayerCard({
             </header>
 
             {player?.bio && <p className="mt-3 break-words text-[0.78rem] font-medium leading-relaxed text-mist-300">{player.bio}</p>}
+
+            <nav aria-label="Player profile sections" className="profile-dossier-tabs">
+              {[['stats','Overview'],['badges','Achievements'],['history','Highlights']].map(([section,label])=><button key={section} type="button" disabled={!player} aria-controls={`player-${playerId}-${section}`} onClick={()=>{
+                const target=document.getElementById(`player-${playerId}-${section}`);
+                target?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+                target?.focus({preventScroll:true});
+              }}>{label}</button>)}
+            </nav>
 
             <section aria-label="Equipped look" className="mt-3 flex flex-wrap items-center gap-1.5">
               <span className="mr-0.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-mist-500">Loadout</span>
@@ -262,7 +249,7 @@ export default function PlayerCard({
               )}
             </section>
 
-            <section className="mt-4" aria-label="Player statistics">
+            <section id={`player-${playerId}-stats`} tabIndex={-1} className="mt-4 scroll-mt-4" aria-label="Player statistics">
               <div className="mb-2 flex items-center gap-2">
                 <Target className="size-3.5 text-nova-400" />
                 <h3 className="text-[0.66rem] font-black uppercase tracking-[0.15em] text-mist-500">Arena record</h3>
@@ -286,7 +273,7 @@ export default function PlayerCard({
               </div>
             </section>
 
-            <section className="mt-4" aria-label="Achievements">
+            <section id={`player-${playerId}-badges`} tabIndex={-1} className="mt-4 scroll-mt-4" aria-label="Achievements">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Trophy className="size-3.5 text-gold-500" />
@@ -303,7 +290,7 @@ export default function PlayerCard({
               )}
             </section>
 
-            <section className="mt-4" aria-label="Recent public history">
+            <section id={`player-${playerId}-history`} tabIndex={-1} className="mt-4 scroll-mt-4" aria-label="Recent public history">
               <div className="mb-2 flex items-center gap-2">
                 <BookOpen className="size-3.5 text-pulse-400" />
                 <h3 className="text-[0.66rem] font-black uppercase tracking-[0.15em] text-mist-500">Recent highlights</h3>

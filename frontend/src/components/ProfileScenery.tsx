@@ -140,6 +140,17 @@ export default function ProfileScenery({theme, level = 1, banner, motion = true,
         )}
         <path d="M0 308Q180 280 320 308T640 308V320H0Z" fill="#0c152a" opacity="0.65" />
       </svg>
+      {showArt && !preview && <svg className="profile-scene-animation" viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice" focusable="false">
+        <g fill="none" stroke={color} strokeLinecap="round">
+          <path className="profile-light-trail" d="M280 270Q600 250 550 40Q450-50 340 150" strokeWidth="1.5" strokeDasharray="35 500" />
+          <path className="profile-light-trail profile-light-trail-second" d="M330 310Q650 170 500 80Q390 10 310 170" strokeWidth="1" strokeDasharray="18 420" />
+        </g>
+        {[0,1,2,3,4,5].map(i=><g className="profile-orb-float" key={i} style={{animationDelay:`${i*-1.2}s`,transformOrigin:`${340+i*43}px ${50+(i*47)%190}px`}}>
+          <circle cx={340+i*43} cy={50+(i*47)%190} r={8+i%3*3} fill={color} opacity=".12" />
+          <circle cx={340+i*43} cy={50+(i*47)%190} r="2" fill="#fff4db" opacity=".85" />
+          <path d={`M${335+i*43} ${50+(i*47)%190}h10m-5-5v10`} stroke="#fff4db" strokeWidth=".6" opacity=".65" />
+        </g>)}
+      </svg>}
       <span className="profile-scene-sheen" />
     </div>
   );
