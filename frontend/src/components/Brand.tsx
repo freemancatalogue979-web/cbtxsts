@@ -1,18 +1,12 @@
-/** Absolute Genesis brand mark: the AG sigil — a violet shield, a gold star, a rising chevron. */
+/** Absolute Genesis brand: the official neon crown artwork. */
 import {useIsDesktop} from '../lib/viewport';
 import {GenesisCrest} from './Logo';
 import SkinToggle from './SkinToggle';
 import type React from 'react';
 
 /**
- * The Absolute Genesis crest — the sigil, drawn as vector.
- *
- * It used to be a raster with the wordmark baked into the artwork, which turned
- * to mush at the 40px it actually appears at in the header. Now it is drawn:
- * crisp at 16px, sharp at 512px, and readable on both skins.
- *
- * Pass a number for a fixed pixel size, or `size={null}` to size the crest with
- * responsive utility classes (used by the app header so it scales per breakpoint).
+ * The official neon crown logo. Pass a number for a fixed height, or
+ * `size={null}` to size the artwork with responsive utility classes.
  */
 export function LogoMark({size = 42, className = ''}: {size?: number | null; className?: string}) {
   return <GenesisCrest size={size} className={className} />;
@@ -32,9 +26,9 @@ export function Wordmark({
   const sizes: Record<'sm' | 'header' | 'brand' | 'md' | 'lg', {mark: number | null; markClass: string; tag: string}> = {
     sm: {mark: 46, markClass: '', tag: 'text-[0.5rem] sm:text-[0.6rem]'},
     // Bigger crest for the app header — grows with the viewport, never clipped.
-    header: {mark: null, markClass: 'h-11 w-11 sm:h-14 sm:w-14 lg:h-15 lg:w-15', tag: 'text-[0.6rem] sm:text-[0.66rem]'},
-    // The brand crest on the public pages: owns the top-left corner.
-    brand: {mark: null, markClass: 'h-13 w-13 sm:h-18 sm:w-18 lg:h-22 lg:w-22', tag: 'text-[0.6rem] sm:text-[0.7rem] lg:text-[0.78rem]'},
+    header: {mark: null, markClass: 'h-11 w-[4.125rem] sm:h-14 sm:w-[5.25rem] lg:h-15 lg:w-[5.625rem]', tag: 'text-[0.6rem] sm:text-[0.66rem]'},
+    // The full logo on public pages: no circular frame or duplicate wordmark.
+    brand: {mark: null, markClass: 'h-13 w-[4.875rem] sm:h-18 sm:w-[6.75rem] lg:h-22 lg:w-[8.25rem]', tag: 'text-[0.6rem] sm:text-[0.7rem] lg:text-[0.78rem]'},
     md: {mark: 52, markClass: '', tag: 'text-[0.62rem] sm:text-[0.66rem]'},
     lg: {mark: 88, markClass: '', tag: 'text-[0.7rem] sm:text-[0.78rem]'},
   };
@@ -47,12 +41,9 @@ export function Wordmark({
     // (the hero art carries no lettering). In-app headers stay clean on phones.
     if (size !== 'brand') return null;
     return (
-      <div className={`flex min-w-0 shrink items-center gap-2 ${className}`}>
-        <GenesisCrest size={36} />
-        <span className="min-w-0 leading-tight">
-          <span className="block truncate font-display text-[0.9rem] font-black tracking-[0.06em] text-mist-50">Absolute Genesis</span>
-          {tagline && <span className="block truncate text-[0.6rem] font-bold tracking-[0.08em] text-mist-500">A completely new beginning</span>}
-        </span>
+      <div className={`flex min-w-0 shrink items-center ${className}`}>
+        <GenesisCrest size={40} title="Absolute Genesis" />
+        {tagline && <span className="sr-only">A completely new beginning</span>}
       </div>
     );
   }
@@ -69,26 +60,14 @@ export function Wordmark({
   );
 }
 
-/**
- * The official brand lockup: crisp crest, two-tone ABSOLUTE GENESIS wordmark,
- * and a compact tagline. Pure markup; styles live in index.css (.agb-*).
- */
+/** The official artwork stands alone — no badge, ring or repeated wordmark. */
 export function BrandLockup({className = '', tagline = true}: {className?: string; tagline?: boolean}) {
   return (
-    <div className={`agb-lockup ${className}`} aria-label="Absolute Genesis">
-      <span className="agb-crest" aria-hidden="true">
-        <GenesisCrest size={null} className="h-full w-full" />
+    <div className={`agb-lockup ${className}`}>
+      <span className="agb-crest">
+        <GenesisCrest size={null} className="h-full w-full" title="Absolute Genesis" />
       </span>
-      <span className="agb-words">
-        <span className="agb-name">
-          Absolute <b>Genesis</b>
-        </span>
-        {tagline && (
-          <span className="agb-tag">
-            <i aria-hidden="true" />A completely new beginning
-          </span>
-        )}
-      </span>
+      {tagline && <span className="sr-only">A completely new beginning</span>}
     </div>
   );
 }

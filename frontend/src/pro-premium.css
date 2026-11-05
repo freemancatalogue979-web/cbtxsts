@@ -132,7 +132,7 @@ html[data-font='helvetica-oblique'] select {
     pointer-events: none;
   }
   .pro-topbar-inner { min-height: 70px; }
-  .pro-mobile-brand .pro-brand-mark { width: 36px; height: 36px; flex-basis: 36px; }
+  .pro-mobile-brand .pro-brand-mark { width: 48px; height: 32px; flex-basis: 48px; }
   .pro-context { position: relative; padding-left: 13px; }
   .pro-context::before {
     position: absolute;

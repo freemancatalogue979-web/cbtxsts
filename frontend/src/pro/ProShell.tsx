@@ -31,11 +31,10 @@ function Brand({compact = false}: {compact?: boolean}) {
   return (
     <div className="pro-brand flex min-w-0 items-center gap-2.5">
       <span className="pro-brand-mark" aria-hidden>
-        <img src="/brand/ag-icon-192.png" alt="" width={32} height={32} draggable={false} />
+        <img src="/brand/absolute-genesis-logo.webp" alt="" width={54} height={36} draggable={false} />
       </span>
       {!compact && (
         <div className="min-w-0 leading-tight">
-          <p className="pro-brand-name truncate">Absolute Genesis</p>
           <p className="pro-brand-edition"><Sparkles aria-hidden /> Pro workspace</p>
         </div>
       )}

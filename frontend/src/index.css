@@ -3575,59 +3575,9 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
   animation: agb-glint 5.5s ease-in-out infinite;
 }
 
-.agb-lockup { display: flex; align-items: center; gap: 0.6rem; min-width: 0; flex: 1 1 auto; }
-.agb-crest { position: relative; display: grid; place-items: center; width: 2.9rem; height: 2.9rem; flex-shrink: 0; }
-.agb-crest > * { position: relative; z-index: 2; width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28)); }
-.agb-words { display: grid; min-width: 0; gap: 0.12rem; }
-.agb-name {
-  font-family: var(--font-title);
-  font-style: normal;
-  font-weight: 800;
-  font-synthesis: none;
-  font-size: clamp(0.92rem, 0.7rem + 1.1vw, 1.55rem);
-  line-height: 1;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #fff;
-  background: linear-gradient(180deg, #ffffff 40%, #e4d7ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  padding-bottom: 0.04em;
-}
-.agb-name b {
-  font-weight: 800;
-  background: linear-gradient(180deg, #fff7d1 0%, #fcd34d 45%, #f59e0b 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.agb-tag {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  font-family: var(--font-label);
-  font-style: normal;
-  font-size: clamp(0.46rem, 0.4rem + 0.35vw, 0.66rem);
-  font-weight: 700;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgb(253 230 138 / 0.78);
-}
-.agb-tag > i {
-  flex-shrink: 0;
-  width: 1.1rem;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #facc15);
-  box-shadow: 0 0 6px #facc15;
-}
+.agb-lockup { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; }
+.agb-crest { display: block; width: 4.35rem; height: 2.9rem; flex-shrink: 0; }
+.agb-crest > img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 7px rgb(0 0 0 / 0.35)); }
 [data-skin='day'] .agb-bar {
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.97), rgb(247 250 255 / 0.96)) padding-box,
@@ -3637,19 +3587,6 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 [data-skin='day'] .agb-bar::before { opacity: 0.32; }
 [data-skin='day'] .agb-bar-glint { display: none; }
 [data-skin='day'] .agb-crest img { filter: drop-shadow(0 2px 4px rgb(16 26 58 / 0.18)); }
-[data-skin='day'] .agb-name {
-  background: none;
-  color: var(--color-mist-50);
-  -webkit-text-fill-color: currentColor;
-  filter: none;
-}
-[data-skin='day'] .agb-name b {
-  background: none;
-  color: #9a5b06;
-  -webkit-text-fill-color: currentColor;
-}
-[data-skin='day'] .agb-tag { color: var(--color-mist-500); }
-[data-skin='day'] .agb-tag > i { background: linear-gradient(90deg, transparent, #b45309); box-shadow: none; }
 .agb-actions { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; flex-shrink: 0; }
 /* Sign-in CTA inside the brand bar: gold-rimmed brand button with a shine sweep */
 @keyframes agb-shine { 0%, 60% { transform: translateX(-130%) skewX(-20deg); } 100% { transform: translateX(260%) skewX(-20deg); } }
@@ -3657,11 +3594,10 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 .agb-cta > .gbtn-face::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent); animation: agb-shine 3.8s ease-in-out infinite; pointer-events: none; }
 @media (min-width: 640px) {
   .agb-bar { gap: 0.9rem; padding: 0.55rem 0.8rem 0.55rem 0.9rem; border-radius: 1.6rem; }
-  .agb-crest { width: 3.6rem; height: 3.6rem; }
-  .agb-lockup { gap: 0.85rem; }
+  .agb-crest { width: 5.4rem; height: 3.6rem; }
   .agb-actions { gap: 0.55rem; }
 }
-@media (min-width: 1024px) { .agb-crest { width: 4.1rem; height: 4.1rem; } }
+@media (min-width: 1024px) { .agb-crest { width: 6.15rem; height: 4.1rem; } }
 @media (prefers-reduced-motion: reduce) { .agb-bar-glint::after, .agb-cta > .gbtn-face::after { animation: none; } }
 
 /* ---------------------------------------------------------------- wallet */
@@ -3695,21 +3631,14 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .wallet-seg[data-k='gems'] .wallet-ico svg { stroke: #164e63; }
 .wallet-div { width: 1px; height: 1.1rem; background: rgb(255 255 255 / 0.12); }
 [data-mode='pro'] .wallet-pill { background: var(--pro-elevated, #171a28); border-color: var(--pro-border, #292d40); box-shadow: none; }
-/* Phones: the full name + tagline must fit beside Install + Sign in. */
+/* Phones: keep the complete artwork beside the compact actions. */
 @media (max-width: 479px) {
   .agb-bar { gap: 0.45rem; padding-right: 0.45rem; }
-  .agb-crest { width: 2.6rem; height: 2.6rem; }
-  .agb-lockup { gap: 0.5rem; }
-  .agb-name { font-size: 0.8rem; letter-spacing: 0.015em; }
-  .agb-tag { font-size: 0.43rem; letter-spacing: 0.13em; gap: 0.25rem; }
-  .agb-tag > i { width: 0.55rem; }
+  .agb-crest { width: 3.9rem; height: 2.6rem; }
   .agb-actions { gap: 0.3rem; }
 }
 @media (max-width: 389px) {
-  .agb-crest { width: 2.35rem; height: 2.35rem; }
-  .agb-name { font-size: 0.72rem; letter-spacing: 0.01em; }
-  .agb-tag { font-size: 0.4rem; letter-spacing: 0.1em; }
-  .agb-tag > i { display: none; }
+  .agb-crest { width: 3.525rem; height: 2.35rem; }
 }
 
 /* ===== study hub / cbt ===== */
