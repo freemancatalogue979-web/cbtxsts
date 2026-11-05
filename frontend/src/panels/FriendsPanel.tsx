@@ -735,7 +735,10 @@ export default function FriendsPanel({
                         )}
                         <MessageCircle className="size-4 shrink-0 text-mist-600" />
                       </button>
-                      <button type="button" aria-label={`View ${row.name}'s profile`} title="View player profile" onClick={() => openPlayer(row.id)} className="mr-2 grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-nova-300"><Users className="size-4" /></button>
+                      {/* The row carries a profile button on its right edge; on
+                          desktop it steps aside to leave a lane for the hover
+                          handle, so the two never sit on top of each other. */}
+                      <button type="button" aria-label={`View ${row.name}'s profile`} title="View player profile" onClick={() => openPlayer(row.id)} className="mr-2 grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-nova-300 lg:mr-10"><Users className="size-4" /></button>
                       </div>
                     </Holdable>
                   ))

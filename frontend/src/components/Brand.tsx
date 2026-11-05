@@ -107,7 +107,7 @@ export function BrandBar({left, children, className = ''}: {left?: React.ReactNo
         <BrandLockup />
         {children && (
           <div className="agb-actions">
-            <SkinToggle className="hidden min-[340px]:inline-grid" />
+            <SkinToggle className="hidden min-[340px]:inline-flex" />
             {children}
           </div>
         )}

@@ -56,6 +56,7 @@ export function Holdable({
   desktopTrigger = true,
   allowOnButton = false,
   menuWidth,
+  triggerClassName = '',
 }: {
   actions: HoldAction[];
   children: ReactNode;
@@ -66,6 +67,12 @@ export function Holdable({
   desktopTrigger?: boolean;
   allowOnButton?: boolean;
   menuWidth?: number;
+  /**
+   * Extra classes for the desktop `⋯` handle — use it to park the handle
+   * clear of a control the row already carries (a profile button, a chip),
+   * so the two never sit on top of each other.
+   */
+  triggerClassName?: string;
 }) {
   const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
   const timer = useRef<number | null>(null);
@@ -269,7 +276,10 @@ export function Holdable({
             const rect = (event.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
             open({x: rect.left + rect.width / 2, y: rect.top + Math.min(28, rect.height / 2)});
           }}
-          className="absolute top-1/2 right-1 hidden size-7 -translate-y-1/2 place-items-center rounded-full border border-white/12 bg-ink-900/80 text-mist-500 opacity-0 transition-opacity hover:text-mist-100 group-hover/hold:opacity-100 lg:grid"
+          /* While the handle is invisible it must not swallow clicks: it sits
+             over the row, and a row can carry its own button on that edge.
+             `pointer-events` only comes back when the handle is on screen. */
+          className={`absolute top-1/2 right-1 hidden size-7 -translate-y-1/2 place-items-center rounded-full border border-white/12 bg-ink-900/80 text-mist-500 opacity-0 transition-opacity pointer-events-none hover:text-mist-100 group-hover/hold:pointer-events-auto group-hover/hold:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 lg:grid ${triggerClassName}`}
         >
           <MoreHorizontal className="size-3.5" />
         </button>

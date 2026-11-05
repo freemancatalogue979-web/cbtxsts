@@ -38,8 +38,8 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
   {
     id: 'arsenica-sans',
     name: 'Arsenica Sans',
-    blurb: 'Requested default. Bundled Arsenica Sans webfont files are pending; Space Grotesk is the temporary fallback.',
-    short: 'Requested default · font files pending.',
+    blurb: 'The licensed house face. Add your own webfont to public/fonts to switch it on — otherwise Space Grotesk renders it.',
+    short: 'The licensed house face.',
     sans: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
     display: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, sans-serif",
   },

@@ -234,7 +234,7 @@ function NoticeBell({className = ''}: {className?: string}) {
                             {typeof note.meta?.tab === 'string' && (
                               <button
                                 type="button"
-                                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-bold text-nova-300 hover:bg-white/8"
+                                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-bold text-nova-300 hover:bg-white/8 lg:mr-8"
                                 onClick={() => {
                                   /* Teacher Network notes deep-link (same contract as teach/ui goTo). */
                                   const meta = note.meta as {tab: string; view?: string; with?: number};
@@ -371,7 +371,6 @@ function AccountMenu({onSignOut, onProfile}: {onSignOut: () => void; onProfile: 
               ))}
             </div>
             <div className="mt-2 flex flex-col">
-              <SkinToggle row />
               <button
                 onClick={() => {
                   setOpen(false);
@@ -658,6 +657,8 @@ export function AppShell({
                 <AccountMenu onSignOut={onSignOut} onProfile={onProfile} />
               </>
             )}
+            {/* Day/night lives in the top bar, not buried in a menu. */}
+            <SkinToggle className="float-chip" />
           </div>
         </div>
       </header>

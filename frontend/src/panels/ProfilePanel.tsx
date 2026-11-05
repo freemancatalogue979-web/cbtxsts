@@ -42,6 +42,7 @@ import {titleOf, themeOf} from '../lib/cosmetics';
 import ProfileScenery, {OverallRankPlate, PROFILE_BANNERS} from '../components/ProfileScenery';
 import SeasonBadge from '../components/SeasonBadge';
 import {AchievementBadge} from '../components/Badge';
+import {useArsenicaSans} from '../lib/fonts';
 import InstallApp from '../components/InstallApp';
 import DigitalEvolution from '../components/DigitalEvolution';
 import {api} from '../lib/api';
@@ -116,6 +117,8 @@ export default function ProfilePanel({
   const [storage, setStorage] = useState(() => cacheStats());
   const [mode, setMode] = useState<ModeName>(() => currentMode());
   const [font, setFont] = useState<FontName>(() => currentFont());
+  /* Whether the licensed Arsenica Sans webfont is really on this device. */
+  const arsenicaInstalled = useArsenicaSans();
   const [mascot, setMascotName] = useState<MascotName>(() => currentMascot());
   const [sound, setSound] = useState(() => sfx.isEnabled());
   const [musicEnabled, setMusicEnabled] = useState(() => music.isEnabled());
@@ -894,26 +897,39 @@ export default function ProfilePanel({
             <div className="min-w-0">
  <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Font</p>
               <div className="mt-2 grid gap-1.5">
-                {FONTS.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => {
-                      setFont(option.id);
-                      applyFont(option.id);
-                      sfx.play('tap');
-                    }}
-                    className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors touch-manipulation ${
-                      font === option.id ? 'border-nova-400/50 bg-nova-500/12' : 'border-white/10 bg-white/[0.03]'
-                    }`}
-                  >
-                    <Type className="size-4 shrink-0 text-nova-300" />
-                    <span className="min-w-0 flex-1" style={{fontFamily: option.sans, fontStyle: option.style}}>
-                      <span className="block text-[0.78rem] font-extrabold text-mist-100">{option.name}</span>
-                      <OptionBlurb short={option.short} blurb={option.blurb} />
-                    </span>
-                    {font === option.id && <Check className="size-3.5 shrink-0 text-nova-300" />}
-                  </button>
-                ))}
+                {FONTS.map((option) => {
+                  /* Arsenica Sans is a licensed family: the app only renders the
+                     real thing when the webfont is installed on this device, so
+                     the row says which of the two you are looking at. */
+                  const licensed = option.id === 'arsenica-sans';
+                  const installed = !licensed || arsenicaInstalled === true;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        setFont(option.id);
+                        applyFont(option.id);
+                        sfx.play('tap');
+                      }}
+                      className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors touch-manipulation ${
+                        font === option.id ? 'border-nova-400/50 bg-nova-500/12' : 'border-white/10 bg-white/[0.03]'
+                      }`}
+                    >
+                      <Type className="size-4 shrink-0 text-nova-300" />
+                      <span className="min-w-0 flex-1" style={{fontFamily: option.sans, fontStyle: option.style}}>
+                        <span className="block text-[0.78rem] font-extrabold text-mist-100">{option.name}</span>
+                        {licensed && !installed ? (
+                          <span className="block text-[0.66rem] font-semibold text-gold-300">
+                            {arsenicaInstalled === null ? 'Checking for the licensed webfont…' : 'Webfont not installed — showing Space Grotesk'}
+                          </span>
+                        ) : (
+                          <OptionBlurb short={option.short} blurb={option.blurb} />
+                        )}
+                      </span>
+                      {font === option.id && <Check className="size-3.5 shrink-0 text-nova-300" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

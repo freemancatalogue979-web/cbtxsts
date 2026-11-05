@@ -656,11 +656,21 @@ The browser keeps only the session token; the database remains the source of tru
 The default font selection is **Arsenica Sans** on desktop, tablet and phone. It is also
 available under **Profile → Font**, and existing explicit font choices remain unchanged.
 
-**Bundling Arsenica Sans is still blocked on the real font files.** The previous
-installed-font-only behavior is not considered a completed implementation. Supply licensed
-WOFF2 regular/bold files or the variable font, with web-embedding permission, so they can
-be included in the frontend and loaded on a clean device. Until then, Space Grotesk remains
-the rendering fallback. No different font is renamed to impersonate Arsenica.
+**Arsenica Sans is a commercial family** (designed by Francesco Canovaro, published through
+Zetafonts), so its files are not redistributed with this repository — you need your own
+licence. The app is wired to pick them up the moment they are on the device:
+
+1. Download the webfont from your licence (the **WOFF2** variable font is ideal).
+2. Copy it to `frontend/public/fonts/arsenica-sans.woff2` (a `.woff` beside it also works).
+3. Restart the dev server. No rebuild, no code change.
+
+`frontend/src/lib/fonts.ts` probes for that file before registering the face, so a device
+**without** the licensed files falls through to the bundled Space Grotesk and never logs a
+404. **Profile → Font** states which of the two you are actually looking at instead of
+pretending. The family name is listed first in the stack on purpose: a copy installed on your
+own machine is used too, so installing the font locally is enough to preview it.
+
+No different font is renamed to impersonate Arsenica.
 
 ### Restored profile and chat features
 

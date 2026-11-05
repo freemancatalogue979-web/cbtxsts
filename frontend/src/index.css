@@ -2314,6 +2314,49 @@
   width: 100%;
 }
 
+/* ------------------------------------------------------------- skin toggle ---
+   One switch for day and night, in the header and on the public pages. The
+   knob springs between the sun and the moon; the page colours crossfade
+   behind it rather than snapping.
+
+   The colours here are literal, not theme tokens: the daylight skin rewrites
+   the gold steps to dark browns for text legibility on paper, which would
+   turn the sun into mud. A sun is gold in both skins. */
+.skin-toggle {
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.16);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 0 rgb(255 255 255 / 0.06);
+  transition: border-color 0.25s ease, background-color 0.4s ease;
+}
+[data-skin='day'] .skin-toggle {
+  background: rgb(15 23 52 / 0.05);
+  border-color: rgb(15 23 52 / 0.14);
+  box-shadow: inset 0 1px 2px rgb(15 23 52 / 0.1), 0 1px 0 rgb(255 255 255 / 0.75);
+}
+.skin-toggle:hover { border-color: rgb(240 164 19 / 0.55); }
+.skin-toggle__track {
+  background: linear-gradient(90deg, rgb(240 164 19 / 0.3), transparent 62%);
+  transition: background 0.4s ease;
+}
+.skin-toggle[data-mode='night'] .skin-toggle__track {
+  background: linear-gradient(270deg, rgb(168 85 247 / 0.34), transparent 62%);
+}
+.skin-toggle__knob {
+  background: linear-gradient(150deg, #ffe493, #f0a413);
+  color: #3b2300;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 -2px 4px -2px rgb(120 60 0 / 0.4), 0 3px 8px -3px rgb(0 0 0 / 0.55);
+  transition: background 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
+}
+.skin-toggle[data-mode='night'] .skin-toggle__knob {
+  background: linear-gradient(150deg, #f1e6ff, #a855f7);
+  color: #1b0b33;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 -2px 4px -2px rgb(40 10 70 / 0.5), 0 3px 8px -3px rgb(0 0 0 / 0.7);
+}
+/* The page itself crossfades when the skin flips. */
+body,
+main,
+header { transition: background-color 0.4s ease, color 0.4s ease; }
+
 /* --------------------------------------------------------------- badge kit ---
    One crest for every badge in the app: vector metal, a bevelled rim, a lit
    core and a ribbon across the base that carries the level. The art is SVG;
