@@ -6,10 +6,12 @@
     <!-- One fixed scale: the arena is drawn for the viewport it lands on. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#eaf4ff" />
+    <!-- The favicon stays the vector sigil: it is the one mark that has to
+         read at 16px. Everything else wears the Neon Crown. -->
     <link rel="icon" type="image/svg+xml" href="/brand/ag-sigil.svg" />
     <link rel="icon" type="image/png" sizes="96x96" href="/brand/ag-logo-96.png" />
-    <link rel="preload" as="image" href="/brand/ag-sigil.svg" type="image/svg+xml" fetchpriority="high" />
-    <link rel="apple-touch-icon" href="/brand/ag-apple-touch-180.png" />
+    <link rel="preload" as="image" href="/brand/ag-crown-lockup.webp" type="image/webp" fetchpriority="high" />
+    <link rel="apple-touch-icon" href="/brand/ag-crown-apple-touch-180.png" />
     <!-- Installable app: manifest + standalone look on iPhone/Android. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -22,7 +24,7 @@
       content="Absolute Genesis — a completely new beginning. Real-time computer-based testing and exam practice: timed CBT exams, study materials, an AI tutor, live 1v1 duels, XP, streaks, leaderboards and prizes."
     />
     <meta property="og:title" content="Absolute Genesis — A completely new beginning." />
-    <meta property="og:image" content="/brand/ag-logo-256.png" />
+    <meta property="og:image" content="/brand/ag-crown-og.jpg" />
     <meta property="og:description" content="Timed CBT exams, live duels with friends, XP, streaks, leaderboards and real prizes." />
     <meta property="og:type" content="website" />
     <script>
@@ -85,8 +87,8 @@
       }
       .ag-splash__stack { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; }
       .ag-splash__logo {
-        display: block; width: min(56vw, 14rem); height: auto; margin-bottom: 1.6rem;
-        filter: drop-shadow(0 0 26px rgba(250, 204, 21, 0.34)) drop-shadow(0 10px 26px rgba(0, 0, 0, 0.5));
+        display: block; width: min(74vw, 20rem); height: auto; margin-bottom: 1.6rem;
+        filter: drop-shadow(0 0 30px rgba(168, 85, 247, 0.45)) drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
         animation: ag-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       .ag-splash__tag {
@@ -128,7 +130,8 @@
     <div id="root">
       <div class="ag-splash" role="status" aria-label="Loading Absolute Genesis">
         <div class="ag-splash__stack">
-          <img class="ag-splash__logo" src="/brand/ag-sigil.svg" alt="Absolute Genesis" width="120" height="120" fetchpriority="high" draggable="false" />
+          <img class="ag-splash__logo" src="/brand/ag-crown-lockup.webp" alt="Absolute Genesis" width="720" height="480" fetchpriority="high" draggable="false"
+               onerror="this.onerror=null;this.src='/brand/ag-sigil.svg';this.width=120;this.height=120" />
           <p class="ag-splash__tag">A completely new beginning</p>
           <div class="ag-splash__bar"><span></span></div>
         </div>

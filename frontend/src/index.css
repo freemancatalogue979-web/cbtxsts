@@ -3576,8 +3576,12 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 }
 
 .agb-lockup { display: flex; align-items: center; gap: 0.6rem; min-width: 0; flex: 1 1 auto; }
-.agb-crest { position: relative; display: grid; place-items: center; width: 2.9rem; height: 2.9rem; flex-shrink: 0; }
-.agb-crest > * { position: relative; z-index: 2; width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28)); }
+/* The mark is wide — the Neon Crown — so the box is sized by height. The box
+   is a flex row with a definite height on purpose: a percentage height inside
+   an auto-sized box falls back to the image's natural size, which would blow
+   the brand bar wide open. */
+.agb-crest { position: relative; display: flex; align-items: center; height: 2.1rem; width: auto; flex-shrink: 0; }
+.agb-crest > * { position: relative; z-index: 2; width: auto; height: 100%; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28)); }
 .agb-words { display: grid; min-width: 0; gap: 0.12rem; }
 .agb-name {
   font-family: var(--font-title);
@@ -3621,6 +3625,9 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
   text-overflow: ellipsis;
   color: rgb(253 230 138 / 0.78);
 }
+/* The tagline is text inside a flex row, so the ellipsis has to live on the
+   text itself — otherwise it is cut mid-word with no sign that it continues. */
+.agb-tag-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agb-tag > i {
   flex-shrink: 0;
   width: 1.1rem;
@@ -3657,11 +3664,11 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 .agb-cta > .gbtn-face::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent); animation: agb-shine 3.8s ease-in-out infinite; pointer-events: none; }
 @media (min-width: 640px) {
   .agb-bar { gap: 0.9rem; padding: 0.55rem 0.8rem 0.55rem 0.9rem; border-radius: 1.6rem; }
-  .agb-crest { width: 3.6rem; height: 3.6rem; }
+  .agb-crest { height: 2.4rem; }
   .agb-lockup { gap: 0.85rem; }
   .agb-actions { gap: 0.55rem; }
 }
-@media (min-width: 1024px) { .agb-crest { width: 4.1rem; height: 4.1rem; } }
+@media (min-width: 1024px) { .agb-crest { height: 2.8rem; } }
 @media (prefers-reduced-motion: reduce) { .agb-bar-glint::after, .agb-cta > .gbtn-face::after { animation: none; } }
 
 /* ---------------------------------------------------------------- wallet */
@@ -3698,7 +3705,7 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 /* Phones: the full name + tagline must fit beside Install + Sign in. */
 @media (max-width: 479px) {
   .agb-bar { gap: 0.45rem; padding-right: 0.45rem; }
-  .agb-crest { width: 2.6rem; height: 2.6rem; }
+  .agb-crest { height: 1.75rem; }
   .agb-lockup { gap: 0.5rem; }
   .agb-name { font-size: 0.8rem; letter-spacing: 0.015em; }
   .agb-tag { font-size: 0.43rem; letter-spacing: 0.13em; gap: 0.25rem; }
@@ -3706,7 +3713,7 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
   .agb-actions { gap: 0.3rem; }
 }
 @media (max-width: 389px) {
-  .agb-crest { width: 2.35rem; height: 2.35rem; }
+  .agb-crest { height: 1.7rem; }
   .agb-name { font-size: 0.72rem; letter-spacing: 0.01em; }
   .agb-tag { font-size: 0.4rem; letter-spacing: 0.1em; }
   .agb-tag > i { display: none; }

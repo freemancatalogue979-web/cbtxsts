@@ -35,6 +35,12 @@ const MATCH = {ignoreVary: true};
 
 const STATIC_PRECACHE = [
   '/manifest.webmanifest',
+  '/brand/ag-crown-192.png',
+  '/brand/ag-crown-512.png',
+  '/brand/ag-crown-maskable-512.png',
+  '/brand/ag-crown-apple-touch-180.png',
+  '/brand/ag-crown-mark.webp',
+  '/brand/ag-crown-lockup.webp',
   '/brand/ag-icon-192.png',
   '/brand/ag-icon-512.png',
   '/brand/ag-icon-maskable-512.png',

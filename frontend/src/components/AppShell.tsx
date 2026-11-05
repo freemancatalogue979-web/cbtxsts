@@ -517,7 +517,7 @@ export function AppShell({
               <Menu className="size-4" />
             </button>
 
-            <LogoMark size={null} className="hidden size-10 shrink-0 lg:block" />
+            <LogoMark size={null} className="hidden h-10 w-auto shrink-0 lg:block" />
             <span className="sr-only left-0 top-0">Absolute Genesis</span>
 
             {/* Compact layouts keep just the menu up top — the LV pill joins at

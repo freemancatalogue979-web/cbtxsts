@@ -38,28 +38,28 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/brand/ag-sigil.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/brand/ag-icon-192.png",
+      "src": "/brand/ag-crown-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/ag-icon-512.png",
+      "src": "/brand/ag-crown-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/ag-icon-maskable-512.png",
+      "src": "/brand/ag-crown-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/brand/ag-sigil.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -69,7 +69,7 @@
       "url": "/?source=shortcut#/play",
       "icons": [
         {
-          "src": "/brand/ag-icon-192.png",
+          "src": "/brand/ag-crown-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -81,7 +81,7 @@
       "url": "/?source=shortcut#/materials",
       "icons": [
         {
-          "src": "/brand/ag-icon-192.png",
+          "src": "/brand/ag-crown-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -93,7 +93,7 @@
       "url": "/?source=shortcut#/study",
       "icons": [
         {
-          "src": "/brand/ag-icon-192.png",
+          "src": "/brand/ag-crown-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }

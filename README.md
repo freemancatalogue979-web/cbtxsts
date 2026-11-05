@@ -416,26 +416,36 @@ talks to one origin.
 
 ## The mark
 
-The Absolute Genesis crest is **drawn, not photographed**. `frontend/src/components/Logo.tsx` is a
-vector sigil — a violet heater shield with a gold bevel, a four-point radiant star at its heart, a
-halo of twelve seed-dots (the genesis ring) and a rising chevron at the foot.
+There are **two marks**, and they do different jobs.
 
-It replaced a raster whose wordmark was baked into the artwork: at the 40px it actually appears at
-in the header, that file turned into an unreadable smear of light-on-dark and read as washed out.
-The vector version is crisp from a 16px favicon to a 512px store icon, has no baked lettering and
-no white halo, and works on both skins without a second asset.
+**The logo — the Neon Crown.** The hand-drawn artwork lives in the repository root as
+`Absolute Genesis Neon Crown Logo.png`: a chrome AG monogram under a gold crown, wrapped in neon
+purple spikes and orbit rings. It is the logo everywhere the brand appears — the app header, the
+landing page, the sign-in screen, the splash, the installed-app icon and the social card.
 
-* `LogoMark` / `BrandLockup` / `Wordmark` all draw it, so the header, the landing page, the
-  sign-in screen and the app shell use the same mark.
-* `frontend/public/brand/ag-sigil.svg` is the same art as a standalone file, and the PNG icons
-  (favicon, PWA icons, the maskable icon, the apple-touch icon) are **rendered from it at build
-  time** by `frontend/scripts/make-brand.mjs`, which runs as `prebuild` and `predev`. The component
-  is the only place the mark is written down, so the icons cannot drift away from it.
-  `node scripts/make-brand.mjs` rebuilds them by hand; if no browser is installed the script warns
-  and leaves the PNGs alone rather than failing the build.
+**The favicon — the Genesis sigil.** `frontend/src/components/Logo.tsx` draws a vector sigil: a
+violet heater shield with a gold bevel, a four-point radiant star at its heart, a halo of twelve
+seed-dots and a rising chevron. It is the one mark that has to read at 16px, so the browser tab
+keeps it. It is also the fallback: if the artwork is missing, the app draws the sigil instead of
+showing a broken image.
+
+How the assets are built:
+
+* `frontend/scripts/make-brand.mjs` runs as `prebuild` and `predev`. It reads the artwork from the
+  repository root, **knocks the flat black background out** (a flood fill inwards from the border,
+  so the dark parts of the artwork survive), and cuts it into the parts the app needs — the mark
+  for the header, the full lockup for the splash, the app icons and the social card. The artwork is
+  photographic, so the in-app files are **WebP**: 60KB instead of 340KB for the same picture. The
+  icons stay PNG, because launchers and the iOS home screen are happier with it.
+* The sigil is rendered to `frontend/public/brand/ag-sigil.svg` and rasterised into the favicon
+  PNGs from the same script, so the component is the only place that art is written down.
+* Replacing the logo is therefore a matter of dropping a new PNG in the repository root and
+  rebuilding — no code changes, and the icons cannot drift away from the artwork.
+* If no browser is installed the script warns and leaves the files alone rather than failing the
+  build. `node scripts/make-brand.mjs` rebuilds them by hand.
 * The splash is the brand's own dark stage in **both** skins — a deep violet field with a gold dawn
-  behind the sigil — so the first thing on load reads as Absolute Genesis rather than as a pale
-  splash with a logo floating in it.
+  behind the crown — and the pre-paint splash in `index.html` and React's copy load the *same*
+  file, so the logo never swaps the moment the bundle mounts.
 
 ## Music
 
@@ -743,9 +753,10 @@ No different font is renamed to impersonate Arsenica.
 - World Map uses illustrated biome covers/vector symbols and actual level progress.
 - Lifetime rank plates use original bevelled metal crests for the eight lifetime metals —
   **Bronze, Silver, Gold, Platinum, Diamond, Obsidian, Mythril, Aurora**. Platinum is no longer
-  the ceiling: every step up adds another layer of ornament (the ring of the order, the laurel
-  wreath, rays behind the shield, a faceted rim, a dark halo, an orbiting ring, the aurora veil)
-  and one more star on the banner, so a mythril crest is unmistakably more than a platinum one.
+  the ceiling: every step up adds another layer of ornament *to* the shield — the laurel wreath,
+  rays behind it, the flare along the wings, the cut seal around the medallion, a dark halo with
+  drifting motes, the energy arcs, the aurora veil — and one more star on the banner, so a mythril
+  crest is unmistakably more than a platinum one. Nothing is drawn as a ring around the crest.
   The metals are earned by level — 3, 5, 7, 10, 15, 23 and 35 — and displayed ranks still come
   from the server.
 - The requested slingshot prototype is **not included**.

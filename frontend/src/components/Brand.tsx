@@ -1,21 +1,56 @@
-/** Absolute Genesis brand mark: the AG sigil — a violet shield, a gold star, a rising chevron. */
+/**
+ * Absolute Genesis brand mark: the Neon Crown.
+ *
+ * The artwork is a PNG in the repository root; `npm run brand` cuts the mark
+ * out of it and writes `public/brand/ag-crown-mark.webp`. The vector sigil
+ * stands in whenever that file is missing, so the app never shows a broken
+ * image — and the sigil stays the favicon.
+ */
+import {useState} from 'react';
 import {useIsDesktop} from '../lib/viewport';
 import {GenesisCrest} from './Logo';
 import SkinToggle from './SkinToggle';
 import type React from 'react';
 
 /**
- * The Absolute Genesis crest — the sigil, drawn as vector.
- *
- * It used to be a raster with the wordmark baked into the artwork, which turned
- * to mush at the 40px it actually appears at in the header. Now it is drawn:
- * crisp at 16px, sharp at 512px, and readable on both skins.
- *
- * Pass a number for a fixed pixel size, or `size={null}` to size the crest with
- * responsive utility classes (used by the app header so it scales per breakpoint).
+ * The logo. A wide mark, so it is sized by height and the width follows.
+ */
+export function CrownMark({
+  className = '',
+  alt = '',
+  style,
+}: {
+  className?: string;
+  alt?: string;
+  style?: React.CSSProperties;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <GenesisCrest size={null} className={className} />;
+  return (
+    <img
+      src="/brand/ag-crown-mark.webp"
+      alt={alt}
+      className={className}
+      style={style}
+      onError={() => setFailed(true)}
+      draggable={false}
+      decoding="async"
+    />
+  );
+}
+
+/**
+ * Pass a number for a fixed pixel height, or `size={null}` to size the mark
+ * with responsive utility classes (used by the app header so it scales per
+ * breakpoint).
  */
 export function LogoMark({size = 42, className = ''}: {size?: number | null; className?: string}) {
-  return <GenesisCrest size={size} className={className} />;
+  return (
+    <CrownMark
+      className={`${className} w-auto`}
+      style={size ? {height: size} : undefined}
+    />
+  );
 }
 
 export function Wordmark({
@@ -29,14 +64,15 @@ export function Wordmark({
   taglineClassName?: string;
   className?: string;
 }) {
+  /* The mark is wide, so it is sized by height alone. */
   const sizes: Record<'sm' | 'header' | 'brand' | 'md' | 'lg', {mark: number | null; markClass: string; tag: string}> = {
-    sm: {mark: 46, markClass: '', tag: 'text-[0.5rem] sm:text-[0.6rem]'},
-    // Bigger crest for the app header — grows with the viewport, never clipped.
-    header: {mark: null, markClass: 'h-11 w-11 sm:h-14 sm:w-14 lg:h-15 lg:w-15', tag: 'text-[0.6rem] sm:text-[0.66rem]'},
-    // The brand crest on the public pages: owns the top-left corner.
-    brand: {mark: null, markClass: 'h-13 w-13 sm:h-18 sm:w-18 lg:h-22 lg:w-22', tag: 'text-[0.6rem] sm:text-[0.7rem] lg:text-[0.78rem]'},
-    md: {mark: 52, markClass: '', tag: 'text-[0.62rem] sm:text-[0.66rem]'},
-    lg: {mark: 88, markClass: '', tag: 'text-[0.7rem] sm:text-[0.78rem]'},
+    sm: {mark: 34, markClass: '', tag: 'text-[0.5rem] sm:text-[0.6rem]'},
+    // Bigger mark for the app header — grows with the viewport, never clipped.
+    header: {mark: null, markClass: 'h-9 sm:h-11 lg:h-12', tag: 'text-[0.6rem] sm:text-[0.66rem]'},
+    // The brand mark on the public pages: owns the top-left corner.
+    brand: {mark: null, markClass: 'h-11 sm:h-16 lg:h-20', tag: 'text-[0.6rem] sm:text-[0.7rem] lg:text-[0.78rem]'},
+    md: {mark: 40, markClass: '', tag: 'text-[0.62rem] sm:text-[0.66rem]'},
+    lg: {mark: 64, markClass: '', tag: 'text-[0.7rem] sm:text-[0.78rem]'},
   };
   const s = sizes[size];
   // The header brand block is desktop-only. On phones the crest + wordmark
@@ -48,7 +84,7 @@ export function Wordmark({
     if (size !== 'brand') return null;
     return (
       <div className={`flex min-w-0 shrink items-center gap-2 ${className}`}>
-        <GenesisCrest size={36} />
+        <CrownMark className="h-8 w-auto" />
         <span className="min-w-0 leading-tight">
           <span className="block truncate font-display text-[0.9rem] font-black tracking-[0.06em] text-mist-50">Absolute Genesis</span>
           {tagline && <span className="block truncate text-[0.6rem] font-bold tracking-[0.08em] text-mist-500">A completely new beginning</span>}
@@ -77,7 +113,7 @@ export function BrandLockup({className = '', tagline = true}: {className?: strin
   return (
     <div className={`agb-lockup ${className}`} aria-label="Absolute Genesis">
       <span className="agb-crest" aria-hidden="true">
-        <GenesisCrest size={null} className="h-full w-full" />
+        <CrownMark className="h-full w-auto" />
       </span>
       <span className="agb-words">
         <span className="agb-name">
@@ -85,7 +121,8 @@ export function BrandLockup({className = '', tagline = true}: {className?: strin
         </span>
         {tagline && (
           <span className="agb-tag">
-            <i aria-hidden="true" />A completely new beginning
+            <i aria-hidden="true" />
+            <span className="agb-tag-text">A completely new beginning</span>
           </span>
         )}
       </span>

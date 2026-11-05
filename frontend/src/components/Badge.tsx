@@ -504,15 +504,6 @@ function curvePoints(x0: number, y0: number, cx: number, cy: number, x1: number,
   return points;
 }
 
-/** A closed polygon of `sides` points on a circle — the faceted rim. */
-function facetPath(r: number, sides: number, cx = 72, cy = 74): string {
-  const points = Array.from({length: sides}, (_, i) => {
-    const angle = ((i * 360) / sides - 90) * (Math.PI / 180);
-    return `${(cx + r * Math.cos(angle)).toFixed(2)} ${(cy + r * Math.sin(angle)).toFixed(2)}`;
-  });
-  return `M${points.join('L')}Z`;
-}
-
 /**
  * The lifetime crest — the big heraldic ornament on a player's profile.
  *
@@ -525,13 +516,16 @@ function facetPath(r: number, sides: number, cx = 72, cy = 74): string {
  * crest is unmistakably more than a platinum one without reading a word:
  *
  *   bronze   — the crest on its own
- *   silver   — + the ring of the order
- *   gold     — + the laurel wreath
- *   platinum — + rays behind the shield
- *   diamond  — + a faceted rim and a prismatic seal
+ *   silver   — + the laurel wreath
+ *   gold     — + rays behind the shield
+ *   platinum — + the flare along the wings
+ *   diamond  — + the cut seal around the medallion
  *   obsidian — + a dark halo and drifting motes
- *   mythril  — + an orbiting ring
+ *   mythril  — + the energy arcs
  *   aurora   — + the aurora veil and a burning core
+ *
+ * Nothing here is a ring around the crest: the ladder climbs by adding
+ * ornament *to* the shield, not by drawing circles around it.
  */
 export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: string}) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -542,7 +536,7 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
   const stars = TIER_STARS[tier] ?? 3;
   const starGap = Math.min(13, 54 / stars);
   const starR = stars > 6 ? 2.9 : stars > 4 ? 3.2 : 3.6;
-  const wreaths = rank >= 2
+  const wreaths = rank >= 1
     ? [
         {x0: 38, y0: 126, cx: 14, cy: 86, x1: 26, y1: 42, side: -1},
         {x0: 106, y0: 126, cx: 130, cy: 86, x1: 118, y1: 42, side: 1},
@@ -567,10 +561,14 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
           <stop stopColor={metal.light} stopOpacity=".32" />
           <stop offset="1" stopColor={metal.bright} stopOpacity="0" />
         </radialGradient>
+        {/* The veil fades out at both ends — a hard stop would leave two
+            round caps hanging off the crest like blobs. */}
         <linearGradient id={`${uid}-veil`} x1="0" y1="0" x2="1" y2="0">
-          <stop stopColor={accent} />
+          <stop stopColor={accent} stopOpacity="0" />
+          <stop offset=".16" stopColor={accent} />
           <stop offset=".5" stopColor={metal.bright} />
-          <stop offset="1" stopColor={metal.light} />
+          <stop offset=".84" stopColor={metal.light} />
+          <stop offset="1" stopColor={metal.light} stopOpacity="0" />
         </linearGradient>
         <linearGradient id={`${uid}-ray`} x1="0" y1="0" x2="0" y2="1">
           <stop stopColor={metal.light} stopOpacity=".9" />
@@ -591,7 +589,7 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
       )}
 
       {/* rays behind the shield */}
-      {rank >= 3 && (
+      {rank >= 2 && (
         <g fill={`url(#${uid}-ray)`}>
           {Array.from({length: 16}, (_, i) => {
             const a = (i * 22.5 - 90) * (Math.PI / 180);
@@ -613,22 +611,6 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
 
       {/* the dark halo — obsidian and up */}
       {rank >= 5 && <circle cx="72" cy="74" r="60" fill={`url(#${uid}-halo)`} />}
-
-      {/* the ring of the order */}
-      {rank >= 1 && (
-        <circle cx="72" cy="74" r="69" fill="none" stroke={metal.bright} strokeWidth="1" strokeDasharray="1.5 5" opacity=".7" />
-      )}
-
-      {/* the faceted rim — diamond and up */}
-      {rank >= 4 && (
-        <g>
-          <path d={facetPath(64, 12)} fill="none" stroke={accent} strokeWidth="1.1" opacity=".75" />
-          {Array.from({length: 12}, (_, i) => {
-            const a = ((i * 30 - 90) * Math.PI) / 180;
-            return <circle key={i} cx={72 + 64 * Math.cos(a)} cy={74 + 64 * Math.sin(a)} r="1.7" fill={metal.light} opacity=".9" />;
-          })}
-        </g>
-      )}
 
       {/* the laurel wreath */}
       {wreaths.map((w) => (
@@ -666,14 +648,6 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
         </g>
       )}
 
-      {/* the orbit — mythril and up */}
-      {rank >= 6 && (
-        <g>
-          <ellipse cx="72" cy="74" rx="60" ry="19" fill="none" stroke={accent} strokeWidth="1.2" opacity=".6" transform="rotate(-20 72 74)" />
-          <circle cx="132" cy="74" r="2.6" fill={metal.light} transform="rotate(-20 72 74)" />
-        </g>
-      )}
-
       <g fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.2" strokeLinejoin="round">
         <path d="M46 50 9 35l11 27 20 12-26-9 10 22 20 10-23-3 13 19 20 5 11-24Z" />
         <path d="m98 50 37-15-11 27-20 12 26-9-10 22-20 10 23-3-13 19-20 5-11-24Z" />
@@ -685,9 +659,21 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
       <path d="m72 44 25 10-4 38q-3 18-21 32-18-14-21-32l-4-38Z" fill="none" stroke={metal.bright} strokeWidth=".8" opacity=".65" />
       <circle cx="72" cy="77" r="22" fill={metal.deep} stroke={metal.bright} strokeWidth="1.5" />
       <circle cx="72" cy="76" r="18" fill={`url(#${uid}-core)`} stroke={metal.light} strokeWidth=".5" />
-      {/* the prismatic seal — diamond and up */}
+      {/* the cut seal — a stone around the medallion, diamond and up */}
       {rank >= 4 && (
-        <circle cx="72" cy="77" r="26.5" fill="none" stroke={accent} strokeWidth="1" strokeDasharray="2.5 4.5" opacity=".85" />
+        <g>
+          <path d="m72 44 28 33-28 33-28-33Z" fill="none" stroke={accent} strokeWidth="1.1" opacity=".85" />
+          <path d="m72 44 28 33h-56Z" fill={accent} opacity=".1" />
+        </g>
+      )}
+      {/* the energy arcs — mythril and up */}
+      {rank >= 6 && (
+        <g fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" opacity=".9">
+          <path d="M47 77a25 25 0 0 1 5-15" />
+          <path d="M97 77a25 25 0 0 0-5-15" />
+          <path d="M49 88a25 25 0 0 0 5 15" />
+          <path d="M95 88a25 25 0 0 1-5 15" />
+        </g>
       )}
       {/* the burning core — aurora alone */}
       {rank >= 7 && (

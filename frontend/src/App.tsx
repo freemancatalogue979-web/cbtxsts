@@ -124,12 +124,18 @@ function Splash() {
             else and the logo swaps the moment React mounts. */}
         <img
           className="ag-splash__logo"
-          src="/brand/ag-sigil.svg"
+          src="/brand/ag-crown-lockup.webp"
           alt="Absolute Genesis"
-          width={120}
-          height={120}
+          width={720}
+          height={480}
           fetchPriority="high"
           draggable={false}
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = '/brand/ag-sigil.svg';
+            event.currentTarget.width = 120;
+            event.currentTarget.height = 120;
+          }}
         />
         <p className="ag-splash__tag">A completely new beginning</p>
         <div className="ag-splash__bar">
