@@ -32,9 +32,17 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'arsenica-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
+  {
+    id: 'arsenica-sans',
+    name: 'Arsenica Sans',
+    blurb: 'The default typeface. Uses your installed Arsenica Sans; Space Grotesk is the fallback.',
+    short: 'Default · installed font required.',
+    sans: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    display: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, sans-serif",
+  },
   {
     id: 'montserrat',
     name: 'Montserrat',
@@ -107,7 +115,7 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v7 stores explicit font choices; no saved value means use the device default.
+// v7 stores explicit font choices; no saved value means use DEFAULT_FONT.
 // Legacy explicit choices are migrated instead of silently discarded.
 const FONT_KEY = 'arena.font.v7';
 const LEGACY_FONT_KEYS = ['arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
@@ -208,21 +216,14 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Non-browser fallback; actual defaults are selected by device, unless saved. */
-export const DEFAULT_FONT: FontName = 'grotesk';
-
-function deviceDefaultFont(): FontName {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return DEFAULT_FONT;
-  const mobileOrTablet =
-    window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches;
-  return mobileOrTablet ? 'grotesk' : 'helvetica-oblique';
-}
+/** Shared default on desktop, tablet and phone; explicit saved choices still win. */
+export const DEFAULT_FONT: FontName = 'arsenica-sans';
 
 export function currentFont(): FontName {
   const current = read(FONT_KEY, '');
   const legacy = current ? '' : LEGACY_FONT_KEYS.map((key) => read(key, '')).find(Boolean) ?? '';
   const stored = current || legacy;
-  const fallback = deviceDefaultFont();
+  const fallback = DEFAULT_FONT;
   const choice = (FONTS.some((font) => font.id === stored) ? stored : fallback) as FontName;
   if (!current && legacy && choice === legacy) write(FONT_KEY, choice);
   return choice;

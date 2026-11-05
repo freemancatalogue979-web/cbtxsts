@@ -8,8 +8,14 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 if /i "%~1"=="demo" (
+  if not exist "backend\.venv\Scripts\python.exe" (
+    echo [x] Run start-arena.bat first and wait for both servers to start.
+    pause
+    exit /b 1
+  )
+  echo [*] Demo data is added to your local database. Use a demo/test installation, not production.
   echo [*] Building the demo world against http://127.0.0.1:3000 ...
-  backend\.venv\Scripts\python.exe backend\scripts\demo_world.py --url http://127.0.0.1:3000
+  backend\.venv\Scripts\python.exe backend\scripts\demo_world.py --url http://127.0.0.1:3000 || (pause & exit /b 1)
   pause
   exit /b 0
 )

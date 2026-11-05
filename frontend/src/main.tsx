@@ -29,7 +29,7 @@ applyFont(currentFont(), false);
 // Day/night applies before paint too — daylight is the default; saved choices win.
 applySkin(currentSkin());
 // Standard / Pro experience + Pro appearance and reading prefs. Both share the
-// device default or the player's selected font pack.
+// shared default or the player's selected font pack.
 bootExperience();
 
 // Offline app shell + "Install app" (production builds only; see public/sw.js).

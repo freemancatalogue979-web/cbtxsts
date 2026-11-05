@@ -8,7 +8,7 @@ English and Mathematics; staff can configure the institution and manage approved
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite + WebSockets   → http://localhost:3000
-frontend/   React 19 + Vite + Tailwind v4 + Montserrat/Audiowide → http://localhost:5173
+frontend/   React 19 + Vite + Tailwind v4 + Arsenica Sans (local) / Space Grotesk fallback → http://localhost:5173
 ```
 
 ---
@@ -84,6 +84,38 @@ Open **http://localhost:5173**.
 
 Interactive API docs: **http://localhost:3000/docs**.
 
+### Demo mode on a Windows PC
+
+Demo mode populates the real local app with showcase accounts and activity; it is not a
+separate browser toggle. Use a **local demo/test installation**, not a production database.
+It changes catalogue visibility and demo profiles and adds exam history, friends, groups,
+chats and teachers. Back up `backend/data/arena.db` with the app stopped before using it
+on an existing installation.
+
+1. Install Python 3.11+ and Node.js 18+, then open the project folder.
+2. Double-click `start-arena.bat` (or run `.\start-arena.bat` in PowerShell). Keep both
+   server windows open and wait until **http://localhost:5173** loads. The optional AI-key
+   prompt can be skipped with Enter.
+3. Open a **second PowerShell window in the project folder** and run:
+
+   ```powershell
+   .\start-arena.bat demo
+   ```
+
+4. Wait for **Demo world ready**, then refresh **http://localhost:5173** and sign in:
+
+   | Role | Username | Password |
+   | --- | --- | --- |
+   | Showcase student | `emma` | `demo1234` |
+   | US student | `ava` | `demo1234` |
+   | Teacher | `mr_whitaker` | `demo1234` |
+
+   Staff use `admin@quizarena.ng` / `arena2026` unless configured otherwise.
+
+If the demo command says the API is not responding, wait for the API window to show it is
+running on port 3000, then retry. Re-running reuses existing demo accounts and skips social
+setup once built. Linux users can run `./start-arena.sh` followed by `./start-arena.sh demo`.
+
 ### Mobile visual audit
 
 After starting the app, install Playwright's browser once and run the automated phone/tablet audit:
@@ -125,7 +157,7 @@ graceful shutdown now stops the import executor so a deploy does not leave orpha
 | **Custom Practice** | Play → **Practice**: pick a **course → topic → number of questions → duration** and start. The server draws **random unique questions** from that topic's bank (never more than exist — *"Only 15 questions are available for this topic"*), shuffles the question order per session and **shuffles each question's options** — the correct answer is bound to its option's canonical key, never to a display letter, so shuffling can never move it. The **timer is server-stamped** (`ends_at` on the run): refreshing restores the *same* paper — same questions, same order, same option shuffles, same progress — at the first unanswered question, and answers after 00:00 are refused server-side. Every answer gets an instant verdict with the **stored explanation**, and the finished run shows a full summary (score %, time used) plus a **review of every question** with your answer vs the right one. |
 | **Signature question cards** | Questions never render as plain text: every question — exam papers, blitz, sudden death, daily challenge, flashcards, Mind Match tiles — sits in a unique gradient-framed card with a ghost question number, shine sweep, difficulty chip and a brand-gradient quote bar. |
 | **Personal notifications** | Help requests, answers and nudges land in a personal inbox with live socket delivery; the bell merges them with announcements. Players carry a bio, a status line and a shareable 6-character player code for instant friend adds. |
-| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**Quite Magical** hand-lettered default, Montserrat, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
+| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**Arsenica Sans** default, Montserrat, Helvetica Oblique, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
 | **Background music** | Three uploaded tracks (**Arena Rock**, **Arcade Session**, **Sound Surfer**) played from `frontend/public/music`, with on/off, pause/resume, track switch and a volume slider in Profile → Make it yours plus a quick toggle in the header. Pause holds your place to the second, mute is a gain fade rather than a stop, and no two tracks ever sound at once. Nothing else ever plays — there is no synth or fallback music. It tries to autoplay; when the browser refuses, a floating **Start music** button waits for the first tap. |
 | **Shell & navigation** | A floating HUD instead of a banner: the top bar has no strip, blur or shadow — every control carries its own chip and rides on top of the scrolling world, so nothing is covered and nothing disappears. **Every screen is a real page** (`#/study`, `#/exam/42`, `#/duel/7`): the in-page back button, the Android back button, the iOS edge swipe and the browser's back all land on the page you actually came from, and a refresh puts you back where you were — including mid-exam, on the same attempt. |
 | **Fixed scale** | The arena renders at exactly the viewport it lands on: `maximum-scale=1` + `user-scalable=no`, `touch-action: pan-x pan-y` on the body, and a gesture guard for iOS Safari's `gesture*` events and desktop ctrl/cmd + wheel or `+`/`-` zoom. Pinch, double-tap and browser zoom are off on phones and desktops; panning, scrolling and every tap still work. |
@@ -613,9 +645,12 @@ The browser keeps only the session token; the database remains the source of tru
 
 ## Font licensing note
 
-The default UI typeface **Quite Magical** (by Misti's Fonts / Misti Hammers, 2018) ships as
-`frontend/public/fonts/quite-magical.woff2` and is free for **personal use**; commercial use
-requires a licence from the designer (mistifonts.com). If this project is deployed
-commercially, buy the licence or swap the default in `frontend/src/lib/prefs.ts` — the font
-switcher and the other four packs (Montserrat, Exo 2, Space Grotesk, Orbitron) are all
-libre-licensed fallbacks that keep the app fully functional.
+The default font selection is **Arsenica Sans** on desktop, tablet and phone. It is also
+available under **Profile → Font**, and existing explicit font choices remain unchanged.
+
+**No Arsenica Sans font file is bundled.** The browser uses it only when installed on the
+viewer's device under the family name `Arsenica Sans`; otherwise the bundled Space Grotesk
+(and then Montserrat/system sans) is used. To display Arsenica Sans on every device, obtain
+a webfont file and a licence that permits web embedding, then add the licensed files and
+appropriate `@font-face` declarations to `frontend/src/index.css`. A desktop licence alone
+may not permit web hosting. Do not rename another font to Arsenica Sans.
