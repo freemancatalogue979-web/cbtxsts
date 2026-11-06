@@ -741,8 +741,8 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
  *   3. The **colour**. Each realm carries its own pair, so no two neighbours
  *      match.
  *
- * Past platinum (realm 41) the badge stops being a medal and starts being an
- * entity: it gets a corona, a slow-turning outer ring of light and a pulse.
+ * Past platinum (realm 41) a restrained specular sweep travels across the
+ * metal. The animation stays clipped to the badge — no floating aura or orbit.
  */
 export type RealmShape =
   | 'shield'
@@ -913,42 +913,16 @@ export function RealmBadge({
             <stop offset="60%" stopColor={mix(palette.core, '#0b0620', 0.5)} />
             <stop offset="100%" stopColor="#070312" />
           </linearGradient>
-          <radialGradient id={`${uid}-aura`} cx="50%" cy="44%" r="52%">
-            <stop offset="0%" stopColor={palette.bright} stopOpacity={mystical ? 0.55 : 0.24} />
-            <stop offset="55%" stopColor={palette.bright} stopOpacity={mystical ? 0.18 : 0.06} />
-            <stop offset="100%" stopColor={palette.bright} stopOpacity="0" />
-          </radialGradient>
-          {mystical ? (
-            <linearGradient id={`${uid}-ring`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={palette.light} stopOpacity="0.9" />
-              <stop offset="50%" stopColor={palette.bright} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={palette.light} stopOpacity="0.9" />
-            </linearGradient>
-          ) : null}
+          <linearGradient id={`${uid}-sheen`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+            <stop offset="48%" stopColor={palette.light} stopOpacity="0.7" />
+            <stop offset="52%" stopColor="#ffffff" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
           <clipPath id={`${uid}-clip`}>
             <path d={silhouette} transform={inner} />
           </clipPath>
         </defs>
-
-        {/* the aura — a realm past platinum breathes light */}
-        <circle cx="60" cy="56" r="58" fill={`url(#${uid}-aura)`} />
-
-        {/* the outer ring of light, only for the mystical realms */}
-        {mystical ? (
-          <g className="realm-badge__orbit">
-            <circle
-              cx="60"
-              cy="56"
-              r="55"
-              fill="none"
-              stroke={`url(#${uid}-ring)`}
-              strokeWidth="1.6"
-              strokeDasharray="3 11"
-              strokeLinecap="round"
-            />
-            <circle cx="60" cy="56" r="51" fill="none" stroke={palette.bright} strokeOpacity="0.28" strokeWidth="0.8" />
-          </g>
-        ) : null}
 
         {/* the frame */}
         <path d={silhouette} fill={`url(#${uid}-metal)`} stroke={palette.deep} strokeWidth="1.4" strokeLinejoin="round" />
@@ -972,6 +946,14 @@ export function RealmBadge({
             ))}
           </g>
         </g>
+
+        {/* An occasional polished-metal sweep, clipped to the badge itself.
+            No floating aura, orbiting circle or perpetual pulsing. */}
+        {mystical ? (
+          <g clipPath={`url(#${uid}-clip)`} aria-hidden="true">
+            <rect className="realm-badge__sheen" x="-45" y="-35" width="42" height="185" fill={`url(#${uid}-sheen)`} />
+          </g>
+        ) : null}
 
         {/* the bevel that catches the light along the top edge */}
         <path

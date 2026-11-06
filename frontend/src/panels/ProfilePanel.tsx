@@ -695,10 +695,9 @@ export default function ProfilePanel({
           </div>
         </Card>
 
-        {/* Sound is its own section: toggles on the left, tracks and volume on
-            the right at desktop widths — never one endless squashed column. */}
+        {/* Sound effects and music are independent blocks, including on phones. */}
         <Card className="mt-3 p-3.5 sm:mt-4 sm:p-5">
-          <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Sound</p>
+          <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Sound effects</p>
           <div className="mt-2 grid gap-4 lg:grid-cols-2 lg:gap-6">
             <div className="min-w-0">
               <button
@@ -718,6 +717,14 @@ export default function ProfilePanel({
                   <span className={`absolute top-0.5 size-5 rounded-full bg-white transition-all ${sound ? 'left-[1.15rem]' : 'left-0.5'}`} />
                 </span>
               </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="profile-music-card mt-3 p-3.5 sm:mt-4 sm:p-5">
+          <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Music</p>
+          <div className="mt-2 grid gap-4 lg:grid-cols-2 lg:gap-6">
+            <div className="min-w-0">
               <button
                 onClick={() => {
                   const next = !musicEnabled;
@@ -878,7 +885,7 @@ export default function ProfilePanel({
           </div>
         </Card>
 
-        <Card className="mt-3 p-3.5 sm:mt-4 sm:p-5">
+        <Card className="profile-mode-font mt-3 p-3.5 sm:mt-4 sm:p-5">
           <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
             <div className="min-w-0">
  <p className="text-[0.66rem] font-black tracking-[0.18em] text-mist-500">Mode</p>

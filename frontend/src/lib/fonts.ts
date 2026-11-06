@@ -84,8 +84,9 @@ export function loadArsenicaSans(): Promise<ArsenicaStatus> {
   probe = (async (): Promise<ArsenicaStatus> => {
     if (typeof document === 'undefined' || !document.fonts) return 'missing';
 
-    /* A device that already has the family does not pay for the probe again. */
-    if (sessionStorage.getItem(PROBE_KEY) === 'hit') return 'ready';
+    /* Do not trust a session-storage "hit" here. FontFace registrations do not
+       survive a reload, while sessionStorage does — that old shortcut reported
+       Arsenica as ready without ever adding the face to the new document. */
     const cached = sessionStorage.getItem(PROBE_KEY);
     if (cached?.startsWith('miss:')) {
       const stamp = Number(cached.slice(5));
