@@ -467,7 +467,7 @@ const CREST_SHIELDS: Record<BaseTier | PeakTier, string> = {
 };
 
 /** The level-100 crown is unique artwork, not a recoloured lifetime shield. */
-function AbsoluteGenesisCrown({className = '', playerName = '', founderNumber}: {
+export function AbsoluteGenesisCrown({className = '', playerName = '', founderNumber}: {
   className?: string;
   playerName?: string;
   founderNumber?: number | null;
@@ -810,6 +810,21 @@ export function RealmBadge({
   const palette = paletteFrom(deep, bright);
   const runes = runeRing(realm, 36);
   const inner = 'translate(60 56) scale(0.84) translate(-60 -56)';
+
+  if (realm === 100) {
+    return (
+      <span
+        className={`realm-badge realm-badge--absolute ${locked ? 'realm-badge--locked' : ''} ${current ? 'realm-badge--current' : ''} ${className}`}
+        style={{width: dims.box, height: dims.box}}
+        data-realm="100"
+        role="img"
+        aria-label={title ?? 'Absolute Genesis — level 100'}
+        title={title ?? 'Absolute Genesis · level 100'}
+      >
+        <AbsoluteGenesisCrown className="realm-badge__absolute-art" />
+      </span>
+    );
+  }
 
   return (
     <span

@@ -9,6 +9,14 @@
 }
 
 @font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dm-mono-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
   font-family: 'Exo 2';
   font-style: normal;
   font-weight: 400 900;
@@ -3968,6 +3976,16 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-plate::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 30%, #ffffff06 44%, transparent 45%); }
 .rank-crest { display: block; width: 84px; height: 95px; flex-shrink: 0; filter: drop-shadow(0 6px 5px #0008) drop-shadow(0 0 8px var(--crest-glow, #ce8b5577)); }
 .rank-crest.rank-crest--absolute { width: 110px; height: 114px; margin: -9px -7px -8px -3px; filter: drop-shadow(0 7px 6px #0009) drop-shadow(0 0 11px #ffd75e88); }
+.realm-badge .rank-crest.rank-crest--absolute.realm-badge__absolute-art { width: 100%; height: 100%; margin: 0; filter: drop-shadow(0 0 5px #ffd75e88); }
+.rank-crest text,
+.profile-rank-copy,
+.profile-rank-copy * {
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 /* Every medal glows around its own silhouette; there are no outer rings,
    rays, wreaths, wings or other ornaments hiding the rank artwork. */
 .profile-rank-copy { position: relative; z-index: 1; }
