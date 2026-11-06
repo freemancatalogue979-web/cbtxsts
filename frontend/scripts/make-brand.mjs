@@ -2,7 +2,7 @@
  * Rebuild the favicon and install icons from the dedicated sigil artwork.
  *
  * The visible product logo is the neon crown artwork in
- * public/brand/absolute-genesis-logo.webp. It is deliberately independent
+ * public/brand/absolute-genesis-neon.webp. It is deliberately independent
  * from these small icons so running the brand build never replaces it.
  *
  *   node scripts/make-brand.mjs

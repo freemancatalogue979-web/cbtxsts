@@ -43,7 +43,7 @@ const SOURCES = [
 export type ArsenicaStatus = 'checking' | 'ready' | 'missing' | 'unreadable';
 
 let probe: Promise<ArsenicaStatus> | null = null;
-const PROBE_KEY = 'arena.font.arsenica';
+const PROBE_KEY = 'arena.font.arsenica.v2';
 /** A miss is remembered briefly so a page load does not repeat the request. */
 const MISS_TTL_MS = 60_000;
 
