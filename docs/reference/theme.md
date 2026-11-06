@@ -38,43 +38,9 @@ Two colours deliberately do **not** move:
 3. A faint tactical grid, an accent wash and a vignette that keeps text the
    brightest thing on screen.
 
-### Sharp on every screen, including 4K
-
-The bundled portraits in `frontend/public/heroes/<slug>.webp` are 240×390, so
-they always paint (offline included) but can't fill a 4K screen. The wallpaper
-therefore follows three rules:
-
-1. **No blur.** Art layers use colour lifts only; blur filters are banned (a test
-   enforces it).
-2. **Never upscale.** Bundled portraits are capped at their native pixel size for
-   the screen's device-pixel ratio (`--art-dpr`), so they stay crisp on 1x, 2x
-   and 3x displays. Phones show a frieze of small, crisp portraits instead of a
-   stretched spotlight.
-3. **Upgrade on big screens.** At 1024 px and wider the wallpaper upgrades to a
-   sharper source once it has fully loaded, in this order:
-   - `frontend/public/heroes/hi/<slug>.webp` — the optional repo HD pack, listed
-     in `frontend/public/heroes/hi/manifest.json`;
-   - the official catalogue painting (≈1080 px wide) from the same MLBB Intel art
-     index the rest of the app uses.
-
-   If neither loads, the bundled portrait stays. HD art is still capped so that a
-   ~1080 px source is never stretched past its pixels.
-
-To build the HD pack so the sharp art lives in the repo (best: no runtime
-dependency on the image host):
-
-```bash
-cd frontend
-CLOVER_APP_URL=https://your-hub.example CLOVER_TOKEN=<signed-in member token> npm run hero-art:hd
-# or from a saved catalogue JSON
-npm run hero-art:hd -- --catalog ./catalog.json
-```
-
-Only WebP files at least 720 px wide are kept; existing files are not replaced
-unless `--force` is passed. Commit `frontend/public/heroes/hi/` afterwards. Check
-that you have permission to redistribute the artwork before committing it.
-
-The layer is decorative (`aria-hidden`), ignores clicks and is skipped for
+Art is read from `frontend/public/heroes/<slug>.webp` — bundled with the app,
+never a third-party CDN — so it works offline and cannot break upstream. The
+layer is decorative (`aria-hidden`), ignores clicks and is skipped for
 `prefers-reduced-motion`. On phones fewer, softer layers are used and cards
 become more opaque so text keeps priority.
 

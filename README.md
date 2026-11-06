@@ -538,9 +538,7 @@ drifts behind the shell, so the app is not tied to one fixed palette. From
 **Edit profile → Colour theme** members can follow the area automatically, pin
 any of eight colours, turn the hero art off, or calm the motion. Choices are
 saved per browser and applied before the first paint. Hero art is bundled in
-`frontend/public/heroes`, is never blurred or upscaled, and upgrades to
-high-resolution paintings on large and 4K screens (optional repo pack via
-`npm run hero-art:hd`). The wallpaper respects `prefers-reduced-motion`.
+`frontend/public/heroes`, and the wallpaper respects `prefers-reduced-motion`.
 See [theme and appearance](docs/reference/theme.md).
 
 ## Fonts

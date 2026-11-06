@@ -102,7 +102,5 @@ test("the profile menu exposes an accessible font picker for everyone", async ()
   // The profile dialog is announced, and stays scrollable on short phones.
   assert.match(layout, /role="dialog" aria-modal="true" aria-label="Edit profile"/);
   assert.match(layout, /max-h-\[90dvh\] overflow-y-auto/);
-  // The trigger is named by its own visible text (name + role), so it only needs
-  // a tooltip; an aria-label here would fight the label-content-name rule.
-  assert.match(layout, /onClick=\{\(\) => setEditing\(true\)\} title="Edit profile"/);
+  assert.match(layout, /title="Edit profile" aria-label="Edit profile"/);
 });
