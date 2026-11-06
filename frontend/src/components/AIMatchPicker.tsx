@@ -144,7 +144,7 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
       <div><div className="label mb-1.5 !text-mute">Data source</div><div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Data source">
         {(["rone", "aerena"] as const).map((value) => <button type="button" key={value} aria-pressed={source === value} onClick={() => changeSource(value)}
           className={`rounded-lg border px-3 py-2 text-left text-[11px] font-extrabold transition-colors ${source === value ? "border-leaf/50 bg-leaf/10 text-leaf" : "border-edge bg-raised/40 text-mute hover:border-edge-2"}`}>
-          {value === "rone" ? "Rone" : "Aerena"}<span className="block mt-0.5 text-[9px] font-medium text-mute">{value === "rone" ? "MPL weeks & playoffs" : "Seasons & matches"}</span></button>)}
+          {value === "rone" ? "Rone" : "Aerena"}<span className="block mt-0.5 text-[9px] font-semibold text-mute">{value === "rone" ? "MPL weeks & playoffs" : "Seasons & matches"}</span></button>)}
       </div></div>
       <div><div className="label mb-1.5 !text-mute">MPL region</div><div className="grid grid-cols-4 gap-1.5" role="group" aria-label="MPL region">
         {REGIONS.map((item) => <button type="button" key={item.id} aria-label={`${item.id.toUpperCase()} — ${item.label}`} aria-pressed={region === item.id} onClick={() => changeRegion(item.id)}
@@ -178,7 +178,7 @@ export function AIMatchPicker({ initial, onApply, onCancel }: {
       <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Match week">
         <button type="button" aria-pressed={week === null} onClick={() => changeWeek(null)} className={`rounded-md border px-2.5 py-1.5 text-[10px] font-bold ${week === null ? "border-leaf/50 bg-leaf/10 text-leaf" : "border-edge text-mute"}`}>All weeks</button>
         {weeks.map((item) => <button type="button" key={item.number} aria-pressed={week === item.number} onClick={() => changeWeek(item.number)}
-          className={`rounded-md border px-2.5 py-1.5 text-[10px] font-bold ${week === item.number ? "border-leaf/50 bg-leaf/10 text-leaf" : "border-edge text-mute"}`}>Week {item.number} <span className="font-medium">{item.matches}</span></button>)}
+          className={`rounded-md border px-2.5 py-1.5 text-[10px] font-bold ${week === item.number ? "border-leaf/50 bg-leaf/10 text-leaf" : "border-edge text-mute"}`}>Week {item.number} <span className="font-semibold">{item.matches}</span></button>)}
       </div>
       {source === "aerena" && Boolean(aerena?.unlabeled_matches) && <p className="text-[10px] text-mute mt-1.5">{aerena?.unlabeled_matches} non-playoff matches have no clear week label and aren’t assigned to a week.</p>}
     </div>}

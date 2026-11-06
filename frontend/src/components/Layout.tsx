@@ -299,8 +299,9 @@ export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, c
             const item = NAV.find((entry) => entry.id === id)!;
             const active = current === item.id;
             const Icon = item.icon;
+            const accessibleLabel = item.label === short || item.label.endsWith(` ${short}`) ? item.label : `${short} — ${item.label}`;
             return (
-              <button key={item.id} onClick={() => navigate(item.id)} aria-label={item.label}
+              <button key={item.id} onClick={() => navigate(item.id)} aria-label={accessibleLabel}
                 className={`flex flex-col items-center gap-1 py-2 text-[10px] font-bold uppercase tracking-wide ${active ? "text-rose-500" : "text-mute"}`}>
                 <Icon size={17} />
                 {short}

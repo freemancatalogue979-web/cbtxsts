@@ -101,7 +101,7 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
       <AILearnedMemory revision={notesRevision} disabled={busy || notesBusy} onBusyChange={setLearningBusy} />
       <AIMemoryNotes revision={notesRevision} disabled={busy || learningBusy} onBusyChange={setNotesBusy} />
       <label className="block">
-        <span className="text-[12px] font-bold">Coaching goal <span className="font-medium text-faint">· optional</span></span>
+        <span className="text-[12px] font-bold">Coaching goal <span className="font-semibold text-faint">· optional</span></span>
         <textarea className="input mt-2 min-h-20 !text-[12px]" maxLength={600} value={goal} onChange={(e) => setGoal(e.target.value)}
           placeholder="e.g. I want to make better jungle rotations." />
         <span className="text-[11px] text-faint block mt-1">Only shared when Profile & linked account is switched on.</span>

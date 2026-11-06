@@ -235,6 +235,10 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   const mobileHistoryRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldScroll = useRef(false);
+  // True while the reader is following the latest message. Font loads and layout
+  // transitions can reflow the transcript after it is rendered, so keep the view
+  // pinned to the newest message instead of stopping short.
+  const pinnedBottom = useRef(true);
   const current = conversations.find((item) => item.id === selected) || (selectedFromSearch?.id === selected ? selectedFromSearch : undefined);
   const workspaceReady = Boolean(status && settings && context);
   const waiting = busy || Boolean(remoteBusy);
@@ -330,8 +334,22 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     if (!loadingChat && shouldScroll.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       shouldScroll.current = false;
+      pinnedBottom.current = true;
     }
   }, [messages, selected, busy, loadingChat]);
+
+  useEffect(() => {
+    // Text can reflow after the web font loads or while the workspace is
+    // resizing. Keep a reader who is already at the newest message there.
+    const scroller = scrollRef.current;
+    const transcript = scroller?.firstElementChild;
+    if (!scroller || !transcript || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (pinnedBottom.current) scroller.scrollTop = scroller.scrollHeight;
+    });
+    observer.observe(transcript);
+    return () => observer.disconnect();
+  }, [selected, loadingChat, desktopLayout.historyOpen, desktopLayout.navigationOpen, desktopLayout.headerOpen]);
 
   useEffect(() => {
     if (showHistory && window.innerWidth < 1024) mobileHistoryRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
@@ -371,6 +389,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   async function olderMessages() {
     if (!selected || !messages.length || loadingMore) return;
     const chat = selected, version = ++olderVersion.current;
+    pinnedBottom.current = false;
     setLoadingMore(true);
     try {
       const result = await api.get<AIMessagePage>(`/ai/conversations/${chat}/messages?before=${messages[0].id}`);
@@ -560,7 +579,10 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             <button type="button" aria-label="Your context" className="btn-ghost !p-2 sm:!px-3 sm:!py-2" onClick={() => setShowControls(true)}><Settings2 size={15} /><span className="hidden sm:inline text-[11px]">Your context</span></button>
           </div>
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 min-h-[200px] max-h-[50vh] sm:max-h-none">
+        <div ref={scrollRef} onScroll={(event) => {
+          const node = event.currentTarget;
+          pinnedBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+        }} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 min-h-[200px] max-h-[50vh] sm:max-h-none">
           {loadingChat ? <div className="h-full grid place-items-center text-[12px] text-faint"><span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading conversation…</span></div> : messages.length || showPending ?
             <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}

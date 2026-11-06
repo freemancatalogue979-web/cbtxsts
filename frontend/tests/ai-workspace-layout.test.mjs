@@ -83,6 +83,16 @@ test("chat scroll waits for loaded messages and attachments are single-message",
   assert.match(picker, /share the selected saved team boards and notes with the external AI provider for my next message/);
 });
 
+test("the newest message stays in view when text reflows or the workspace resizes", async () => {
+  const chat = await readFile(new URL("../src/pages/CloverAI.tsx", import.meta.url), "utf8");
+  // A reader who is already at the bottom is re-pinned after a font load or resize.
+  assert.match(chat, /new ResizeObserver\(\(\) => \{\s*if \(pinnedBottom\.current\) scroller\.scrollTop = scroller\.scrollHeight;/);
+  assert.match(chat, /observer\.observe\(transcript\)/);
+  assert.match(chat, /pinnedBottom\.current = node\.scrollHeight - node\.scrollTop - node\.clientHeight < 48;/);
+  // Loading older messages must not drag the reader back down.
+  assert.match(chat, /const chat = selected, version = \+\+olderVersion\.current;\s*pinnedBottom\.current = false;/);
+});
+
 test("the conversation can grow with readable type and attachments", () => {
   const html = render({ navigationOpen: true, historyOpen: true, headerOpen: true });
   assert.match(html, /min-h-min sm:h-\[min\(740px,calc\(100vh-235px\)\)\]/);

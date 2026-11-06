@@ -42,8 +42,8 @@
   --color-edge-2: #30303c;
 
   --color-text: #f2f2f6;
-  --color-mute: #9b9ba8;
-  --color-faint: #898995;
+  --color-mute: #b5b5c3;
+  --color-faint: #a3a3b1;
 
   /* crimson + clover accents */
   --color-crim: #e11d48;
@@ -62,10 +62,11 @@
   body {
     @apply bg-ink text-text font-sans;
     font-style: oblique; /* Keep the app-wide slanted style. */
-    /* Corptic has one regular face. Avoid fuzzy, artificially bold letters,
-       while still allowing the browser to synthesize the requested slant. */
-    font-synthesis: style;
-    font-synthesis-weight: none;
+    /* The demo only includes a regular face. Let the browser thicken it for
+       a bold default, while keeping the requested oblique styling. */
+    font-weight: 700;
+    font-synthesis: weight style;
+    font-synthesis-weight: auto;
     /* Its small x-height needs more actual glyph size without breaking the
        responsive font-size utilities or the Montserrat number fallback. */
     font-size-adjust: 0.6;

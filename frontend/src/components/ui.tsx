@@ -112,7 +112,7 @@ export function ErrorNote({ error }: { error: unknown }) {
   if (!error) return null;
   const msg = error instanceof Error ? error.message : String(error);
   return (
-    <div className="rounded border border-crim/50 bg-crim-dim/40 px-3 py-2 text-[13px] text-crim font-medium">
+    <div className="rounded border border-crim/50 bg-crim-dim/40 px-3 py-2 text-[13px] text-crim font-semibold">
       {msg}
     </div>
   );
@@ -122,7 +122,7 @@ export function KV({ k, v }: { k: string; v: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
       <span className="label pt-0.5">{k}</span>
-      <span className="text-sm text-right font-medium">{v}</span>
+      <span className="text-sm text-right font-semibold">{v}</span>
     </div>
   );
 }

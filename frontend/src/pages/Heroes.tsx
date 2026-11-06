@@ -202,7 +202,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             <div className="space-y-1">
               {(h.specialists ?? []).map((s) => (
                 <button key={s.user_id} onClick={() => navigate("players", s.user_id)} className="w-full flex items-center justify-between text-left hover:bg-raised rounded-lg px-3 py-2.5 transition-colors">
-                  <span className="text-sm font-semibold">{s.ign} <span className="text-faint text-[11px] font-medium">{s.main_role}</span></span>
+                  <span className="text-sm font-semibold">{s.ign} <span className="text-faint text-[11px] font-semibold">{s.main_role}</span></span>
                   <span className="text-[11px] text-mute">{s.category} · conf {s.confidence}/10{s.win_rate != null ? ` · ${s.win_rate}% WR` : ""}</span>
                 </button>
               ))}

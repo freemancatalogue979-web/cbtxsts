@@ -102,18 +102,35 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
-test("the display font keeps its slant while gaining clarity and breathing room", () => {
+test("Corptic is bold by default without losing the slant or breathing room", () => {
   const body = css.match(/body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-style:\s*oblique/);
-  assert.match(body, /font-synthesis:\s*style/);
-  assert.match(body, /font-synthesis-weight:\s*none/);
+  assert.match(body, /font-weight:\s*700/);
+  assert.match(body, /font-synthesis:\s*weight\s+style/);
+  assert.match(body, /font-synthesis-weight:\s*auto/);
   assert.match(body, /font-size-adjust:\s*0\.6/);
   assert.match(body, /letter-spacing:\s*0\.035em/);
   assert.match(body, /line-height:\s*1\.6/);
   assert.doesNotMatch(body, /\bantialiased\b/);
-  assert.match(css, /--color-faint:\s*#898995/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);
   assert.match(css, /@supports not \(font-size-adjust:\s*0\.6\)\s*\{\s*@font-face\s*\{[^}]*unicode-range:\s*U\+0000-002F,\s*U\+003A-10FFFF;[^}]*size-adjust:\s*120%/s);
+});
+
+test("secondary text remains clearly visible on the darkest and raised surfaces", () => {
+  const color = (name) => {
+    const value = css.match(new RegExp(`--color-${name}:\\s*#([0-9a-f]{6});`, "i"))?.[1];
+    assert.ok(value, `${name} color must exist`);
+    return [0, 2, 4].map((start) => parseInt(value.slice(start, start + 2), 16) / 255);
+  };
+  const luminance = (channels) => channels.reduce((sum, channel, index) => {
+    const linear = channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    return sum + linear * [0.2126, 0.7152, 0.0722][index];
+  }, 0);
+  const contrast = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  for (const background of ["ink", "panel", "raised", "overlay"]) {
+    assert.ok(contrast(luminance(color("faint")), luminance(color(background))) >= 6.5, `faint on ${background}`);
+    assert.ok(contrast(luminance(color("mute")), luminance(color(background))) >= 8, `mute on ${background}`);
+  }
 });
 
 test("the mobile quick bar keeps larger, higher-contrast labels for the display font", async () => {
@@ -121,6 +138,7 @@ test("the mobile quick bar keeps larger, higher-contrast labels for the display 
   const bar = layout.split("{/* Mobile bottom quick bar */}")[1]?.split("</nav>")[0] ?? "";
   assert.match(bar, /text-\[10px\]/);
   assert.match(bar, /active \? "text-rose-500" : "text-mute"/);
+  assert.match(bar, /aria-label=\{accessibleLabel\}/);
 });
 
 test("draft cards can shrink and names can wrap on narrow screens", async () => {
