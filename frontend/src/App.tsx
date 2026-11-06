@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
+import { applyFontChoice, readFontChoice, saveFontChoice, type FontChoice } from "./lib/fontPrefs";
 import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
 import { Layout } from "./components/Layout";
@@ -27,7 +28,7 @@ import { EventsPage } from "./pages/Events";
 import { ArchivePage } from "./pages/Archive";
 import { AdminPage } from "./pages/Admin";
 
-function aiLayoutStorage(): Storage | null {
+function deviceStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
 }
 
@@ -45,10 +46,12 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [booting, setBooting] = useState(true);
-  const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(aiLayoutStorage()));
+  const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(deviceStorage()));
+  const [font, setFont] = useState<FontChoice>(() => readFontChoice(deviceStorage()));
   const route = useRoute();
 
-  useEffect(() => { saveAIWorkspaceLayout(aiLayoutStorage(), aiLayout); }, [aiLayout]);
+  useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
+  useEffect(() => { applyFontChoice(font); saveFontChoice(deviceStorage(), font); }, [font]);
 
   useEffect(() => {
     const refreshMeta = () => { void api.get<Meta>("/meta").then(setMeta).catch(() => undefined); };
@@ -158,7 +161,8 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onUserUpdate={setUser} hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
+    <Layout user={user} onUserUpdate={setUser} font={font} onFontChange={setFont}
+      hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
       onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
       {page}
     </Layout>

@@ -27,10 +27,12 @@
 }
 
 @theme {
-  --font-sans: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* Montserrat is the default text style: it has a full character set and is
+     the easiest to read. Corptic stays available from the profile menu. */
+  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-  /* Corptic is already compact; don't squeeze headings with negative tracking. */
+  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
   /* dark premium foundation */
@@ -55,23 +57,36 @@
   --color-sky: #7db5f5;
 }
 
+/* Corptic is an opt-in display style, chosen per browser in the profile menu.
+   `data-font` is set before the first paint by the inline script in index.html. */
+html[data-font="corptic"] {
+  --font-sans: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  --font-mono: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+}
+
 @layer base {
   html {
     color-scheme: dark;
   }
   body {
     @apply bg-ink text-text font-sans;
-    font-style: oblique; /* Keep the app-wide slanted style. */
-    /* The demo only includes a regular face. Let the browser thicken it for
-       a bold default, while keeping the requested oblique styling. */
-    font-weight: 700;
+    /* Semibold keeps Montserrat crisp against the dark surfaces without the
+       extra width that a synthesized heavy weight adds. */
+    font-weight: 600;
     font-synthesis: weight style;
     font-synthesis-weight: auto;
-    /* Its small x-height needs more actual glyph size without breaking the
-       responsive font-size utilities or the Montserrat number fallback. */
-    font-size-adjust: 0.6;
-    letter-spacing: 0.035em;
+    letter-spacing: 0.01em;
     line-height: 1.6;
+  }
+  /* The display font keeps its slanted, technical look and needs a little
+     more room. Its small x-height gets a size boost; the demo has only one
+     weight, so the browser thickens it. Digits still fall through to
+     Montserrat because the Corptic @font-face excludes 0–9. */
+  html[data-font="corptic"] body {
+    font-style: oblique;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    font-size-adjust: 0.6;
     font-feature-settings: "ss01";
   }
   ::selection {

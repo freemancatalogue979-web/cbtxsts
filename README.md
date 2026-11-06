@@ -533,7 +533,7 @@ recommendations. It cannot establish why a decision was made without evidence.
 
 ## Fonts
 
-The interface uses Corptic DEMO by Pandeka Foundry. **The included demo is for personal, non-commercial use only**; obtain an appropriate license before commercial or corporate use. Digits use Montserrat; punctuation and other glyphs missing from the demo use Montserrat or system fallbacks. See [font credits and licensing](docs/reference/fonts.md).
+The interface uses **Montserrat** by default. Members can switch to the optional Corptic DEMO display font from **Edit profile → Text style**; the choice is saved per browser. Corptic DEMO is by Pandeka Foundry, and **the included demo is for personal, non-commercial use only** — obtain an appropriate license before commercial or corporate use. Numerals always use Montserrat, and glyphs missing from the demo use Montserrat or system fallbacks. See [font credits and licensing](docs/reference/fonts.md).
 
 ## Tests
 

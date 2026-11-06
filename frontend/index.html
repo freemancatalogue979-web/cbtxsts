@@ -11,6 +11,16 @@
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <meta name="theme-color" content="#0a0a0d" />
     <title>9 CLOVER — The Hub</title>
+    <script>
+      // Apply the saved text style before the first paint. Montserrat is the
+      // default; Corptic is opt-in from the profile menu.
+      try {
+        document.documentElement.dataset.font =
+          window.localStorage.getItem("clover_font_choice") === "corptic" ? "corptic" : "montserrat";
+      } catch (error) {
+        document.documentElement.dataset.font = "montserrat";
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

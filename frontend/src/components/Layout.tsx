@@ -27,6 +27,7 @@ import { linkOf } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
 import type { User } from "../lib/types";
 import { hashRoute, navigate } from "../lib/util";
+import { FONT_CHOICES, type FontChoice } from "../lib/fontPrefs";
 import { Wordmark } from "./Logo";
 import { AvatarImg } from "./Avatar";
 import { ErrorNote, Field } from "./ui";
@@ -89,7 +90,34 @@ function NavList({ current, onNavigate, user, unread = 0 }: { current: string; o
   );
 }
 
-function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => void; onSaved: (u: User) => void }) {
+function FontPicker({ value, onChange }: { value: FontChoice; onChange: (choice: FontChoice) => void }) {
+  return (
+    <div className="rounded-lg border border-edge bg-raised px-3.5 py-3">
+      <div className="text-[12px] font-bold">Text style</div>
+      <p className="text-[10.5px] text-faint mt-0.5 leading-relaxed" id="font-picker-hint">
+        Montserrat is the default and easiest to read. Pick the Corptic display font if you prefer the slanted look. Saved on this device only.
+      </p>
+      <div role="radiogroup" aria-label="Text style" aria-describedby="font-picker-hint" className="grid grid-cols-2 gap-2 mt-2.5">
+        {FONT_CHOICES.map((choice) => {
+          const active = choice.id === value;
+          return (
+            <button key={choice.id} type="button" role="radio" aria-checked={active} onClick={() => onChange(choice.id)}
+              className={`min-w-0 rounded-md border px-2.5 py-2 text-left transition-colors ${
+                active ? "border-leaf/60 bg-leaf/10" : "border-edge bg-panel hover:border-edge-2 hover:bg-overlay"
+              }`}>
+              <span className="block break-words text-[12.5px] leading-tight font-bold" style={{ fontFamily: choice.stack }}>{choice.label}</span>
+              <span className={`mt-0.5 block text-[9.5px] leading-snug ${active ? "text-leaf" : "text-faint"}`}>{choice.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProfileModal({ user, font, onFontChange, onClose, onSaved }: {
+  user: User; font: FontChoice; onFontChange: (choice: FontChoice) => void; onClose: () => void; onSaved: (u: User) => void;
+}) {
   const [f, setF] = useState({ name: user.name, ign: user.ign, main_role: user.main_role, bio: user.bio });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -126,8 +154,9 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <form className="card p-6 w-full max-w-md space-y-4 bg-panel" onClick={(e) => e.stopPropagation()} onSubmit={save}>
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4" onClick={onClose}>
+      <form className="card p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto space-y-4 bg-panel" onClick={(e) => e.stopPropagation()} onSubmit={save}
+        role="dialog" aria-modal="true" aria-label="Edit profile">
         <div className="flex items-center gap-4">
           <AvatarImg user={user} size={64} />
           <div className="flex-1">
@@ -174,7 +203,7 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
               <div className="flex items-center gap-2.5 w-full">
                 <Gamepad2 size={15} className="text-faint shrink-0" />
                 <div className="text-[11px] text-faint flex-1">MLBB account not connected — rank, level and official IGN can fill this profile.</div>
-                <button type="button" className="btn-ghost !py-1 !text-[10px] text-crim shrink-0" onClick={() => { onClose(); navigate("mlbb"); }}>Connect</button>
+                <button type="button" className="btn-ghost !py-1 !text-[11px] !text-rose-300 shrink-0" onClick={() => { onClose(); navigate("mlbb"); }}>Connect</button>
               </div>
             )}
           </div>
@@ -189,6 +218,7 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
           </Field>
         </div>
         <Field label="Bio"><textarea className="input min-h-20" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} placeholder="Role, goals, offline focus…" /></Field>
+        <FontPicker value={font} onChange={onFontChange} />
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Close</button>
@@ -199,14 +229,16 @@ function ProfileModal({ user, onClose, onSaved }: { user: User; onClose: () => v
   );
 }
 
-function UserCard({ user, onLogout, onUserUpdate }: { user: User; onLogout: () => void; onUserUpdate: (u: User) => void }) {
+function UserCard({ user, font, onFontChange, onLogout, onUserUpdate }: {
+  user: User; font: FontChoice; onFontChange: (choice: FontChoice) => void; onLogout: () => void; onUserUpdate: (u: User) => void;
+}) {
   const [editing, setEditing] = useState(false);
   return (
     <div className="border-t border-edge p-3 flex items-center gap-3">
-      <button className="shrink-0" onClick={() => setEditing(true)} title="Edit profile">
+      <button className="shrink-0" onClick={() => setEditing(true)} title="Edit profile" aria-label="Edit profile">
         <AvatarImg user={user} size={36} />
       </button>
-      <button className="flex-1 min-w-0 text-left" onClick={() => setEditing(true)} title="Edit profile">
+      <button className="flex-1 min-w-0 text-left" onClick={() => setEditing(true)} title="Edit profile" aria-label="Edit profile">
         <div className="text-[13px] font-bold truncate">{user.ign || user.name}</div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className={`chip !text-[9px] !px-1.5 !py-0 uppercase ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
@@ -216,13 +248,15 @@ function UserCard({ user, onLogout, onUserUpdate }: { user: User; onLogout: () =
       <button onClick={onLogout} className="text-faint hover:text-crim transition-colors" title="Sign out">
         <LogOut size={16} />
       </button>
-      {editing && <ProfileModal user={user} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />}
+      {editing && <ProfileModal user={user} font={font} onFontChange={onFontChange} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />}
     </div>
   );
 }
 
-export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, children }: {
-  user: User; onLogout: () => void; onUserUpdate: (u: User) => void; hideDesktopNav?: boolean; children: ReactNode;
+export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, hideDesktopNav = false, children }: {
+  user: User; onLogout: () => void; onUserUpdate: (u: User) => void;
+  font: FontChoice; onFontChange: (choice: FontChoice) => void;
+  hideDesktopNav?: boolean; children: ReactNode;
 }) {
   const [route, setRoute] = useState<string[]>(hashRoute());
   const [mobileNav, setMobileNav] = useState(false);
@@ -251,7 +285,7 @@ export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, c
           <Wordmark />
         </div>
         <NavList current={current} user={user} unread={unread} />
-        <UserCard user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />
+        <UserCard user={user} font={font} onFontChange={onFontChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
       </aside>
 
       {/* Mobile top bar */}
@@ -279,7 +313,7 @@ export function Layout({ user, onLogout, onUserUpdate, hideDesktopNav = false, c
               </button>
             </div>
             <NavList current={current} user={user} unread={unread} onNavigate={() => setMobileNav(false)} />
-            <UserCard user={user} onLogout={onLogout} onUserUpdate={onUserUpdate} />
+            <UserCard user={user} font={font} onFontChange={onFontChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
           </div>
         </div>
       )}

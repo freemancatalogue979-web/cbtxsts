@@ -74,13 +74,9 @@ test("demo letters use Corptic while unavailable characters have fallbacks", () 
     assert.equal(glyphFor(character.codePointAt(0)), 0, `fallback needed for ${character}`);
   }
   assert.match(css, /@font-face\s*\{[^}]*font-family:\s*"Corptic";[^}]*url\("\/fonts\/CorpticDEMO-Regular\.otf"\)/s);
-  for (const name of ["sans", "mono"]) {
-    const stack = css.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    assert.match(stack, /^"Corptic",\s*"Montserrat Variable"/);
-    assert.match(stack, /"Segoe UI Symbol"/);
-    assert.match(stack, /"Noto Sans Symbols"/);
-  }
-  assert.match(css, /body\s*\{[^}]*font-style:\s*oblique/s);
+  assert.match(css, /"Segoe UI Symbol"/);
+  assert.match(css, /"Noto Sans Symbols"/);
+  assert.match(css, /html\[data-font="corptic"\]\s*\{[^}]*--font-sans:\s*"Corptic",\s*"Montserrat Variable"/s);
 });
 
 test("digits use Montserrat even if a future Corptic face contains numbers", () => {
@@ -97,22 +93,38 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   for (const digit of "0123456789") assert.equal(corpticCanSupply(digit), false, digit);
   for (const character of "AZaz .,!?é") assert.equal(corpticCanSupply(character), true, character);
   for (const name of ["sans", "mono"]) {
-    const stack = css.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
+    const stack = css.match(new RegExp(`html\\[data-font="corptic"\\]\\s*\\{[^}]*--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
     assert.match(stack, /^"Corptic",\s*"Montserrat Variable"/);
   }
 });
 
-test("Corptic is bold by default without losing the slant or breathing room", () => {
-  const body = css.match(/body\s*\{([^}]+)\}/)?.[1] ?? "";
-  assert.match(body, /font-style:\s*oblique/);
-  assert.match(body, /font-weight:\s*700/);
-  assert.match(body, /font-synthesis:\s*weight\s+style/);
-  assert.match(body, /font-synthesis-weight:\s*auto/);
-  assert.match(body, /font-size-adjust:\s*0\.6/);
-  assert.match(body, /letter-spacing:\s*0\.035em/);
+test("Montserrat is the default text style and stays crisp and bold", () => {
+  const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
+  for (const name of ["sans", "mono"]) {
+    const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
+    assert.match(stack, /^"Montserrat Variable"/);
+    assert.doesNotMatch(stack, /Corptic/);
+  }
+  const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(body, /font-weight:\s*600/);
   assert.match(body, /line-height:\s*1\.6/);
+  assert.match(body, /letter-spacing:\s*0\.01em/);
+  // The default style must not be slanted, scaled or given display-font spacing.
+  assert.doesNotMatch(body, /font-style:\s*oblique/);
+  assert.doesNotMatch(body, /font-size-adjust/);
   assert.doesNotMatch(body, /\bantialiased\b/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);
+});
+
+test("the optional Corptic style keeps its slant, readable size and thick letters", () => {
+  const corptic = css.match(/html\[data-font="corptic"\] body\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(corptic, /font-style:\s*oblique/);
+  assert.match(corptic, /font-weight:\s*700/);
+  assert.match(corptic, /font-size-adjust:\s*0\.6/);
+  assert.match(corptic, /letter-spacing:\s*0\.035em/);
+  const base = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(base, /font-synthesis:\s*weight\s+style/);
+  assert.match(base, /font-synthesis-weight:\s*auto/);
   assert.match(css, /@supports not \(font-size-adjust:\s*0\.6\)\s*\{\s*@font-face\s*\{[^}]*unicode-range:\s*U\+0000-002F,\s*U\+003A-10FFFF;[^}]*size-adjust:\s*120%/s);
 });
 
