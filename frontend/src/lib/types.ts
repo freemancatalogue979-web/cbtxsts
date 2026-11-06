@@ -34,6 +34,8 @@ export interface PlayerSummary {
   level: number;
   title: string;
   tier: Tier;
+  absolute_genesis_number?: number | null;
+  absolute_genesis_at?: string | null;
   xp: number;
   coins: number;
   diamonds?: number;
@@ -147,6 +149,8 @@ export interface Profile {
   last_active: string | null;
   progress: LevelProgress;
   tier: Tier;
+  absolute_genesis_number?: number | null;
+  absolute_genesis_at?: string | null;
   stats: {
     exams_taken: number;
     exams_won: number;

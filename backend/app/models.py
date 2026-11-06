@@ -79,6 +79,10 @@ class Student(Base):
 
     # --- progression -------------------------------------------------------
     xp: Mapped[int] = mapped_column(Integer, default=0)
+    # Permanent level-100 honour. Numbers 1–100 form the Founder's 100;
+    # later Absolute Genesis players receive the crown without a number.
+    absolute_genesis_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
+    absolute_genesis_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     coins: Mapped[int] = mapped_column(Integer, default=0)
     # Diamonds are the prestige currency: only milestones, majors and events pay
     # them, and nothing in the arena can convert coins into diamonds.
@@ -125,6 +129,14 @@ class Student(Base):
     activities: Mapped[list["Activity"]] = relationship(back_populates="student", cascade="all, delete-orphan")
     cosmetics: Mapped[list["Cosmetic"]] = relationship(back_populates="student", cascade="all, delete-orphan")
     milestones: Mapped[list["StudentMilestone"]] = relationship(back_populates="student", cascade="all, delete-orphan")
+
+
+class AbsoluteGenesisCounter(Base):
+    """Single atomic counter row for the permanent Founder's 100 numbering."""
+    __tablename__ = "absolute_genesis_counter"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_number: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class Admin(Base):

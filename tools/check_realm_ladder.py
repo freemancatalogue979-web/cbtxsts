@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 sa = types.ModuleType("sqlalchemy")
 sa.func = types.SimpleNamespace(count=lambda *a, **k: None)
 sa.select = lambda *a, **k: None
+sa.text = lambda *a, **k: None
 sa.orm = types.ModuleType("sqlalchemy.orm")
 sa.orm.Session = object
 sys.modules["sqlalchemy"] = sa
@@ -81,17 +82,17 @@ game = importlib.util.module_from_spec(spec)
 sys.modules["app.game"] = game
 spec.loader.exec_module(game)
 
-# Twenty-four division medals and Genesis at the level cap.
+# Twenty-four division medals and Absolute Genesis at level 100.
 LADDER = [
     (1, "bronze_1"), (2, "bronze_2"), (3, "bronze_3"),
     (4, "silver_1"), (5, "silver_2"), (6, "silver_3"),
     (7, "gold_1"), (8, "gold_2"), (9, "gold_3"),
-    (10, "platinum_1"), (12, "platinum_2"), (14, "platinum_3"),
-    (16, "diamond_1"), (19, "diamond_2"), (22, "diamond_3"),
-    (25, "obsidian_1"), (29, "obsidian_2"), (33, "obsidian_3"),
-    (37, "mythril_1"), (41, "mythril_2"), (45, "mythril_3"),
-    (49, "aurora_1"), (53, "aurora_2"), (57, "aurora_3"),
-    (60, "genesis"),
+    (10, "platinum_1"), (13, "platinum_2"), (16, "platinum_3"),
+    (20, "diamond_1"), (24, "diamond_2"), (28, "diamond_3"),
+    (33, "obsidian_1"), (38, "obsidian_2"), (43, "obsidian_3"),
+    (50, "mythril_1"), (57, "mythril_2"), (64, "mythril_3"),
+    (72, "aurora_1"), (81, "aurora_2"), (90, "aurora_3"),
+    (100, "absolute_genesis"),
 ]
 assert len(LADDER) == 25
 assert game.TIER_LEVELS == tuple(LADDER), game.TIER_LEVELS
@@ -110,8 +111,9 @@ for threshold, name in LADDER:
         assert game.tier_for_level(threshold - 1) != name, (threshold, name)
 
 assert game.tier_for_level(0) == "bronze_1"
-assert game.tier_for_level(60) == "genesis"
-assert game.tier_for_level(100) == "genesis"
+assert game.MAX_LEVEL == 100
+assert game.tier_for_level(60) == "mythril_2"
+assert game.tier_for_level(100) == "absolute_genesis"
 
 print("realm ladder OK — 100 realms, first mystical realm:", ladder[40]["label"])
 print("lifetime metals OK —", " → ".join(name for _, name in LADDER))

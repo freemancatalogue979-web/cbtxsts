@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .models import Activity, Attempt, Badge, Friendship, Student, StudentBadge, utcnow
@@ -27,9 +27,10 @@ TITLES = [
     (8, "Legend"),
     (9, "Immortal"),
     (10, "Arena Deity"),
+    (100, "Absolute Genesis"),
 ]
 
-MAX_LEVEL = 60
+MAX_LEVEL = 100
 
 
 def xp_for_level(level: int) -> int:
@@ -72,7 +73,7 @@ def title_for_level(level: int) -> str:
 
 
 # Twenty-five visibly distinct lifetime medals: three divisions in each of
-# eight metal families, then the singular Genesis medal at the level cap.
+# eight metal families, then the singular Absolute Genesis crown at level 100.
 TIER_LEVELS = (
     (1, "bronze_1"),
     (2, "bronze_2"),
@@ -84,21 +85,21 @@ TIER_LEVELS = (
     (8, "gold_2"),
     (9, "gold_3"),
     (10, "platinum_1"),
-    (12, "platinum_2"),
-    (14, "platinum_3"),
-    (16, "diamond_1"),
-    (19, "diamond_2"),
-    (22, "diamond_3"),
-    (25, "obsidian_1"),
-    (29, "obsidian_2"),
-    (33, "obsidian_3"),
-    (37, "mythril_1"),
-    (41, "mythril_2"),
-    (45, "mythril_3"),
-    (49, "aurora_1"),
-    (53, "aurora_2"),
-    (57, "aurora_3"),
-    (60, "genesis"),
+    (13, "platinum_2"),
+    (16, "platinum_3"),
+    (20, "diamond_1"),
+    (24, "diamond_2"),
+    (28, "diamond_3"),
+    (33, "obsidian_1"),
+    (38, "obsidian_2"),
+    (43, "obsidian_3"),
+    (50, "mythril_1"),
+    (57, "mythril_2"),
+    (64, "mythril_3"),
+    (72, "aurora_1"),
+    (81, "aurora_2"),
+    (90, "aurora_3"),
+    (100, "absolute_genesis"),
 )
 
 
@@ -344,6 +345,43 @@ def award_diamonds(
     return event
 
 
+def award_absolute_genesis(db: Session, student: Student, events: list[dict]) -> None:
+    """Immortalise level 100 and atomically number only the first 100 arrivals.
+
+    The counter update and increment are one SQL statement, so simultaneous
+    level-up requests cannot receive the same Founder number. The student
+    columns make the honour permanent and cheap to include in public profiles.
+    """
+    if student.absolute_genesis_at is not None:
+        return
+    student.absolute_genesis_at = utcnow()
+    db.execute(text(
+        "INSERT INTO absolute_genesis_counter (id, next_number) VALUES (1, 1) "
+        "ON CONFLICT (id) DO NOTHING"
+    ))
+    allocated = db.execute(text(
+        "UPDATE absolute_genesis_counter SET next_number = next_number + 1 "
+        "WHERE id = 1 AND next_number <= 100 RETURNING next_number"
+    )).scalar()
+    if allocated is not None:
+        student.absolute_genesis_number = int(allocated) - 1
+    number = student.absolute_genesis_number
+    db.add(Activity(
+        student_id=student.id,
+        kind="absolute_genesis",
+        title=f"Founder #{number:03d} · Absolute Genesis" if number else "Absolute Genesis achieved",
+        detail="Your name is carved into the level-100 crown." if number else "You reached the peak of the lifetime ladder.",
+        amount=number or 100,
+    ))
+    events.append({
+        "type": "absolute_genesis",
+        "level": 100,
+        "founder_number": number,
+        "founder": number is not None,
+        "title": "Absolute Genesis",
+    })
+
+
 def grant(
     db: Session,
     student: Student,
@@ -401,6 +439,8 @@ def grant(
         )
 
     after_level = level_from_xp(student.xp)
+    if after_level >= 100:
+        award_absolute_genesis(db, student, events)
     if after_level > before_level:
         db.add(
             Activity(

@@ -8,6 +8,7 @@ import {TIER_PALETTES, tierLabel} from '../lib/tiers';
 
 export function prestigeFor(level: number) {
   // The current progression is capped at 60; never invent a level-100 account.
+  if (level >= 100) return {name: 'Absolute Genesis', color: '#ffd75e'};
   if (level >= 60) return {name: 'Transcendent', color: '#67e8f9'};
   if (level >= 50) return {name: 'Mythic', color: '#f0abfc'};
   if (level >= 35) return {name: 'Legendary', color: '#fbbf24'};
@@ -16,14 +17,20 @@ export function prestigeFor(level: number) {
   return {name: 'Rookie', color: '#6ee7b7'};
 }
 
-export function OverallRankPlate({tier, level}: {tier: Tier; level: number}) {
+export function OverallRankPlate({tier, level, playerName, founderNumber}: {
+  tier: Tier;
+  level: number;
+  playerName?: string;
+  founderNumber?: number | null;
+}) {
+  const founder = typeof founderNumber === 'number' && founderNumber >= 1 && founderNumber <= 100;
   return (
     <div className="profile-rank-plate" data-tier={tier} style={{'--rank-metal': TIER_PALETTES[tier]?.bright ?? TIER_PALETTES.bronze.bright} as CSSProperties}>
-      <RankCrest tier={tier} />
+      <RankCrest tier={tier} playerName={playerName} founderNumber={founderNumber} />
       <div className="profile-rank-copy min-w-0 flex-1">
-        <p className="profile-rank-eyebrow">Overall rank</p>
+        <p className="profile-rank-eyebrow">{founder ? `Founder's 100 · #${String(founderNumber).padStart(3, '0')}` : 'Overall rank'}</p>
         <p className="profile-rank-name">{tierLabel(tier)}</p>
-        <p className="profile-rank-subtitle">Lifetime progression · {prestigeFor(level).name}</p>
+        <p className="profile-rank-subtitle">{founder ? 'Your name is carved into the crown forever.' : `Lifetime progression · ${prestigeFor(level).name}`}</p>
       </div>
       <span className="profile-rank-level"><small>LEVEL</small><strong>{level}</strong></span>
     </div>

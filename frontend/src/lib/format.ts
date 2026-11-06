@@ -166,6 +166,7 @@ const TIER_CLASS: Record<string, string> = {
   mythril: 'text-mist-100 bg-mist-300/12 border-mist-200/28',
   aurora: 'text-mint-200 bg-mint-400/14 border-mint-300/40',
   genesis: 'text-gold-200 bg-nova-400/14 border-gold-300/40',
+  absolute_genesis: 'text-gold-200 bg-gold-400/16 border-gold-300/50',
 };
 export const TIER_STYLES: Record<string, {label: string; className: string; ring: string}> = {
   ...Object.fromEntries(Object.keys(BASE_TIER_PALETTES).map((tier) => [tier, {

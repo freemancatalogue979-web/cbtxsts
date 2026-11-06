@@ -19,7 +19,7 @@
 import {useId, type CSSProperties} from 'react';
 import {Award, Crown, Flame, Gem, Medal, Shield, Sparkles, Star, Sun, Trophy, Zap} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
-import type {BaseTier, Tier} from '../lib/tiers';
+import type {BaseTier, PeakTier, Tier} from '../lib/tiers';
 import {TIER_ORDER, TIER_PALETTES, tierDivision, tierFamily} from '../lib/tiers';
 
 /** The glyphs a badge can carry. Mapped to lucide icons. */
@@ -93,7 +93,7 @@ export function tierRank(tier: Tier | string): number {
 }
 
 /** Each metal family has its own readable centre emblem. */
-const TIER_ICONS: Record<BaseTier | 'genesis', LucideIcon> = {
+const TIER_ICONS: Record<BaseTier | PeakTier, LucideIcon> = {
   bronze: Shield,
   silver: Star,
   gold: Trophy,
@@ -103,6 +103,7 @@ const TIER_ICONS: Record<BaseTier | 'genesis', LucideIcon> = {
   mythril: Zap,
   aurora: Sun,
   genesis: Crown,
+  absolute_genesis: Crown,
 };
 
 /* ------------------------------------------------------------------ colour */
@@ -452,7 +453,7 @@ function starPath(cx: number, cy: number, r: number): string {
 }
 
 /** Each family has its own shield contour, even before colour and emblem. */
-const CREST_SHIELDS: Record<BaseTier | 'genesis', string> = {
+const CREST_SHIELDS: Record<BaseTier | PeakTier, string> = {
   bronze: 'm60 31 40 15-4 48q-5 22-36 39-31-17-36-39l-4-48Z',
   silver: 'm60 29 42 17-7 46q-7 23-35 42-28-19-35-42l-7-46Z',
   gold: 'm60 30 43 14-3 48q-4 24-40 42-36-18-40-42l-3-48Z',
@@ -462,13 +463,103 @@ const CREST_SHIELDS: Record<BaseTier | 'genesis', string> = {
   mythril: 'm60 27 39 17 5 12-10 40-34 38-34-38-10-40 5-12Z',
   aurora: 'm60 26 41 17 4 14-9 38q-7 22-36 39-29-17-36-39l-9-38 4-14Z',
   genesis: 'm60 24 45 18-3 50q-4 25-42 43-38-18-42-43l-3-50Z',
+  absolute_genesis: 'm60 24 45 18-3 50q-4 25-42 43-38-18-42-43l-3-50Z',
 };
 
+/** The level-100 crown is unique artwork, not a recoloured lifetime shield. */
+function AbsoluteGenesisCrown({className = '', playerName = '', founderNumber}: {
+  className?: string;
+  playerName?: string;
+  founderNumber?: number | null;
+}) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const founder = typeof founderNumber === 'number' && founderNumber >= 1 && founderNumber <= 100;
+  const number = founder ? String(founderNumber).padStart(3, '0') : '';
+  const name = (playerName.trim() || 'Absolute Scholar').toUpperCase().slice(0, 20);
+  const nameWidth = Math.min(108, Math.max(48, name.length * 6.1));
+
+  return (
+    <svg className={`rank-crest rank-crest--absolute ${className}`} data-tier="absolute_genesis" data-founder={founder ? founderNumber : undefined}
+      viewBox="0 0 160 166" aria-hidden="true" focusable="false" style={{'--crest-glow': '#ffd75ecc'} as CSSProperties}>
+      <defs>
+        <linearGradient id={`${uid}-gold`} x1=".08" y1="0" x2=".9" y2="1">
+          <stop stopColor="#6f3d08" /><stop offset=".1" stopColor="#d99516" /><stop offset=".24" stopColor="#fff7b2" />
+          <stop offset=".36" stopColor="#f4b92d" /><stop offset=".48" stopColor="#ffffff" /><stop offset=".535" stopColor="#ffe57d" />
+          <stop offset=".72" stopColor="#c77b0c" /><stop offset=".9" stopColor="#ffdc65" /><stop offset="1" stopColor="#633006" />
+        </linearGradient>
+        <linearGradient id={`${uid}-band`} x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#fff9c8" /><stop offset=".18" stopColor="#f8ce4f" /><stop offset=".55" stopColor="#b66b08" />
+          <stop offset=".76" stopColor="#f4bd32" /><stop offset="1" stopColor="#6c3606" />
+        </linearGradient>
+        <radialGradient id={`${uid}-velvet`} cx=".42" cy=".18" r=".9">
+          <stop stopColor="#522373" /><stop offset=".5" stopColor="#24103f" /><stop offset="1" stopColor="#090718" />
+        </radialGradient>
+        <linearGradient id={`${uid}-jewel`} x1=".2" y1="0" x2=".8" y2="1">
+          <stop stopColor="#ffffff" /><stop offset=".22" stopColor="#f7c8ff" /><stop offset=".48" stopColor="#d771ff" />
+          <stop offset=".72" stopColor="#7432c7" /><stop offset="1" stopColor="#24104e" />
+        </linearGradient>
+        <filter id={`${uid}-relief`} x="-40%" y="-40%" width="180%" height="190%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" floodColor="#000000" floodOpacity=".9" />
+        </filter>
+      </defs>
+
+      {/* A towering five-point silhouette, reserved exclusively for level 100. */}
+      <path d="M16 91 9 24l39 25L58 18 80 3l22 15 10 31 39-25-7 67-12 16H28Z" fill="#03030b" stroke="#03030b" strokeWidth="5" strokeLinejoin="round" transform="translate(0 3)" />
+      <path d="M16 88 9 21l39 26L58 15 80 2l22 13 10 32 39-26-7 67-12 16H28Z" fill={`url(#${uid}-gold)`} stroke="#8b520b" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="m23 79-7-49 34 25L60 23l20-14 20 14 10 32 34-25-7 49Z" fill={`url(#${uid}-velvet)`} stroke="#fff2a6" strokeOpacity=".62" strokeWidth="1" />
+      <path d="M17 27 48 52 61 23 80 8l19 15 13 29 31-25" fill="none" stroke="#ffffff" strokeOpacity=".7" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M27 82q53-22 106 0l-4 17H31Z" fill={`url(#${uid}-gold)`} stroke="#6f3d08" strokeWidth="1.2" />
+      <path d="M32 84q48-16 96 0" fill="none" stroke="#fff8c9" strokeOpacity=".72" strokeWidth="1.4" />
+
+      {/* Cut amethysts and diamond tips make the crown read as royal jewellery. */}
+      <path d="m80 10 9 13-9 15-9-15Z" fill={`url(#${uid}-jewel)`} stroke="#fff4c0" strokeWidth="1.2" filter={`url(#${uid}-relief)`} />
+      <path d="m80 12 4 11-4 10-4-10Z" fill="#ffffff" opacity=".48" />
+      {[[18, 35], [51, 48], [109, 48], [142, 35]].map(([x, y], i) => (
+        <path key={i} d={`m${x} ${y - 7} 5 7-5 8-5-8Z`} fill={`url(#${uid}-jewel)`} stroke="#fff0a5" strokeWidth=".8" />
+      ))}
+      {[34, 49, 65, 95, 111, 126].map((x) => <circle key={x} cx={x} cy={88 - Math.abs(80 - x) * .035} r="2.2" fill="#fff9d5" stroke="#9a5b08" strokeWidth=".7" />)}
+
+      {/* Education at the summit: graduation cap above an illuminated open book. */}
+      <path d="m80 45 27 11-27 12-27-12Z" fill="#050713" opacity=".8" transform="translate(0 2)" />
+      <path d="m80 43 28 11-28 12-28-12Z" fill={`url(#${uid}-gold)`} stroke="#fff0a0" strokeWidth=".8" filter={`url(#${uid}-relief)`} />
+      <path d="m63 61 4 12q13 8 26 0l4-12-17 7Z" fill="#d99317" stroke="#ffe895" strokeWidth=".7" />
+      <path d="M107 55v15l5 4" fill="none" stroke="#ffe99a" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="m113 70 3 5-3 5-3-5Z" fill="#f6c13c" />
+      <path d="M80 70q-13-7-25-3v19q13-4 25 3 12-7 25-3V67q-12-4-25 3Z" fill="#fff6c7" stroke="#9b5c09" strokeWidth="1" filter={`url(#${uid}-relief)`} />
+      <path d="M80 70v19M60 73q8-1 15 3M60 78q8-1 15 3M85 76q7-4 15-3M85 81q7-4 15-3" fill="none" stroke="#b57a24" strokeWidth=".8" strokeLinecap="round" />
+
+      {/* Permanent engraved Founder's 100 plate: number and player's own name. */}
+      <path d="m26 96-12 9 13 7M134 96l12 9-13 7" fill="#7b4308" stroke="#e4a827" strokeWidth="1" />
+      <path d="M24 94h112l-5 50-51 18-51-18Z" fill="#03030b" opacity=".85" transform="translate(0 2)" />
+      <path d="M24 92h112l-5 50-51 18-51-18Z" fill={founder ? `url(#${uid}-band)` : `url(#${uid}-velvet)`} stroke={`url(#${uid}-gold)`} strokeWidth="2" strokeLinejoin="round" />
+      <path d="M30 98h100l-4 41-46 15-46-15Z" fill="none" stroke={founder ? '#fff3ae' : '#e7b83e'} strokeOpacity=".7" strokeWidth=".8" />
+      <path d="M35 103h90M38 137h84" fill="none" stroke={founder ? '#6f3d08' : '#f4cd5c'} strokeOpacity=".55" strokeWidth=".7" />
+      <text x="80" y="116" textAnchor="middle" fill={founder ? '#5a2c04' : '#ffe68a'} fontSize={founder ? 17 : 11} fontWeight="950" letterSpacing={founder ? 1.8 : 1.2}>
+        {founder ? `#${number}` : 'LEVEL 100'}
+      </text>
+      <text x="80" y="132" textAnchor="middle" fill={founder ? '#3d1d03' : '#fff5c7'} fontSize="8" fontWeight="900" letterSpacing=".5"
+        textLength={nameWidth} lengthAdjust="spacingAndGlyphs">{name}</text>
+      <text x="80" y="146" textAnchor="middle" fill={founder ? '#653304' : '#d9ac42'} fontSize="5.8" fontWeight="900" letterSpacing="1.5">
+        {founder ? "FOUNDER'S 100" : 'ABSOLUTE GENESIS'}
+      </text>
+      <path d="m80 153 4 5-4 6-4-6Z" fill={`url(#${uid}-jewel)`} stroke="#ffe99a" strokeWidth=".7" />
+    </svg>
+  );
+}
+
 /** Premium metalwork contained within the crown, shield and folded ribbon. */
-export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: string}) {
+export function HeraldicCrest({tier, className = '', playerName, founderNumber}: {
+  tier: Tier;
+  className?: string;
+  playerName?: string;
+  founderNumber?: number | null;
+}) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const metal = TIER_METALS[tier] ?? TIER_METALS.bronze;
   const family = tierFamily(tier);
+  if (family === 'absolute_genesis') {
+    return <AbsoluteGenesisCrown className={className} playerName={playerName} founderNumber={founderNumber} />;
+  }
   const Icon = TIER_ICONS[family];
   const stars = tierDivision(tier);
   const genesis = family === 'genesis';

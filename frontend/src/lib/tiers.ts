@@ -1,7 +1,8 @@
 /** Shared lifetime-rank catalogue. The API keys here mirror app/game.py. */
 export type BaseTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'obsidian' | 'mythril' | 'aurora';
 export type DivisionTier = `${BaseTier}_${1 | 2 | 3}`;
-export type LifetimeTier = DivisionTier | 'genesis';
+export type PeakTier = 'genesis' | 'absolute_genesis';
+export type LifetimeTier = DivisionTier | PeakTier;
 /** Base metals remain valid for achievements; lifetime profiles use the 25 ranks. */
 export type Tier = BaseTier | LifetimeTier;
 
@@ -27,28 +28,29 @@ export const BASE_TIER_PALETTES: Record<BaseTier, TierPalette> = {
 const FAMILIES: BaseTier[] = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'obsidian', 'mythril', 'aurora'];
 const ROMAN = ['I', 'II', 'III'] as const;
 
-export const LIFETIME_TIERS: {key: LifetimeTier; label: string; family: BaseTier | 'genesis'; division: number}[] = [
+export const LIFETIME_TIERS: {key: LifetimeTier; label: string; family: BaseTier | PeakTier; division: number}[] = [
   ...FAMILIES.flatMap((family) => [1, 2, 3].map((division) => ({
     key: `${family}_${division}` as LifetimeTier,
     label: `${family[0].toUpperCase()}${family.slice(1)} ${ROMAN[division - 1]}`,
     family,
     division,
   }))),
-  {key: 'genesis', label: 'Genesis', family: 'genesis', division: 3},
+  {key: 'absolute_genesis', label: 'Absolute Genesis', family: 'absolute_genesis', division: 3},
 ];
 
 export const TIER_ORDER = LIFETIME_TIERS.map((tier) => tier.key);
 export const TIER_PALETTES: Record<Tier, TierPalette> = {
   ...BASE_TIER_PALETTES,
-  ...Object.fromEntries(LIFETIME_TIERS.filter((tier) => tier.family !== 'genesis').map((tier) => [tier.key, BASE_TIER_PALETTES[tier.family as BaseTier]])),
+  ...Object.fromEntries(LIFETIME_TIERS.filter((tier) => tier.family !== 'absolute_genesis').map((tier) => [tier.key, BASE_TIER_PALETTES[tier.family as BaseTier]])),
   genesis: {light: '#fffbe8', bright: '#f8d568', deep: '#6d3b8f', core: '#1b1038', accent: '#f0abfc'},
+  absolute_genesis: {light: '#fffde9', bright: '#ffd75e', deep: '#6f3d08', core: '#170d2f', accent: '#f5b8ff'},
 } as Record<Tier, TierPalette>;
 
 export function tierLabel(tier: Tier | string): string {
   return LIFETIME_TIERS.find((item) => item.key === tier)?.label ?? `${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
 }
 
-export function tierFamily(tier: Tier | string): BaseTier | 'genesis' {
+export function tierFamily(tier: Tier | string): BaseTier | PeakTier {
   const found = LIFETIME_TIERS.find((item) => item.key === tier);
   if (found) return found.family;
   const base = tier.split('_')[0] as BaseTier;

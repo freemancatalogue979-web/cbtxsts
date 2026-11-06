@@ -216,7 +216,7 @@ export default function PlayerCard({
               )}
             </section>
 
-            {player && <div className="mt-4"><OverallRankPlate tier={player.tier} level={player.level} /></div>}
+            {player && <div className="mt-4"><OverallRankPlate tier={player.tier} level={player.level} playerName={player.name} founderNumber={player.absolute_genesis_number} /></div>}
             <section className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Current ranks">
               {player?.season && (
                 <div className="profile-competitive-rank flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/7 px-3 py-2.5">

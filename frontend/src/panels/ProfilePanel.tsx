@@ -435,7 +435,7 @@ export default function ProfilePanel({
                         </div>
                       </div>
                     ) : null}
-                    <div className="mt-3"><OverallRankPlate tier={profile.tier} level={progress.level} /></div>
+                    <div className="mt-3"><OverallRankPlate tier={profile.tier} level={progress.level} playerName={profile.name} founderNumber={profile.absolute_genesis_number} /></div>
                     <p className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-[0.78rem] font-semibold text-mist-400 sm:justify-start sm:gap-2 sm:text-[0.82rem]">
                       <span className="text-nova-300">
                         Level {progress.level} · {progress.title}
