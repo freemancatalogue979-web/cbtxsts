@@ -8,7 +8,7 @@ English and Mathematics; staff can configure the institution and manage approved
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite + WebSockets   → http://localhost:3000
-frontend/   React 19 + Vite + Tailwind v4 + bundled Space Grotesk / Arsenica Sans asset pending → http://localhost:5173
+frontend/   React 19 + Vite + Tailwind v4 + bundled DM Sans Light 300 / Space Grotesk → http://localhost:5173
 ```
 
 ---
@@ -165,7 +165,7 @@ graceful shutdown now stops the import executor so a deploy does not leave orpha
 | **Custom Practice** | Play → **Practice**: pick a **course → topic → number of questions → duration** and start. The server draws **random unique questions** from that topic's bank (never more than exist — *"Only 15 questions are available for this topic"*), shuffles the question order per session and **shuffles each question's options** — the correct answer is bound to its option's canonical key, never to a display letter, so shuffling can never move it. The **timer is server-stamped** (`ends_at` on the run): refreshing restores the *same* paper — same questions, same order, same option shuffles, same progress — at the first unanswered question, and answers after 00:00 are refused server-side. Every answer gets an instant verdict with the **stored explanation**, and the finished run shows a full summary (score %, time used) plus a **review of every question** with your answer vs the right one. |
 | **Signature question cards** | Questions never render as plain text: every question — exam papers, blitz, sudden death, daily challenge, flashcards, Mind Match tiles — sits in a unique gradient-framed card with a ghost question number, shine sweep, difficulty chip and a brand-gradient quote bar. |
 | **Personal notifications** | Help requests, answers and nudges land in a personal inbox with live socket delivery; the bell merges them with announcements. Players carry a bio, a status line and a shareable 6-character player code for instant friend adds. |
-| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**Arsenica Sans** default, Montserrat, Helvetica Oblique, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
+| **Make it yours** | Three **modes** — **Game** (the full arena HUD), **Pro** (mascots and arcade chrome stripped for a clean professional surface) and **Fun** (bouncy mascots, wiggling titles, saturated glows) — six switchable themes (Arena, Ember, Ocean, Venom, Candy and a pure black-&-white **Mono**), a **font switcher** (**DM Sans Light 300** default, Montserrat, Helvetica Oblique, Exo 2 classic, Space Grotesk, Orbitron display), three animated mascots (Bolt, Pixel, Goober) that react to how an exam is going and dance on the win screen, WebAudio sound effects with a master mute, and swipe up/down exam navigation. All device-local, applied before first paint. |
 | **Background music** | Three uploaded tracks (**Arena Rock**, **Arcade Session**, **Sound Surfer**) played from `frontend/public/music`, with on/off, pause/resume, track switch and a volume slider in Profile → Make it yours plus a quick toggle in the header. Pause holds your place to the second, mute is a gain fade rather than a stop, and no two tracks ever sound at once. Nothing else ever plays — there is no synth or fallback music. It tries to autoplay; when the browser refuses, a floating **Start music** button waits for the first tap. |
 | **Shell & navigation** | A floating HUD instead of a banner: the top bar has no strip, blur or shadow — every control carries its own chip and rides on top of the scrolling world, so nothing is covered and nothing disappears. **Every screen is a real page** (`#/study`, `#/exam/42`, `#/duel/7`): the in-page back button, the Android back button, the iOS edge swipe and the browser's back all land on the page you actually came from, and a refresh puts you back where you were — including mid-exam, on the same attempt. |
 | **Fixed scale** | The arena renders at exactly the viewport it lands on: `maximum-scale=1` + `user-scalable=no`, `touch-action: pan-x pan-y` on the body, and a gesture guard for iOS Safari's `gesture*` events and desktop ctrl/cmd + wheel or `+`/`-` zoom. Pinch, double-tap and browser zoom are off on phones and desktops; panning, scrolling and every tap still work. |
@@ -692,40 +692,13 @@ The browser keeps only the session token; the database remains the source of tru
 
 ---
 
-## Font licensing note
+## Typography
 
-The default font selection is **Arsenica Sans** on desktop, tablet and phone. It is also
-available under **Profile → Font**, and existing explicit font choices remain unchanged.
-
-**Arsenica Sans is a commercial family** (designed by Francesco Canovaro, published through
-Zetafonts), so its files are not redistributed with this repository — you need your own
-licence. The app is wired to pick them up the moment they are on the device:
-
-1. Buy the **web licence** from [Zetafonts](https://www.zetafonts.com/arsenica-sans) or
-   [MyFonts](https://www.myfonts.com/collections/arsenica-font-zetafonts) — perpetual, one
-   domain, WOFF2 and WOFF included. The free trial cut is personal, non-commercial use
-   only, and must not ship.
-2. Copy the file to `frontend/public/fonts/arsenica-sans.woff2` (`.woff`, `.ttf` and `.otf`
-   are accepted too — the format is read from the file itself).
-3. Restart the dev server. No rebuild, no code change.
-
-`frontend/src/lib/fonts.ts` looks for that file at boot and **reads its first four bytes**
-before the browser ever sees it, so:
-
-* a device **with** the licensed files renders real Arsenica Sans;
-* a device **without** them falls through to the bundled Space Grotesk and logs nothing;
-* a server that answers a missing font with the app's HTML (an SPA fallback does exactly
-  that) is caught — the bytes are not a font, so the browser is never asked to decode them
-  and never shouts "OTS parsing error: invalid sfntVersion" at the console;
-* the **format is taken from the file, not from its name**, so a WOFF saved as `.woff2` — or
-  a TTF, which is what the free trial cut ships as — still loads.
-
-**Profile → Font** states which of the two you are actually looking at instead of
-pretending, and says "a file was found but the browser could not read it" when the bytes are
-wrong. The family name is listed first in the stack on purpose: a copy installed on your
-own machine is used too, so installing the font locally is enough to preview it.
-
-No different font is renamed to impersonate Arsenica.
+The default font is **DM Sans Light 300** on desktop, tablet, phone and the loading
+screen. The variable font is self-hosted through `@fontsource-variable/dm-sans`,
+with a public WOFF2 copy for the pre-React splash, so no licensed font download or
+runtime font probe is required. Other explicit choices remain available under
+**Profile → Font**; older Arsenica selections automatically migrate to DM Sans.
 
 ### Restored profile and chat features
 

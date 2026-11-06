@@ -38,16 +38,16 @@
         var themeColor = document.querySelector('meta[name="theme-color"]');
         if (themeColor) themeColor.setAttribute('content', skin === 'night' ? '#07030f' : '#eaf4ff');
         var FONTS = {
-          'arsenica-sans': ["'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, sans-serif"],
+          'dm-sans': ["'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, sans-serif"],
           montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
           'helvetica-oblique': ["'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif", "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif"],
           arena: ["'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Orbitron', 'Exo 2', sans-serif"],
           grotesk: ["'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
           orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
         };
-        // Match prefs.ts: Arsenica Sans on every device; saved choices still win.
+        // Match prefs.ts: DM Sans on every device; saved choices still win.
         var savedFont = localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
-        var font = savedFont && FONTS[savedFont] ? savedFont : 'arsenica-sans';
+        var font = savedFont && FONTS[savedFont] ? savedFont : 'dm-sans';
         document.documentElement.dataset.font = font;
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
@@ -59,6 +59,10 @@
          before the app bundle (and its CSS, in dev) has loaded. React's own
          <Splash /> reuses these classes, so the hand-over is seamless. -->
     <style>
+      @font-face {
+        font-family: 'DM Sans Variable'; font-style: normal; font-weight: 100 900; font-display: swap;
+        src: url('/fonts/dm-sans-latin-variable.woff2') format('woff2');
+      }
       html, body { background: #07030f; }
       html[data-skin='day'], html[data-skin='day'] body { background-color: #eaf4ff; }
       /* The splash is the brand's first breath, so it is the brand's own dark
@@ -91,7 +95,7 @@
       }
       .ag-splash__tag {
         margin: 0; padding-left: 0.34em; text-align: center; text-transform: uppercase; letter-spacing: 0.34em;
-        font: 600 0.72rem/1.4 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font: 300 0.72rem/1.4 'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
         background: linear-gradient(90deg, #c4b5fd 0%, #fde68a 35%, #fff7d6 50%, #fde68a 65%, #c4b5fd 100%);
         background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
         animation: ag-fade 0.8s ease 0.35s both, ag-sheen 5s linear 1.2s infinite;
@@ -107,7 +111,7 @@
       }
       .ag-splash__foot {
         position: absolute; left: 0; right: 0; bottom: max(1.6rem, env(safe-area-inset-bottom)); margin: 0; text-align: center;
-        font: 600 0.6rem/1 ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.22em;
+        font: 300 0.6rem/1 'DM Sans Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.22em;
         text-transform: uppercase; color: rgba(226, 232, 240, 0.32); animation: ag-fade 0.8s ease 0.8s both;
       }
       /* React's copy takes over mid-animation: no second entrance. */

@@ -85,7 +85,7 @@ try {
       mode: document.documentElement.dataset.mode,
       storedFont: localStorage.getItem('arena.font.v7'),
     }));
-    const expectedFont = 'arsenica-sans';
+    const expectedFont = 'dm-sans';
     if (defaults.skin !== 'day' || defaults.font !== expectedFont || defaults.storedFont !== null) {
       throw new Error(`${viewport.name} defaults are wrong: ${JSON.stringify(defaults)}`);
     }

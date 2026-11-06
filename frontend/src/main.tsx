@@ -1,3 +1,4 @@
+import '@fontsource-variable/dm-sans/wght.css';
 import '@fontsource-variable/montserrat';
 import '@fontsource-variable/space-grotesk';
 import {StrictMode} from 'react';
@@ -10,7 +11,6 @@ import {applyFont, applyMode, applySkin, currentFont, currentMode, currentSkin} 
 import {sfx} from './lib/sfx';
 import {bootExperience} from './lib/mode';
 import {lockViewport} from './lib/zoomlock';
-import {loadArsenicaSans} from './lib/fonts';
 import {registerServiceWorker} from './lib/pwa';
 import {SessionProvider} from './store/session.tsx';
 import './index.css';
@@ -38,11 +38,6 @@ registerServiceWorker();
 
 // One fixed scale everywhere: no pinch zoom, no double-tap zoom, no ctrl+wheel.
 lockViewport();
-
-// Probe for the licensed Arsenica Sans files and register the face if they
-// are on this device. The stack falls through to the bundled Space Grotesk
-// when they are not, so nothing waits on the network.
-void loadArsenicaSans();
 
 // Try to autoplay the soundtrack; when the browser refuses (no gesture yet),
 // music reports 'blocked' and the shell shows a simple "Start music" button.

@@ -32,16 +32,16 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'arsenica-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'dm-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
   {
-    id: 'arsenica-sans',
-    name: 'Arsenica Sans',
-    blurb: 'The licensed house face. Drop your webfont into public/fonts as arsenica-sans.woff2 — otherwise Space Grotesk renders it.',
-    short: 'The licensed house face.',
-    sans: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Arsenica Sans', 'Space Grotesk Variable', 'Montserrat Variable', ui-sans-serif, sans-serif",
+    id: 'dm-sans',
+    name: 'DM Sans Light',
+    blurb: 'Clean geometric lettering at Light 300, bundled and ready on every device.',
+    short: 'Clean and light — 300.',
+    sans: "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    display: "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
   },
   {
     id: 'montserrat',
@@ -217,7 +217,7 @@ export function applyMode(name: ModeName): void {
 }
 
 /** Shared default on desktop, tablet and phone; explicit saved choices still win. */
-export const DEFAULT_FONT: FontName = 'arsenica-sans';
+export const DEFAULT_FONT: FontName = 'dm-sans';
 
 export function currentFont(): FontName {
   const current = read(FONT_KEY, '');

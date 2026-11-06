@@ -19,15 +19,15 @@ function browser(mobile = false) {
 
 for (const mobile of [false, true]) {
   const dom = browser(mobile);
-  assert.equal(prefs.currentFont(), 'arsenica-sans');
+  assert.equal(prefs.currentFont(), 'dm-sans');
   prefs.applyFont(prefs.currentFont(), false);
-  assert.equal(document.documentElement.dataset.font, 'arsenica-sans');
+  assert.equal(document.documentElement.dataset.font, 'dm-sans');
   for (const property of ['--font-sans', '--font-display']) {
-    assert.match(document.documentElement.style.getPropertyValue(property), /^'Arsenica Sans'/);
+    assert.match(document.documentElement.style.getPropertyValue(property), /^'DM Sans Variable'/);
   }
   assert.equal(window.localStorage.getItem('arena.font.v7'), null, 'boot must not persist a default');
   window.localStorage.setItem('arena.font.v7', 'unknown');
-  assert.equal(prefs.currentFont(), 'arsenica-sans');
+  assert.equal(prefs.currentFont(), 'dm-sans');
   dom.window.close();
 }
 
@@ -44,15 +44,15 @@ for (const key of ['arena.font.v6', 'arena.font.v5', 'arena.font.v4']) {
   window.localStorage.setItem(key, 'helvetica-oblique');
   assert.equal(prefs.currentFont(), 'helvetica-oblique');
   assert.equal(window.localStorage.getItem('arena.font.v7'), 'helvetica-oblique');
-  prefs.applyFont('arsenica-sans');
-  assert.equal(prefs.currentFont(), 'arsenica-sans');
+  prefs.applyFont('dm-sans');
+  assert.equal(prefs.currentFont(), 'dm-sans');
   dom.window.close();
 }
 
 const dom = browser();
 Object.defineProperty(window, 'localStorage', {get() { throw new Error('Storage disabled'); }});
-assert.equal(prefs.currentFont(), 'arsenica-sans');
-assert.doesNotThrow(() => prefs.applyFont('arsenica-sans'));
+assert.equal(prefs.currentFont(), 'dm-sans');
+assert.doesNotThrow(() => prefs.applyFont('dm-sans'));
 dom.window.close();
 console.log('Font checks passed: desktop/mobile defaults, CSS variables, saved choices, legacy migration and disabled storage.');
 
@@ -63,7 +63,7 @@ for (const selected of [null, ...prefs.FONTS.map((font) => font.id)]) {
   const page = new JSDOM('<meta name="theme-color">', {url: 'https://example.test', runScripts: 'outside-only'});
   if (selected) page.window.localStorage.setItem('arena.font.v7', selected);
   page.window.eval(inline);
-  assert.equal(page.window.document.documentElement.dataset.font, selected || 'arsenica-sans');
+  assert.equal(page.window.document.documentElement.dataset.font, selected || 'dm-sans');
   page.window.close();
 }
 console.log('First-paint font checks passed for the default and every saved font.');
