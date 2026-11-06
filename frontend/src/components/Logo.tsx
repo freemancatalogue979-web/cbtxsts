@@ -1,5 +1,5 @@
 /** The official Absolute Genesis neon crown artwork. */
-export const GENESIS_LOGO = '/brand/absolute-genesis-neon.webp';
+export const GENESIS_LOGO = '/brand/absolute-genesis-current.webp';
 
 export type GenesisCrestProps = {
   /** Fixed artwork height in pixels, or null to size it with utility classes. */

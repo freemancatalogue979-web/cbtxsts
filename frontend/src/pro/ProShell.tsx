@@ -31,7 +31,7 @@ function Brand({compact = false}: {compact?: boolean}) {
   return (
     <div className="pro-brand flex min-w-0 items-center gap-2.5">
       <span className="pro-brand-mark" aria-hidden>
-        <img src="/brand/absolute-genesis-neon.webp" alt="" width={54} height={36} draggable={false} />
+        <img src="/brand/absolute-genesis-current.webp" alt="" width={54} height={36} draggable={false} />
       </span>
       {!compact && (
         <div className="min-w-0 leading-tight">
