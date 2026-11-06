@@ -3966,13 +3966,9 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-plate { gap: 8px; padding: 8px 12px 8px 4px; min-height: 104px; border-radius: 18px; border-color: color-mix(in srgb, var(--rank-metal) 65%, transparent); background: radial-gradient(ellipse at 20% 0, color-mix(in srgb, var(--rank-metal) 15%, transparent), transparent 70%), linear-gradient(115deg, #141a30, #0b1021); color: #f3f5fd; box-shadow: inset 0 1px #ffffff35, inset 0 -3px #0007, 0 12px 22px -17px #000a; }
 .profile-rank-plate::before { content: ''; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--rank-metal) 22%, transparent); border-radius: 13px; pointer-events: none; }
 .profile-rank-plate::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 30%, #ffffff06 44%, transparent 45%); }
-.rank-crest { display: block; width: 84px; height: 90px; flex-shrink: 0; filter: drop-shadow(0 7px 6px #0008); }
-/* The high metals are lit from within, so the crest reads at a glance even
-   at the 84px it wears on the profile. */
-.rank-crest[data-tier='diamond'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 7px #7de3f455); }
-.rank-crest[data-tier='obsidian'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 9px #9d7cf566); }
-.rank-crest[data-tier='mythril'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 10px #5cc8f877); }
-.rank-crest[data-tier='aurora'] { filter: drop-shadow(0 7px 6px #0008) drop-shadow(0 0 13px #b39cfbaa); }
+.rank-crest { display: block; width: 84px; height: 95px; flex-shrink: 0; filter: drop-shadow(0 6px 5px #0008) drop-shadow(0 0 8px var(--crest-glow, #ce8b5577)); }
+/* Every medal glows around its own silhouette; there are no outer rings,
+   rays, wreaths, wings or other ornaments hiding the rank artwork. */
 .profile-rank-copy { position: relative; z-index: 1; }
 .profile-rank-eyebrow { color: #b7bdcf; font-size: .52rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
 .profile-rank-name { margin-top: 2px; color: var(--rank-metal); font-size: clamp(1.12rem, 4vw, 1.5rem); font-weight: 900; text-transform: capitalize; letter-spacing: -.025em; text-shadow: 0 1px #000; }

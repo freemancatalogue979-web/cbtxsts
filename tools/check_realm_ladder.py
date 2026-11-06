@@ -81,17 +81,19 @@ game = importlib.util.module_from_spec(spec)
 sys.modules["app.game"] = game
 spec.loader.exec_module(game)
 
-# Platinum is not the ceiling: the ladder climbs to aurora.
+# Twenty-four division medals and Genesis at the level cap.
 LADDER = [
-    (1, "bronze"),
-    (3, "silver"),
-    (5, "gold"),
-    (7, "platinum"),
-    (10, "diamond"),
-    (15, "obsidian"),
-    (23, "mythril"),
-    (35, "aurora"),
+    (1, "bronze_1"), (2, "bronze_2"), (3, "bronze_3"),
+    (4, "silver_1"), (5, "silver_2"), (6, "silver_3"),
+    (7, "gold_1"), (8, "gold_2"), (9, "gold_3"),
+    (10, "platinum_1"), (12, "platinum_2"), (14, "platinum_3"),
+    (16, "diamond_1"), (19, "diamond_2"), (22, "diamond_3"),
+    (25, "obsidian_1"), (29, "obsidian_2"), (33, "obsidian_3"),
+    (37, "mythril_1"), (41, "mythril_2"), (45, "mythril_3"),
+    (49, "aurora_1"), (53, "aurora_2"), (57, "aurora_3"),
+    (60, "genesis"),
 ]
+assert len(LADDER) == 25
 assert game.TIER_LEVELS == tuple(LADDER), game.TIER_LEVELS
 
 for level in range(1, game.MAX_LEVEL + 1):
@@ -107,9 +109,9 @@ for threshold, name in LADDER:
     if threshold > 1:
         assert game.tier_for_level(threshold - 1) != name, (threshold, name)
 
-assert game.tier_for_level(0) == "bronze"
-assert game.tier_for_level(60) == "aurora"
-assert game.tier_for_level(100) == "aurora"
+assert game.tier_for_level(0) == "bronze_1"
+assert game.tier_for_level(60) == "genesis"
+assert game.tier_for_level(100) == "genesis"
 
 print("realm ladder OK — 100 realms, first mystical realm:", ladder[40]["label"])
 print("lifetime metals OK —", " → ".join(name for _, name in LADDER))

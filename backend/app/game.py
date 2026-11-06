@@ -71,17 +71,34 @@ def title_for_level(level: int) -> str:
     return title
 
 
-# The lifetime metals, lowest to highest. Platinum is no longer the ceiling:
-# each step up is a rarer metal, and the ladder runs all the way to the cap.
+# Twenty-five visibly distinct lifetime medals: three divisions in each of
+# eight metal families, then the singular Genesis medal at the level cap.
 TIER_LEVELS = (
-    (1, "bronze"),
-    (3, "silver"),
-    (5, "gold"),
-    (7, "platinum"),
-    (10, "diamond"),
-    (15, "obsidian"),
-    (23, "mythril"),
-    (35, "aurora"),
+    (1, "bronze_1"),
+    (2, "bronze_2"),
+    (3, "bronze_3"),
+    (4, "silver_1"),
+    (5, "silver_2"),
+    (6, "silver_3"),
+    (7, "gold_1"),
+    (8, "gold_2"),
+    (9, "gold_3"),
+    (10, "platinum_1"),
+    (12, "platinum_2"),
+    (14, "platinum_3"),
+    (16, "diamond_1"),
+    (19, "diamond_2"),
+    (22, "diamond_3"),
+    (25, "obsidian_1"),
+    (29, "obsidian_2"),
+    (33, "obsidian_3"),
+    (37, "mythril_1"),
+    (41, "mythril_2"),
+    (45, "mythril_3"),
+    (49, "aurora_1"),
+    (53, "aurora_2"),
+    (57, "aurora_3"),
+    (60, "genesis"),
 )
 
 

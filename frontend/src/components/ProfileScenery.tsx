@@ -4,6 +4,7 @@ import {THEMES} from '../lib/cosmetics';
 import {tokenStore} from '../lib/api';
 import RankCrest from './RankCrest';
 import type {Tier} from '../lib/types';
+import {TIER_PALETTES, tierLabel} from '../lib/tiers';
 
 export function prestigeFor(level: number) {
   // The current progression is capped at 60; never invent a level-100 account.
@@ -17,11 +18,11 @@ export function prestigeFor(level: number) {
 
 export function OverallRankPlate({tier, level}: {tier: Tier; level: number}) {
   return (
-    <div className="profile-rank-plate" data-tier={tier}>
+    <div className="profile-rank-plate" data-tier={tier} style={{'--rank-metal': TIER_PALETTES[tier]?.bright ?? TIER_PALETTES.bronze.bright} as CSSProperties}>
       <RankCrest tier={tier} />
       <div className="profile-rank-copy min-w-0 flex-1">
         <p className="profile-rank-eyebrow">Overall rank</p>
-        <p className="profile-rank-name">{tier}</p>
+        <p className="profile-rank-name">{tierLabel(tier)}</p>
         <p className="profile-rank-subtitle">Lifetime progression · {prestigeFor(level).name}</p>
       </div>
       <span className="profile-rank-level"><small>LEVEL</small><strong>{level}</strong></span>

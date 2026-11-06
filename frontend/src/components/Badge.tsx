@@ -16,10 +16,11 @@
  * badge catalogue), so the art on screen is the ladder the server actually
  * scores you against — never a guess made in the browser.
  */
-import {useId} from 'react';
-import {Award, Crown, Flame, Gem, Medal, Orbit, Shield, Sparkles, Star, Sun, Trophy, Zap} from 'lucide-react';
+import {useId, type CSSProperties} from 'react';
+import {Award, Crown, Flame, Gem, Medal, Shield, Sparkles, Star, Sun, Trophy, Zap} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
-import type {Tier} from '../lib/types';
+import type {BaseTier, Tier} from '../lib/tiers';
+import {TIER_ORDER, TIER_PALETTES, tierDivision, tierFamily} from '../lib/tiers';
 
 /** The glyphs a badge can carry. Mapped to lucide icons. */
 export type BadgeGlyph =
@@ -35,7 +36,7 @@ export type BadgeGlyph =
   | 'sun'
   | 'award';
 
-/** The four metals of the lifetime ladder. */
+/** Sculpted colours shared by achievement and lifetime medals. */
 export type BadgePalette = {
   /** The highlight stop — near-white, used for bevels and the glyph. */
   light: string;
@@ -81,66 +82,27 @@ const SIZES = {
   xl: {box: 104, glyph: 0.34, level: 0.19},
 } as const;
 
-/**
- * The lifetime metals, lowest to highest.
- *
- * Platinum is not the ceiling. Above it the ladder keeps climbing — diamond,
- * obsidian, mythril and finally aurora, which is light itself.
- */
-export const TIER_METALS: Record<Tier, BadgePalette> = {
-  bronze: {light: '#ffe1b0', bright: '#ce8b55', deep: '#563322', core: '#472c29'},
-  silver: {light: '#f2f8ff', bright: '#b6cce3', deep: '#455974', core: '#24334c'},
-  gold: {light: '#fff4ba', bright: '#efbf54', deep: '#81531b', core: '#4c351b'},
-  platinum: {light: '#e4ffff', bright: '#80e2ef', deep: '#34768a', core: '#162f4e'},
-  diamond: {light: '#f4fdff', bright: '#7de3f4', deep: '#0e5f7d', core: '#08304a', accent: '#e9d5ff'},
-  obsidian: {light: '#efe3ff', bright: '#9d7cf5', deep: '#2b0f5e', core: '#100723', accent: '#38bdf8'},
-  mythril: {light: '#f0f9ff', bright: '#5cc8f8', deep: '#0b4a72', core: '#0a2440', accent: '#a5f3fc'},
-  aurora: {light: '#ffffff', bright: '#b39cfb', deep: '#4b1d95', core: '#170a33', accent: '#5eead4'},
-};
+/** All achievement metals and the 25 lifetime-rank palettes. */
+export const TIER_METALS: Record<Tier, BadgePalette> = TIER_PALETTES;
+export {TIER_ORDER};
 
-/** The lifetime metals in order — the index is how far up the ladder a tier is. */
-export const TIER_ORDER: Tier[] = [
-  'bronze',
-  'silver',
-  'gold',
-  'platinum',
-  'diamond',
-  'obsidian',
-  'mythril',
-  'aurora',
-];
-
-/** How far up the lifetime ladder a tier sits. Unknown tiers sit at the floor. */
+/** How far up the 25-medal lifetime ladder a tier sits. */
 export function tierRank(tier: Tier | string): number {
-  const index = TIER_ORDER.indexOf(tier as Tier);
+  const index = TIER_ORDER.indexOf(tier as (typeof TIER_ORDER)[number]);
   return index < 0 ? 0 : index;
 }
 
-/** The emblem each lifetime metal carries. */
-const TIER_ICONS: Record<Tier, LucideIcon> = {
+/** Each metal family has its own readable centre emblem. */
+const TIER_ICONS: Record<BaseTier | 'genesis', LucideIcon> = {
   bronze: Shield,
   silver: Star,
-  gold: Crown,
+  gold: Trophy,
   platinum: Gem,
   diamond: Sparkles,
   obsidian: Flame,
   mythril: Zap,
-  aurora: Orbit,
-};
-
-/**
- * How many stars each lifetime metal is worth — one more with every step up.
- * The crest draws them along the banner, so the count is also the score.
- */
-const TIER_STARS: Record<Tier, number> = {
-  bronze: 1,
-  silver: 2,
-  gold: 3,
-  platinum: 4,
-  diamond: 5,
-  obsidian: 6,
-  mythril: 7,
-  aurora: 8,
+  aurora: Sun,
+  genesis: Crown,
 };
 
 /* ------------------------------------------------------------------ colour */
@@ -489,236 +451,78 @@ function starPath(cx: number, cy: number, r: number): string {
   return `${d}Z`;
 }
 
-/** Points along a quadratic curve, each with the angle of the curve there. */
-function curvePoints(x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, count: number) {
-  const points: {x: number; y: number; angle: number}[] = [];
-  for (let i = 0; i <= count; i += 1) {
-    const t = i / count;
-    const it = 1 - t;
-    const x = it * it * x0 + 2 * it * t * cx + t * t * x1;
-    const y = it * it * y0 + 2 * it * t * cy + t * t * y1;
-    const dx = 2 * it * (cx - x0) + 2 * t * (x1 - cx);
-    const dy = 2 * it * (cy - y0) + 2 * t * (y1 - cy);
-    points.push({x, y, angle: (Math.atan2(dy, dx) * 180) / Math.PI});
-  }
-  return points;
-}
-
-/** A closed polygon of `sides` points on a circle — the faceted rim. */
-function facetPath(r: number, sides: number, cx = 72, cy = 74): string {
-  const points = Array.from({length: sides}, (_, i) => {
-    const angle = ((i * 360) / sides - 90) * (Math.PI / 180);
-    return `${(cx + r * Math.cos(angle)).toFixed(2)} ${(cy + r * Math.sin(angle)).toFixed(2)}`;
-  });
-  return `M${points.join('L')}Z`;
-}
-
 /**
- * The lifetime crest — the big heraldic ornament on a player's profile.
- *
- * Unlike the tier badges this one is not server-coloured: the lifetime metals
- * are the ladder the profile screen shows, so their colours are baked into the
- * art.
- *
- * The crest is also where the ladder is *felt*. Platinum is no longer the
- * ceiling, and every step up adds another layer of ornament, so a mythril
- * crest is unmistakably more than a platinum one without reading a word:
- *
- *   bronze   — the crest on its own
- *   silver   — + the ring of the order
- *   gold     — + the laurel wreath
- *   platinum — + rays behind the shield
- *   diamond  — + a faceted rim and a prismatic seal
- *   obsidian — + a dark halo and drifting motes
- *   mythril  — + an orbiting ring
- *   aurora   — + the aurora veil and a burning core
+ * The lifetime medal: one clean, readable crest rather than a cloud of rings,
+ * rays, wreaths and wing-like ornaments. Colour and the centre emblem identify
+ * the metal family; one to three engraved stars identify its division.
  */
 export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: string}) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const metal = TIER_METALS[tier] ?? TIER_METALS.bronze;
-  const Icon = TIER_ICONS[tier] ?? Shield;
-  const rank = tierRank(tier);
-  const accent = metal.accent ?? metal.bright;
-  const stars = TIER_STARS[tier] ?? 3;
-  const starGap = Math.min(13, 54 / stars);
-  const starR = stars > 6 ? 2.9 : stars > 4 ? 3.2 : 3.6;
-  const wreaths = rank >= 2
-    ? [
-        {x0: 38, y0: 126, cx: 14, cy: 86, x1: 26, y1: 42, side: -1},
-        {x0: 106, y0: 126, cx: 130, cy: 86, x1: 118, y1: 42, side: 1},
-      ]
-    : [];
+  const family = tierFamily(tier);
+  const Icon = TIER_ICONS[family];
+  const stars = tierDivision(tier);
+  const genesis = family === 'genesis';
 
   return (
-    <svg className={`rank-crest ${className}`} data-tier={tier} viewBox="0 0 144 152" aria-hidden="true" focusable="false">
+    <svg
+      className={`rank-crest ${className}`}
+      data-tier={tier}
+      data-division={stars}
+      viewBox="0 0 120 136"
+      aria-hidden="true"
+      focusable="false"
+      style={{'--crest-glow': `${metal.bright}aa`} as CSSProperties}
+    >
       <defs>
         <linearGradient id={`${uid}-metal`} x1="0" y1="0" x2=".9" y2="1">
           <stop stopColor={metal.light} />
           <stop offset=".25" stopColor={metal.bright} />
           <stop offset=".47" stopColor={metal.light} />
-          <stop offset=".52" stopColor={metal.bright} />
+          <stop offset=".54" stopColor={metal.bright} />
           <stop offset="1" stopColor={metal.deep} />
         </linearGradient>
-        <linearGradient id={`${uid}-core`} x2="0" y2="1">
+        <linearGradient id={`${uid}-core`} x1="0" y1="0" x2=".25" y2="1">
           <stop stopColor={metal.core} />
-          <stop offset="1" stopColor="#0b1024" />
+          <stop offset="1" stopColor="#080b19" />
         </linearGradient>
-        <radialGradient id={`${uid}-glow`}>
-          <stop stopColor={metal.light} stopOpacity=".32" />
-          <stop offset="1" stopColor={metal.bright} stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={`${uid}-veil`} x1="0" y1="0" x2="1" y2="0">
-          <stop stopColor={accent} />
-          <stop offset=".5" stopColor={metal.bright} />
-          <stop offset="1" stopColor={metal.light} />
-        </linearGradient>
-        <linearGradient id={`${uid}-ray`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor={metal.light} stopOpacity=".9" />
-          <stop offset="1" stopColor={metal.bright} stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id={`${uid}-halo`}>
-          <stop stopColor={metal.bright} stopOpacity=".42" />
-          <stop offset="1" stopColor={metal.deep} stopOpacity="0" />
-        </radialGradient>
       </defs>
 
-      {/* the aurora veil — the top tier alone wears it */}
-      {rank >= 7 && (
-        <g>
-          <path d="M4 106C32 32 112 32 140 106" fill="none" stroke={`url(#${uid}-veil)`} strokeWidth="11" strokeLinecap="round" opacity=".4" />
-          <path d="M16 118C40 58 104 58 128 118" fill="none" stroke={`url(#${uid}-veil)`} strokeWidth="5" strokeLinecap="round" opacity=".32" />
-        </g>
-      )}
+      {/* The crown and shield are the whole silhouette: nothing competes with them. */}
+      <path
+        d={genesis ? 'm28 35 5-24 18 13 9-21 9 21 18-13 5 24-8 12H36Z' : 'm35 34 4-19 14 10 7-17 7 17 14-10 4 19-7 11H42Z'}
+        fill={`url(#${uid}-metal)`}
+        stroke={metal.deep}
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m60 31 40 15-5 49q-6 23-35 39-29-16-35-39l-5-49Z"
+        fill={`url(#${uid}-metal)`}
+        stroke={metal.deep}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m60 40 30 11-4 40q-5 18-26 32-21-14-26-32l-4-40Z"
+        fill={`url(#${uid}-core)`}
+        stroke={metal.light}
+        strokeOpacity=".72"
+        strokeWidth="1.1"
+      />
+      <path d="M29 51 60 40l31 12" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="m60 47 23 8-3 33q-4 15-20 27-16-12-20-27l-3-33Z" fill="none" stroke={metal.bright} strokeOpacity=".5" strokeWidth=".9" />
+      <path d="M34 55 60 46l26 9-3 23-23-15-23 15Z" fill={metal.light} opacity=".07" />
 
-      {/* rays behind the shield */}
-      {rank >= 3 && (
-        <g fill={`url(#${uid}-ray)`}>
-          {Array.from({length: 16}, (_, i) => {
-            const a = (i * 22.5 - 90) * (Math.PI / 180);
-            const w = 2.2 * (Math.PI / 180);
-            const r0 = 34;
-            const r1 = 70;
-            const x0 = 72 + r0 * Math.cos(a - w);
-            const y0 = 74 + r0 * Math.sin(a - w);
-            const x1 = 72 + r1 * Math.cos(a);
-            const y1 = 74 + r1 * Math.sin(a);
-            const x2 = 72 + r0 * Math.cos(a + w);
-            const y2 = 74 + r0 * Math.sin(a + w);
-            return <path key={i} d={`M${x0.toFixed(1)} ${y0.toFixed(1)}L${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}Z`} />;
-          })}
-        </g>
-      )}
+      <Icon x="45" y="57" width="30" height="30" color={metal.light} strokeWidth={1.8} />
 
-      <circle cx="72" cy="74" r="65" fill={`url(#${uid}-glow)`} />
-
-      {/* the dark halo — obsidian and up */}
-      {rank >= 5 && <circle cx="72" cy="74" r="60" fill={`url(#${uid}-halo)`} />}
-
-      {/* the ring of the order */}
-      {rank >= 1 && (
-        <circle cx="72" cy="74" r="69" fill="none" stroke={metal.bright} strokeWidth="1" strokeDasharray="1.5 5" opacity=".7" />
-      )}
-
-      {/* the faceted rim — diamond and up */}
-      {rank >= 4 && (
-        <g>
-          <path d={facetPath(64, 12)} fill="none" stroke={accent} strokeWidth="1.1" opacity=".75" />
-          {Array.from({length: 12}, (_, i) => {
-            const a = ((i * 30 - 90) * Math.PI) / 180;
-            return <circle key={i} cx={72 + 64 * Math.cos(a)} cy={74 + 64 * Math.sin(a)} r="1.7" fill={metal.light} opacity=".9" />;
-          })}
-        </g>
-      )}
-
-      {/* the laurel wreath */}
-      {wreaths.map((w) => (
-        <g key={w.side}>
-          <path
-            d={`M${w.x0} ${w.y0} Q${w.cx} ${w.cy} ${w.x1} ${w.y1}`}
-            fill="none"
-            stroke={metal.deep}
-            strokeWidth="1.1"
-            opacity=".65"
-          />
-          {curvePoints(w.x0, w.y0, w.cx, w.cy, w.x1, w.y1, 7).map((p, i) => (
-            <ellipse
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              rx="5.2"
-              ry="2.3"
-              fill={metal.bright}
-              opacity={0.5 + (i % 2) * 0.32}
-              transform={`rotate(${(p.angle + w.side * 90).toFixed(1)} ${p.x.toFixed(1)} ${p.y.toFixed(1)})`}
-            />
-          ))}
-        </g>
-      ))}
-
-      {/* drifting motes */}
-      {rank >= 5 && (
-        <g fill={metal.light}>
-          {[[26, 52, 1.7], [118, 44, 1.4], [16, 96, 1.5], [130, 104, 1.8], [40, 20, 1.2], [104, 16, 1.6], [20, 72, 1.1], [128, 74, 1.3]].map(
-            ([x, y, r], i) => (
-              <circle key={i} cx={x} cy={y} r={r} opacity={0.45 + (i % 3) * 0.18} />
-            ),
-          )}
-        </g>
-      )}
-
-      {/* the orbit — mythril and up */}
-      {rank >= 6 && (
-        <g>
-          <ellipse cx="72" cy="74" rx="60" ry="19" fill="none" stroke={accent} strokeWidth="1.2" opacity=".6" transform="rotate(-20 72 74)" />
-          <circle cx="132" cy="74" r="2.6" fill={metal.light} transform="rotate(-20 72 74)" />
-        </g>
-      )}
-
-      <g fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.2" strokeLinejoin="round">
-        <path d="M46 50 9 35l11 27 20 12-26-9 10 22 20 10-23-3 13 19 20 5 11-24Z" />
-        <path d="m98 50 37-15-11 27-20 12 26-9-10 22-20 10 23-3-13 19-20 5-11-24Z" />
-        <path d="m47 29 5-15 13 10 7-18 7 18 13-10 5 15-6 13H53Z" />
-        <path d="m72 28 42 17-6 54q-7 25-36 44-29-19-36-44l-6-54Z" />
-      </g>
-      <path d="m72 37 32 13-5 45q-5 21-27 37-22-16-27-37l-5-45Z" fill={`url(#${uid}-core)`} stroke={metal.light} strokeWidth="1.2" />
-      <path d="M43 51 72 39l29 12-4 33-25-17-25 17Z" fill={metal.light} opacity=".08" />
-      <path d="m72 44 25 10-4 38q-3 18-21 32-18-14-21-32l-4-38Z" fill="none" stroke={metal.bright} strokeWidth=".8" opacity=".65" />
-      <circle cx="72" cy="77" r="22" fill={metal.deep} stroke={metal.bright} strokeWidth="1.5" />
-      <circle cx="72" cy="76" r="18" fill={`url(#${uid}-core)`} stroke={metal.light} strokeWidth=".5" />
-      {/* the prismatic seal — diamond and up */}
-      {rank >= 4 && (
-        <circle cx="72" cy="77" r="26.5" fill="none" stroke={accent} strokeWidth="1" strokeDasharray="2.5 4.5" opacity=".85" />
-      )}
-      {/* the burning core — aurora alone */}
-      {rank >= 7 && (
-        <g>
-          <circle cx="72" cy="76" r="14" fill={accent} opacity=".22" />
-          <circle cx="72" cy="76" r="7" fill={metal.light} opacity=".9" />
-          {[0, 90, 180, 270].map((a) => {
-            const r = ((a - 90) * Math.PI) / 180;
-            return (
-              <path
-                key={a}
-                d={starPath(72 + 24 * Math.cos(r), 77 + 24 * Math.sin(r), 3.2)}
-                fill={metal.light}
-                opacity=".85"
-              />
-            );
-          })}
-        </g>
-      )}
-      <Icon x="59" y="62" width="26" height="26" color={metal.light} strokeWidth={1.65} />
-      <path d="m42 111 30 14 30-14-5 17-25 13-25-13Z" fill={`url(#${uid}-metal)`} stroke={metal.deep} />
+      {/* A compact rank ribbon, with exactly 1–3 division marks. */}
+      <path d="m31 105 29 12 29-12-5 19-24 11-24-11Z" fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.2" strokeLinejoin="round" />
       {Array.from({length: stars}, (_, i) => {
-        const x = 72 + (i - (stars - 1) / 2) * starGap;
-        return <path key={i} d={starPath(x, 111, starR)} fill={metal.light} />;
+        const x = 60 + (i - (stars - 1) / 2) * 14;
+        return <path key={i} d={starPath(x, 117, 4)} fill={metal.light} />;
       })}
-      <path d="m37 47 2 21M46 37l26-10 28 11" fill="none" stroke={metal.light} strokeWidth="1.6" strokeLinecap="round" opacity=".85" />
-      {rank >= 3 && (
-        <path d="m30 39 3 24M114 39l-3 24" fill="none" stroke={accent} strokeWidth="1" strokeLinecap="round" opacity=".55" />
-      )}
-      <circle cx="72" cy="27" r="3" fill={metal.light} />
-      {rank >= 7 && <circle cx="72" cy="27" r="7" fill={accent} opacity=".3" />}
+      <path d="m40 114 20 8 20-8" fill="none" stroke="#fff" strokeOpacity=".28" strokeWidth=".8" />
     </svg>
   );
 }
