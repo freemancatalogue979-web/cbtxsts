@@ -451,11 +451,20 @@ function starPath(cx: number, cy: number, r: number): string {
   return `${d}Z`;
 }
 
-/**
- * The lifetime medal: one clean, readable crest rather than a cloud of rings,
- * rays, wreaths and wing-like ornaments. Colour and the centre emblem identify
- * the metal family; one to three engraved stars identify its division.
- */
+/** Each family has its own shield contour, even before colour and emblem. */
+const CREST_SHIELDS: Record<BaseTier | 'genesis', string> = {
+  bronze: 'm60 31 40 15-4 48q-5 22-36 39-31-17-36-39l-4-48Z',
+  silver: 'm60 29 42 17-7 46q-7 23-35 42-28-19-35-42l-7-46Z',
+  gold: 'm60 30 43 14-3 48q-4 24-40 42-36-18-40-42l-3-48Z',
+  platinum: 'm60 28 42 18-5 47-37 41-37-41-5-47Z',
+  diamond: 'm60 27 43 20-9 45-34 42-34-42-9-45Z',
+  obsidian: 'm60 27 44 18-8 49-36 40-36-40-8-49Z',
+  mythril: 'm60 27 39 17 5 12-10 40-34 38-34-38-10-40 5-12Z',
+  aurora: 'm60 26 41 17 4 14-9 38q-7 22-36 39-29-17-36-39l-9-38 4-14Z',
+  genesis: 'm60 24 45 18-3 50q-4 25-42 43-38-18-42-43l-3-50Z',
+};
+
+/** Premium metalwork contained within the crown, shield and folded ribbon. */
 export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: string}) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const metal = TIER_METALS[tier] ?? TIER_METALS.bronze;
@@ -463,66 +472,86 @@ export function HeraldicCrest({tier, className = ''}: {tier: Tier; className?: s
   const Icon = TIER_ICONS[family];
   const stars = tierDivision(tier);
   const genesis = family === 'genesis';
+  const accent = metal.accent ?? metal.light;
+  const shield = CREST_SHIELDS[family];
+  const innerShield = 'translate(60 80) scale(.865) translate(-60 -80)';
 
   return (
-    <svg
-      className={`rank-crest ${className}`}
-      data-tier={tier}
-      data-division={stars}
-      viewBox="0 0 120 136"
-      aria-hidden="true"
-      focusable="false"
-      style={{'--crest-glow': `${metal.bright}aa`} as CSSProperties}
-    >
+    <svg className={`rank-crest ${className}`} data-tier={tier} data-division={stars} viewBox="0 0 120 140" aria-hidden="true" focusable="false"
+      style={{'--crest-glow': `${metal.bright}b8`} as CSSProperties}>
       <defs>
-        <linearGradient id={`${uid}-metal`} x1="0" y1="0" x2=".9" y2="1">
-          <stop stopColor={metal.light} />
-          <stop offset=".25" stopColor={metal.bright} />
-          <stop offset=".47" stopColor={metal.light} />
-          <stop offset=".54" stopColor={metal.bright} />
-          <stop offset="1" stopColor={metal.deep} />
+        <linearGradient id={`${uid}-metal`} x1=".05" y1="0" x2=".9" y2="1">
+          <stop stopColor={metal.deep} /><stop offset=".12" stopColor={metal.bright} /><stop offset=".27" stopColor={metal.light} />
+          <stop offset=".38" stopColor={metal.bright} /><stop offset=".49" stopColor="#ffffff" /><stop offset=".535" stopColor={metal.light} />
+          <stop offset=".7" stopColor={metal.bright} /><stop offset="1" stopColor={metal.deep} />
         </linearGradient>
-        <linearGradient id={`${uid}-core`} x1="0" y1="0" x2=".25" y2="1">
-          <stop stopColor={metal.core} />
-          <stop offset="1" stopColor="#080b19" />
+        <linearGradient id={`${uid}-bevel`} x1="0" y1="0" x2=".85" y2="1">
+          <stop stopColor="#ffffff" stopOpacity=".95" /><stop offset=".24" stopColor={metal.light} stopOpacity=".7" />
+          <stop offset=".52" stopColor={metal.deep} stopOpacity=".25" /><stop offset="1" stopColor={metal.deep} stopOpacity=".9" />
         </linearGradient>
+        <radialGradient id={`${uid}-core`} cx=".38" cy=".2" r=".95">
+          <stop stopColor={mix(metal.core, metal.bright, .22)} /><stop offset=".5" stopColor={metal.core} /><stop offset="1" stopColor="#050713" />
+        </radialGradient>
+        <linearGradient id={`${uid}-gem`} x1=".15" y1="0" x2=".85" y2="1">
+          <stop stopColor="#ffffff" /><stop offset=".25" stopColor={accent} /><stop offset=".52" stopColor={metal.bright} /><stop offset="1" stopColor={metal.deep} />
+        </linearGradient>
+        <linearGradient id={`${uid}-ribbon`} x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor={metal.light} /><stop offset=".18" stopColor={metal.bright} />
+          <stop offset=".55" stopColor={mix(metal.bright, metal.deep, .35)} /><stop offset="1" stopColor={metal.deep} />
+        </linearGradient>
+        <filter id={`${uid}-relief`} x="-35%" y="-35%" width="170%" height="180%">
+          <feDropShadow dx="0" dy="1.4" stdDeviation="1.1" floodColor="#000000" floodOpacity=".85" />
+        </filter>
+        <clipPath id={`${uid}-face-clip`}><path d={shield} transform={innerShield} /></clipPath>
       </defs>
 
-      {/* The crown and shield are the whole silhouette: nothing competes with them. */}
-      <path
-        d={genesis ? 'm28 35 5-24 18 13 9-21 9 21 18-13 5 24-8 12H36Z' : 'm35 34 4-19 14 10 7-17 7 17 14-10 4 19-7 11H42Z'}
-        fill={`url(#${uid}-metal)`}
-        stroke={metal.deep}
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m60 31 40 15-5 49q-6 23-35 39-29-16-35-39l-5-49Z"
-        fill={`url(#${uid}-metal)`}
-        stroke={metal.deep}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m60 40 30 11-4 40q-5 18-26 32-21-14-26-32l-4-40Z"
-        fill={`url(#${uid}-core)`}
-        stroke={metal.light}
-        strokeOpacity=".72"
-        strokeWidth="1.1"
-      />
-      <path d="M29 51 60 40l31 12" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="m60 47 23 8-3 33q-4 15-20 27-16-12-20-27l-3-33Z" fill="none" stroke={metal.bright} strokeOpacity=".5" strokeWidth=".9" />
-      <path d="M34 55 60 46l26 9-3 23-23-15-23 15Z" fill={metal.light} opacity=".07" />
+      {/* Raised five-point crown with a dark casting and cut gemstones. */}
+      <path d={genesis ? 'm25 40 5-29 20 15 10-23 10 23 20-15 5 29-10 12H35Z' : 'm31 39 4-25 16 13 9-21 9 21 16-13 4 25-9 11H40Z'}
+        fill={metal.deep} stroke="#050713" strokeWidth="2.2" strokeLinejoin="round" />
+      <path d={genesis ? 'm28 37 4-22 19 14 9-22 9 22 19-14 4 22-9 9H37Z' : 'm34 36 3-18 15 12 8-19 8 19 15-12 3 18-8 9H42Z'}
+        fill={`url(#${uid}-metal)`} stroke={metal.light} strokeOpacity=".55" strokeWidth=".8" strokeLinejoin="round" />
+      <path d="M36 36q24 8 48 0l-3 9H39Z" fill={`url(#${uid}-ribbon)`} stroke={metal.deep} strokeWidth="1" />
+      <path d="M39 37q21 5 42 0" fill="none" stroke="#fff" strokeOpacity=".62" strokeWidth="1.2" />
+      <path d="m60 13 5.5 9-5.5 10-5.5-10Z" fill={`url(#${uid}-gem)`} stroke={metal.light} strokeWidth=".8" filter={`url(#${uid}-relief)`} />
+      <path d="m60 15 2.8 7-2.8 7-2.8-7Z" fill="#fff" opacity=".42" />
+      {[43, 77].map((x) => <path key={x} d={`m${x} 25 3 4-3 5-3-5Z`} fill={accent} stroke={metal.light} strokeWidth=".55" />)}
+      {[40, 50, 70, 80].map((x) => <circle key={x} cx={x} cy="39" r="1.45" fill={metal.light} stroke={metal.deep} strokeWidth=".5" />)}
 
-      <Icon x="45" y="57" width="30" height="30" color={metal.light} strokeWidth={1.8} />
+      {/* Deep casting, raised outer metal and recessed enamel. */}
+      <path d={shield} transform="translate(0 2)" fill="#03040b" stroke="#03040b" strokeWidth="3" strokeLinejoin="round" opacity=".85" />
+      <path d={shield} fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.5" strokeLinejoin="round" />
+      <path d={shield} transform="translate(60 80) scale(.95) translate(-60 -80)" fill="none" stroke={`url(#${uid}-bevel)`} strokeWidth="2.1" strokeLinejoin="round" />
+      <path d={shield} transform={innerShield} fill={`url(#${uid}-core)`} stroke={metal.deep} strokeWidth="2.4" strokeLinejoin="round" />
+      <path d={shield} transform={innerShield} fill="none" stroke={metal.light} strokeOpacity=".55" strokeWidth=".85" strokeLinejoin="round" />
+      <g clipPath={`url(#${uid}-face-clip)`}>
+        <path d="M20 47 60 32l40 17-12 25-28-19-28 19Z" fill={metal.light} opacity=".09" />
+        <path d="M29 45 52 36 35 111 22 92Z" fill="#ffffff" opacity=".075" />
+        <path d="M87 48 94 64 80 112 72 119Z" fill={metal.bright} opacity=".08" />
+      </g>
+      <path d="M29 50 60 38l31 13" fill="none" stroke="#ffffff" strokeOpacity=".7" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M31 57q8 1 14 8M31 64q7 1 11 6M89 57q-8 1-14 8M89 64q-7 1-11 6" fill="none" stroke={metal.bright} strokeOpacity=".62" strokeWidth="1" strokeLinecap="round" />
+      <path d="M31 76q1 19 12 31M89 76q-1 19-12 31" fill="none" stroke={metal.light} strokeOpacity=".25" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="m34 96 8 4-5 5M86 96l-8 4 5 5" fill="none" stroke={accent} strokeOpacity=".6" strokeWidth=".9" />
 
-      {/* A compact rank ribbon, with exactly 1–3 division marks. */}
-      <path d="m31 105 29 12 29-12-5 19-24 11-24-11Z" fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.2" strokeLinejoin="round" />
+      {/* Jewelled octagonal centre setting, not an outer decorative ring. */}
+      <path d="m60 49 18 6 8 18-8 19-18 7-18-7-8-19 8-18Z" fill="#03050e" opacity=".8" transform="translate(0 1.5)" />
+      <path d="m60 48 18 6 8 19-8 19-18 7-18-7-8-19 8-19Z" fill={`url(#${uid}-metal)`} stroke={metal.deep} strokeWidth="1.2" filter={`url(#${uid}-relief)`} />
+      <path d="m60 53 14 5 6 15-6 14-14 6-14-6-6-14 6-15Z" fill={`url(#${uid}-core)`} stroke={metal.light} strokeOpacity=".72" strokeWidth=".9" />
+      <path d="m60 53 14 5-14 7-14-7ZM40 73l6-15 6 15-6 14ZM80 73l-6-15-6 15 6 14ZM60 93l-14-6 14-6 14 6Z" fill={metal.bright} opacity=".16" />
+      <path d="M46 59 60 54l14 5" fill="none" stroke="#fff" strokeOpacity=".6" strokeWidth="1" />
+      <Icon x="47" y="60" width="26" height="26" color={metal.light} strokeWidth={1.75} filter={`url(#${uid}-relief)`} />
+      <path d="m60 45 2.2 3.4L60 51l-2.2-2.6Z" fill={accent} />
+
+      {/* Folded, engraved rank ribbon with raised division stars. */}
+      <path d="m30 108-10 8 13 5 8-9ZM90 108l10 8-13 5-8-9Z" fill={metal.deep} stroke={metal.bright} strokeOpacity=".45" strokeWidth=".8" />
+      <path d="m30 105 30 12 30-12-4 20-26 12-26-12Z" fill="#03050d" opacity=".8" transform="translate(0 1.5)" />
+      <path d="m30 104 30 12 30-12-4 20-26 12-26-12Z" fill={`url(#${uid}-ribbon)`} stroke={metal.deep} strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="m34 107 26 10 26-10-1 4-25 10-25-10Z" fill="#ffffff" opacity=".22" />
+      <path d="m36 124 24 10 24-10" fill="none" stroke={metal.light} strokeOpacity=".38" strokeWidth=".8" />
       {Array.from({length: stars}, (_, i) => {
-        const x = 60 + (i - (stars - 1) / 2) * 14;
-        return <path key={i} d={starPath(x, 117, 4)} fill={metal.light} />;
+        const x = 60 + (i - (stars - 1) / 2) * 15;
+        return <path key={i} d={starPath(x, 120, 4.6)} fill={`url(#${uid}-gem)`} stroke={metal.light} strokeWidth=".55" filter={`url(#${uid}-relief)`} />;
       })}
-      <path d="m40 114 20 8 20-8" fill="none" stroke="#fff" strokeOpacity=".28" strokeWidth=".8" />
     </svg>
   );
 }
