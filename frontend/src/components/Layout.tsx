@@ -1,28 +1,5 @@
-import {
-  Archive,
-  Bell,
-  BookOpenText,
-  BrainCircuit,
-  Gamepad2,
-  Radar,
-  RadioTower,
-  CalendarDays,
-  ClipboardList,
-  Crosshair,
-  Dumbbell,
-  Home,
-  Layers,
-  LogOut,
-  Map,
-  Menu,
-  Palette,
-  ShieldBan,
-  Swords,
-  Trophy,
-  Users,
-  X,
-} from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronsLeft, ChevronsRight, Gamepad2, LogOut, Menu, Palette, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { linkOf } from "../lib/mlbb";
@@ -30,32 +7,15 @@ import type { LinkSummary } from "../lib/mlbb";
 import type { User } from "../lib/types";
 import { hashRoute, navigate } from "../lib/util";
 import { FONT_CHOICES, type FontChoice } from "../lib/fontPrefs";
-import { ACCENTS, type SectionId, type ThemePrefs } from "../lib/theme";
+import { ACCENTS, accentFor, heroArt, sectionTheme, type SectionId, type ThemePrefs } from "../lib/theme";
+import {
+  MOBILE_QUICK, NAV_GROUPS, groupLabel, navItem, readNavCollapsed, saveNavCollapsed, visibleNav, type NavItem,
+} from "../lib/nav";
 import { AmbientBackdrop } from "./AmbientBackdrop";
-import { Wordmark } from "./Logo";
+import { CommandPalette } from "./CommandPalette";
+import { Wordmark, BrandImg } from "./Logo";
 import { AvatarImg } from "./Avatar";
-import { ErrorNote, Field } from "./ui";
-
-const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "ai", label: "9 CLOVER AI", icon: BrainCircuit },
-  { id: "training", label: "Training Center", icon: Dumbbell },
-  { id: "scrims", label: "Scrims", icon: Swords },
-    { id: "tournaments", label: "Tournaments", icon: Trophy },
-  { id: "esports", label: "Esports", icon: RadioTower },
-  { id: "mlbb", label: "My MLBB", icon: Gamepad2 },
-  { id: "reviews", label: "Match Reviews", icon: ClipboardList },
-  { id: "heroes", label: "Hero Database", icon: Crosshair },
-  { id: "intel", label: "MLBB Intel", icon: Radar },
-  { id: "players", label: "Players", icon: Users },
-  { id: "bans", label: "Ban Board", icon: ShieldBan },
-  { id: "drafts", label: "Draft Lab", icon: Layers },
-  { id: "maps", label: "Map Lab", icon: Map },
-  { id: "strategy", label: "Strategy", icon: BookOpenText },
-  { id: "archive", label: "Archive", icon: Archive },
-  { id: "events", label: "Calendar", icon: CalendarDays },
-  { id: "notifications", label: "Notifications", icon: Bell },
-];
+import { ErrorNote, Field, PageChrome } from "./ui";
 
 const ROLE_TONE: Record<string, string> = {
   admin: "text-crim border-crim/50",
@@ -65,32 +25,75 @@ const ROLE_TONE: Record<string, string> = {
   player: "text-mute border-edge-2",
 };
 
-function NavList({ current, onNavigate, user, unread = 0 }: { current: string; onNavigate?: () => void; user: User; unread?: number }) {
-  const items = user.role === "admin" ? [...NAV, { id: "admin", label: "Team Admin", icon: Menu }] : NAV;
+function deviceStorage(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
+
+/** Each area keeps its own colour on its icon, so the sidebar reads like a map of the hub. */
+function itemAccent(item: NavItem): string {
+  return accentFor(sectionTheme(item.id).accent).text;
+}
+
+function NavList({ current, onNavigate, user, unread = 0, collapsed = false }: {
+  current: string; onNavigate?: () => void; user: User; unread?: number; collapsed?: boolean;
+}) {
+  const items = visibleNav(user.role === "admin");
   return (
-    <nav className="flex-1 overflow-y-auto py-2">
-      {items.map((item) => {
-        const active = current === item.id;
-        const Icon = item.icon;
+    <nav aria-label="Main" className={`flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 ${collapsed ? "nav-rail" : ""}`}>
+      {NAV_GROUPS.map((group) => {
+        const entries = items.filter((item) => item.group === group.id);
+        if (!entries.length) return null;
         return (
-          <button
-            key={item.id}
-            onClick={() => { navigate(item.id); onNavigate?.(); }}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold transition-colors ${
-              active ? "text-text bg-raised nav-active" : "text-mute hover:text-text hover:bg-raised/60"
-            }`}
-          >
-            <Icon size={16} className={active ? "text-crim" : "text-faint"} style={item.id === "notifications" && unread > 0 ? { color: "#e11d48" } : undefined} />
-            {item.label}
-            {item.id === "notifications" && unread > 0 && (
-              <span className="ml-auto text-[10px] font-extrabold bg-crim text-white rounded-full min-w-5 h-5 px-1 inline-flex items-center justify-center">
-                {unread > 99 ? "99+" : unread}
-              </span>
-            )}
-          </button>
+          <div key={group.id} role="group" aria-label={group.label}>
+            <div className="nav-group-label" aria-hidden="true">{group.label}</div>
+            <ul className="space-y-0.5">
+              {entries.map((item) => {
+                const active = current === item.id;
+                const Icon = item.icon;
+                const count = item.id === "notifications" ? unread : 0;
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => { navigate(item.id); onNavigate?.(); }}
+                      aria-current={active ? "page" : undefined}
+                      title={collapsed ? `${item.label}${count ? ` (${count} unread)` : ""}` : undefined}
+                      className="nav-item"
+                      style={{ ["--item-accent" as string]: itemAccent(item) }}
+                    >
+                      <span className="nav-item__icon" aria-hidden="true"><Icon size={16} /></span>
+                      <span className="nav-item__label truncate">{item.label}</span>
+                      {count > 0 && (
+                        <span className="nav-badge" aria-label={`${count} unread`}>{count > 99 ? "99+" : count}</span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         );
       })}
     </nav>
+  );
+}
+
+function SearchButton({ onOpen, compact = false }: { onOpen: () => void; compact?: boolean }) {
+  if (compact) {
+    return (
+      <button type="button" onClick={onOpen} aria-label="Jump to a page" title="Jump to a page (Ctrl+K)"
+        className="mx-auto grid h-9 w-9 place-items-center rounded-lg border border-edge bg-raised/70 text-faint hover:text-text hover:border-edge-2">
+        <Search size={15} />
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={onOpen} aria-label="Jump to a page"
+      className="flex w-full items-center gap-2 rounded-lg border border-edge bg-raised/70 px-3 py-2 text-left text-[12px] text-faint transition-colors hover:border-edge-2 hover:text-mute">
+      <Search size={14} aria-hidden="true" />
+      <span className="flex-1">Jump to…</span>
+      <span className="kbd" aria-hidden="true">Ctrl K</span>
+    </button>
   );
 }
 
@@ -293,17 +296,35 @@ function ProfileModal({ user, font, onFontChange, theme, onThemeChange, onClose,
   );
 }
 
-function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, onUserUpdate }: {
+function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, onUserUpdate, collapsed = false }: {
   user: User; font: FontChoice; onFontChange: (choice: FontChoice) => void;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
-  onLogout: () => void; onUserUpdate: (u: User) => void;
+  onLogout: () => void; onUserUpdate: (u: User) => void; collapsed?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const modal = editing && <ProfileModal user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />;
+  if (collapsed) {
+    return (
+      <div className="border-t border-edge py-3 flex flex-col items-center gap-2">
+        <button onClick={() => setEditing(true)} title={`Edit profile — ${user.ign || user.name}`} aria-label={`Edit profile — ${user.ign || user.name}`}
+          className="rounded-full ring-2 ring-transparent hover:ring-crim/50 transition">
+          <AvatarImg user={user} size={34} />
+        </button>
+        <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme and text style" aria-label="Appearance settings">
+          <Palette size={15} />
+        </button>
+        <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
+          <LogOut size={15} />
+        </button>
+        {modal}
+      </div>
+    );
+  }
   return (
-    <div className="border-t border-edge p-3 flex items-center gap-3">
+    <div className="m-2.5 mt-0 rounded-xl border border-edge bg-raised/60 p-2.5 flex items-center gap-2.5">
       {/* One target for the avatar and name: the visible text is the accessible
           name, so screen readers announce exactly what is on screen. */}
-      <button className="flex flex-1 min-w-0 items-center gap-3 text-left" onClick={() => setEditing(true)} title="Edit profile">
+      <button className="flex flex-1 min-w-0 items-center gap-2.5 text-left" onClick={() => setEditing(true)} title="Edit profile">
         <span className="shrink-0"><AvatarImg user={user} size={36} /></span>
         <span className="min-w-0">
           <span className="block text-[13px] font-bold truncate">{user.ign || user.name}</span>
@@ -313,13 +334,13 @@ function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, on
           </span>
         </span>
       </button>
-      <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors" title="Colour theme and text style" aria-label="Appearance settings">
+      <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme and text style" aria-label="Appearance settings">
         <Palette size={16} />
       </button>
-      <button onClick={onLogout} className="text-faint hover:text-crim transition-colors" title="Sign out" aria-label="Sign out">
+      <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
         <LogOut size={16} />
       </button>
-      {editing && <ProfileModal user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />}
+      {modal}
     </div>
   );
 }
@@ -333,6 +354,9 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
   const [route, setRoute] = useState<string[]>(hashRoute());
   const [mobileNav, setMobileNav] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [collapsed, setCollapsed] = useState(() => readNavCollapsed(deviceStorage()));
+  const [palette, setPalette] = useState(false);
+  const drawerClose = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const onHash = () => setRoute(hashRoute());
     window.addEventListener("hashchange", onHash);
@@ -347,18 +371,60 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
     window.addEventListener("clover:notifications-changed", fetchCount);
     return () => { alive = false; clearInterval(t); window.removeEventListener("clover:notifications-changed", fetchCount); };
   }, [user.id]);
+  useEffect(() => { saveNavCollapsed(deviceStorage(), collapsed); }, [collapsed]);
+  // Ctrl/⌘ + K opens the quick-jump palette from anywhere.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPalette((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // The drawer behaves like a dialog: focus the close button, Escape closes it.
+  useEffect(() => {
+    if (!mobileNav) return;
+    drawerClose.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMobileNav(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNav]);
+
   const current = route[0] || "dashboard";
+  const items = useMemo(() => visibleNav(user.role === "admin"), [user.role]);
+  const openPalette = useCallback(() => { setMobileNav(false); setPalette(true); }, []);
+
+  // Every page header gets this area's icon, group and hero portrait.
+  const here = navItem(section);
+  const chrome = useMemo(() => {
+    if (!here) return null;
+    const Icon = here.icon;
+    return { icon: <Icon />, eyebrow: `${groupLabel(here.group)} · ${here.label}`, art: heroArt(sectionTheme(section).spotlight) };
+  }, [here, section]);
+
+  const navWidth = collapsed ? "md:w-[76px]" : "md:w-64";
+  const navPad = hideDesktopNav ? "" : collapsed ? "md:pl-[76px]" : "md:pl-64";
 
   return (
     <div className="min-h-screen bg-ink">
       <AmbientBackdrop section={section} motion={theme.motion} />
       {/* Desktop sidebar */}
-      <aside id="site-desktop-navigation" aria-label="Site navigation" className={`${hideDesktopNav ? "hidden" : "hidden md:flex"} fixed inset-y-0 left-0 w-60 flex-col border-r border-edge bg-panel/80 backdrop-blur-xl z-40`}>
-        <div className="px-4 pt-4 pb-3 border-b border-edge">
-          <Wordmark />
+      <aside id="site-desktop-navigation" aria-label="Site navigation"
+        className={`${hideDesktopNav ? "hidden" : "hidden md:flex"} ${navWidth} fixed inset-y-0 left-0 flex-col border-r border-edge bg-panel/80 backdrop-blur-xl z-40 transition-[width] duration-200 motion-reduce:transition-none`}>
+        <div className={`flex items-center gap-2 border-b border-edge ${collapsed ? "flex-col px-2 py-3" : "px-4 pt-4 pb-3"}`}>
+          {collapsed ? <BrandImg size={32} /> : <div className="min-w-0 flex-1"><Wordmark /></div>}
+          <button type="button" onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} aria-controls="site-desktop-navigation"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint hover:bg-white/5 hover:text-text">
+            {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+          </button>
         </div>
-        <NavList current={current} user={user} unread={unread} />
-        <UserCard user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
+        <div className={collapsed ? "py-3" : "px-3 pt-3"}><SearchButton onOpen={openPalette} compact={collapsed} /></div>
+        <NavList current={current} user={user} unread={unread} collapsed={collapsed} />
+        <UserCard user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} collapsed={collapsed} />
       </aside>
 
       {/* Mobile top bar */}
@@ -367,7 +433,10 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
           <Wordmark compact />
           <div className="flex items-center gap-2">
             <span className={`chip !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`}>{user.ign || user.role_label}</span>
-            <button className="btn-ghost !px-2 !py-1.5" onClick={() => setMobileNav(true)} aria-label="Menu">
+            <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
+              <Search size={17} />
+            </button>
+            <button className="btn-ghost !px-2 !py-1.5" onClick={() => setMobileNav(true)} aria-label="Menu" aria-expanded={mobileNav}>
               <Menu size={18} />
             </button>
           </div>
@@ -376,47 +445,50 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
 
       {/* Mobile drawer */}
       {mobileNav && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="absolute inset-0 bg-black/70" onClick={() => setMobileNav(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-panel/95 backdrop-blur-xl border-r border-edge flex flex-col">
+          <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[86vw] bg-panel/95 backdrop-blur-xl border-r border-edge flex flex-col">
             <div className="flex items-center justify-between px-4 h-14 border-b border-edge">
               <Wordmark compact />
-              <button className="text-faint" onClick={() => setMobileNav(false)} aria-label="Close">
+              <button ref={drawerClose} className="text-faint p-1" onClick={() => setMobileNav(false)} aria-label="Close">
                 <X size={18} />
               </button>
             </div>
+            <div className="px-3 pt-3"><SearchButton onOpen={openPalette} /></div>
             <NavList current={current} user={user} unread={unread} onNavigate={() => setMobileNav(false)} />
             <UserCard user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
           </div>
         </div>
       )}
 
-      <main className={`relative z-10 ${hideDesktopNav ? "" : "md:pl-60"} pb-20 md:pb-10 transition-[padding] duration-200 motion-reduce:transition-none`}>
-        <div className={`${hideDesktopNav ? "max-w-none" : "max-w-7xl"} mx-auto px-5 sm:px-8 pt-7`}>{children}</div>
+      <main className={`relative z-10 ${navPad} pb-24 md:pb-10 transition-[padding] duration-200 motion-reduce:transition-none`}>
+        <PageChrome.Provider value={chrome}>
+          <div className={`${hideDesktopNav ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-8 pt-5 sm:pt-7`}>{children}</div>
+        </PageChrome.Provider>
       </main>
 
       {/* Mobile bottom quick bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/85 backdrop-blur-xl border-t border-edge">
+      <nav aria-label="Quick links" className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/90 backdrop-blur-xl border-t border-edge pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-6">
-          {[
-            { id: "dashboard", short: "Home" }, { id: "ai", short: "AI" },
-            { id: "training", short: "Train" }, { id: "scrims", short: "Scrims" },
-            { id: "tournaments", short: "Cups" }, { id: "esports", short: "Esports" },
-          ].map(({ id, short }) => {
-            const item = NAV.find((entry) => entry.id === id)!;
+          {MOBILE_QUICK.map((id) => {
+            const item = navItem(id)!;
+            const short = item.short;
             const active = current === item.id;
             const Icon = item.icon;
             const accessibleLabel = item.label === short || item.label.endsWith(` ${short}`) ? item.label : `${short} — ${item.label}`;
             return (
-              <button key={item.id} onClick={() => navigate(item.id)} aria-label={accessibleLabel}
-                className={`flex flex-col items-center gap-1 py-2 text-[10px] font-bold uppercase tracking-wide ${active ? "text-rose-500" : "text-mute"}`}>
-                <Icon size={17} />
+              <button key={item.id} onClick={() => navigate(item.id)} aria-label={accessibleLabel} aria-current={active ? "page" : undefined}
+                className={`relative flex flex-col items-center gap-1 py-2 text-[10px] font-bold uppercase tracking-wide ${active ? "text-crim" : "text-mute"}`}>
+                {active && <span aria-hidden="true" className="absolute top-0 h-[3px] w-8 rounded-b-full bg-crim shadow-[0_0_12px_rgb(var(--accent-glow)/0.9)]" />}
+                <span className={`grid h-7 w-10 place-items-center rounded-full transition-colors ${active ? "bg-crim/15" : ""}`}><Icon size={17} /></span>
                 {short}
               </button>
             );
           })}
         </div>
       </nav>
+
+      {palette && <CommandPalette items={items} current={current} onClose={() => setPalette(false)} onGo={(id) => navigate(id)} />}
     </div>
   );
 }

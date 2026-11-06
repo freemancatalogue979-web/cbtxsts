@@ -1,15 +1,38 @@
 import { Loader2, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { createContext, useContext, useRef, type KeyboardEvent, type ReactNode } from "react";
+
+/**
+ * What the current area looks like, supplied once by the Layout so every page
+ * header gets the right icon, eyebrow and hero art without each page passing it.
+ */
+export interface PageChromeValue {
+  icon?: ReactNode;
+  /** e.g. "Team ops · Scrims" */
+  eyebrow?: string;
+  /** Bundled hero portrait shown at its native size in the header. */
+  art?: string;
+}
+export const PageChrome = createContext<PageChromeValue | null>(null);
 
 export function PageTitle({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) {
+  const chrome = useContext(PageChrome);
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
-      <div>
-        <h1 className="text-lg sm:text-xl font-extrabold tracking-[0.14em] uppercase">{title}</h1>
-        {sub && <p className="text-[13px] text-mute mt-1">{sub}</p>}
+    <header className="page-hero mb-5">
+      {chrome?.art && (
+        <div className="page-hero__art" aria-hidden="true">
+          <img src={chrome.art} alt="" width={240} height={390} decoding="async" draggable={false} />
+        </div>
+      )}
+      <div className="page-hero__body">
+        {chrome?.icon && <div className="page-hero__icon" aria-hidden="true">{chrome.icon}</div>}
+        <div className="min-w-0 flex-1">
+          {chrome?.eyebrow && <div className="page-hero__eyebrow">{chrome.eyebrow}</div>}
+          <h1 className="page-hero__title">{title}</h1>
+          {sub && <p className="page-hero__sub">{sub}</p>}
+        </div>
+        {right && <div className="page-hero__actions">{right}</div>}
       </div>
-      {right}
-    </div>
+    </header>
   );
 }
 
@@ -22,16 +45,19 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
-export function StatTile({ label, value, hint, tone = "default" }: {
-  label: string; value: ReactNode; hint?: string; tone?: "default" | "good" | "bad" | "accent";
+export function StatTile({ label, value, hint, tone = "default", icon }: {
+  label: string; value: ReactNode; hint?: string; tone?: "default" | "good" | "bad" | "accent"; icon?: ReactNode;
 }) {
   // "bad" keeps the fixed danger colour; the accent shifts per area, so an
   // accent-coloured number must never be mistaken for a warning.
   const toneCls = tone === "good" ? "text-leaf" : tone === "bad" ? "text-danger" : tone === "accent" ? "text-amber" : "text-text";
   return (
-    <div className="card px-3.5 py-3">
-      <div className="label mb-1.5">{label}</div>
-      <div className={`text-xl font-extrabold leading-none tabular-nums ${toneCls}`}>{value}</div>
+    <div className="card stat-tile px-3.5 py-3" data-tone={tone}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="label">{label}</div>
+        {icon && <span className="stat-tile__icon" aria-hidden="true">{icon}</span>}
+      </div>
+      <div className={`text-[22px] font-extrabold leading-none tabular-nums ${toneCls}`}>{value}</div>
       {hint && <div className="text-[11px] text-faint mt-1.5">{hint}</div>}
     </div>
   );
@@ -129,22 +155,42 @@ export function KV({ k, v }: { k: string; v: ReactNode }) {
   );
 }
 
-export function Tabs({ tabs, value, onChange }: {
-  tabs: { id: string; label: string }[]; value: string; onChange: (v: string) => void;
+export function Tabs({ tabs, value, onChange, label = "Sections" }: {
+  tabs: { id: string; label: string; count?: number }[]; value: string; onChange: (v: string) => void; label?: string;
 }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Arrow keys move between tabs, as screen-reader users expect from a tablist.
+  const onKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const last = tabs.length - 1;
+    const next = event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+      : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    onChange(tabs[next].id);
+    refs.current[next]?.focus();
+  };
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-edge mb-4 -mx-1 px-1">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          className={`px-3 py-2 text-[12px] font-bold uppercase tracking-[0.1em] whitespace-nowrap border-b-2 -mb-px transition-colors ${
-            value === t.id ? "border-crim text-text" : "border-transparent text-mute hover:text-text"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="tabs mb-4" role="tablist" aria-label={label}>
+      {tabs.map((t, index) => {
+        const active = value === t.id;
+        return (
+          <button
+            key={t.id}
+            ref={(node) => { refs.current[index] = node; }}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(event) => onKey(event, index)}
+            className="tabs__tab"
+          >
+            <span className="truncate">{t.label}</span>
+            {t.count !== undefined && <span className="tabs__count">{t.count}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

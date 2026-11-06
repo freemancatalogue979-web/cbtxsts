@@ -112,6 +112,7 @@ test("mobile history remains separate and global navigation only collapses on AI
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   assert.match(app, /hideDesktopNav=\{section === "ai" && !aiLayout\.navigationOpen\}/);
   assert.match(layout, /id="site-desktop-navigation"/);
-  assert.match(layout, /hideDesktopNav \? "" : "md:pl-60"/);
+  // Content padding follows the sidebar: none when hidden on AI, rail or full width otherwise.
+  assert.match(layout, /const navPad = hideDesktopNav \? "" : collapsed \? "md:pl-\[76px\]" : "md:pl-64";/);
   assert.match(layout, /motion-reduce:transition-none/);
 });

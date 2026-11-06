@@ -149,7 +149,9 @@ test("the mobile quick bar keeps larger, higher-contrast labels for the display 
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   const bar = layout.split("{/* Mobile bottom quick bar */}")[1]?.split("</nav>")[0] ?? "";
   assert.match(bar, /text-\[10px\]/);
-  assert.match(bar, /active \? "text-rose-500" : "text-mute"/);
+  // Active uses the live accent text shade (contrast-checked ≥5.5:1 in theme.test.mjs).
+  assert.match(bar, /active \? "text-crim" : "text-mute"/);
+  assert.match(bar, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(bar, /aria-label=\{accessibleLabel\}/);
 });
 

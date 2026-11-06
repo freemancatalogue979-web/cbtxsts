@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
@@ -10,24 +10,27 @@ import { Layout } from "./components/Layout";
 import { Spinner } from "./components/ui";
 import { Login } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
-import { TrainingPage } from "./pages/Training";
-import { ScrimsPage } from "./pages/Scrims";
-import { TournamentsPage } from "./pages/Tournaments";
-import { ReviewsPage } from "./pages/Reviews";
-import { HeroesPage } from "./pages/Heroes";
-import { IntelPage } from "./pages/Intel";
-import { EsportsPage } from "./pages/Esports";
-import { CloverAIPage } from "./pages/CloverAI";
-import { AccountMLBBPage } from "./pages/AccountMLBB";
-import { PlayersPage } from "./pages/Players";
-import { BansPage } from "./pages/Bans";
-import { DraftsPage } from "./pages/Drafts";
-import { MapsPage } from "./pages/Maps";
-import { NotificationsPage } from "./pages/Notifications";
-import { StrategyPage } from "./pages/Strategy";
-import { EventsPage } from "./pages/Events";
-import { ArchivePage } from "./pages/Archive";
-import { AdminPage } from "./pages/Admin";
+
+// Pages load on first visit, so a phone downloads the dashboard first instead of
+// the whole hub. Login and the dashboard stay in the main bundle for instant paint.
+const TrainingPage = lazy(() => import("./pages/Training").then((m) => ({ default: m.TrainingPage })));
+const ScrimsPage = lazy(() => import("./pages/Scrims").then((m) => ({ default: m.ScrimsPage })));
+const TournamentsPage = lazy(() => import("./pages/Tournaments").then((m) => ({ default: m.TournamentsPage })));
+const ReviewsPage = lazy(() => import("./pages/Reviews").then((m) => ({ default: m.ReviewsPage })));
+const HeroesPage = lazy(() => import("./pages/Heroes").then((m) => ({ default: m.HeroesPage })));
+const IntelPage = lazy(() => import("./pages/Intel").then((m) => ({ default: m.IntelPage })));
+const EsportsPage = lazy(() => import("./pages/Esports").then((m) => ({ default: m.EsportsPage })));
+const CloverAIPage = lazy(() => import("./pages/CloverAI").then((m) => ({ default: m.CloverAIPage })));
+const AccountMLBBPage = lazy(() => import("./pages/AccountMLBB").then((m) => ({ default: m.AccountMLBBPage })));
+const PlayersPage = lazy(() => import("./pages/Players").then((m) => ({ default: m.PlayersPage })));
+const BansPage = lazy(() => import("./pages/Bans").then((m) => ({ default: m.BansPage })));
+const DraftsPage = lazy(() => import("./pages/Drafts").then((m) => ({ default: m.DraftsPage })));
+const MapsPage = lazy(() => import("./pages/Maps").then((m) => ({ default: m.MapsPage })));
+const NotificationsPage = lazy(() => import("./pages/Notifications").then((m) => ({ default: m.NotificationsPage })));
+const StrategyPage = lazy(() => import("./pages/Strategy").then((m) => ({ default: m.StrategyPage })));
+const EventsPage = lazy(() => import("./pages/Events").then((m) => ({ default: m.EventsPage })));
+const ArchivePage = lazy(() => import("./pages/Archive").then((m) => ({ default: m.ArchivePage })));
+const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
 
 function deviceStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
@@ -161,7 +164,7 @@ export default function App() {
       page = <AdminPage me={user} meta={meta} />;
       break;
     default:
-      page = <DashboardPage />;
+      page = <DashboardPage me={user} />;
   }
 
   return (
@@ -169,7 +172,7 @@ export default function App() {
       theme={theme} onThemeChange={setTheme} section={section}
       hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
       onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
-      {page}
+      <Suspense fallback={<Spinner label="Opening" />}>{page}</Suspense>
     </Layout>
   );
 }

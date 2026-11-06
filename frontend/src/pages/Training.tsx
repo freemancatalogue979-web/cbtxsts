@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { Activity, Meta, Program, ProgressCell, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
-import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner } from "../components/ui";
+import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner, Tabs } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
 import { FilePick } from "../components/FilePick";
 
@@ -904,15 +904,9 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
           )
         )} />
 
-      <div className="flex gap-1 border-b border-edge -mt-2">
-        {([["programs", "Programs"], ["schedule", "Schedule"]] as const).map(([k, label]) => (
-          <button key={k} onClick={() => (k === "schedule" ? navigate("training", "schedule") : navigate("training"))}
-            className={`px-4 py-2 text-[12px] font-extrabold uppercase tracking-wider border-b-2 -mb-px transition ${
-              tab === k ? "text-crim border-crim" : "text-faint border-transparent hover:text-mute"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs label="Training views" value={tab}
+        onChange={(k) => (k === "schedule" ? navigate("training", "schedule") : navigate("training"))}
+        tabs={[{ id: "programs", label: "Programs" }, { id: "schedule", label: "Schedule" }]} />
 
       {tab === "programs" ? (
         <section className="space-y-3">

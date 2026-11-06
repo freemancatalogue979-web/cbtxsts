@@ -49,7 +49,8 @@ export function useCountdown(isoDate: string | null | undefined, time: string | 
 
 export const RESULT_STYLE: Record<string, string> = {
   WIN: "text-leaf border-leaf/40 bg-leaf-dim/60",
-  LOSS: "text-crim border-crim/40 bg-crim-dim/60",
+  // Fixed danger red: the accent colour changes per area and must never decide what a loss looks like.
+  LOSS: "text-danger border-danger/40 bg-danger-dim/60",
   DRAW: "text-amber border-amber/40 bg-amber/10",
 };
 
