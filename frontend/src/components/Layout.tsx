@@ -88,10 +88,10 @@ function SearchButton({ onOpen, compact = false }: { onOpen: () => void; compact
     );
   }
   return (
-    <button type="button" onClick={onOpen} aria-label="Jump to a page"
+    <button type="button" onClick={onOpen} aria-keyshortcuts="Control+K Meta+K"
       className="flex w-full items-center gap-2 rounded-lg border border-edge bg-raised/70 px-3 py-2 text-left text-[12px] text-faint transition-colors hover:border-edge-2 hover:text-mute">
       <Search size={14} aria-hidden="true" />
-      <span className="flex-1">Jump to…</span>
+      <span className="flex-1">Jump to a page…</span>
       <span className="kbd" aria-hidden="true">Ctrl K</span>
     </button>
   );

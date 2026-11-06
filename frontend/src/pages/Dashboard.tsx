@@ -1,6 +1,6 @@
 import {
   AlertTriangle, ArrowRight, Bell, BrainCircuit, CalendarDays, ClipboardList, Clock, Coins, Crosshair, Crown,
-  Flame, Layers, Skull, Swords, Target, Timer, Trophy, Turtle,
+  Flame, Layers, Swords, Target, Timer, Trophy, Turtle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
@@ -59,12 +59,12 @@ function CountdownTiles({ date, time }: { date?: string | null; time?: string | 
 function TrainingBlock({ dash }: { dash: Dashboard }) {
   const week = dash.current_week;
   return (
-    <section className="card p-4 sm:p-5 h-full">
+    <section className="card p-4 sm:p-5 h-full flex flex-col">
       <SectionTitle right={week && <button className="label !text-crim hover:!text-crim/80" onClick={() => navigate("training", "weeks", week.id)}>Open week →</button>}>
         Current training block
       </SectionTitle>
       {week ? (
-        <div className="flex items-center gap-5">
+        <div className="flex flex-1 items-center gap-5">
           <div className="relative">
             <Ring value={week.progress} />
             <div className="absolute inset-0 grid place-items-center text-center">
@@ -140,7 +140,7 @@ function FormStrip({ results }: { results: Dashboard["recent_results"] }) {
   const ordered = [...results].reverse();
   const tone = (r: string | null | undefined) => r === "WIN" ? "bg-leaf text-[#04261b]" : r === "LOSS" ? "bg-danger text-[#2a0710]" : "bg-amber text-[#2b1d04]";
   return (
-    <div className="flex items-center gap-1.5" aria-label={`Recent form: ${ordered.map((s) => s.result ?? "no result").join(", ")}`}>
+    <div className="flex items-center gap-1.5" role="img" aria-label={`Recent form: ${ordered.map((s) => s.result ?? "no result").join(", ")}`}>
       {ordered.map((s) => (
         <span key={s.id} aria-hidden="true" title={`#${s.number} vs ${s.opponent}`}
           className={`grid h-6 w-6 place-items-center rounded-md text-[10px] font-extrabold ${tone(s.result)}`}>
@@ -176,13 +176,13 @@ export function DashboardPage({ me }: { me?: User }) {
     <div className="space-y-6">
       <PageTitle
         title={name ? `${greeting()}, ${name}` : "The Hub"}
-        sub={`${today}${dash.weakness?.season_name ? ` · ${dash.weakness.season_name}` : ""} · PLAY → REVIEW → TRAIN → IMPROVE`}
+        sub={<>{today}{dash.weakness?.season_name ? ` · ${dash.weakness.season_name}` : ""}<span className="hidden sm:inline"> · PLAY → REVIEW → TRAIN → IMPROVE</span></>}
         right={
           <>
             {QUICK.map((action) => {
               const Icon = action.icon;
               return (
-                <button key={action.id} className={action.primary ? "btn-primary" : "btn-ghost"} onClick={() => navigate(action.id)}>
+                <button key={action.id} className={action.primary ? "btn-primary" : "btn-ghost hidden sm:inline-flex"} onClick={() => navigate(action.id)}>
                   <Icon size={15} aria-hidden="true" /> {action.label}
                 </button>
               );
@@ -213,7 +213,7 @@ export function DashboardPage({ me }: { me?: User }) {
         <SectionTitle right={<span className="text-[11px] text-faint">last {perf.games_analyzed} scrim games</span>}>
           Team performance
         </SectionTitle>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatTile icon={<Trophy size={14} />} label="Win rate" value={pct(perf.win_rate)} tone={(perf.win_rate ?? 0) >= 50 ? "good" : "bad"}
             hint={perf.record ? `${perf.record.series_won}W–${perf.record.series_lost}L series` : undefined} />
           <StatTile icon={<Target size={14} />} label="Objective control" value={pct(perf.objective_control)} />
@@ -222,8 +222,9 @@ export function DashboardPage({ me }: { me?: User }) {
           <StatTile icon={<Flame size={14} />} label="Teamfight win" value={pct(perf.teamfight_success)} />
           <StatTile icon={<Timer size={14} />} label="Avg game time" value={perf.avg_game_time_min ? `${perf.avg_game_time_min}m` : "—"} />
           <StatTile icon={<Coins size={14} />} label="Gold diff @10" value={perf.gold_diff_10 === undefined ? "—" : `${perf.gold_diff_10 >= 0 ? "+" : ""}${perf.gold_diff_10}`} tone={(perf.gold_diff_10 ?? 0) >= 0 ? "good" : "bad"} />
-          <StatTile icon={<Crosshair size={14} />} label="Kills @10" value={perf.kills_10 ?? "—"} />
-          <StatTile icon={<Skull size={14} />} label="Deaths @10" value={perf.deaths_10 ?? "—"} tone={(perf.deaths_10 ?? 0) <= (perf.kills_10 ?? 0) ? "good" : "default"} />
+          <StatTile icon={<Crosshair size={14} />} label="Kills / deaths @10"
+            value={perf.kills_10 === undefined && perf.deaths_10 === undefined ? "—" : `${perf.kills_10 ?? "—"} / ${perf.deaths_10 ?? "—"}`}
+            tone={(perf.deaths_10 ?? 0) <= (perf.kills_10 ?? 0) ? "good" : "bad"} />
         </div>
       </section>
 
@@ -272,7 +273,7 @@ export function DashboardPage({ me }: { me?: User }) {
               {dash.recent_results.length === 0 && <div className="p-4"><Empty title="No scrims played yet" /></div>}
               {dash.recent_results.map((s) => (
                 <button key={s.id} onClick={() => navigate("scrims", s.id)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left">
-                  <ResultBadge result={s.result} />
+                  <span className="w-14 shrink-0 [&>.chip]:w-full [&>.chip]:justify-center"><ResultBadge result={s.result} /></span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold truncate">9 CLOVER <span className="tabular-nums">{s.score_us} - {s.score_them}</span> {s.opponent}</div>
                     <div className="text-[11px] text-faint">{dayLabel(s.date)} · Scrim #{s.number} · {s.format}</div>

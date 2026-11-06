@@ -623,7 +623,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           <div className="flex flex-wrap gap-2">
             <input className="input !w-44" placeholder="Opponent…" value={filters.opponent}
               onChange={(e) => setFilters((p) => ({ ...p, opponent: e.target.value }))} />
-            <select className="input !w-36" value={filters.result} onChange={(e) => setFilters((p) => ({ ...p, result: e.target.value }))}>
+            <select className="input !w-36" aria-label="Filter by result" value={filters.result} onChange={(e) => setFilters((p) => ({ ...p, result: e.target.value }))}>
               <option value="">Win/Loss</option><option>WIN</option><option>LOSS</option>
             </select>
           </div>

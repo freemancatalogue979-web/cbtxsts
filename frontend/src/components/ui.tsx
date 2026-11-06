@@ -14,7 +14,7 @@ export interface PageChromeValue {
 }
 export const PageChrome = createContext<PageChromeValue | null>(null);
 
-export function PageTitle({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) {
+export function PageTitle({ title, sub, right }: { title: string; sub?: ReactNode; right?: ReactNode }) {
   const chrome = useContext(PageChrome);
   return (
     <header className="page-hero mb-5">
