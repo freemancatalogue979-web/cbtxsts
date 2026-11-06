@@ -124,10 +124,10 @@ function Splash() {
             else and the logo swaps the moment React mounts. */}
         <img
           className="ag-splash__logo"
-          src="/brand/absolute-genesis-current.webp"
+          src="/brand/absolute-genesis-crown-emblem.png"
           alt="Absolute Genesis"
-          width={360}
-          height={240}
+          width={1536}
+          height={1024}
           fetchPriority="high"
           draggable={false}
         />

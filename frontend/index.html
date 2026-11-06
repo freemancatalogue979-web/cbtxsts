@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#eaf4ff" />
     <link rel="icon" type="image/svg+xml" href="/brand/ag-sigil.svg" />
     <link rel="icon" type="image/png" sizes="96x96" href="/brand/ag-logo-96.png" />
-    <link rel="preload" as="image" href="/brand/absolute-genesis-current.webp" type="image/webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/brand/absolute-genesis-crown-emblem.png" type="image/png" fetchpriority="high" />
     <link rel="apple-touch-icon" href="/brand/ag-apple-touch-180.png" />
     <!-- Installable app: manifest + standalone look on iPhone/Android. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
@@ -89,8 +89,8 @@
       }
       .ag-splash__stack { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; }
       .ag-splash__logo {
-        display: block; width: min(82vw, 24rem); height: auto; margin-bottom: 1.6rem;
-        filter: drop-shadow(0 0 26px rgba(168, 85, 247, 0.38)) drop-shadow(0 10px 26px rgba(0, 0, 0, 0.5));
+        display: block; width: min(92vw, 32rem); height: auto; max-height: 52dvh; object-fit: contain; margin-bottom: 1.6rem;
+        /* Exact uploaded PNG: no filter, crop, transparency edit or derived artwork. */
         animation: ag-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       .ag-splash__tag {
@@ -132,7 +132,7 @@
     <div id="root">
       <div class="ag-splash" role="status" aria-label="Loading Absolute Genesis">
         <div class="ag-splash__stack">
-          <img class="ag-splash__logo" src="/brand/absolute-genesis-current.webp" alt="Absolute Genesis" width="360" height="240" fetchpriority="high" draggable="false" />
+          <img class="ag-splash__logo" src="/brand/absolute-genesis-crown-emblem.png" alt="Absolute Genesis" width="1536" height="1024" fetchpriority="high" draggable="false" />
           <p class="ag-splash__tag">A completely new beginning</p>
           <div class="ag-splash__bar"><span></span></div>
         </div>
