@@ -297,34 +297,43 @@ html[data-font="corptic"] {
 /* The drifting shelf of hero portraits behind everything. */
 .ambient__shelf {
   position: absolute;
-  inset: -12% -10%;
+  inset: -10% -8% 0% -6%;
   display: flex;
-  align-items: flex-start;
-  gap: clamp(1rem, 3vw, 3.2rem);
+  align-items: flex-end;
+  justify-content: space-evenly;
+  gap: clamp(0.75rem, 2.2vw, 2.4rem);
   transform-style: preserve-3d;
-  transform: rotateX(10deg) rotateY(-14deg) scale(1.18);
+  transform: rotateX(8deg) rotateY(-10deg) scale(1.04);
   animation: ambient-drift 34s ease-in-out infinite alternate;
   will-change: transform;
 }
+/* Never upscale the bundled 240×390 portraits: the cap tracks the device pixel
+   ratio, so each one is drawn at its native pixel size and stays sharp. */
 .ambient__shelf img {
-  width: clamp(120px, 15vw, 230px);
+  width: clamp(86px, 7.6vw, calc(240px / var(--art-dpr, 1)));
   height: auto;
   aspect-ratio: 240 / 390;
   object-fit: cover;
-  border-radius: 14px;
-  opacity: 0.62;
-  filter: blur(3px) saturate(1.5) brightness(1.25);
+  border-radius: 12px;
+  opacity: 0.74;
+  filter: saturate(1.3) brightness(1.16);
 }
-.ambient__shelf img:nth-child(even) { margin-top: clamp(2rem, 9vh, 8rem); }
-.ambient__shelf img:nth-child(3n) { margin-top: clamp(-2rem, -4vh, 0rem); }
+/* A sharper source (repo HD pack or catalogue painting) can be shown bigger. */
+.ambient__shelf img[data-art="hd"] {
+  width: clamp(120px, 11vw, calc(320px / var(--art-dpr, 1)));
+  filter: saturate(1.16) brightness(1.06);
+}
+.ambient__shelf img:nth-child(even) { margin-bottom: clamp(1rem, 6vh, 5rem); }
+.ambient__shelf img:nth-child(3n) { margin-bottom: clamp(0rem, 2vh, 1.5rem); }
 /* The hero the area is "about", large and softly masked into the page. */
 .ambient__spotlight {
   position: absolute;
-  right: clamp(-10%, -3vw, -1%);
-  bottom: clamp(-20%, -12vh, -6%);
-  width: min(46vw, 540px);
+  right: 0;
+  bottom: clamp(-16%, -10vh, -4%);
   transform-style: preserve-3d;
-  transform: rotateY(-8deg);
+  /* The bleed is a share of the hero's own width, never of the viewport, so a
+     capped portrait can't drift off the screen edge. */
+  transform: translateX(9%) rotateY(-8deg);
   animation: ambient-float 18s ease-in-out infinite alternate;
   will-change: transform;
 }
@@ -333,13 +342,23 @@ html[data-font="corptic"] {
   height: auto;
   aspect-ratio: 240 / 390;
   object-fit: cover;
+  object-position: center 26%;
   /* Hero splashes are painted on near-black backgrounds, so lift them enough
-     to read as art while the vignette keeps text contrast. */
+     to read as art while the vignette keeps text contrast. No blur filter:
+     that was what made the art look soft. */
   opacity: 0.72;
-  filter: saturate(1.45) brightness(1.22) contrast(1.06);
-  -webkit-mask-image: radial-gradient(78% 84% at 56% 46%, #000 26%, transparent 82%);
-  mask-image: radial-gradient(78% 84% at 56% 46%, #000 26%, transparent 82%);
+  filter: saturate(1.16) brightness(1.07);
+  -webkit-mask-image: radial-gradient(80% 86% at 56% 46%, #000 30%, transparent 84%);
+  mask-image: radial-gradient(80% 86% at 56% 46%, #000 30%, transparent 84%);
 }
+/* Bundled portrait: show it at a size it can actually fill, rather than
+   stretching a 240px image across half the screen. */
+.ambient__spotlight[data-art="local"] { width: min(30vw, calc(250px / var(--art-dpr, 1))); }
+.ambient__spotlight[data-art="local"] img { opacity: 0.62; }
+/* Sharper source (≈1080px catalogue painting or the repo HD pack): large and
+   crisp, but still capped so a 4K/retina screen never out-resolves it. */
+.ambient__spotlight[data-art="hd"] { width: min(46vw, calc(1000px / var(--art-dpr, 1))); }
+.ambient__spotlight[data-art="hd"] img { filter: saturate(1.1) brightness(1.05); }
 /* Faint tactical grid + vignette so text stays the brightest thing on screen. */
 .ambient__grid {
   position: absolute;
@@ -371,13 +390,28 @@ html[data-effects="calm"] .ambient__spotlight { transform: none; transition: non
   .ambient__shelf, .ambient__spotlight { transform: none; transition: none; }
 }
 @media (max-width: 767px) {
-  /* Fewer, blurrier layers keep phones smooth. */
-  .ambient__shelf img:nth-child(n + 4) { display: none; }
-  .ambient__shelf { gap: 1.25rem; }
-  /* Phones show less art and more card surface so text always wins. */
-  .ambient__spotlight { width: min(80vw, 380px); bottom: 2%; }
-  .ambient__spotlight img { opacity: 0.34; }
-  .ambient__shelf img { opacity: 0.34; }
+  /* Phones cannot download 1080px paintings on mobile data, and a 240px
+     portrait blown up to a "spotlight" is exactly the blur we are fixing. So
+     the phone wallpaper is a frieze of portraits drawn at native pixel size:
+     several heroes, all crisp, none stretched. */
+  .ambient__spotlight { display: none; }
+  .ambient__shelf {
+    inset: 34% -6% -10% -6%;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    transform: rotateX(5deg) rotateY(-6deg);
+    animation: ambient-drift-mobile 40s ease-in-out infinite alternate;
+  }
+  .ambient__shelf img,
+  .ambient__shelf img[data-art="hd"] {
+    width: clamp(74px, 21vw, 96px);
+    border-radius: 10px;
+    opacity: 0.42;
+  }
+  .ambient__shelf img:nth-child(n) { margin-bottom: 0; }
+  .ambient__shelf img:nth-child(n + 9) { display: none; }
   .ambient__vignette {
     background:
       radial-gradient(110% 80% at 50% 30%, transparent 28%, rgb(3 6 12 / 0.88) 100%),
@@ -385,9 +419,20 @@ html[data-effects="calm"] .ambient__spotlight { transform: none; transition: non
   }
   .card { background: color-mix(in srgb, var(--color-panel) 93%, transparent); }
 }
+/* Large displays get a wider wall, not a stretched one. */
+@media (min-width: 2000px) {
+  .ambient__shelf { gap: 2.6rem; inset: -12% -5% -2% -4%; }
+  /* Wider wall, same native-resolution cap. */
+  .ambient__shelf img[data-art="hd"] { width: clamp(140px, 9vw, calc(420px / var(--art-dpr, 1))); }
+}
+
 @keyframes ambient-drift {
-  0% { transform: translate3d(-1.5%, 0, 0) rotateX(10deg) rotateY(-14deg) scale(1.18); }
-  100% { transform: translate3d(2.5%, 2%, 0) rotateX(12deg) rotateY(-8deg) scale(1.24); }
+  0% { transform: translate3d(-1.2%, 0, 0) rotateX(8deg) rotateY(-10deg) scale(1.04); }
+  100% { transform: translate3d(2%, 1.5%, 0) rotateX(9deg) rotateY(-6deg) scale(1.08); }
+}
+@keyframes ambient-drift-mobile {
+  0% { transform: translate3d(-1.5%, 0, 0) rotateX(5deg) rotateY(-6deg); }
+  100% { transform: translate3d(1.5%, 2%, 0) rotateX(6deg) rotateY(-2deg); }
 }
 @keyframes ambient-float {
   0% { translate: 0 0; }
