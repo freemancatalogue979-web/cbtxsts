@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, setToken, ApiError } from "../lib/api";
 import type { User } from "../lib/types";
+import { AmbientBackdrop } from "../components/AmbientBackdrop";
 import { ErrorNote, Field } from "../components/ui";
 import { HeroMark } from "../components/Logo";
 
@@ -27,9 +28,8 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
 
   return (
     <div className="min-h-screen bg-ink flex items-center justify-center p-4 relative overflow-hidden">
-      {/* subtle crimson glow, no noise */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[36rem] h-[36rem] rounded-full bg-crim/[0.05] blur-3xl" />
-      <div className="w-full max-w-sm relative">
+      <AmbientBackdrop section="login" motion />
+      <div className="w-full max-w-sm relative z-10">
         <div className="flex flex-col items-center mb-8">
           <HeroMark size={188} />
           <div className="mt-4 text-2xl font-extrabold tracking-[0.25em]">

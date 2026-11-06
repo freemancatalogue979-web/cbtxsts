@@ -3,6 +3,7 @@ import { api, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
 import { applyFontChoice, readFontChoice, saveFontChoice, type FontChoice } from "./lib/fontPrefs";
+import { applyTheme, parseSection, readThemePrefs, saveThemePrefs, type ThemePrefs } from "./lib/theme";
 import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
 import { Layout } from "./components/Layout";
@@ -48,10 +49,14 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(deviceStorage()));
   const [font, setFont] = useState<FontChoice>(() => readFontChoice(deviceStorage()));
+  const [theme, setTheme] = useState<ThemePrefs>(() => readThemePrefs(deviceStorage()));
   const route = useRoute();
+  // Before sign-in there is no area yet, so the theme is the login look.
+  const section = user ? parseSection(route[0] || "dashboard") : "login";
 
   useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
   useEffect(() => { applyFontChoice(font); saveFontChoice(deviceStorage(), font); }, [font]);
+  useEffect(() => { applyTheme(theme, section); saveThemePrefs(deviceStorage(), theme); }, [theme, section]);
 
   useEffect(() => {
     const refreshMeta = () => { void api.get<Meta>("/meta").then(setMeta).catch(() => undefined); };
@@ -96,7 +101,6 @@ export default function App() {
     return <div className="min-h-screen flex items-center justify-center"><Spinner label="Loading reference data" /></div>;
   }
 
-  const section = route[0] || "dashboard";
   const rest = route.slice(1);
   const toggleAILayout = (key: keyof AIWorkspaceLayout) => setAILayout((previous) => ({ ...previous, [key]: !previous[key] }));
 
@@ -162,6 +166,7 @@ export default function App() {
 
   return (
     <Layout user={user} onUserUpdate={setUser} font={font} onFontChange={setFont}
+      theme={theme} onThemeChange={setTheme} section={section}
       hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
       onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
       {page}

@@ -25,7 +25,9 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
 export function StatTile({ label, value, hint, tone = "default" }: {
   label: string; value: ReactNode; hint?: string; tone?: "default" | "good" | "bad" | "accent";
 }) {
-  const toneCls = tone === "good" ? "text-leaf" : tone === "bad" ? "text-crim" : tone === "accent" ? "text-amber" : "text-text";
+  // "bad" keeps the fixed danger colour; the accent shifts per area, so an
+  // accent-coloured number must never be mistaken for a warning.
+  const toneCls = tone === "good" ? "text-leaf" : tone === "bad" ? "text-danger" : tone === "accent" ? "text-amber" : "text-text";
   return (
     <div className="card px-3.5 py-3">
       <div className="label mb-1.5">{label}</div>
@@ -112,7 +114,7 @@ export function ErrorNote({ error }: { error: unknown }) {
   if (!error) return null;
   const msg = error instanceof Error ? error.message : String(error);
   return (
-    <div className="rounded border border-crim/50 bg-crim-dim/40 px-3 py-2 text-[13px] text-crim font-semibold">
+    <div className="rounded border border-danger/50 bg-danger/10 px-3 py-2 text-[13px] text-danger font-semibold">
       {msg}
     </div>
   );

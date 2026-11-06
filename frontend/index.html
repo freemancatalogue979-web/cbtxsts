@@ -12,14 +12,37 @@
     <meta name="theme-color" content="#0a0a0d" />
     <title>9 CLOVER — The Hub</title>
     <script>
-      // Apply the saved text style before the first paint. Montserrat is the
-      // default; Corptic is opt-in from the profile menu.
-      try {
-        document.documentElement.dataset.font =
-          window.localStorage.getItem("clover_font_choice") === "corptic" ? "corptic" : "montserrat";
-      } catch (error) {
-        document.documentElement.dataset.font = "montserrat";
-      }
+      // Apply the saved appearance before the first paint so there is no flash
+      // of the wrong font or colour: text style, accent, backdrop and motion.
+      (function () {
+        var root = document.documentElement;
+        // Default accent per area; kept in sync with SECTION_THEMES in
+        // src/lib/theme.ts by tests/theme.test.mjs.
+        var ACCENTS = {
+          dashboard: "crimson", ai: "emerald", training: "cyan", scrims: "violet",
+          tournaments: "amber", esports: "azure", mlbb: "azure", reviews: "violet",
+          heroes: "fuchsia", intel: "emerald", players: "cyan", bans: "crimson",
+          drafts: "lime", maps: "emerald", strategy: "amber", archive: "fuchsia",
+          events: "amber", notifications: "crimson", admin: "azure", login: "crimson"
+        };
+        var section = (location.hash.replace(/^#\/?/, "").split("/")[0] || "dashboard").toLowerCase();
+        if (!ACCENTS[section]) section = "dashboard";
+        var stored = null;
+        try {
+          root.dataset.font = window.localStorage.getItem("clover_font_choice") === "corptic" ? "corptic" : "montserrat";
+          stored = window.localStorage.getItem("clover_theme_accent");
+          root.dataset.backdrop = window.localStorage.getItem("clover_theme_backdrop") === "off" ? "plain" : "hero";
+          root.dataset.effects = window.localStorage.getItem("clover_theme_motion") === "calm" ? "calm" : "full";
+        } catch (error) {
+          root.dataset.font = "montserrat";
+          root.dataset.backdrop = "hero";
+          root.dataset.effects = "full";
+        }
+        var pinned = false;
+        for (var id in ACCENTS) if (ACCENTS[id] === stored) pinned = true;
+        root.dataset.section = section;
+        root.dataset.accent = pinned ? stored : ACCENTS[section];
+      })();
     </script>
   </head>
   <body>
