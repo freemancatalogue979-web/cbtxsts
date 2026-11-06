@@ -1,3 +1,6 @@
+import "@fontsource/dm-mono/400.css";
+import "@fontsource/dm-mono/500.css";
+import "@fontsource/dm-mono/500-italic.css";
 import "@fontsource-variable/montserrat";
 import "@fontsource-variable/montserrat/wght-italic.css";
 import "./index.css";

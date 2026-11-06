@@ -29,12 +29,13 @@
         if (!ACCENTS[section]) section = "dashboard";
         var stored = null;
         try {
-          root.dataset.font = window.localStorage.getItem("clover_font_choice") === "corptic" ? "corptic" : "montserrat";
+          var font = window.localStorage.getItem("clover_font_choice");
+          root.dataset.font = font === "montserrat" || font === "corptic" ? font : "dmmono";
           stored = window.localStorage.getItem("clover_theme_accent");
           root.dataset.backdrop = window.localStorage.getItem("clover_theme_backdrop") === "off" ? "plain" : "hero";
           root.dataset.effects = window.localStorage.getItem("clover_theme_motion") === "calm" ? "calm" : "full";
         } catch (error) {
-          root.dataset.font = "montserrat";
+          root.dataset.font = "dmmono";
           root.dataset.backdrop = "hero";
           root.dataset.effects = "full";
         }

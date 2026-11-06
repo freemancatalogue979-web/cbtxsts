@@ -1,19 +1,25 @@
 /**
- * Per-browser text style. Montserrat is the default; the Corptic display font
- * stays available for anyone who prefers it. The choice is device-local, like
+ * Per-browser text style. DM Mono (11px, 500, 0.1em tracking, all caps) is the
+ * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */
 
-export type FontChoice = "montserrat" | "corptic";
+export type FontChoice = "dmmono" | "montserrat" | "corptic";
 
 export const FONT_STORAGE_KEY = "clover_font_choice";
-export const DEFAULT_FONT: FontChoice = "montserrat";
+export const DEFAULT_FONT: FontChoice = "dmmono";
 
 export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack: string }[] = [
   {
+    id: "dmmono",
+    label: "DM Mono",
+    hint: "Default · caps",
+    stack: "\"DM Mono\", ui-monospace, \"SFMono-Regular\", Menlo, Consolas, monospace",
+  },
+  {
     id: "montserrat",
     label: "Montserrat",
-    hint: "Default · clearest",
+    hint: "Large · mixed case",
     stack: "\"Montserrat Variable\", \"Helvetica Neue\", Arial, sans-serif",
   },
   {
@@ -26,7 +32,7 @@ export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack:
 
 /** Anything unrecognised (old value, corrupt data, nothing saved) gets the default. */
 export function parseFontChoice(value: unknown): FontChoice {
-  return value === "corptic" ? "corptic" : DEFAULT_FONT;
+  return value === "montserrat" || value === "corptic" ? value : DEFAULT_FONT;
 }
 
 function storageOf(storage?: Storage | null): Storage | null {

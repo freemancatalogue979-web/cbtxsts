@@ -98,21 +98,38 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
-test("Montserrat is the default text style and stays crisp and bold", () => {
+test("DM Mono is the default text style: 11px, 500, 0.1em, all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    assert.match(stack, /^"Montserrat Variable"/);
+    assert.match(stack, /^"DM Mono",/);
+    assert.match(stack, /monospace$/);
     assert.doesNotMatch(stack, /Corptic/);
   }
   const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
-  assert.match(body, /font-weight:\s*600/);
-  assert.match(body, /line-height:\s*1\.6/);
-  assert.match(body, /letter-spacing:\s*0\.01em/);
-  // The default style must not be slanted, scaled or given display-font spacing.
+  assert.match(body, /font-size:\s*11px/);
+  assert.match(body, /font-weight:\s*500/);
+  assert.match(body, /letter-spacing:\s*0\.1em/);
+  assert.match(body, /text-transform:\s*uppercase/);
   assert.doesNotMatch(body, /font-style:\s*oblique/);
   assert.doesNotMatch(body, /font-size-adjust/);
-  assert.doesNotMatch(body, /\bantialiased\b/);
+  // Typed text and placeholders follow the same case.
+  assert.match(css, /input, textarea, select, button \{\s*text-transform: inherit;/);
+  // The font ships with the app (no external font CDN), in the weights used.
+  const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
+  assert.match(main, /import "@fontsource\/dm-mono\/500\.css";/);
+  assert.match(main, /import "@fontsource\/dm-mono\/400\.css";/);
+});
+
+test("Montserrat stays available as a larger, mixed-case option", () => {
+  const vars = css.match(/html\[data-font="montserrat"\]\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(vars, /--font-sans:\s*"Montserrat Variable"/);
+  assert.match(vars, /--font-mono:\s*"Montserrat Variable"/);
+  const body = css.match(/html\[data-font="montserrat"\] body\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(body, /font-size:\s*16px/);
+  assert.match(body, /font-weight:\s*600/);
+  assert.match(body, /letter-spacing:\s*0\.01em/);
+  assert.match(body, /text-transform:\s*none/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);
 });
 
@@ -122,6 +139,8 @@ test("the optional Corptic style keeps its slant, readable size and thick letter
   assert.match(corptic, /font-weight:\s*700/);
   assert.match(corptic, /font-size-adjust:\s*0\.6/);
   assert.match(corptic, /letter-spacing:\s*0\.035em/);
+  assert.match(corptic, /font-size:\s*16px/);
+  assert.match(corptic, /text-transform:\s*none/);
   const base = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(base, /font-synthesis:\s*weight\s+style/);
   assert.match(base, /font-synthesis-weight:\s*auto/);

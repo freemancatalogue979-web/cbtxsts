@@ -91,7 +91,7 @@ function SearchButton({ onOpen, compact = false }: { onOpen: () => void; compact
     <button type="button" onClick={onOpen} aria-keyshortcuts="Control+K Meta+K"
       className="flex w-full items-center gap-2 rounded-lg border border-edge bg-raised/70 px-3 py-2 text-left text-[12px] text-faint transition-colors hover:border-edge-2 hover:text-mute">
       <Search size={14} aria-hidden="true" />
-      <span className="flex-1">Jump to a page…</span>
+      <span className="flex-1 truncate">Jump to…</span>
       <span className="kbd" aria-hidden="true">Ctrl K</span>
     </button>
   );
@@ -102,9 +102,9 @@ function FontPicker({ value, onChange }: { value: FontChoice; onChange: (choice:
     <div className="rounded-lg border border-edge bg-raised px-3.5 py-3">
       <div className="text-[12px] font-bold">Text style</div>
       <p className="text-[10.5px] text-faint mt-0.5 leading-relaxed" id="font-picker-hint">
-        Montserrat is the default and easiest to read. Pick the Corptic display font if you prefer the slanted look. Saved on this device only.
+        DM Mono in small caps is the default. Pick Montserrat for larger mixed-case text, or Corptic for the slanted display look. Saved on this device only.
       </p>
-      <div role="radiogroup" aria-label="Text style" aria-describedby="font-picker-hint" className="grid grid-cols-2 gap-2 mt-2.5">
+      <div role="radiogroup" aria-label="Text style" aria-describedby="font-picker-hint" className="grid grid-cols-3 gap-2 mt-2.5">
         {FONT_CHOICES.map((choice) => {
           const active = choice.id === value;
           return (

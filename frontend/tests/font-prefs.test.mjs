@@ -25,10 +25,12 @@ function fakeStorage(initial = {}) {
   };
 }
 
-test("Montserrat is the default text style and Corptic stays an option", () => {
-  assert.equal(DEFAULT_FONT, "montserrat");
+test("DM Mono is the default text style; Montserrat and Corptic stay options", () => {
+  assert.equal(DEFAULT_FONT, "dmmono");
   // The module runs in a separate VM realm, so compare host-realm copies.
-  assert.deepEqual(Array.from(FONT_CHOICES, (choice) => choice.id), ["montserrat", "corptic"]);
+  assert.deepEqual(Array.from(FONT_CHOICES, (choice) => choice.id), ["dmmono", "montserrat", "corptic"]);
+  const dm = FONT_CHOICES.find((choice) => choice.id === "dmmono");
+  assert.match(dm.stack, /^"DM Mono",.*monospace$/);
   const montserrat = FONT_CHOICES.find((choice) => choice.id === "montserrat");
   assert.match(montserrat.stack, /^"Montserrat Variable"/);
   assert.doesNotMatch(montserrat.stack, /Corptic/);
@@ -36,42 +38,46 @@ test("Montserrat is the default text style and Corptic stays an option", () => {
   assert.match(corptic.stack, /^"Corptic",\s*"Montserrat Variable"/);
 });
 
-test("unknown, missing and corrupt saved values fall back to Montserrat", () => {
-  assert.equal(parseFontChoice(undefined), "montserrat");
-  assert.equal(parseFontChoice(null), "montserrat");
-  assert.equal(parseFontChoice(""), "montserrat");
-  assert.equal(parseFontChoice("COMIC"), "montserrat");
+test("unknown, missing and corrupt saved values fall back to DM Mono", () => {
+  assert.equal(parseFontChoice(undefined), "dmmono");
+  assert.equal(parseFontChoice(null), "dmmono");
+  assert.equal(parseFontChoice(""), "dmmono");
+  assert.equal(parseFontChoice("COMIC"), "dmmono");
   assert.equal(parseFontChoice("corptic"), "corptic");
+  assert.equal(parseFontChoice("montserrat"), "montserrat");
+  assert.equal(parseFontChoice("dmmono"), "dmmono");
   const empty = fakeStorage();
-  assert.equal(readFontChoice(empty), "montserrat");
+  assert.equal(readFontChoice(empty), "dmmono");
   assert.equal(readFontChoice(fakeStorage({ [FONT_STORAGE_KEY]: "corptic" })), "corptic");
-  assert.equal(readFontChoice(fakeStorage({ [FONT_STORAGE_KEY]: "papyrus" })), "montserrat");
+  assert.equal(readFontChoice(fakeStorage({ [FONT_STORAGE_KEY]: "papyrus" })), "dmmono");
   // A browser that blocks storage must not break the app.
-  assert.equal(readFontChoice(null), "montserrat");
-  assert.equal(readFontChoice({ getItem() { throw new Error("blocked"); } }), "montserrat");
+  assert.equal(readFontChoice(null), "dmmono");
+  assert.equal(readFontChoice({ getItem() { throw new Error("blocked"); } }), "dmmono");
 });
 
 test("only non-default choices are written, so a future default reaches everyone else", () => {
   const storage = fakeStorage();
-  saveFontChoice(storage, "montserrat");
+  saveFontChoice(storage, "dmmono");
   assert.equal(storage.data.has(FONT_STORAGE_KEY), false);
   saveFontChoice(storage, "corptic");
   assert.equal(storage.getItem(FONT_STORAGE_KEY), "corptic");
   saveFontChoice(storage, "montserrat");
+  assert.equal(storage.getItem(FONT_STORAGE_KEY), "montserrat");
+  saveFontChoice(storage, "dmmono");
   assert.equal(storage.getItem(FONT_STORAGE_KEY), null);
   // Saving must survive a throwing or missing store instead of crashing the app.
   assert.doesNotThrow(() => saveFontChoice(null, "corptic"));
   assert.doesNotThrow(() => saveFontChoice({ setItem() { throw new Error("quota"); }, removeItem() { throw new Error("quota"); } }, "corptic"));
 });
 
-test("applying a choice only ever sets the two supported font attributes", () => {
+test("applying a choice only ever sets the three supported font attributes", () => {
   const element = { dataset: {} };
   applyFontChoice("corptic", element);
   assert.equal(element.dataset.font, "corptic");
   applyFontChoice("montserrat", element);
   assert.equal(element.dataset.font, "montserrat");
   applyFontChoice("something-else", element);
-  assert.equal(element.dataset.font, "montserrat");
+  assert.equal(element.dataset.font, "dmmono");
 });
 
 test("the app loads the saved style before its first paint and keeps the state in sync", async () => {
@@ -81,7 +87,8 @@ test("the app loads the saved style before its first paint and keeps the state i
   assert.ok(bootstrap.indexOf("clover_font_choice") > 0, "bootstrap reads the saved font");
   assert.ok(html.indexOf("clover_font_choice") < html.indexOf("/src/main.tsx"), "applied before React loads");
   assert.match(bootstrap, /dataset\.font\s*=/);
-  assert.match(bootstrap, /=== "corptic" \? "corptic" : "montserrat"/);
+  assert.match(bootstrap, /font === "montserrat" \|\| font === "corptic" \? font : "dmmono"/);
+  assert.match(bootstrap, /catch \(error\) \{\s*root\.dataset\.font = "dmmono";/);
 
   const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   assert.match(app, /useState<FontChoice>\(\(\) => readFontChoice\(deviceStorage\(\)\)\)/);

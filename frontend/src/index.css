@@ -27,11 +27,11 @@
 }
 
 @theme {
-  /* Montserrat is the default text style: it has a full character set and is
-     the easiest to read. Corptic stays available from the profile menu. */
-  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* DM Mono is the default text style. Montserrat and Corptic stay available
+     from the profile menu; symbol fonts cover anything DM Mono lacks. */
+  --font-sans: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
@@ -73,6 +73,12 @@ html[data-accent="amber"]   { --color-crim: #fbbf24; --color-crim-deep: #b45309;
 html[data-accent="azure"]   { --color-crim: #60a5fa; --color-crim-deep: #1d4ed8; --color-crim-dim: #14243d; --accent-solid: #1d4ed8; --accent-glow: 96 165 250; }
 html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f; --color-crim-dim: #222c0d; --accent-solid: #4d7c0f; --accent-glow: 163 230 53; }
 
+/* Montserrat is an opt-in style: larger, mixed-case text. */
+html[data-font="montserrat"] {
+  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+}
+
 /* Corptic is an opt-in display style, chosen per browser in the profile menu.
    `data-font` is set before the first paint by the inline script in index.html. */
 html[data-font="corptic"] {
@@ -84,21 +90,40 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
+  /* Default text style, everywhere: DM Mono, 11px, 500, 0.1em, all caps.
+     Elements with their own size class (titles, stats) keep that size. */
   body {
     @apply bg-ink text-text font-sans;
-    /* Semibold keeps Montserrat crisp against the dark surfaces without the
-       extra width that a synthesized heavy weight adds. */
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     font-synthesis: weight style;
     font-synthesis-weight: auto;
-    letter-spacing: 0.01em;
     line-height: 1.6;
+  }
+  /* Form controls don't inherit case by default; make typed text match too.
+     Only the display changes; the saved value keeps what was typed. */
+  input, textarea, select, button {
+    text-transform: inherit;
+  }
+  input::placeholder, textarea::placeholder {
+    text-transform: inherit;
+  }
+  /* Montserrat: the previous style. Semibold keeps it crisp on dark surfaces. */
+  html[data-font="montserrat"] body {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-transform: none;
   }
   /* The display font keeps its slanted, technical look and needs a little
      more room. Its small x-height gets a size boost; the demo has only one
      weight, so the browser thickens it. Digits still fall through to
      Montserrat because the Corptic @font-face excludes 0–9. */
   html[data-font="corptic"] body {
+    font-size: 16px;
+    text-transform: none;
     font-style: oblique;
     font-weight: 700;
     letter-spacing: 0.035em;
