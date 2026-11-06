@@ -32,6 +32,7 @@ export const ARSENICA_FAMILY = 'Arsenica Sans';
  * still works.
  */
 const SOURCES = [
+  '/fonts/Arsenica-Sans-Variable-Roman-TRIAL.ttf',
   '/fonts/arsenica-sans.woff2',
   '/fonts/arsenica-sans.woff',
   '/fonts/arsenica-sans.ttf',

@@ -25,6 +25,7 @@ distributed as TTF — do not ship it in a real app.
    frontend/public/fonts/arsenica-sans.woff    ← WOFF
    frontend/public/fonts/arsenica-sans.ttf     ← TrueType
    frontend/public/fonts/arsenica-sans.otf     ← OpenType
+   frontend/public/fonts/Arsenica-Sans-Variable-Roman-TRIAL.ttf ← local trial
    ```
 
 Restart the dev server (or rebuild) and the family is picked up on the next
@@ -42,9 +43,6 @@ four bytes** before handing it to the browser, so:
   bytes are not a font, so the browser is never asked to decode them;
 - the **format is taken from the file, not from its name**, so a WOFF saved
   as `.woff2` (or a TTF) still loads.
-
-The **Profile → Font** picker shows which of the two you are actually looking
-at, so the selection is never a silent lie.
 
 The **Profile → Font** picker shows which of the two you are actually looking
 at, so the selection is never a silent lie.
