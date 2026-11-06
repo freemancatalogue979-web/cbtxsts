@@ -73,12 +73,16 @@ test("page headers show the area's icon, eyebrow and crisp hero art", () => {
   const html = renderToStaticMarkup(React.createElement(ui.PageChrome.Provider, {
     value: { icon: React.createElement("svg"), eyebrow: "Team ops · Scrims", art: "/heroes/ling.webp" },
   }, React.createElement(ui.PageTitle, { title: "Scrim Manager", sub: "Book, record, review.", right: React.createElement("button", null, "New") })));
-  assert.match(html, /<header class="page-hero mb-5">/);
+  assert.match(html, /<header class="page-hero mb-5" data-slides="1">/);
   assert.match(html, /class="page-hero__art" aria-hidden="true"><img src="\/heroes\/ling\.webp" alt="" width="240" height="390"/);
   assert.match(html, /class="page-hero__icon" aria-hidden="true">/);
   assert.match(html, /class="page-hero__eyebrow">Team ops · Scrims</);
-  assert.match(html, /<h1 class="page-hero__title">Scrim Manager<\/h1>/);
+  // One real heading for assistive tech; the animated letters are decorative.
+  assert.match(html, /<h1 class="sr-only">Scrim Manager<\/h1>/);
+  assert.match(html, /<div class="page-hero__title"><span aria-hidden="true"><span class="flip-word"><span class="flip-char" style="--i:0">S<\/span>/);
   assert.match(html, /class="page-hero__actions"><button>New<\/button>/);
+  // A single slide is not a carousel: no controls, timer or carousel roles.
+  assert.doesNotMatch(html, /hero-controls|page-hero__timer|aria-roledescription/);
   // Art is never drawn wider than half its 240px source, so it stays sharp on 2x screens.
   assert.match(css, /\.page-hero__art \{[^}]*width: 120px;/);
   assert.doesNotMatch(css.match(/\.page-hero__art img \{[^}]*\}/)?.[0] ?? "", /blur\(/);
@@ -86,8 +90,86 @@ test("page headers show the area's icon, eyebrow and crisp hero art", () => {
 
 test("page headers still work without any chrome (e.g. outside the shell)", () => {
   const html = renderToStaticMarkup(React.createElement(ui.PageTitle, { title: "Team Admin" }));
-  assert.match(html, /<h1 class="page-hero__title">Team Admin<\/h1>/);
+  assert.match(html, /<h1 class="sr-only">Team Admin<\/h1>/);
   assert.doesNotMatch(html, /page-hero__art|page-hero__icon|page-hero__eyebrow/);
+});
+
+test("extra slides turn the header into an accessible 3D carousel", () => {
+  const html = renderToStaticMarkup(React.createElement(ui.PageTitle, {
+    title: "Good morning, Dre", sub: "Saturday",
+    slides: [{ eyebrow: "Season 42 · season goal", title: "Tier 2 Qualification programme" }, { eyebrow: "The 9 CLOVER loop", title: "Play. Review. Train. Improve.", steps: ["Play", "Review", "Train", "Improve"] }],
+  }));
+  assert.match(html, /data-slides="3"/);
+  assert.match(html, /class="page-hero__deck" role="region" aria-roledescription="carousel" aria-label="Good morning, Dre highlights"/);
+  assert.match(html, /class="hero-slide" data-state="active" role="group" aria-roledescription="slide" aria-label="1 of 3">/);
+  // Hidden faces can't be read or tabbed into.
+  assert.equal((html.match(/data-state="waiting"[^>]*aria-hidden="true" inert=""/g) ?? []).length, 2);
+  // Non-main slide titles are read once, as plain text.
+  assert.match(html, /<span class="sr-only">Tier 2 Qualification programme<\/span><span aria-hidden="true">/);
+  assert.match(html, /<ol class="hero-loop" aria-label="Team loop"><li class="hero-loop__step" style="--i:0;--n:4">Play<\/li>/);
+  // Members can pause it (WCAG 2.2.2) and jump to any slide.
+  assert.match(html, /<button type="button" class="hero-controls__pause" aria-label="Pause slideshow">/);
+  assert.match(html, /aria-label="Show slide 2 of 3: Tier 2 Qualification programme"/);
+  assert.match(html, /aria-label="Show slide 1 of 3: Good morning, Dre" aria-current="true"/);
+  assert.match(html, /<div class="page-hero__timer" aria-hidden="true"><span data-running="true" style="animation-duration:6500ms">/);
+  assert.equal(ui.HERO_SLIDE_MS, 6500);
+});
+
+test("slides roll like a cube and letters flip in, but stay still for calm motion", () => {
+  assert.match(css, /\.page-hero__deck \{ display: grid; perspective: 900px; \}/);
+  assert.match(css, /\.hero-slide\[data-state="leaving"\] \{ opacity: 0; transform: rotateX\(86deg\);/);
+  assert.match(css, /\.hero-slide\[data-state="waiting"\] \{ opacity: 0; transform: rotateX\(-86deg\);/);
+  assert.match(css, /\.hero-slide\[data-state="active"\] \.flip-char \{\s*animation: flip-in/);
+  assert.match(css, /@keyframes flip-in \{\s*0% \{ opacity: 0; transform: translateY\(0\.5em\) rotateX\(-100deg\); \}/);
+  // Extruded edge in the area's colour.
+  assert.match(css, /\.page-hero__title \{[^}]*text-shadow:\s*0 1px 0 color-mix\(in srgb, var\(--color-crim\) 70%, #000\)/);
+  // The entrance never pins the transform, so pointer tilt keeps working afterwards.
+  assert.match(css, /animation: hero-rise 700ms cubic-bezier\(\.2, \.8, \.2, 1\) backwards;/);
+  for (const block of [css.split('html[data-effects="calm"] .page-hero,')[1] ?? "", css.split("@media (prefers-reduced-motion: reduce) {\n  .page-hero,")[1] ?? ""]) {
+    assert.match(block, /animation: none !important;/);
+    assert.match(block, /\.hero-slide \{ transform: none !important;/);
+  }
+  const uiSource = ui.PageTitle.toString();
+  assert.match(uiSource, /prefers-reduced-motion|useCalmMotion/);
+});
+
+test("stylised names keep their exact letters inside the all-caps style", () => {
+  for (const char of "αмɪʀ") assert.equal(ui.keepsCase(char), true, char);
+  for (const char of "aZé9⚝ᴋ") assert.equal(ui.keepsCase(char), false, char);
+  assert.deepEqual(Array.from(ui.splitGraphemes("ᴋαмɪɴαʀɪ⚝")), ["ᴋ", "α", "м", "ɪ", "ɴ", "α", "ʀ", "ɪ", "⚝"]);
+  assert.deepEqual(Array.from(ui.splitGraphemes("e\u0301👍🏽")), ["e\u0301", "👍🏽"]);
+  const html = renderToStaticMarkup(React.createElement(ui.PageTitle, { title: "Hi ᴋα" }));
+  assert.match(html, /<span class="flip-char" style="--i:2">ᴋ<\/span><span class="flip-char flip-char--keep" style="--i:3">α<\/span>/);
+  assert.match(css, /\.flip-char--keep \{ text-transform: none; \}/);
+});
+
+test("the dashboard header rolls through season goal, team loop and next up", async () => {
+  const dashboard = await readFile(new URL("../src/pages/Dashboard.tsx", import.meta.url), "utf8");
+  assert.match(dashboard, /slides=\{slides\}/);
+  assert.match(dashboard, /eyebrow: goal\.length \? `\$\{label\} · season goal` : "Season goal"/);
+  assert.match(dashboard, /steps: \["Play", "Review", "Train", "Improve"\]/);
+  assert.match(dashboard, /eyebrow: `Next up · \$\{dayLabel\(activity\.date\)\}/);
+});
+
+test("the new four-leaf 9 emblem is the brand everywhere", async () => {
+  const png = async (name) => {
+    const data = await readFile(new URL(`../public/brand/${name}`, import.meta.url));
+    assert.equal(data.toString("latin1", 1, 4), "PNG", name);
+    return { width: data.readUInt32BE(16), height: data.readUInt32BE(20), colorType: data[25] };
+  };
+  const source = await png("logo-source.png");
+  assert.deepEqual([source.width, source.height, source.colorType], [1254, 1254, 6], "transparent RGBA source");
+  for (const [name, size] of [["logo.png", 256], ["logo-full.png", 512], ["favicon-16.png", 16], ["favicon-32.png", 32], ["favicon-48.png", 48], ["apple-touch-icon.png", 180]]) {
+    const info = await png(name);
+    assert.deepEqual([info.width, info.height], [size, size], name);
+  }
+  assert.equal((await png("logo.png")).colorType, 6, "UI mark keeps transparency");
+  assert.equal((await png("apple-touch-icon.png")).colorType, 2, "iOS icon is opaque");
+  const script = await readFile(new URL("../scripts/make-brand.py", import.meta.url), "utf8");
+  assert.match(script, /SRC = ROOT \/ "public" \/ "brand" \/ "logo-source\.png"/);
+  const logo = await readFile(new URL("../src/components/Logo.tsx", import.meta.url), "utf8");
+  assert.match(logo, /className="brand-emblem mx-auto"/);
+  assert.match(css, /\.brand-emblem \{[^}]*drop-shadow/);
 });
 
 test("tabs are an accessible tablist with one focusable selected tab", () => {

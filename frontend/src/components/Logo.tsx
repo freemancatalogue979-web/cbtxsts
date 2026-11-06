@@ -1,24 +1,23 @@
 import { useState } from "react";
 
-/** 9 CLOVER brand mark — sharp clover glyph + wordmark.
+/** 9 CLOVER brand mark: the glossy four-leaf "9" emblem + wordmark.
  *
- * Drop the official team artwork at frontend/public/brand/logo.png and it
- * takes over everywhere (sidebar, login, favicon). The SVG mark below is the
- * built-in fallback so the app always has a clean brand. */
+ * All brand files are generated from frontend/public/brand/logo-source.png by
+ * scripts/make-brand.py. The SVG mark below is only an offline fallback. */
 const CANDIDATES = ["/brand/logo.png", "/brand/logo.webp", "/brand/logo.svg", "/brand/logo.jpg"];
 
 export function CloverMark({ size = 28 }: { size?: number }) {
+  // Simplified offline stand-in for the glossy four-leaf "9" emblem.
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden>
-      <rect width="48" height="48" rx="8" fill="#101015" stroke="#2b2b35" />
-      <path d="M13 6h22a3 3 0 0 1 3 3v9h-4.8V9.5H13V6Z" fill="#e11d48" />
-      <g fill="#34d399">
-        <ellipse cx="18.5" cy="18" rx="5" ry="5.6" transform="rotate(-28 18.5 18)" />
-        <ellipse cx="29.5" cy="18" rx="5" ry="5.6" transform="rotate(28 29.5 18)" />
-        <ellipse cx="24" cy="26.5" rx="5.2" ry="6" />
+      <g fill="#f2f4f8" stroke="#000" strokeWidth="1.2">
+        <path d="M24 21c-6-2-9-7-6.5-11 2.2-3.4 5.5-2.6 6.5.5 1-3.1 4.3-3.9 6.5-.5C33 14 30 19 24 21Z" />
+        <path d="M22 24c-2-6-7-9-11-6.5-3.4 2.2-2.6 5.5.5 6.5-3.1 1-3.9 4.3-.5 6.5C15 33 20 30 22 24Z" />
+        <path d="M26 24c2-6 7-9 11-6.5 3.4 2.2 2.6 5.5-.5 6.5 3.1 1 3.9 4.3.5 6.5C33 33 28 30 26 24Z" />
+        <path d="M25.5 29 20 44h2.6l5.4-15Z" />
       </g>
-      <path d="M24 31c0 4.5-1.8 7.5-4.5 9.5l2 2c3.7-2.5 5.5-6.8 5.5-11.5h-3Z" fill="#34d399" />
-      <rect x="13" y="33" width="4.6" height="9" rx="1.5" fill="#e11d48" opacity="0.9" />
+      <path d="m24 17.5 5 2.9v5.8l-3.6 2.1L22 34h-2.7l3.2-5.6-3.5-2.1v-5.9Z" fill="#f2f4f8" stroke="#000" strokeWidth="1" />
+      <path d="m24 21 2 1.2v2.4L24 25.8l-2-1.2v-2.4Z" fill="#000" />
     </svg>
   );
 }
@@ -53,7 +52,7 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Big centered mark for the login screen — the full tribal-flame emblem. */
+/** Big centered emblem for the login screen, floating over the live backdrop. */
 export function HeroMark({ size = 180 }: { size?: number }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <BrandImg size={size / 2.4} />;
@@ -62,7 +61,7 @@ export function HeroMark({ size = 180 }: { size?: number }) {
       src="/brand/logo-full.png"
       alt="9 CLOVER"
       onError={() => setFailed(true)}
-      className="mx-auto rounded-lg drop-shadow-[0_0_46px_rgba(0,0,0,0.9)] border border-edge/70"
+      className="brand-emblem mx-auto"
       style={{ height: size, width: "auto" }}
       draggable={false}
     />

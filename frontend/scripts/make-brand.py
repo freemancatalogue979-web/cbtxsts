@@ -1,6 +1,8 @@
-"""Generate 9 CLOVER brand assets from the official mark (frontend/public/brand/logo-source.jpg).
+"""Generate 9 CLOVER brand assets from the official mark (frontend/public/brand/logo-source.png).
 
-Splits the white-on-black emblem into a clean alpha channel, then composes:
+The source is the glossy four-leaf "9" emblem with a real transparent
+background, so its colours (white body, black inner panels and outline) are
+kept as-is. The script crops it tight, then composes:
   - logo.png             transparent white mark (sidebar / compact UI)
   - logo-full.png        dark-tile hero emblem (login screen)
   - favicon-16/32.png    small dark rounded tiles (browser tabs)
@@ -16,34 +18,24 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent  # frontend/
-SRC = ROOT / "public" / "brand" / "logo-source.jpg"
+SRC = ROOT / "public" / "brand" / "logo-source.png"
 OUT = ROOT / "public" / "brand"
 
-INK = (10, 10, 13)  # --color-ink, matches app background
+INK = (7, 10, 18)  # --color-ink (#070a12), matches app background
 
 
 def load_alpha_mark() -> Image.Image:
-    """White emblem with transparency recovered from the black-background JPEG.
-
-    Alpha = luminance, pushed through a soft threshold to suppress JPEG noise
-    while keeping antialiased edges.
-    """
-    src = Image.open(SRC).convert("L")
-    # soft threshold: <12 -> 0, >200 -> 255, linear between (kills JPEG halo)
-    alpha = src.point(lambda v: 0 if v < 12 else min(255, round((v - 12) * 255 / 188)))
-    # tight crop to the artwork + 4% padding
-    bbox = alpha.point(lambda v: 255 if v > 8 else 0).getbbox()
+    """The emblem with its own alpha, cropped to the artwork plus 4% padding."""
+    mark = Image.open(SRC).convert("RGBA")
+    bbox = mark.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
     pad = round(max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * 0.04)
     box = (
         max(0, bbox[0] - pad),
         max(0, bbox[1] - pad),
-        min(alpha.width, bbox[2] + pad),
-        min(alpha.height, bbox[3] + pad),
+        min(mark.width, bbox[2] + pad),
+        min(mark.height, bbox[3] + pad),
     )
-    alpha = alpha.crop(box)
-    mark = Image.new("RGBA", alpha.size, (255, 255, 255, 255))
-    mark.putalpha(alpha)
-    return mark
+    return mark.crop(box)
 
 
 def square(im: Image.Image) -> Image.Image:
@@ -73,10 +65,10 @@ def main() -> None:
     mark = square(load_alpha_mark())
 
     # transparent UI mark
-    mark.resize((512, 512), Image.LANCZOS).save(OUT / "logo.png", optimize=True)
+    mark.resize((256, 256), Image.LANCZOS).save(OUT / "logo.png", optimize=True)  # shown at <=48px
 
-    # hero emblem: dark tile, generous breathing room
-    on_tile(mark, 1024, inset=0.14, radius=0.16).save(OUT / "logo-full.png", optimize=True)
+    # login emblem: transparent, large, so it floats over the live backdrop
+    mark.resize((512, 512), Image.LANCZOS).save(OUT / "logo-full.png", optimize=True)  # shown at ~190px
 
     # favicons: keep mark chunky at tiny sizes (smaller inset)
     on_tile(mark, 32, inset=0.10).save(OUT / "favicon-32.png", optimize=True)

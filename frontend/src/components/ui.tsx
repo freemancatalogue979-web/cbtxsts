@@ -1,5 +1,5 @@
-import { Loader2, X } from "lucide-react";
-import { createContext, useContext, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Loader2, Pause, Play, X } from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 /**
  * What the current area looks like, supplied once by the Layout so every page
@@ -14,24 +14,195 @@ export interface PageChromeValue {
 }
 export const PageChrome = createContext<PageChromeValue | null>(null);
 
-export function PageTitle({ title, sub, right }: { title: string; sub?: ReactNode; right?: ReactNode }) {
-  const chrome = useContext(PageChrome);
+/** One face of the header slideshow. `steps` renders the animated loop chips. */
+export interface HeroSlide {
+  eyebrow?: string;
+  title: string;
+  sub?: ReactNode;
+  steps?: string[];
+}
+
+/** Time each slide stays up before the deck turns. */
+export const HERO_SLIDE_MS = 6500;
+
+/** Splits text into user-perceived characters, so emoji and accents stay whole. */
+export function splitGraphemes(text: string): string[] {
+  const Segmenter = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => { segment(t: string): Iterable<{ segment: string }> } }).Segmenter;
+  if (Segmenter) return Array.from(new Segmenter(undefined, { granularity: "grapheme" }).segment(text), (part) => part.segment);
+  return Array.from(text);
+}
+
+/** Stylised names (e.g. ᴋαмɪɴαʀɪ) must look exactly as typed: the all-caps
+ *  style would swap α, м or ɪ for different capitals, some of which fonts lack. */
+export function keepsCase(char: string): boolean {
+  return /[^\u0000-\u024F]/u.test(char) && char.toUpperCase() !== char;
+}
+
+/** Letters flip up on a 3D hinge, one after another. Words never break in the middle. Visual only. */
+function FlipText({ text }: { text: string }) {
+  let index = 0;
   return (
-    <header className="page-hero mb-5">
+    <>
+      {text.split(/(\s+)/).map((word, wordIndex) => /^\s*$/.test(word) ? (word ? " " : null) : (
+        <span key={wordIndex} className="flip-word">
+          {splitGraphemes(word).map((char, charIndex) => (
+            <span key={charIndex} className={keepsCase(char) ? "flip-char flip-char--keep" : "flip-char"} style={{ "--i": index++ } as CSSProperties}>{char}</span>
+          ))}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** True when the member asked for less motion (OS setting or the app's Calm motion toggle). */
+function useCalmMotion(): boolean {
+  const read = () => {
+    if (typeof window === "undefined") return false;
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return reduce || document.documentElement.dataset.effects === "calm";
+  };
+  const [calm, setCalm] = useState(read);
+  useEffect(() => {
+    const update = () => setCalm(read());
+    const media = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    media?.addEventListener?.("change", update);
+    const observer = typeof MutationObserver === "function" ? new MutationObserver(update) : null;
+    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-effects"] });
+    return () => { media?.removeEventListener?.("change", update); observer?.disconnect(); };
+  }, []);
+  return calm;
+}
+
+/**
+ * Page header. Always one slide (eyebrow, title, sub); pages can add more
+ * `slides` to turn it into a 3D slideshow that rolls like a cube. Titles flip in
+ * letter by letter with an extruded accent edge, and the banner tilts toward the
+ * pointer. Calm motion / reduced motion: no auto-advance, tilt or letter flips.
+ */
+export function PageTitle({ title, sub, right, slides = [] }: { title: string; sub?: ReactNode; right?: ReactNode; slides?: HeroSlide[] }) {
+  const chrome = useContext(PageChrome);
+  const deck: HeroSlide[] = [{ eyebrow: chrome?.eyebrow, title, sub }, ...slides];
+  const count = deck.length;
+  const [active, setActive] = useState(0);
+  const [previous, setPrevious] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const calm = useCalmMotion();
+  const header = useRef<HTMLElement>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const current = Math.min(active, count - 1);
+  const auto = count > 1 && !paused && !held && !hidden && !calm;
+
+  const go = (next: number) => {
+    const target = ((next % count) + count) % count;
+    if (target === current) return;
+    setPrevious(current);
+    setActive(target);
+  };
+
+  useEffect(() => {
+    if (!auto) return;
+    const id = window.setTimeout(() => go(current + 1), HERO_SLIDE_MS);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, current, count]);
+
+  useEffect(() => {
+    const update = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
+  const tilt = (event: PointerEvent<HTMLElement>) => {
+    const node = header.current;
+    if (!node || calm || event.pointerType !== "mouse") return;
+    const box = node.getBoundingClientRect();
+    const x = (event.clientX - box.left) / box.width - 0.5;
+    const y = (event.clientY - box.top) / box.height - 0.5;
+    node.style.setProperty("--tilt-x", x.toFixed(3));
+    node.style.setProperty("--tilt-y", y.toFixed(3));
+  };
+  const resetTilt = () => {
+    header.current?.style.setProperty("--tilt-x", "0");
+    header.current?.style.setProperty("--tilt-y", "0");
+  };
+
+  const onPointerDown = (event: PointerEvent<HTMLElement>) => {
+    if (count > 1 && event.pointerType !== "mouse") swipe.current = { x: event.clientX, y: event.clientY };
+  };
+  const onPointerUp = (event: PointerEvent<HTMLElement>) => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.4) go(current + (dx < 0 ? 1 : -1));
+  };
+
+  return (
+    <header ref={header} className="page-hero mb-5" data-slides={count} data-calm={calm ? "true" : undefined}
+      onPointerMove={tilt} onPointerLeave={() => { resetTilt(); setHeld(false); }} onPointerEnter={(e) => { if (e.pointerType === "mouse") setHeld(true); }}
+      onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { swipe.current = null; }}
+      onFocus={() => setHeld(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false); }}>
       {chrome?.art && (
         <div className="page-hero__art" aria-hidden="true">
           <img src={chrome.art} alt="" width={240} height={390} decoding="async" draggable={false} />
         </div>
       )}
       <div className="page-hero__body">
-        {chrome?.icon && <div className="page-hero__icon" aria-hidden="true">{chrome.icon}</div>}
+        {chrome?.icon && <div className="page-hero__icon" aria-hidden="true" key={`icon-${current}`}>{chrome.icon}</div>}
         <div className="min-w-0 flex-1">
-          {chrome?.eyebrow && <div className="page-hero__eyebrow">{chrome.eyebrow}</div>}
-          <h1 className="page-hero__title">{title}</h1>
-          {sub && <p className="page-hero__sub">{sub}</p>}
+          <h1 className="sr-only">{title}</h1>
+          <div className="page-hero__deck" role={count > 1 ? "region" : undefined}
+            aria-roledescription={count > 1 ? "carousel" : undefined} aria-label={count > 1 ? `${title} highlights` : undefined}>
+            {deck.map((slide, index) => {
+              const state = index === current ? "active" : index === previous ? "leaving" : "waiting";
+              const isMain = index === 0;
+              return (
+                <div key={index} className="hero-slide" data-state={state}
+                  role={count > 1 ? "group" : undefined} aria-roledescription={count > 1 ? "slide" : undefined}
+                  aria-label={count > 1 ? `${index + 1} of ${count}` : undefined}
+                  aria-hidden={index === current ? undefined : true} inert={index === current ? undefined : true}>
+                  {slide.eyebrow && <div className="page-hero__eyebrow">{slide.eyebrow}</div>}
+                  <div className="page-hero__title">
+                    {/* The main title is already the page's <h1>; other slide titles are read once here. */}
+                    {!isMain && <span className="sr-only">{slide.title}</span>}
+                    <span aria-hidden="true"><FlipText text={slide.title} /></span>
+                  </div>
+                  {slide.steps ? (
+                    <ol className="hero-loop" aria-label="Team loop">
+                      {slide.steps.map((step, stepIndex) => (
+                        <li key={step} className="hero-loop__step" style={{ "--i": stepIndex, "--n": slide.steps!.length } as CSSProperties}>{step}</li>
+                      ))}
+                    </ol>
+                  ) : slide.sub && <p className="page-hero__sub">{slide.sub}</p>}
+                </div>
+              );
+            })}
+          </div>
+          {count > 1 && (
+            <div className="hero-controls">
+              {!calm && (
+                <button type="button" className="hero-controls__pause" onClick={() => setPaused((p) => !p)}
+                  aria-label={paused ? "Play slideshow" : "Pause slideshow"}>
+                  {paused ? <Play size={11} aria-hidden="true" /> : <Pause size={11} aria-hidden="true" />}
+                </button>
+              )}
+              {deck.map((slide, index) => (
+                <button key={index} type="button" className="hero-controls__dot" onClick={() => go(index)}
+                  aria-label={`Show slide ${index + 1} of ${count}: ${slide.title}`} aria-current={index === current ? "true" : undefined} />
+              ))}
+            </div>
+          )}
         </div>
         {right && <div className="page-hero__actions">{right}</div>}
       </div>
+      {count > 1 && (
+        <div className="page-hero__timer" aria-hidden="true">
+          <span key={`${current}-${auto}`} data-running={auto ? "true" : undefined} style={{ animationDuration: `${HERO_SLIDE_MS}ms` }} />
+        </div>
+      )}
     </header>
   );
 }

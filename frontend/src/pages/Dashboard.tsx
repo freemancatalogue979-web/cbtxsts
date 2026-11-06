@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Dashboard, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge, useCountdown } from "../lib/util";
-import { Empty, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
+import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide } from "../components/ui";
 
 function greeting(now = new Date()): string {
   const hour = now.getHours();
@@ -171,12 +171,39 @@ export function DashboardPage({ me }: { me?: User }) {
   const perf = dash.performance;
   const name = me?.ign || me?.name;
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const season = dash.weakness?.season_name;
+  const week = dash.current_week;
+  const activity = dash.next_activity;
+
+  // Header slideshow: greeting, then the season goal, the team loop and what's next.
+  const slides: HeroSlide[] = [];
+  if (season) {
+    const [label, ...goal] = season.split(/\s+[—–-]\s+/);
+    slides.push({
+      eyebrow: goal.length ? `${label} · season goal` : "Season goal",
+      title: goal.length ? goal.join(" — ") : season,
+      sub: week ? `Training week ${String(week.number).padStart(2, "0")} · focus: ${week.focus} · ${week.progress}% done` : undefined,
+    });
+  }
+  slides.push({
+    eyebrow: "The 9 CLOVER loop",
+    title: "Play. Review. Train. Improve.",
+    steps: ["Play", "Review", "Train", "Improve"],
+  });
+  if (activity) {
+    slides.push({
+      eyebrow: `Next up · ${dayLabel(activity.date)} · ${fmtTime(activity.time)}`,
+      title: activity.title,
+      sub: `${activity.category} · ${activity.duration_min} min${activity.coach_name ? ` · coach ${activity.coach_name}` : ""}${activity.required ? " · attendance required" : ""}`,
+    });
+  }
 
   return (
     <div className="space-y-6">
       <PageTitle
         title={name ? `${greeting()}, ${name}` : "The Hub"}
-        sub={<>{today}{dash.weakness?.season_name ? ` · ${dash.weakness.season_name}` : ""}<span className="hidden sm:inline"> · PLAY → REVIEW → TRAIN → IMPROVE</span></>}
+        sub={<>{today}{season ? ` · ${season}` : ""}<span className="hidden sm:inline"> · PLAY → REVIEW → TRAIN → IMPROVE</span></>}
+        slides={slides}
         right={
           <>
             {QUICK.map((action) => {
