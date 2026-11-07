@@ -4,7 +4,7 @@
 
 Everyone can switch the interface text style from **Edit profile → Text style** (the profile menu at the bottom of the sidebar, or in the mobile drawer). The choice is stored per browser in `localStorage` under `clover_font_choice` and is applied by the inline script in `index.html` before the first paint, so there is no flash of the wrong font.
 
-- **Courier** (default) — `font-family: Courier, "Courier New", "Courier Prime", monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
+- **Courier** (default) — `font-family: Courier, "Courier New", "Courier Prime", monospace; font-size: 11px; font-weight: 700; font-style: italic; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
 - **Montserrat** — the previous default: 16px semibold, mixed case, no slant.
 - **Corptic** — the team's display font: slanted, heavier, tighter and sized up for its small x-height. Numerals are always drawn by Montserrat.
 
@@ -24,7 +24,7 @@ The demo contains basic Latin letters only: it has no numerals, punctuation or a
 
 ## Courier
 
-Courier is not bundled: the app uses the Courier already on the device (Courier on macOS/iOS, Courier New on Windows). Devices without either (most Android and Linux) get **Courier Prime**, a free Courier redesign by Alan Dague-Greene for Quote-Unquote Apps, bundled through `@fontsource/courier-prime` under the SIL Open Font License 1.1 (regular, bold and italic). Browsers download Courier Prime only when no local Courier is found. Courier has regular and bold faces only, so the 500 weight renders with the regular face; bold elements use the real bold face.
+Courier is not bundled: the app uses the Courier already on the device (Courier on macOS/iOS, Courier New on Windows). Devices without either (most Android and Linux) get **Courier Prime**, a free Courier redesign by Alan Dague-Greene for Quote-Unquote Apps, bundled through `@fontsource/courier-prime` under the SIL Open Font License 1.1 (regular, bold and italic). Browsers download Courier Prime only when no local Courier is found. The default uses the real Courier Bold Italic face (Courier Bold Oblique on Apple, Courier New Bold Italic on Windows, Courier Prime Bold Italic elsewhere), so nothing is synthesized.
 
 ## Montserrat numbers and fallback
 

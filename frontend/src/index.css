@@ -92,12 +92,13 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Courier, 11px, 500, 0.1em, all caps.
-     Elements with their own size class (titles, stats) keep that size. */
+  /* Default text style, everywhere: Courier Bold Italic (700), 11px, 0.1em,
+     all caps. Elements with their own size or weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 700;
+    font-style: italic;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-synthesis: weight style;
@@ -115,6 +116,7 @@ html[data-font="corptic"] {
   /* Montserrat: the previous style. Semibold keeps it crisp on dark surfaces. */
   html[data-font="montserrat"] body {
     font-size: 16px;
+    font-style: normal;
     font-weight: 600;
     letter-spacing: 0.01em;
     text-transform: none;

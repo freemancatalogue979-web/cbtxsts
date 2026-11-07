@@ -98,7 +98,7 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
-test("Courier is the default text style: 11px, 500, 0.1em, all caps", async () => {
+test("Courier Bold Italic is the default text style: 11px, 700, 0.1em, all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
@@ -108,7 +108,8 @@ test("Courier is the default text style: 11px, 500, 0.1em, all caps", async () =
   }
   const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-size:\s*11px/);
-  assert.match(body, /font-weight:\s*500/);
+  assert.match(body, /font-weight:\s*700/);
+  assert.match(body, /font-style:\s*italic/);
   assert.match(body, /letter-spacing:\s*0\.1em/);
   assert.match(body, /text-transform:\s*uppercase/);
   assert.doesNotMatch(body, /font-style:\s*oblique/);
@@ -120,6 +121,8 @@ test("Courier is the default text style: 11px, 500, 0.1em, all caps", async () =
   // Real Courier first; bundled Courier Prime (OFL) only where none is installed.
   assert.match(main, /import "@fontsource\/courier-prime\/400\.css";/);
   assert.match(main, /import "@fontsource\/courier-prime\/700\.css";/);
+  // The real bold-italic face, so the browser never fakes the slant or weight.
+  assert.match(main, /import "@fontsource\/courier-prime\/700-italic\.css";/);
   assert.doesNotMatch(main, /dm-mono/);
   assert.doesNotMatch(css, /DM Mono/);
 });
@@ -131,6 +134,7 @@ test("Montserrat stays available as a larger, mixed-case option", () => {
   const body = css.match(/html\[data-font="montserrat"\] body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-size:\s*16px/);
   assert.match(body, /font-weight:\s*600/);
+  assert.match(body, /font-style:\s*normal/);
   assert.match(body, /letter-spacing:\s*0\.01em/);
   assert.match(body, /text-transform:\s*none/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);

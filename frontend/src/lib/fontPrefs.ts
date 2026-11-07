@@ -1,5 +1,5 @@
 /**
- * Per-browser text style. Courier (11px, 500, 0.1em tracking, all caps) is the
+ * Per-browser text style. Courier Bold Italic (11px, 700, 0.1em tracking, all caps) is the
  * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */

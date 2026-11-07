@@ -3,6 +3,7 @@
 import "@fontsource/courier-prime/400.css";
 import "@fontsource/courier-prime/700.css";
 import "@fontsource/courier-prime/400-italic.css";
+import "@fontsource/courier-prime/700-italic.css";
 import "@fontsource-variable/montserrat";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";

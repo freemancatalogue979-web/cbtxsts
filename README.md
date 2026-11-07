@@ -543,7 +543,7 @@ See [theme and appearance](docs/reference/theme.md).
 
 ## Fonts
 
-The interface uses **Courier** by default (11px, weight 500, 0.1em tracking, all caps; bundled Courier Prime where the device has no Courier). Members can switch to **Montserrat** or the optional Corptic DEMO display font from **Edit profile → Text style**; the choice is saved per browser. Corptic DEMO is by Pandeka Foundry, and **the included demo is for personal, non-commercial use only** — obtain an appropriate license before commercial or corporate use. Numerals always use Montserrat, and glyphs missing from the demo use Montserrat or system fallbacks. See [font credits and licensing](docs/reference/fonts.md).
+The interface uses **Courier** by default in Bold Italic (11px, weight 700, 0.1em tracking, all caps; bundled Courier Prime where the device has no Courier). Members can switch to **Montserrat** or the optional Corptic DEMO display font from **Edit profile → Text style**; the choice is saved per browser. Corptic DEMO is by Pandeka Foundry, and **the included demo is for personal, non-commercial use only** — obtain an appropriate license before commercial or corporate use. Numerals always use Montserrat, and glyphs missing from the demo use Montserrat or system fallbacks. See [font credits and licensing](docs/reference/fonts.md).
 
 ## Tests
 
