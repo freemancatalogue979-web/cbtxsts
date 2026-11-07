@@ -1,20 +1,20 @@
 /**
- * Per-browser text style. Courier Std Bold (11px, 700, 0.1em tracking, all caps) is the
+ * Per-browser text style. Space Mono Bold (11px, 700, 0.1em tracking, all caps) is the
  * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */
 
-export type FontChoice = "courier" | "montserrat" | "corptic";
+export type FontChoice = "spacemono" | "montserrat" | "corptic";
 
 export const FONT_STORAGE_KEY = "clover_font_choice";
-export const DEFAULT_FONT: FontChoice = "courier";
+export const DEFAULT_FONT: FontChoice = "spacemono";
 
 export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack: string }[] = [
   {
-    id: "courier",
-    label: "Courier Std",
+    id: "spacemono",
+    label: "Space Mono",
     hint: "Default · caps",
-    stack: "\"Courier Std\", Courier, \"Courier New\", \"Courier Prime\", monospace",
+    stack: "\"Space Mono\", ui-monospace, Menlo, Consolas, monospace",
   },
   {
     id: "montserrat",

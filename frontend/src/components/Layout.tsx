@@ -102,7 +102,7 @@ function FontPicker({ value, onChange }: { value: FontChoice; onChange: (choice:
     <div className="rounded-lg border border-edge bg-raised px-3.5 py-3">
       <div className="text-[12px] font-bold">Text style</div>
       <p className="text-[10.5px] text-faint mt-0.5 leading-relaxed" id="font-picker-hint">
-        Courier Std Bold in caps is the default. Pick Montserrat for larger mixed-case text, or Corptic for the slanted display look. Saved on this device only.
+        Space Mono Bold in caps is the default. Pick Montserrat for larger mixed-case text, or Corptic for the slanted display look. Saved on this device only.
       </p>
       <div role="radiogroup" aria-label="Text style" aria-describedby="font-picker-hint" className="grid grid-cols-3 gap-2 mt-2.5">
         {FONT_CHOICES.map((choice) => {

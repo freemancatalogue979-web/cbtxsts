@@ -98,19 +98,18 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
-test("Courier Std Bold is the default text style: 11px, 700 upright, 0.1em, all caps", async () => {
+test("Space Mono Bold is the default text style: 11px, 700 upright, 0.1em, all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    // Adobe's Courier Std where installed, then system Courier, then bundled Courier Prime.
-    assert.match(stack, /^"Courier Std", Courier, "Courier New", "Courier Prime",/);
+    assert.match(stack, /^"Space Mono", ui-monospace,/);
     assert.match(stack, /monospace$/);
     assert.doesNotMatch(stack, /Corptic/);
   }
   const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-size:\s*11px/);
   assert.match(body, /font-weight:\s*700/);
-  assert.doesNotMatch(body, /font-style/, "Courier Std Bold is upright");
+  assert.doesNotMatch(body, /font-style/, "Space Mono Bold is upright");
   assert.match(body, /letter-spacing:\s*0\.1em/);
   assert.match(body, /text-transform:\s*uppercase/);
   assert.doesNotMatch(body, /font-style:\s*oblique/);
@@ -119,13 +118,12 @@ test("Courier Std Bold is the default text style: 11px, 700 upright, 0.1em, all 
   assert.match(css, /input, textarea, select, button \{\s*text-transform: inherit;/);
   // The font ships with the app (no external font CDN), in the weights used.
   const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
-  // Real Courier first; bundled Courier Prime (OFL) only where none is installed.
-  assert.match(main, /import "@fontsource\/courier-prime\/400\.css";/);
-  assert.match(main, /import "@fontsource\/courier-prime\/700\.css";/);
-  // Real bold face for the fallback, so the browser never fakes the weight.
-  assert.match(main, /import "@fontsource\/courier-prime\/700-italic\.css";/);
-  assert.doesNotMatch(main, /dm-mono/);
-  assert.doesNotMatch(css, /DM Mono/);
+  // Space Mono ships with the app in its real regular and bold faces.
+  assert.match(main, /import "@fontsource\/space-mono\/400\.css";/);
+  assert.match(main, /import "@fontsource\/space-mono\/700\.css";/);
+  assert.match(main, /import "@fontsource\/space-mono\/700-italic\.css";/);
+  for (const gone of [/dm-mono/, /courier-prime/]) assert.doesNotMatch(main, gone);
+  for (const gone of [/DM Mono/, /Courier/]) assert.doesNotMatch(css, gone);
 });
 
 test("Montserrat stays available as a larger, mixed-case option", () => {

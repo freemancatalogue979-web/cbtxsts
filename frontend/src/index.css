@@ -27,14 +27,12 @@
 }
 
 @theme {
-  /* Courier Std Bold is the default text style. Adobe's Courier Std can't be
-     bundled (licence), so it is used where installed; otherwise the system
-     Courier (Apple) or Courier New (Windows), then bundled Courier Prime.
-     Montserrat and Corptic stay available from the profile menu; symbol fonts
-     cover anything Courier lacks. */
-  --font-sans: "Courier Std", Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  /* Space Mono Bold is the default text style (bundled, SIL OFL), so it looks
+     the same on every device. Montserrat and Corptic stay available from the
+     profile menu; symbol fonts cover anything Space Mono lacks. */
+  --font-sans: "Space Mono", ui-monospace, Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "Courier Std", Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-mono: "Space Mono", ui-monospace, Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
@@ -93,7 +91,7 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Courier Std Bold (700, upright), 11px,
+  /* Default text style, everywhere: Space Mono Bold (700, upright), 11px,
      0.1em, all caps. Elements with their own size or weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;
