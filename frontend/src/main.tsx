@@ -1,5 +1,3 @@
-import '@fontsource-variable/dm-sans/wght.css';
-import '@fontsource-variable/montserrat';
 import '@fontsource-variable/space-grotesk';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';

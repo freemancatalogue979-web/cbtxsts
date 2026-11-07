@@ -448,6 +448,13 @@ export function AppShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const desktopMoreRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [drawerOpen]);
+
   /* Collapsible mobile nav: the chat thread asks to take the whole screen, the
      floating pill can temporarily bring the tabs back. Leaving the thread
      always restores the normal bar. */
@@ -799,33 +806,31 @@ export function AppShell({
             onClick={() => setDrawerOpen(false)}
           >
             <motion.div
-              className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-white/10 bg-ink-950 p-4 shadow-2xl"
+              className="ag-mobile-drawer"
               initial={{x: -320}}
               animate={{x: 0}}
               exit={{x: -320}}
               transition={{type: 'spring', stiffness: 350, damping: 32}}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-nova-400 animate-pulse" />
- <span className="font-display text-[0.84rem] font-black tracking-widest text-mist-100">
-                    COMMAND CENTER
-                  </span>
+              <div className="ag-mobile-drawer__header">
+                <div>
+                  <p className="ag-mobile-drawer__title">Navigate</p>
+                  <p className="ag-mobile-drawer__subtitle">Your arena, one tap away</p>
                 </div>
                 <button
                   onClick={() => setDrawerOpen(false)}
                   aria-label="Close menu"
-                  className="grid size-8 place-items-center rounded-lg border border-white/12 text-mist-400 hover:text-mist-50"
+                  className="ag-mobile-drawer__close"
                 >
                   <X className="size-4" />
                 </button>
               </div>
 
-              {/* Player Dossier Summary */}
+              <div className="ag-mobile-drawer__scroll">
+              {/* Player summary stays in the same scroll flow as navigation. */}
               {profile && (
-                <div className="my-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
+                <div className="ag-mobile-drawer__profile">
                   <Avatar name={profile.name} hue={profile.avatar_hue} initials={profile.initials} size={40} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[0.85rem] font-bold text-mist-50">{profile.name}</p>
@@ -842,12 +847,9 @@ export function AppShell({
                 </div>
               )}
 
-              {/* Tactical Navigation List */}
-              <div className="flex-1 overflow-y-auto py-1">
- <p className="px-2 py-1.5 text-[0.62rem] font-black tracking-widest text-mist-500">
-                  SYSTEM OPERATIONS
-                </p>
-                <div className="flex flex-col gap-1">
+              <nav className="ag-mobile-drawer__nav" aria-label="All destinations">
+                <p className="ag-mobile-drawer__label">Destinations</p>
+                <div className="grid gap-1">
                   {TABS.map((item) => {
                     const active = tab === item.id;
                     const Icon = item.icon;
@@ -875,10 +877,10 @@ export function AppShell({
                     );
                   })}
                 </div>
-              </div>
+              </nav>
 
-              {/* Drawer Quick Controls Footer */}
-              <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
+              <div className="ag-mobile-drawer__footer">
+                <p className="ag-mobile-drawer__label">Sound & account</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
@@ -907,6 +909,7 @@ export function AppShell({
                   <LogOut className="size-3.5" />
                   <span>Sign out</span>
                 </button>
+              </div>
               </div>
             </motion.div>
           </motion.div>

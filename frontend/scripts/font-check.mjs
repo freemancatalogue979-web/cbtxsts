@@ -26,7 +26,7 @@ for (const mobile of [false, true]) {
   for (const property of ['--font-sans', '--font-display']) {
     assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'Space Grotesk Variable'/ : /^'Courier Std'/);
   }
-  assert.equal(window.localStorage.getItem('arena.font.v8'), null, 'boot must not persist a default');
+  assert.equal(window.localStorage.getItem('arena.font.v9'), null, 'boot must not persist a default');
   window.localStorage.setItem('arena.font.v7', 'unknown');
   assert.equal(prefs.currentFont(), expected);
   dom.window.close();
@@ -53,20 +53,20 @@ for (const font of prefs.FONTS) {
   dom.window.close();
 }
 
-for (const key of ['arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4']) {
+assert.deepEqual(prefs.FONTS.map((font) => font.id), ['courier', 'grotesk']);
+for (const key of ['arena.font.v8', 'arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4']) {
   const dom = browser();
   window.localStorage.setItem(key, 'helvetica-oblique');
-  assert.equal(prefs.currentFont(), 'helvetica-oblique');
-  assert.equal(window.localStorage.getItem('arena.font.v8'), 'helvetica-oblique');
+  assert.equal(prefs.currentFont(), 'courier', `${key} retired packs must migrate to Courier`);
   prefs.applyFont('dm-sans');
-  assert.equal(prefs.currentFont(), 'dm-sans');
+  assert.equal(prefs.currentFont(), 'courier', 'retired packs cannot be reapplied');
   dom.window.close();
 }
 
 const dom = browser();
 Object.defineProperty(window, 'localStorage', {get() { throw new Error('Storage disabled'); }});
 assert.equal(prefs.currentFont(), 'courier');
-assert.doesNotThrow(() => prefs.applyFont('dm-sans'));
+assert.doesNotThrow(() => prefs.applyFont('grotesk'));
 dom.window.close();
 console.log('Font checks passed: desktop/mobile defaults, CSS variables, saved choices, legacy migration and disabled storage.');
 
@@ -77,7 +77,7 @@ for (const mobile of [false, true]) {
   for (const selected of [null, ...prefs.FONTS.map((font) => font.id)]) {
     const page = new JSDOM('<meta name="theme-color">', {url: 'https://example.test', runScripts: 'outside-only'});
     page.window.matchMedia = () => ({matches: mobile});
-    if (selected) page.window.localStorage.setItem('arena.font.v8', selected);
+    if (selected) page.window.localStorage.setItem('arena.font.v9', selected);
     page.window.eval(inline);
     assert.equal(page.window.document.documentElement.dataset.font, selected || (mobile ? 'grotesk' : 'courier'));
     page.window.close();

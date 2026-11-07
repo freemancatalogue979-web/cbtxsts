@@ -32,7 +32,7 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'courier' | 'dm-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'courier' | 'grotesk';
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
   {
@@ -44,53 +44,12 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
     display: "'Courier Std', Courier, 'Courier New', monospace",
   },
   {
-    id: 'dm-sans',
-    name: 'DM Sans Light',
-    blurb: 'Clean geometric lettering at Light 300, bundled and ready on every device.',
-    short: 'Clean and light — 300.',
-    sans: "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
-  },
-  {
-    id: 'montserrat',
-    name: 'Montserrat',
-    blurb: 'Geometric and friendly, reads great on phones.',
-    short: 'Geometric and friendly.',
-    sans: "'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Audiowide', 'Montserrat Variable', ui-sans-serif, sans-serif",
-  },
-  {
-    id: 'helvetica-oblique',
-    name: 'Helvetica Oblique',
-    blurb: 'Bold editorial italics — the signature Pro typeface.',
-    short: 'Premium editorial italics.',
-    sans: "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-    display: "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-    style: 'oblique',
-  },
-  {
-    id: 'arena',
-    name: 'Exo 2',
-    blurb: 'The classic arena body font with the Audiowide display.',
-    short: 'Classic arena body font.',
-    sans: "'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Audiowide', 'Orbitron', 'Exo 2', ui-sans-serif, sans-serif",
-  },
-  {
     id: 'grotesk',
     name: 'Space Grotesk',
-    blurb: 'Modern and minimal — one family everywhere.',
-    short: 'Modern and minimal.',
-    sans: "'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Space Grotesk Variable', 'Audiowide', ui-sans-serif, sans-serif",
-  },
-  {
-    id: 'orbit',
-    name: 'Orbitron',
-    blurb: 'Sci-fi display over a clean Montserrat body.',
-    short: 'Sci-fi display face.',
-    sans: "'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif",
-    display: "'Orbitron', 'Audiowide', 'Montserrat Variable', ui-sans-serif, sans-serif",
+    blurb: 'Modern geometric lettering, bundled for every device.',
+    short: 'Modern and geometric.',
+    sans: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
+    display: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
   },
 ];
 
@@ -123,10 +82,9 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v8 makes Courier the house default; older explicit choices migrate, except
-// the old DM Sans default, which must not keep existing installs on DM Sans.
-const FONT_KEY = 'arena.font.v8';
-const LEGACY_FONT_KEYS = ['arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
+// v9 retains only Courier and Space Grotesk; retired packs use the device default.
+const FONT_KEY = 'arena.font.v9';
+const LEGACY_FONT_KEYS = ['arena.font.v8', 'arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';

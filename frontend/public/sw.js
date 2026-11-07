@@ -16,7 +16,7 @@
  *
  * Bump VERSION to drop every old cache on the next visit.
  */
-const VERSION = 'v30';
+const VERSION = 'v31';
 /* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
    makes the app installable and gives an offline fallback page; it never
    caches dev modules, so hot reload behaves exactly as before. */
@@ -45,11 +45,7 @@ const STATIC_PRECACHE = [
   '/brand/absolute-genesis-crown-emblem.png',
   '/arena/world.webp',
   '/arena/world-960.webp',
-  '/fonts/dm-sans-latin-variable.woff2',
   '/fonts/space-grotesk-latin-variable.woff2',
-  '/fonts/exo-2-latin.woff2',
-  '/fonts/orbitron-latin.woff2',
-  '/fonts/audiowide-latin-400-normal.woff2',
 ];
 
 /** Pull /assets/... URLs out of the built index.html so the shell works offline from visit one. */

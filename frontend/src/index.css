@@ -1,37 +1,5 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'DM Sans Variable';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/dm-sans-latin-variable.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Exo 2';
-  font-style: normal;
-  font-weight: 400 900;
-  font-display: swap;
-  src: url('/fonts/exo-2-latin.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Orbitron';
-  font-style: normal;
-  font-weight: 400 900;
-  font-display: swap;
-  src: url('/fonts/orbitron-latin.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Audiowide';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/audiowide-latin-400-normal.woff2') format('woff2');
-}
-
 /* ==========================================================================
    Absolute Genesis design system
    Palette: violet/indigo/magenta on a near-black base — "purple & black".
@@ -4091,3 +4059,91 @@ html[data-font='grotesk'] body {
 }
 .route-enter { animation: route-enter .18s cubic-bezier(.22, 1, .36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .route-enter { animation: none; } }
+
+/* Exactly two families ship: Courier and Space Grotesk. Legacy component
+   display-face rules must never silently introduce a third family. */
+html[data-font] body,
+html[data-font] body * {
+  font-family: var(--font-sans) !important;
+}
+
+/* Rebuilt phone navigation: one contained scroll flow, no dead flex space. */
+.ag-mobile-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(21rem, 90vw);
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--color-mist-100);
+  background: linear-gradient(165deg, #171027 0%, #090711 48%, #06050c 100%);
+  border-right: 1px solid rgb(196 181 253 / .16);
+  box-shadow: 24px 0 70px rgb(0 0 0 / .5);
+  overscroll-behavior: contain;
+}
+.ag-mobile-drawer__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 68px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  border-bottom: 1px solid rgb(255 255 255 / .08);
+}
+.ag-mobile-drawer__title { margin: 0; font-size: 1rem; line-height: 1.2; letter-spacing: -.02em; }
+.ag-mobile-drawer__subtitle { margin: 3px 0 0; color: var(--color-mist-500); font-size: .64rem; line-height: 1.3; }
+.ag-mobile-drawer__close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / .1);
+  border-radius: 12px;
+  color: var(--color-mist-300);
+  background: rgb(255 255 255 / .04);
+}
+.ag-mobile-drawer__scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+  scrollbar-width: thin;
+  scrollbar-color: rgb(168 85 247 / .4) transparent;
+}
+.ag-mobile-drawer__profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgb(196 181 253 / .12);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgb(139 92 246 / .12), rgb(255 255 255 / .025));
+}
+.ag-mobile-drawer__nav { margin-top: 16px; }
+.ag-mobile-drawer__label {
+  margin: 0 0 7px 3px;
+  color: var(--color-mist-500);
+  font-size: .58rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.ag-mobile-drawer__nav button { min-height: 38px; border-radius: 11px; }
+.ag-mobile-drawer__footer {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid rgb(255 255 255 / .08);
+}
+.ag-mobile-drawer__footer button { min-height: 38px; border-radius: 11px; }
+[data-skin='day'] .ag-mobile-drawer {
+  color: #201636;
+  background: linear-gradient(165deg, #ffffff, #f2edff 70%, #ebe3fb);
+  border-right-color: rgb(76 29 149 / .14);
+}
+[data-skin='day'] .ag-mobile-drawer__subtitle,
+[data-skin='day'] .ag-mobile-drawer__label { color: #746b88; }
+[data-skin='day'] .ag-mobile-drawer__close { color: #4c4163; background: rgb(255 255 255 / .7); border-color: rgb(76 29 149 / .12); }
+[data-skin='day'] .ag-mobile-drawer__profile { background: rgb(255 255 255 / .62); border-color: rgb(124 58 237 / .13); }

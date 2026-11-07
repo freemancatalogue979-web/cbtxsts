@@ -39,16 +39,10 @@
         if (themeColor) themeColor.setAttribute('content', skin === 'night' ? '#07030f' : '#eaf4ff');
         var FONTS = {
           courier: ["'Courier Std', Courier, 'Courier New', monospace", "'Courier Std', Courier, 'Courier New', monospace"],
-          'dm-sans': ["'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, sans-serif"],
-          montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
-          'helvetica-oblique': ["'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif", "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif"],
-          arena: ["'Exo 2', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Orbitron', 'Exo 2', sans-serif"],
-          grotesk: ["'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
-          orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
+          grotesk: ["'Space Grotesk Variable', ui-sans-serif, sans-serif", "'Space Grotesk Variable', ui-sans-serif, sans-serif"]
         };
-        // Match prefs.ts: Courier desktop, Space Grotesk mobile; no old DM Sans default.
-        var savedFont = localStorage.getItem('arena.font.v8') || localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
-        if (!localStorage.getItem('arena.font.v8') && savedFont === 'dm-sans') savedFont = '';
+        // Only Courier and Space Grotesk remain; retired packs use the device default.
+        var savedFont = localStorage.getItem('arena.font.v9') || localStorage.getItem('arena.font.v8') || localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
         var mobile = window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
         var font = savedFont && FONTS[savedFont] ? savedFont : (mobile ? 'grotesk' : 'courier');
         document.documentElement.dataset.font = font;
@@ -62,10 +56,6 @@
          before the app bundle (and its CSS, in dev) has loaded. React's own
          <Splash /> reuses these classes, so the hand-over is seamless. -->
     <style>
-      @font-face {
-        font-family: 'DM Sans Variable'; font-style: normal; font-weight: 100 900; font-display: swap;
-        src: url('/fonts/dm-sans-latin-variable.woff2') format('woff2');
-      }
       @font-face {
         font-family: 'Space Grotesk Variable'; font-style: normal; font-weight: 300 700; font-display: swap;
         src: url('/fonts/space-grotesk-latin-variable.woff2') format('woff2');

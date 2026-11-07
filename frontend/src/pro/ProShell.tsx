@@ -139,6 +139,12 @@ export default function ProShell({
   const {appearance} = useExperience();
   const [drawer, setDrawer] = useState(false);
   const [chatThreadOpen, setChatThreadOpen] = useState(false);
+  useEffect(() => {
+    if (!drawer) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [drawer]);
   useEffect(() => { if (tab !== 'messages') setChatThreadOpen(false); }, [tab]);
   const chatImmersive = tab === 'tutor' || ((tab === 'messages' || tab === 'friends') && chatThreadOpen);
   const chatNavValue = useMemo<ChatNavValue>(
@@ -214,7 +220,7 @@ export default function ProShell({
           <div className="flex h-14 items-center px-4">
             <Brand />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
             <NavList tab={tab} onTab={go} />
           </div>
           {/* Short laptop screens: keep every nav item visible instead of the card. */}
@@ -354,14 +360,14 @@ export default function ProShell({
         {drawer && (
           <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
             <button type="button" aria-label="Close navigation" className="scrim absolute inset-0" onClick={() => setDrawer(false)} />
-            <div className="pro-sidebar absolute inset-y-0 left-0 flex w-[min(18rem,86vw)] flex-col pb-[env(safe-area-inset-bottom)]">
+            <div className="pro-sidebar absolute inset-y-0 left-0 flex w-[min(18rem,86vw)] flex-col overscroll-contain pb-[env(safe-area-inset-bottom)]">
               <div className="flex h-14 items-center justify-between px-4 safe-top">
                 <Brand />
                 <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon" aria-label="Close navigation" onClick={() => setDrawer(false)}>
                   <X className="size-5" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
                 <NavList tab={tab} onTab={go} onDone={() => setDrawer(false)} />
               </div>
               <div className="px-2 pt-2" onClick={() => setDrawer(false)}>

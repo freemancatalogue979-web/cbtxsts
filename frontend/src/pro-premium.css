@@ -4,28 +4,6 @@
  * intentionally last: it replaces the restrained Studio treatment without
  * disturbing Standard mode.
  */
-@font-face {
-  font-family: 'AG Helvetica Oblique';
-  src: local('Helvetica Neue Oblique'), local('Helvetica Neue Italic'), local('Helvetica Oblique'), local('Arial Italic');
-  font-style: oblique 12deg;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-/* The font pack chosen in settings drives BOTH Standard and Pro. Helvetica
-   Oblique carries a slant; form controls do not reliably inherit font-style,
-   so include them explicitly. Other packs stay upright. */
-html { --ag-font-style: normal; }
-html[data-font='helvetica-oblique'] { --ag-font-style: oblique 12deg; }
-html[data-font='helvetica-oblique'] body,
-html[data-font='helvetica-oblique'] button,
-html[data-font='helvetica-oblique'] input,
-html[data-font='helvetica-oblique'] textarea,
-html[data-font='helvetica-oblique'] select {
-  font-family: 'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-style: oblique 12deg;
-}
-
 [data-mode='pro'] {
   --pro-bg: #070810;
   --pro-surface: #10121d;
