@@ -466,103 +466,105 @@ const CREST_SHIELDS: Record<BaseTier | PeakTier, string> = {
   absolute_genesis: 'm60 24 45 18-3 50q-4 25-42 43-38-18-42-43l-3-50Z',
 };
 
-/** The level-100 crown: sculpted gold, five royal points, one Founder number. */
+/** Level 100: a large diamond-encrusted royal crest, not a standalone crown. */
 export function AbsoluteGenesisCrown({className = '', founderNumber}: {
   className?: string;
-  /** Kept for call-site compatibility; player names are never drawn on the crown. */
+  /** Kept for call-site compatibility; player names are never drawn on the crest. */
   playerName?: string;
   founderNumber?: number | null;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const founder = typeof founderNumber === 'number' && founderNumber >= 1 && founderNumber <= 100;
   const number = founder ? String(founderNumber).padStart(3, '0') : '';
+  const jewels = [
+    [90, 56, 0, 1.15], [124, 66, 28, 1], [148, 91, 58, 1], [153, 124, 90, 1.05],
+    [132, 153, 125, 1], [90, 174, 180, 1.15], [48, 153, 235, 1], [27, 124, 270, 1.05],
+    [32, 91, 302, 1], [56, 66, 332, 1],
+  ] as const;
 
   return (
     <svg className={`rank-crest rank-crest--absolute ${className}`} data-tier="absolute_genesis" data-founder={founder ? founderNumber : undefined}
-      viewBox="0 0 160 154" aria-hidden="true" focusable="false" style={{'--crest-glow': '#ffd75ecc'} as CSSProperties}>
+      viewBox="0 0 180 190" aria-hidden="true" focusable="false" style={{'--crest-glow': '#e5b8ff'} as CSSProperties}>
       <defs>
-        <linearGradient id={`${uid}-gold`} x1=".12" y1="0" x2=".86" y2="1">
-          <stop stopColor="#7b4208" /><stop offset=".12" stopColor="#e8a824" /><stop offset=".27" stopColor="#fff5ad" />
-          <stop offset=".39" stopColor="#d99312" /><stop offset=".51" stopColor="#fffbd4" /><stop offset=".57" stopColor="#edb62d" />
-          <stop offset=".78" stopColor="#a75d07" /><stop offset=".91" stopColor="#f6cc53" /><stop offset="1" stopColor="#613006" />
+        <linearGradient id={`${uid}-gold`} x1=".12" y1="0" x2=".88" y2="1">
+          <stop stopColor="#6b3505" /><stop offset=".12" stopColor="#d99618" /><stop offset=".28" stopColor="#fff7b8" />
+          <stop offset=".4" stopColor="#d89513" /><stop offset=".51" stopColor="#fffde0" /><stop offset=".59" stopColor="#e6aa24" />
+          <stop offset=".8" stopColor="#8e4a06" /><stop offset=".93" stopColor="#f8d660" /><stop offset="1" stopColor="#4f2603" />
         </linearGradient>
-        <linearGradient id={`${uid}-edge`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor="#fff8c5" /><stop offset=".22" stopColor="#e6a520" /><stop offset=".55" stopColor="#8a4806" />
-          <stop offset=".78" stopColor="#e9ae28" /><stop offset="1" stopColor="#4d2504" />
+        <linearGradient id={`${uid}-rim`} x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#fffbe0" /><stop offset=".2" stopColor="#e5aa30" /><stop offset=".47" stopColor="#6c3507" />
+          <stop offset=".7" stopColor="#f5c64d" /><stop offset="1" stopColor="#512503" />
         </linearGradient>
-        <radialGradient id={`${uid}-velvet`} cx=".42" cy=".18" r=".9">
-          <stop stopColor="#49205f" /><stop offset=".48" stopColor="#1c0c30" /><stop offset="1" stopColor="#070711" />
+        <radialGradient id={`${uid}-core`} cx=".4" cy=".25" r=".9">
+          <stop stopColor="#793fa0" /><stop offset=".27" stopColor="#3e195f" /><stop offset=".62" stopColor="#170b31" /><stop offset="1" stopColor="#050610" />
         </radialGradient>
-        <linearGradient id={`${uid}-facet`} x1="0" y1="0" x2="1" y2=".2">
-          <stop stopColor="#3e1d03" stopOpacity=".82" /><stop offset=".35" stopColor="#d58b11" stopOpacity=".12" />
-          <stop offset=".7" stopColor="#fff8c7" stopOpacity=".55" /><stop offset="1" stopColor="#fff8c7" stopOpacity="0" />
+        <linearGradient id={`${uid}-diamond`} x1=".18" y1="0" x2=".82" y2="1">
+          <stop stopColor="#ffffff" /><stop offset=".2" stopColor="#e9ddff" /><stop offset=".39" stopColor="#ffffff" />
+          <stop offset=".56" stopColor="#b69be8" /><stop offset=".75" stopColor="#f2e9ff" /><stop offset="1" stopColor="#74549e" />
         </linearGradient>
-        <linearGradient id={`${uid}-jewel`} x1=".2" y1="0" x2=".8" y2="1">
-          <stop stopColor="#ffffff" /><stop offset=".2" stopColor="#f4caff" /><stop offset=".46" stopColor="#bd68ed" />
-          <stop offset=".73" stopColor="#6330a9" /><stop offset="1" stopColor="#1c0b3b" />
+        <linearGradient id={`${uid}-amethyst`} x1=".2" y1="0" x2=".8" y2="1">
+          <stop stopColor="#ffffff" /><stop offset=".18" stopColor="#f0c9ff" /><stop offset=".43" stopColor="#c176ef" />
+          <stop offset=".7" stopColor="#7135b1" /><stop offset="1" stopColor="#271047" />
         </linearGradient>
-        <radialGradient id={`${uid}-pearl`} cx=".3" cy=".22" r=".8">
-          <stop stopColor="#ffffff" /><stop offset=".28" stopColor="#fff7cf" /><stop offset=".66" stopColor="#e8bd63" /><stop offset="1" stopColor="#795019" />
-        </radialGradient>
         <linearGradient id={`${uid}-number`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor="#fffde1" /><stop offset=".45" stopColor="#ffe68a" /><stop offset=".52" stopColor="#d99a22" /><stop offset="1" stopColor="#fff1a4" />
+          <stop stopColor="#ffffff" /><stop offset=".42" stopColor="#fff4bd" /><stop offset=".55" stopColor="#e4b344" /><stop offset="1" stopColor="#fff8d3" />
         </linearGradient>
-        <filter id={`${uid}-relief`} x="-35%" y="-35%" width="170%" height="180%">
-          <feDropShadow dx="0" dy="1.4" stdDeviation="1" floodColor="#000000" floodOpacity=".85" />
+        <radialGradient id={`${uid}-aura`}>
+          <stop stopColor="#c889ff" stopOpacity=".5" /><stop offset=".48" stopColor="#8d45da" stopOpacity=".2" /><stop offset="1" stopColor="#6d28d9" stopOpacity="0" />
+        </radialGradient>
+        <filter id={`${uid}-relief`} x="-40%" y="-40%" width="180%" height="190%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.1" floodColor="#000000" floodOpacity=".9" />
+        </filter>
+        <filter id={`${uid}-shine`} x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="0" stdDeviation="2.2" floodColor="#e7c6ff" floodOpacity=".85" />
         </filter>
       </defs>
 
-      {/* One continuous silhouette: broad, architectural and unmistakably royal. */}
-      <path d="M14 31 47 57 57 17 80 3l23 14 10 40 33-26-10 75q-56 25-112 0Z"
-        fill="#020208" stroke="#020208" strokeWidth="5" strokeLinejoin="round" transform="translate(0 3)" />
-      <path d="M14 29 47 55 57 15 80 2l23 13 10 40 33-26-10 75q-56 25-112 0Z"
-        fill={`url(#${uid}-gold)`} stroke="#6f3906" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="m24 42 28 25 12-42 16-13 16 13 12 42 28-25-8 56q-48 20-96 0Z"
-        fill={`url(#${uid}-velvet)`} stroke="#fff1a0" strokeOpacity=".65" strokeWidth="1.1" strokeLinejoin="round" />
-      <path d="M14 29 47 55 57 15 64 22 54 69 32 98 24 104Z" fill={`url(#${uid}-facet)`} opacity=".72" />
-      <path d="M146 29 113 55 103 15 96 22 106 69 128 98 136 104Z" fill="#431f03" opacity=".32" />
-      <path d="M17 34 47 59 60 20 80 7l20 13 13 39 30-25" fill="none" stroke="#fffce0" strokeOpacity=".72" strokeWidth="1.6" strokeLinecap="round" />
+      <ellipse cx="90" cy="110" rx="84" ry="79" fill={`url(#${uid}-aura)`} />
 
-      {/* Raised structural ribs stand proud of the recessed night-violet enamel. */}
-      <path d="M80 32v64M52 66q3 20 0 34M108 66q-3 20 0 34" fill="none" stroke="#3d1c03" strokeOpacity=".9" strokeWidth="6" strokeLinecap="round" transform="translate(0 1.5)" />
-      <path d="M80 32v64M52 66q3 20 0 34M108 66q-3 20 0 34" fill="none" stroke={`url(#${uid}-gold)`} strokeWidth="4.2" strokeLinecap="round" />
-      <path d="M79 35v57M51 69q2 17 0 27M107 69q-2 17 0 27" fill="none" stroke="#fff7bf" strokeOpacity=".68" strokeWidth=".85" strokeLinecap="round" />
-      <path d="M52 68Q65 51 76 39M108 68Q95 51 84 39" fill="none" stroke={`url(#${uid}-gold)`} strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M32 91q48 16 96 0M35 98q45 14 90 0" fill="none" stroke="#d59a28" strokeOpacity=".55" strokeWidth=".8" />
+      {/* The crown is only the summit of a much larger jewel-crested medallion. */}
+      <path d="m47 11 22 20L90 4l21 27 22-20-8 51q-35 16-70 0Z" fill="#03030a" stroke="#03030a" strokeWidth="6" strokeLinejoin="round" />
+      <path d="m47 8 22 20L90 1l21 27 22-20-8 51q-35 16-70 0Z" fill={`url(#${uid}-gold)`} stroke="#764006" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="m57 21 15 17L90 10l18 28 15-17-5 32q-28 12-56 0Z" fill={`url(#${uid}-core)`} stroke="#fff1a1" strokeOpacity=".7" strokeWidth="1" />
+      <path d="M52 14 69 34 90 6l21 28 17-20" fill="none" stroke="#fffbd7" strokeOpacity=".8" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="m90 13 7 12-7 13-7-13Z" fill={`url(#${uid}-amethyst)`} stroke="#fff0a0" strokeWidth="1" filter={`url(#${uid}-relief)`} />
+      <path d="m61 34 5 7-5 8-5-8Zm58 0 5 7-5 8-5-8Z" fill={`url(#${uid}-amethyst)`} stroke="#ffe58d" strokeWidth=".8" />
 
-      {/* A central navette and smaller side stones are claw-set into the ribs. */}
-      <path d="m80 49 8 13-8 15-8-15Z" fill="#2b1403" stroke="#2b1403" strokeWidth="3" />
-      <path d="m80 48 8 13-8 15-8-15Z" fill={`url(#${uid}-jewel)`} stroke="#ffeaa0" strokeWidth="1.2" filter={`url(#${uid}-relief)`} />
-      <path d="m80 50 3.5 11-3.5 10-3.5-10Z" fill="#fff" opacity=".46" />
-      <path d="M72 61h-4M88 61h4M80 48v-4M80 76v4" stroke="#fff1a0" strokeWidth="1.3" strokeLinecap="round" />
-      {[[52, 81], [108, 81]].map(([x, y]) => <path key={x} d={`m${x} ${y - 5} 4 5-4 6-4-6Z`} fill={`url(#${uid}-jewel)`} stroke="#f8cf5b" strokeWidth=".8" />)}
+      {/* Massive octagonal setting: layered gold, black relief and polished bevels. */}
+      <path d="m90 42 53 22 22 48-20 48-55 27-55-27-20-48 22-48Z" fill="#020208" stroke="#020208" strokeWidth="7" strokeLinejoin="round" />
+      <path d="m90 39 53 22 22 48-20 48-55 27-55-27-20-48 22-48Z" fill={`url(#${uid}-gold)`} stroke="#5e2e04" strokeWidth="1.6" strokeLinejoin="round" filter={`url(#${uid}-relief)`} />
+      <path d="m90 49 46 19 19 42-17 41-48 24-48-24-17-41 19-42Z" fill="#090713" stroke="#fff2a4" strokeOpacity=".72" strokeWidth="1.3" />
+      <path d="m90 57 40 16 16 38-15 35-41 21-41-21-15-35 16-38Z" fill={`url(#${uid}-core)`} stroke={`url(#${uid}-rim)`} strokeWidth="3" strokeLinejoin="round" />
 
-      {/* Five cut stones sit in the metal itself; no floating ornament. */}
-      <path d="m80 8 8 12-8 14-8-14Z" fill={`url(#${uid}-jewel)`} stroke="#fff4b8" strokeWidth="1" filter={`url(#${uid}-relief)`} />
-      <path d="m80 10 3.5 10-3.5 9-3.5-9Z" fill="#ffffff" opacity=".5" />
-      {[[18, 39], [55, 43], [105, 43], [142, 39]].map(([x, y], i) => (
-        <path key={i} d={`m${x} ${y - 6} 4.5 6-4.5 8-4.5-8Z`} fill={`url(#${uid}-jewel)`} stroke="#ffe99a" strokeWidth=".8" />
+      {/* Facets are cut into the amethyst core, never floating around it. */}
+      <path d="m90 57 40 16-17 19-23-12-23 12-17-19Z" fill="#d9a4ff" opacity=".16" />
+      <path d="m50 73 17 19-8 54-10-35Z" fill="#b26be5" opacity=".12" />
+      <path d="m130 73-17 19 8 54 10-35Z" fill="#02030b" opacity=".38" />
+      <path d="m59 146 8-54 23 75Zm62 0-8-54-23 75Z" fill="#05030d" opacity=".28" />
+      <path d="M90 60v17M52 75l15 17M128 75l-15 17M42 143l17 3M138 143l-17 3" fill="none" stroke="#e5bdff" strokeOpacity=".2" strokeWidth=".8" />
+
+      {/* Ten individually cut diamonds form the jewellery setting. */}
+      {jewels.map(([x, y, rotation, scale], i) => (
+        <g key={i} transform={`translate(${x} ${y}) rotate(${rotation}) scale(${scale})`} filter={`url(#${uid}-shine)`}>
+          <path d="m0-9 7 5 2 8-9 9-9-9 2-8Z" fill="#1b0c2e" stroke="#6e3d08" strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="m0-9 7 5 2 8-9 9-9-9 2-8Z" fill={`url(#${uid}-diamond)`} stroke="#fff5c3" strokeWidth=".7" strokeLinejoin="round" />
+          <path d="M-7-4 0-1 7-4M0-9v8M-9 4 0-1 9 4M0-1v14" fill="none" stroke="#644185" strokeOpacity=".7" strokeWidth=".65" />
+          <path d="m-5-3 4-4 2 5-5 5Z" fill="#ffffff" opacity=".7" />
+        </g>
       ))}
 
-      {/* A curved, weighty crown band replaces the old rectangular nameplate. */}
-      <path d="M22 94q58 20 116 0l-4 35q-54 24-108 0Z" fill="#020208" opacity=".8" transform="translate(0 2)" />
-      <path d="M22 91q58 20 116 0l-4 35q-54 24-108 0Z" fill={`url(#${uid}-edge)`} stroke="#6b3706" strokeWidth="1.4" />
-      <path d="M28 98q52 17 104 0M29 119q51 20 102 0" fill="none" stroke="#fff3a5" strokeOpacity=".62" strokeWidth="1" />
-      <path d="M31 111q8-5 17 1-9 0-12 7 8-4 15 1M129 111q-8-5-17 1 9 0 12 7-8-4-15 1" fill="none" stroke="#713b07" strokeOpacity=".8" strokeWidth="1" strokeLinecap="round" />
-      <path d="M32 110q8-4 15 1M128 110q-8-4-15 1" fill="none" stroke="#fff2a0" strokeOpacity=".62" strokeWidth=".7" strokeLinecap="round" />
-      {[31, 40, 49, 111, 120, 129].map((x) => <circle key={x} cx={x} cy={103 + Math.abs(80 - x) * .05} r="2.35" fill={`url(#${uid}-pearl)`} stroke="#815008" strokeWidth=".65" />)}
-
-      {/* The only visible lettering anywhere on the artwork: the Founder number. */}
-      <path d="m55 103 10-5h30l10 5 4 18-10 14H61l-10-14Z" fill="#03030b" opacity=".9" transform="translate(0 1.5)" />
-      <path d="m55 101 10-5h30l10 5 4 18-10 14H61l-10-14Z" fill={`url(#${uid}-velvet)`} stroke={`url(#${uid}-gold)`} strokeWidth="2" strokeLinejoin="round" />
-      <path d="m59 104 8-4h26l8 4 3 14-8 11H64l-8-11Z" fill="none" stroke="#d6a944" strokeOpacity=".55" strokeWidth=".7" />
-      <path d="m60 104 7-4h26l7 4" fill="none" stroke="#fff8c8" strokeOpacity=".82" strokeWidth="1.1" strokeLinecap="round" />
-      <path d="M64 127q16 5 32 0" fill="none" stroke="#08040e" strokeOpacity=".9" strokeWidth="1.1" />
-      {[[57, 111], [103, 111], [65, 128], [95, 128]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.15" fill="#ffe898" stroke="#633407" strokeWidth=".5" />)}
+      {/* Raised centre jewel and its double bezel carry only the Founder number. */}
+      <path d="m90 82 35 18 8 29-18 30-25 12-25-12-18-30 8-29Z" fill="#020208" opacity=".9" transform="translate(0 2)" />
+      <path d="m90 79 35 18 8 29-18 30-25 12-25-12-18-30 8-29Z" fill={`url(#${uid}-rim)`} stroke="#fff0a0" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="m90 86 29 15 7 24-15 25-21 10-21-10-15-25 7-24Z" fill={`url(#${uid}-core)`} stroke="#572c7b" strokeWidth="1.4" />
+      <path d="m90 86 29 15-29 12-29-12Z" fill="#dca8ff" opacity=".17" />
+      <path d="m61 101 29 12-21 37-15-25Zm58 0-29 12 21 37 15-25Z" fill="#05040e" opacity=".3" />
+      <path d="m66 101 24-11 24 11" fill="none" stroke="#fff1b0" strokeOpacity=".72" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M68 145q22 15 44 0" fill="none" stroke="#d7a53d" strokeOpacity=".6" strokeWidth=".8" />
       {founder ? (
-        <text x="80" y="121" textAnchor="middle" fill={`url(#${uid}-number)`} stroke="#3c2005" strokeWidth=".65"
-          paintOrder="stroke fill" fontFamily="'Courier Std', Courier, monospace" fontSize="21" fontWeight="900"
-          fontStyle="italic" letterSpacing="1.2" filter={`url(#${uid}-relief)`}>{number}</text>
+        <text x="90" y="132" textAnchor="middle" fill={`url(#${uid}-number)`} stroke="#2a1404" strokeWidth="1"
+          paintOrder="stroke fill" fontFamily="'Courier Std', Courier, monospace" fontSize="29" fontWeight="900"
+          fontStyle="italic" letterSpacing="1" filter={`url(#${uid}-relief)`}>{number}</text>
       ) : null}
     </svg>
   );
