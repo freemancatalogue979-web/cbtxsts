@@ -493,9 +493,19 @@ export function AbsoluteGenesisCrown({className = '', founderNumber}: {
         <radialGradient id={`${uid}-velvet`} cx=".42" cy=".18" r=".9">
           <stop stopColor="#49205f" /><stop offset=".48" stopColor="#1c0c30" /><stop offset="1" stopColor="#070711" />
         </radialGradient>
+        <linearGradient id={`${uid}-facet`} x1="0" y1="0" x2="1" y2=".2">
+          <stop stopColor="#3e1d03" stopOpacity=".82" /><stop offset=".35" stopColor="#d58b11" stopOpacity=".12" />
+          <stop offset=".7" stopColor="#fff8c7" stopOpacity=".55" /><stop offset="1" stopColor="#fff8c7" stopOpacity="0" />
+        </linearGradient>
         <linearGradient id={`${uid}-jewel`} x1=".2" y1="0" x2=".8" y2="1">
           <stop stopColor="#ffffff" /><stop offset=".2" stopColor="#f4caff" /><stop offset=".46" stopColor="#bd68ed" />
           <stop offset=".73" stopColor="#6330a9" /><stop offset="1" stopColor="#1c0b3b" />
+        </linearGradient>
+        <radialGradient id={`${uid}-pearl`} cx=".3" cy=".22" r=".8">
+          <stop stopColor="#ffffff" /><stop offset=".28" stopColor="#fff7cf" /><stop offset=".66" stopColor="#e8bd63" /><stop offset="1" stopColor="#795019" />
+        </radialGradient>
+        <linearGradient id={`${uid}-number`} x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#fffde1" /><stop offset=".45" stopColor="#ffe68a" /><stop offset=".52" stopColor="#d99a22" /><stop offset="1" stopColor="#fff1a4" />
         </linearGradient>
         <filter id={`${uid}-relief`} x="-35%" y="-35%" width="170%" height="180%">
           <feDropShadow dx="0" dy="1.4" stdDeviation="1" floodColor="#000000" floodOpacity=".85" />
@@ -509,8 +519,23 @@ export function AbsoluteGenesisCrown({className = '', founderNumber}: {
         fill={`url(#${uid}-gold)`} stroke="#6f3906" strokeWidth="1.4" strokeLinejoin="round" />
       <path d="m24 42 28 25 12-42 16-13 16 13 12 42 28-25-8 56q-48 20-96 0Z"
         fill={`url(#${uid}-velvet)`} stroke="#fff1a0" strokeOpacity=".65" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M14 29 47 55 57 15 64 22 54 69 32 98 24 104Z" fill={`url(#${uid}-facet)`} opacity=".72" />
+      <path d="M146 29 113 55 103 15 96 22 106 69 128 98 136 104Z" fill="#431f03" opacity=".32" />
       <path d="M17 34 47 59 60 20 80 7l20 13 13 39 30-25" fill="none" stroke="#fffce0" strokeOpacity=".72" strokeWidth="1.6" strokeLinecap="round" />
+
+      {/* Raised structural ribs stand proud of the recessed night-violet enamel. */}
+      <path d="M80 32v64M52 66q3 20 0 34M108 66q-3 20 0 34" fill="none" stroke="#3d1c03" strokeOpacity=".9" strokeWidth="6" strokeLinecap="round" transform="translate(0 1.5)" />
+      <path d="M80 32v64M52 66q3 20 0 34M108 66q-3 20 0 34" fill="none" stroke={`url(#${uid}-gold)`} strokeWidth="4.2" strokeLinecap="round" />
+      <path d="M79 35v57M51 69q2 17 0 27M107 69q-2 17 0 27" fill="none" stroke="#fff7bf" strokeOpacity=".68" strokeWidth=".85" strokeLinecap="round" />
+      <path d="M52 68Q65 51 76 39M108 68Q95 51 84 39" fill="none" stroke={`url(#${uid}-gold)`} strokeWidth="2.2" strokeLinecap="round" />
       <path d="M32 91q48 16 96 0M35 98q45 14 90 0" fill="none" stroke="#d59a28" strokeOpacity=".55" strokeWidth=".8" />
+
+      {/* A central navette and smaller side stones are claw-set into the ribs. */}
+      <path d="m80 49 8 13-8 15-8-15Z" fill="#2b1403" stroke="#2b1403" strokeWidth="3" />
+      <path d="m80 48 8 13-8 15-8-15Z" fill={`url(#${uid}-jewel)`} stroke="#ffeaa0" strokeWidth="1.2" filter={`url(#${uid}-relief)`} />
+      <path d="m80 50 3.5 11-3.5 10-3.5-10Z" fill="#fff" opacity=".46" />
+      <path d="M72 61h-4M88 61h4M80 48v-4M80 76v4" stroke="#fff1a0" strokeWidth="1.3" strokeLinecap="round" />
+      {[[52, 81], [108, 81]].map(([x, y]) => <path key={x} d={`m${x} ${y - 5} 4 5-4 6-4-6Z`} fill={`url(#${uid}-jewel)`} stroke="#f8cf5b" strokeWidth=".8" />)}
 
       {/* Five cut stones sit in the metal itself; no floating ornament. */}
       <path d="m80 8 8 12-8 14-8-14Z" fill={`url(#${uid}-jewel)`} stroke="#fff4b8" strokeWidth="1" filter={`url(#${uid}-relief)`} />
@@ -523,15 +548,21 @@ export function AbsoluteGenesisCrown({className = '', founderNumber}: {
       <path d="M22 94q58 20 116 0l-4 35q-54 24-108 0Z" fill="#020208" opacity=".8" transform="translate(0 2)" />
       <path d="M22 91q58 20 116 0l-4 35q-54 24-108 0Z" fill={`url(#${uid}-edge)`} stroke="#6b3706" strokeWidth="1.4" />
       <path d="M28 98q52 17 104 0M29 119q51 20 102 0" fill="none" stroke="#fff3a5" strokeOpacity=".62" strokeWidth="1" />
-      {[35, 46, 114, 125].map((x) => <circle key={x} cx={x} cy={108 + Math.abs(80 - x) * .08} r="2" fill="#fff5bd" stroke="#815008" strokeWidth=".7" />)}
+      <path d="M31 111q8-5 17 1-9 0-12 7 8-4 15 1M129 111q-8-5-17 1 9 0 12 7-8-4-15 1" fill="none" stroke="#713b07" strokeOpacity=".8" strokeWidth="1" strokeLinecap="round" />
+      <path d="M32 110q8-4 15 1M128 110q-8-4-15 1" fill="none" stroke="#fff2a0" strokeOpacity=".62" strokeWidth=".7" strokeLinecap="round" />
+      {[31, 40, 49, 111, 120, 129].map((x) => <circle key={x} cx={x} cy={103 + Math.abs(80 - x) * .05} r="2.35" fill={`url(#${uid}-pearl)`} stroke="#815008" strokeWidth=".65" />)}
 
       {/* The only visible lettering anywhere on the artwork: the Founder number. */}
       <path d="m55 103 10-5h30l10 5 4 18-10 14H61l-10-14Z" fill="#03030b" opacity=".9" transform="translate(0 1.5)" />
       <path d="m55 101 10-5h30l10 5 4 18-10 14H61l-10-14Z" fill={`url(#${uid}-velvet)`} stroke={`url(#${uid}-gold)`} strokeWidth="2" strokeLinejoin="round" />
       <path d="m59 104 8-4h26l8 4 3 14-8 11H64l-8-11Z" fill="none" stroke="#d6a944" strokeOpacity=".55" strokeWidth=".7" />
+      <path d="m60 104 7-4h26l7 4" fill="none" stroke="#fff8c8" strokeOpacity=".82" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="M64 127q16 5 32 0" fill="none" stroke="#08040e" strokeOpacity=".9" strokeWidth="1.1" />
+      {[[57, 111], [103, 111], [65, 128], [95, 128]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.15" fill="#ffe898" stroke="#633407" strokeWidth=".5" />)}
       {founder ? (
-        <text x="80" y="121" textAnchor="middle" fill="#fff0a0" fontFamily="'Courier Std', Courier, monospace"
-          fontSize="21" fontWeight="900" fontStyle="italic" letterSpacing="1.2">{number}</text>
+        <text x="80" y="121" textAnchor="middle" fill={`url(#${uid}-number)`} stroke="#3c2005" strokeWidth=".65"
+          paintOrder="stroke fill" fontFamily="'Courier Std', Courier, monospace" fontSize="21" fontWeight="900"
+          fontStyle="italic" letterSpacing="1.2" filter={`url(#${uid}-relief)`}>{number}</text>
       ) : null}
     </svg>
   );
