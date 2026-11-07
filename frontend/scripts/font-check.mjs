@@ -24,7 +24,7 @@ for (const mobile of [false, true]) {
   prefs.applyFont(prefs.currentFont(), false);
   assert.equal(document.documentElement.dataset.font, expected);
   for (const property of ['--font-sans', '--font-display']) {
-    assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'Space Grotesk Variable'/ : /^Courier/);
+    assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'Space Grotesk Variable'/ : /^'Courier Std'/);
   }
   assert.equal(window.localStorage.getItem('arena.font.v8'), null, 'boot must not persist a default');
   window.localStorage.setItem('arena.font.v7', 'unknown');

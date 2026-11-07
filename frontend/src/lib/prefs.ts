@@ -37,11 +37,11 @@ export type FontName = 'courier' | 'dm-sans' | 'montserrat' | 'helvetica-oblique
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
   {
     id: 'courier',
-    name: 'Courier',
-    blurb: 'Classic monospaced lettering in Bold 700 Italic.',
-    short: 'Bold 700 Italic.',
-    sans: "Courier, 'Courier New', monospace",
-    display: "Courier, 'Courier New', monospace",
+    name: 'Courier Std Bold',
+    blurb: 'Extra-heavy monospaced lettering in 900 Italic.',
+    short: 'Extra bold — 900 Italic.',
+    sans: "'Courier Std', Courier, 'Courier New', monospace",
+    display: "'Courier Std', Courier, 'Courier New', monospace",
   },
   {
     id: 'dm-sans',

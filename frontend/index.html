@@ -38,7 +38,7 @@
         var themeColor = document.querySelector('meta[name="theme-color"]');
         if (themeColor) themeColor.setAttribute('content', skin === 'night' ? '#07030f' : '#eaf4ff');
         var FONTS = {
-          courier: ["Courier, 'Courier New', monospace", "Courier, 'Courier New', monospace"],
+          courier: ["'Courier Std', Courier, 'Courier New', monospace", "'Courier Std', Courier, 'Courier New', monospace"],
           'dm-sans': ["'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'DM Sans Variable', 'Space Grotesk Variable', ui-sans-serif, sans-serif"],
           montserrat: ["'Montserrat Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Audiowide', 'Montserrat Variable', sans-serif"],
           'helvetica-oblique': ["'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif", "'AG Helvetica Oblique', 'Helvetica Neue', Helvetica, Arial, sans-serif"],
@@ -100,7 +100,7 @@
       }
       .ag-splash__tag {
         margin: 0; padding-left: 0.34em; text-align: center; text-transform: uppercase; letter-spacing: 0.34em;
-        font: italic 700 0.72rem/1.4 Courier, 'Courier New', monospace;
+        font: italic 900 0.72rem/1.4 'Courier Std', Courier, 'Courier New', monospace;
         background: linear-gradient(90deg, #c4b5fd 0%, #fde68a 35%, #fff7d6 50%, #fde68a 65%, #c4b5fd 100%);
         background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
         animation: ag-fade 0.8s ease 0.35s both, ag-sheen 5s linear 1.2s infinite;
@@ -116,7 +116,7 @@
       }
       .ag-splash__foot {
         position: absolute; left: 0; right: 0; bottom: max(1.6rem, env(safe-area-inset-bottom)); margin: 0; text-align: center;
-        font: italic 700 0.6rem/1 Courier, 'Courier New', monospace; letter-spacing: 0.22em;
+        font: italic 900 0.6rem/1 'Courier Std', Courier, 'Courier New', monospace; letter-spacing: 0.22em;
         text-transform: uppercase; color: rgba(226, 232, 240, 0.32); animation: ag-fade 0.8s ease 0.8s both;
       }
       @media (max-width: 1023px) {
