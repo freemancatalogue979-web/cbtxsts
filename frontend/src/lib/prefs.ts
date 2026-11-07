@@ -38,8 +38,8 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
   {
     id: 'courier',
     name: 'Courier',
-    blurb: 'Classic monospaced lettering, available on every device.',
-    short: 'Classic monospace.',
+    blurb: 'Classic monospaced lettering in Bold 700 Italic.',
+    short: 'Bold 700 Italic.',
     sans: "Courier, 'Courier New', monospace",
     display: "Courier, 'Courier New', monospace",
   },

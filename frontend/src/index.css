@@ -396,8 +396,9 @@
     background-attachment: fixed;
     color: var(--color-mist-50);
     font-family: var(--font-sans);
-    /* Courier is the house face; display weights remain component-specific. */
-    font-weight: 500;
+    /* Courier Bold Italic is the house face. */
+    font-weight: 700;
+    font-style: italic;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;
@@ -3985,7 +3986,8 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-copy * {
   font-family: Courier, monospace;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
+  font-style: italic;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -4058,3 +4060,11 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
   line-height: 1.2;
 }
 .stat-fit__value--lg { font-size: min(0.92rem, 16.4cqi); }
+
+/* The Courier house pack is Bold Italic everywhere, including controls and
+   labels that historically forced upright text. Other optional packs retain
+   their own intended style. */
+html[data-font='courier'] body,
+html[data-font='courier'] body * {
+  font-style: italic;
+}
