@@ -19,7 +19,7 @@ export function GenesisCrest({size = 42, className = '', title}: GenesisCrestPro
       src={GENESIS_LOGO}
       width={size ? Math.round(size * 1.5) : undefined}
       height={size ?? undefined}
-      className={`shrink-0 object-contain ${className}`}
+      className={`genesis-logo shrink-0 object-contain ${className}`}
       alt={title || ''}
       aria-hidden={title ? undefined : true}
       draggable={false}

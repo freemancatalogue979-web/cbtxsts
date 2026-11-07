@@ -3571,6 +3571,18 @@ html:not([data-mode='pro']) :is(h1, h2, h3) {
 }
 
 .agb-lockup { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; }
+/* The official artwork is dark-native. Every placement gets its own dark
+   surface, including daylight mode, rather than disappearing into a light UI. */
+img.genesis-logo {
+  box-sizing: border-box;
+  padding: 2px;
+  border: 1px solid rgb(250 204 21 / .18);
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 38%, #16092b 0%, #07030e 58%, #000 100%);
+  box-shadow: inset 0 1px rgb(255 255 255 / .06), 0 5px 14px -10px #000;
+  color-scheme: dark;
+}
+.pro-brand-mark img.genesis-logo { padding: 1px; border-radius: 7px; }
 .agb-crest { display: block; width: 4.35rem; height: 2.9rem; flex-shrink: 0; }
 .agb-crest > img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 7px rgb(0 0 0 / 0.35)); }
 [data-skin='day'] .agb-bar {

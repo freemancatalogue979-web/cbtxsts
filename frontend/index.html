@@ -71,10 +71,8 @@
       .ag-splash {
         position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden;
         color: #fff; -webkit-tap-highlight-color: transparent; user-select: none;
-        background:
-          radial-gradient(58% 42% at 50% 42%, rgba(168, 85, 247, 0.28) 0%, rgba(168, 85, 247, 0) 70%),
-          radial-gradient(38% 30% at 50% 40%, rgba(250, 204, 21, 0.16) 0%, rgba(250, 204, 21, 0) 72%),
-          linear-gradient(180deg, #12062b 0%, #0a0419 55%, #050210 100%);
+        /* True black matches the raw PNG's own background edge to edge. */
+        background: #000;
       }
       /* the starfield */
       .ag-splash::before {

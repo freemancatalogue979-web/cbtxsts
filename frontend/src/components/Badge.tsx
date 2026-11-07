@@ -480,7 +480,7 @@ export function AbsoluteGenesisCrown({className = '', playerName = '', founderNu
 
   return (
     <svg className={`rank-crest rank-crest--absolute ${className}`} data-tier="absolute_genesis" data-founder={founder ? founderNumber : undefined}
-      viewBox="0 0 160 166" aria-hidden="true" focusable="false" style={{'--crest-glow': '#ffd75ecc'} as CSSProperties}>
+      viewBox="0 0 160 154" aria-hidden="true" focusable="false" style={{'--crest-glow': '#ffd75ecc'} as CSSProperties}>
       <defs>
         <linearGradient id={`${uid}-gold`} x1=".08" y1="0" x2=".9" y2="1">
           <stop stopColor="#6f3d08" /><stop offset=".1" stopColor="#d99516" /><stop offset=".24" stopColor="#fff7b2" />
@@ -503,7 +503,7 @@ export function AbsoluteGenesisCrown({className = '', playerName = '', founderNu
         </filter>
       </defs>
 
-      {/* A towering five-point silhouette, reserved exclusively for level 100. */}
+      {/* A broad five-point royal crown, never a trophy or pendant silhouette. */}
       <path d="M16 91 9 24l39 25L58 18 80 3l22 15 10 31 39-25-7 67-12 16H28Z" fill="#03030b" stroke="#03030b" strokeWidth="5" strokeLinejoin="round" transform="translate(0 3)" />
       <path d="M16 88 9 21l39 26L58 15 80 2l22 13 10 32 39-26-7 67-12 16H28Z" fill={`url(#${uid}-gold)`} stroke="#8b520b" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="m23 79-7-49 34 25L60 23l20-14 20 14 10 32 34-25-7 49Z" fill={`url(#${uid}-velvet)`} stroke="#fff2a6" strokeOpacity=".62" strokeWidth="1" />
@@ -528,21 +528,19 @@ export function AbsoluteGenesisCrown({className = '', playerName = '', founderNu
       <path d="M80 70q-13-7-25-3v19q13-4 25 3 12-7 25-3V67q-12-4-25 3Z" fill="#fff6c7" stroke="#9b5c09" strokeWidth="1" filter={`url(#${uid}-relief)`} />
       <path d="M80 70v19M60 73q8-1 15 3M60 78q8-1 15 3M85 76q7-4 15-3M85 81q7-4 15-3" fill="none" stroke="#b57a24" strokeWidth=".8" strokeLinecap="round" />
 
-      {/* Permanent engraved Founder's 100 plate: number and player's own name. */}
-      <path d="m26 96-12 9 13 7M134 96l12 9-13 7" fill="#7b4308" stroke="#e4a827" strokeWidth="1" />
-      <path d="M24 94h112l-5 50-51 18-51-18Z" fill="#03030b" opacity=".85" transform="translate(0 2)" />
-      <path d="M24 92h112l-5 50-51 18-51-18Z" fill={founder ? `url(#${uid}-band)` : `url(#${uid}-velvet)`} stroke={`url(#${uid}-gold)`} strokeWidth="2" strokeLinejoin="round" />
-      <path d="M30 98h100l-4 41-46 15-46-15Z" fill="none" stroke={founder ? '#fff3ae' : '#e7b83e'} strokeOpacity=".7" strokeWidth=".8" />
-      <path d="M35 103h90M38 137h84" fill="none" stroke={founder ? '#6f3d08' : '#f4cd5c'} strokeOpacity=".55" strokeWidth=".7" />
-      <text x="80" y="116" textAnchor="middle" fill={founder ? '#5a2c04' : '#ffe68a'} fontSize={founder ? 17 : 11} fontWeight="950" letterSpacing={founder ? 1.8 : 1.2}>
+      {/* A wide, flat gold tag attached to the crown band: no trophy stem or point. */}
+      <path d="M22 96h116l8 7v38l-8 7H22l-8-7v-38Z" fill="#03030b" opacity=".85" transform="translate(0 2)" />
+      <path d="M22 94h116l8 7v38l-8 7H22l-8-7v-38Z" fill={founder ? `url(#${uid}-band)` : `url(#${uid}-velvet)`} stroke={`url(#${uid}-gold)`} strokeWidth="2" strokeLinejoin="round" />
+      <path d="M26 100h108l5 4v32l-5 4H26l-5-4v-32Z" fill="none" stroke={founder ? '#fff3ae' : '#e7b83e'} strokeOpacity=".7" strokeWidth=".8" />
+      <path d="M29 103h102M29 138h102" fill="none" stroke={founder ? '#6f3d08' : '#f4cd5c'} strokeOpacity=".55" strokeWidth=".7" />
+      <text x="80" y="119" textAnchor="middle" fill={founder ? '#5a2c04' : '#ffe68a'} fontSize={founder ? 17 : 11} fontWeight="950" letterSpacing={founder ? 1.8 : 1.2}>
         {founder ? `#${number}` : 'LEVEL 100'}
       </text>
-      <text x="80" y="132" textAnchor="middle" fill={founder ? '#3d1d03' : '#fff5c7'} fontSize="8" fontWeight="900" letterSpacing=".5"
+      <text x="80" y="133" textAnchor="middle" fill={founder ? '#3d1d03' : '#fff5c7'} fontSize="8" fontWeight="900" letterSpacing=".5"
         textLength={nameWidth} lengthAdjust="spacingAndGlyphs">{name}</text>
-      <text x="80" y="146" textAnchor="middle" fill={founder ? '#653304' : '#d9ac42'} fontSize="5.8" fontWeight="900" letterSpacing="1.5">
+      <text x="80" y="145" textAnchor="middle" fill={founder ? '#653304' : '#d9ac42'} fontSize="5.8" fontWeight="900" letterSpacing="1.5">
         {founder ? "FOUNDER'S 100" : 'ABSOLUTE GENESIS'}
       </text>
-      <path d="m80 153 4 5-4 6-4-6Z" fill={`url(#${uid}-jewel)`} stroke="#ffe99a" strokeWidth=".7" />
     </svg>
   );
 }
