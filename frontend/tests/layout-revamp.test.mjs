@@ -141,6 +141,23 @@ test("stylised names keep their exact letters inside the all-caps style", () => 
   const html = renderToStaticMarkup(React.createElement(ui.PageTitle, { title: "Hi ᴋα" }));
   assert.match(html, /<span class="flip-char" style="--i:2">ᴋ<\/span><span class="flip-char flip-char--keep" style="--i:3">α<\/span>/);
   assert.match(css, /\.flip-char--keep \{ text-transform: none; \}/);
+  // The same protection applies to names in the sidebar, drawer and top bar.
+  assert.equal(renderToStaticMarkup(React.createElement(ui.CaseSafe, { text: "Dre" })), "Dre");
+  assert.equal(renderToStaticMarkup(React.createElement(ui.CaseSafe, { text: "ᴋα⚝" })), 'ᴋ<span class="normal-case">α</span>⚝');
+  assert.equal((layout.match(/<CaseSafe text=\{user\.ign \|\| /g) ?? []).length, 3);
+});
+
+test("symbols in names (like ⚝) have a bundled fallback that loads only when needed", async () => {
+  const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
+  assert.match(main, /import "@fontsource\/noto-sans-symbols\/500\.css";/);
+  const faces = await readFile(new URL("../node_modules/@fontsource/noto-sans-symbols/500.css", import.meta.url), "utf8");
+  const symbols = faces.split("noto-sans-symbols-symbols-500-normal */")[1]?.split("}")[0] ?? "";
+  assert.match(symbols, /font-family: 'Noto Sans Symbols'/);
+  // Every face is range-limited, so it is fetched only for characters DM Mono lacks.
+  assert.equal((faces.match(/@font-face/g) ?? []).length, (faces.match(/unicode-range:/g) ?? []).length);
+  const ranges = symbols.match(/unicode-range: ([^;]+);/)[1].split(",").map((r) => r.trim().replace("U+", "").split("-").map((h) => parseInt(h, 16)));
+  assert.ok(ranges.some(([lo, hi = lo]) => lo <= 0x269d && 0x269d <= hi), "⚝ is covered");
+  assert.match(css, /--font-sans: "DM Mono",[^;]*"Noto Sans Symbols"/);
 });
 
 test("the dashboard header rolls through season goal, team loop and next up", async () => {

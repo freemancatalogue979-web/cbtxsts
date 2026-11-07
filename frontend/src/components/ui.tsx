@@ -38,6 +38,19 @@ export function keepsCase(char: string): boolean {
   return /[^\u0000-\u024F]/u.test(char) && char.toUpperCase() !== char;
 }
 
+/** Shows member-typed text (names, IGNs) inside the all-caps style without
+ *  swapping stylised letters for capitals the fonts may not have. */
+export function CaseSafe({ text }: { text: string }) {
+  if (!splitGraphemes(text).some(keepsCase)) return <>{text}</>;
+  return (
+    <>
+      {splitGraphemes(text).map((char, index) => keepsCase(char)
+        ? <span key={index} className="normal-case">{char}</span>
+        : char)}
+    </>
+  );
+}
+
 /** Letters flip up on a 3D hinge, one after another. Words never break in the middle. Visual only. */
 function FlipText({ text }: { text: string }) {
   let index = 0;

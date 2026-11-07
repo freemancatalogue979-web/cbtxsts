@@ -15,7 +15,7 @@ import { AmbientBackdrop } from "./AmbientBackdrop";
 import { CommandPalette } from "./CommandPalette";
 import { Wordmark, BrandImg } from "./Logo";
 import { AvatarImg } from "./Avatar";
-import { ErrorNote, Field, PageChrome } from "./ui";
+import { ErrorNote, Field, PageChrome, CaseSafe } from "./ui";
 
 const ROLE_TONE: Record<string, string> = {
   admin: "text-crim border-crim/50",
@@ -225,7 +225,7 @@ function ProfileModal({ user, font, onFontChange, theme, onThemeChange, onClose,
         <div className="flex items-center gap-4">
           <AvatarImg user={user} size={64} />
           <div className="flex-1">
-            <div className="text-[15px] font-extrabold">{user.ign || user.name}</div>
+            <div className="text-[15px] font-extrabold"><CaseSafe text={user.ign || user.name} /></div>
             <div className="text-[11px] text-faint">{user.email}</div>
             <div className="flex gap-2 mt-2">
               <button type="button" className="btn-ghost !py-1 !text-[11px]" onClick={() => fileRef.current?.click()}>
@@ -327,7 +327,7 @@ function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, on
       <button className="flex flex-1 min-w-0 items-center gap-2.5 text-left" onClick={() => setEditing(true)} title="Edit profile">
         <span className="shrink-0"><AvatarImg user={user} size={36} /></span>
         <span className="min-w-0">
-          <span className="block text-[13px] font-bold truncate">{user.ign || user.name}</span>
+          <span className="block text-[13px] font-bold truncate"><CaseSafe text={user.ign || user.name} /></span>
           <span className="flex items-center gap-1.5 mt-0.5">
             <span className={`chip !text-[9px] !px-1.5 !py-0 uppercase ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
             {user.main_role && <span className="text-[10px] text-faint font-bold">{user.main_role}</span>}
@@ -432,7 +432,7 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
         <div className="flex items-center justify-between px-4 h-14">
           <Wordmark compact />
           <div className="flex items-center gap-2">
-            <span className={`chip !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`}>{user.ign || user.role_label}</span>
+            <span className={`chip !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`}><CaseSafe text={user.ign || user.role_label} /></span>
             <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
               <Search size={17} />
             </button>
