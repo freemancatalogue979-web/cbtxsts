@@ -16,7 +16,7 @@
  *
  * Bump VERSION to drop every old cache on the next visit.
  */
-const VERSION = 'v28';
+const VERSION = 'v29';
 /* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
    makes the app installable and gives an offline fallback page; it never
    caches dev modules, so hot reload behaves exactly as before. */
@@ -41,7 +41,7 @@ const STATIC_PRECACHE = [
   '/brand/ag-apple-touch-180.png',
   '/brand/ag-logo-96.png',
   '/brand/ag-sigil.svg',
-  '/brand/absolute-genesis-current.webp',
+  '/brand/absolute-genesis-mini.svg',
   '/brand/absolute-genesis-crown-emblem.png',
   '/arena/world.webp',
   '/arena/world-960.webp',

@@ -1,5 +1,5 @@
-/** The official Absolute Genesis neon crown artwork. */
-export const GENESIS_LOGO = '/brand/absolute-genesis-current.webp';
+/** Transparent, two-theme mini branding; the loading screen uses separate raw artwork. */
+export const GENESIS_LOGO = '/brand/absolute-genesis-mini.svg';
 
 export type GenesisCrestProps = {
   /** Fixed artwork height in pixels, or null to size it with utility classes. */

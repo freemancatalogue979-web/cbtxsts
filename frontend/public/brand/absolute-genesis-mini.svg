@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Absolute Genesis">
+  <defs>
+    <linearGradient id="gold" x1=".15" y1="0" x2=".85" y2="1">
+      <stop stop-color="#8a4b08"/><stop offset=".18" stop-color="#ffd85c"/><stop offset=".38" stop-color="#fff4aa"/>
+      <stop offset=".55" stop-color="#e7a51c"/><stop offset=".78" stop-color="#ffdc68"/><stop offset="1" stop-color="#824306"/>
+    </linearGradient>
+    <linearGradient id="silver" x1=".2" y1="0" x2=".75" y2="1">
+      <stop stop-color="#ffffff"/><stop offset=".35" stop-color="#f4f1ff"/><stop offset=".55" stop-color="#b9b4d1"/>
+      <stop offset=".72" stop-color="#ffffff"/><stop offset="1" stop-color="#8b84a8"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#c084fc"/><stop offset=".5" stop-color="#7c3aed"/><stop offset="1" stop-color="#3b1580"/>
+    </linearGradient>
+    <linearGradient id="jewel" x1=".2" y1="0" x2=".8" y2="1">
+      <stop stop-color="#fff"/><stop offset=".25" stop-color="#e9c2ff"/><stop offset=".55" stop-color="#a855f7"/><stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+
+  <!-- AG monogram: dark-violet keyline preserves the silver on light themes. -->
+  <g stroke-linejoin="round">
+    <path d="M10 108 42 43h18l29 65H68l-6-15H37l-6 15Zm33-31h14l-7-20Z"
+      fill="url(#silver)" fill-rule="evenodd" stroke="#24103f" stroke-width="5"/>
+    <path d="M10 108 42 43h18l29 65H68l-6-15H37l-6 15Zm33-31h14l-7-20Z"
+      fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1"/>
+    <path d="M145 59c-7-10-17-16-30-16-21 0-36 14-36 33s15 33 36 33c14 0 25-5 32-13V73h-34v15h15v3c-4 3-8 4-13 4-11 0-18-7-18-19s7-19 18-19c7 0 13 3 18 9Z"
+      fill="url(#silver)" stroke="#24103f" stroke-width="5"/>
+    <path d="M145 59c-7-10-17-16-30-16-21 0-36 14-36 33s15 33 36 33c14 0 25-5 32-13V73h-34v15h15v3c-4 3-8 4-13 4-11 0-18-7-18-19s7-19 18-19c7 0 13 3 18 9Z"
+      fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1"/>
+    <path d="m20 100 25-51h9L36 86m48 15 5 5m34-49c11-7 22-3 28 4" fill="none" stroke="url(#violet)" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Compact royal crown, drawn into the monogram rather than placed in a box. -->
+  <path d="m40 15 21 18L80 4l19 29 21-18-8 40q-32 14-64 0Z"
+    fill="#160a27" stroke="#160a27" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m40 13 21 18L80 2l19 29 21-18-8 40q-32 14-64 0Z"
+    fill="url(#gold)" stroke="#5b3005" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="m49 24 15 17L80 10l16 31 15-17-5 25q-26 11-52 0Z" fill="#2b1045" stroke="#fff0a0" stroke-opacity=".7" stroke-width=".8"/>
+  <path d="M47 48q33 13 66 0l-2 10q-31 13-62 0Z" fill="url(#gold)" stroke="#633506" stroke-width="1"/>
+  <path d="M52 51q28 10 56 0" fill="none" stroke="#fff7c4" stroke-opacity=".8" stroke-width="1"/>
+  <path d="m80 16 6 10-6 11-6-11Z" fill="url(#jewel)" stroke="#fff0a0" stroke-width=".8"/>
+  <path d="m52 31 4 6-4 7-4-7Zm56 0 4 6-4 7-4-7Z" fill="url(#jewel)" stroke="#ffe589" stroke-width=".7"/>
+  <path d="m44 17 17 18L80 6l19 29 17-18" fill="none" stroke="#fffbd8" stroke-opacity=".75" stroke-width="1.2" stroke-linecap="round"/>
+</svg>
