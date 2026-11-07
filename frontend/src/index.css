@@ -40,7 +40,7 @@
      pulse: deep indigo        (info / links / secondary glow)
      mint : success green      (unchanged — keeps the answer-correct meaning)
      gold : reward amber       (unchanged — keeps XP/season meaning)
-   Type: DM Sans Light 300 by default on every device; switchable font packs.
+   Type: Courier by default on every device; switchable font packs.
    Themes: arena (default), ember, ocean, venom, candy, mono via [data-theme].
    ========================================================================== */
 
@@ -64,13 +64,13 @@
   /* extra small step used by the header HUD chips (`xs:inline-flex`) */
   --breakpoint-xs: 30rem;
 
-  --font-sans: "DM Sans Variable", "Space Grotesk Variable", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "DM Sans Variable", "Space Grotesk Variable", ui-sans-serif, sans-serif;
+  --font-sans: Courier, "Courier New", monospace;
+  --font-display: Courier, "Courier New", monospace;
   /* Titles use the font pack the player picked in their profile (applyFont sets
      --font-sans on <html>), so headers always match the rest of their app. */
-  --font-title: var(--font-sans, "Space Grotesk Variable"), ui-sans-serif, system-ui, sans-serif;
+  --font-title: var(--font-sans, Courier), "Courier New", monospace;
   /* Small all-caps labels above titles: always upright, always the house face. */
-  --font-label: "Space Grotesk Variable", "Montserrat Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-label: Courier, "Courier New", monospace;
 
   /* surfaces — true black base, violet-tinted raised steps */
   --color-ink-950: #050308;
@@ -396,9 +396,8 @@
     background-attachment: fixed;
     color: var(--color-mist-50);
     font-family: var(--font-sans);
-    /* The house face is DM Sans Light. Components can still opt into heavier
-       weights for buttons, scores and headings through the variable font. */
-    font-weight: 300;
+    /* Courier is the house face; display weights remain component-specific. */
+    font-weight: 500;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;

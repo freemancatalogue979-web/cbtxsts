@@ -32,9 +32,17 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'dm-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
+export type FontName = 'courier' | 'dm-sans' | 'montserrat' | 'helvetica-oblique' | 'arena' | 'grotesk' | 'orbit';
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
+  {
+    id: 'courier',
+    name: 'Courier',
+    blurb: 'Classic monospaced lettering, available on every device.',
+    short: 'Classic monospace.',
+    sans: "Courier, 'Courier New', monospace",
+    display: "Courier, 'Courier New', monospace",
+  },
   {
     id: 'dm-sans',
     name: 'DM Sans Light',
@@ -115,10 +123,10 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v7 stores explicit font choices; no saved value means use DEFAULT_FONT.
-// Legacy explicit choices are migrated instead of silently discarded.
-const FONT_KEY = 'arena.font.v7';
-const LEGACY_FONT_KEYS = ['arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
+// v8 makes Courier the house default; older explicit choices migrate, except
+// the old DM Sans default, which must not keep existing installs on DM Sans.
+const FONT_KEY = 'arena.font.v8';
+const LEGACY_FONT_KEYS = ['arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
 const MASCOT_KEY = 'arena.mascot';
 const SOUND_KEY = 'arena.sound';
 const MUSIC_KEY = 'arena.music';
@@ -216,12 +224,13 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Shared default on desktop, tablet and phone; explicit saved choices still win. */
-export const DEFAULT_FONT: FontName = 'dm-sans';
+/** Courier is shared on desktop, tablet and phone; explicit new choices win. */
+export const DEFAULT_FONT: FontName = 'courier';
 
 export function currentFont(): FontName {
   const current = read(FONT_KEY, '');
-  const legacy = current ? '' : LEGACY_FONT_KEYS.map((key) => read(key, '')).find(Boolean) ?? '';
+  const legacyValue = current ? '' : LEGACY_FONT_KEYS.map((key) => read(key, '')).find(Boolean) ?? '';
+  const legacy = legacyValue === 'dm-sans' ? '' : legacyValue;
   const stored = current || legacy;
   const fallback = DEFAULT_FONT;
   const choice = (FONTS.some((font) => font.id === stored) ? stored : fallback) as FontName;
