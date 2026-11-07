@@ -1,5 +1,5 @@
-// Courier Prime: fallback for devices without Courier / Courier New. Browsers
-// fetch it only when no local Courier is found.
+// Courier Prime: fallback for devices without Courier Std / Courier / Courier
+// New. Browsers fetch it only when no local Courier is found.
 import "@fontsource/courier-prime/400.css";
 import "@fontsource/courier-prime/700.css";
 import "@fontsource/courier-prime/400-italic.css";

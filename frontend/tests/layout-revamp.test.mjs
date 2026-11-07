@@ -157,7 +157,7 @@ test("symbols in names (like ⚝) have a bundled fallback that loads only when n
   assert.equal((faces.match(/@font-face/g) ?? []).length, (faces.match(/unicode-range:/g) ?? []).length);
   const ranges = symbols.match(/unicode-range: ([^;]+);/)[1].split(",").map((r) => r.trim().replace("U+", "").split("-").map((h) => parseInt(h, 16)));
   assert.ok(ranges.some(([lo, hi = lo]) => lo <= 0x269d && 0x269d <= hi), "⚝ is covered");
-  assert.match(css, /--font-sans: Courier,[^;]*"Noto Sans Symbols"/);
+  assert.match(css, /--font-sans: "Courier Std", Courier,[^;]*"Noto Sans Symbols"/);
 });
 
 test("the dashboard header rolls through season goal, team loop and next up", async () => {

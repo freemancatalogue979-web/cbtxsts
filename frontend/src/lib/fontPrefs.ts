@@ -1,5 +1,5 @@
 /**
- * Per-browser text style. Courier Bold Italic (11px, 700, 0.1em tracking, all caps) is the
+ * Per-browser text style. Courier Std Bold (11px, 700, 0.1em tracking, all caps) is the
  * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */
@@ -12,9 +12,9 @@ export const DEFAULT_FONT: FontChoice = "courier";
 export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack: string }[] = [
   {
     id: "courier",
-    label: "Courier",
+    label: "Courier Std",
     hint: "Default · caps",
-    stack: "Courier, \"Courier New\", \"Courier Prime\", monospace",
+    stack: "\"Courier Std\", Courier, \"Courier New\", \"Courier Prime\", monospace",
   },
   {
     id: "montserrat",

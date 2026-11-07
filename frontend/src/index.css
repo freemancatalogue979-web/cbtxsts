@@ -27,13 +27,14 @@
 }
 
 @theme {
-  /* Courier is the default text style: the system Courier (Apple) or Courier
-     New (Windows), with bundled Courier Prime for devices that have neither.
+  /* Courier Std Bold is the default text style. Adobe's Courier Std can't be
+     bundled (licence), so it is used where installed; otherwise the system
+     Courier (Apple) or Courier New (Windows), then bundled Courier Prime.
      Montserrat and Corptic stay available from the profile menu; symbol fonts
      cover anything Courier lacks. */
-  --font-sans: Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-sans: "Courier Std", Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-mono: "Courier Std", Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
@@ -92,13 +93,12 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Courier Bold Italic (700), 11px, 0.1em,
-     all caps. Elements with their own size or weight class keep it. */
+  /* Default text style, everywhere: Courier Std Bold (700, upright), 11px,
+     0.1em, all caps. Elements with their own size or weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;
     font-size: 11px;
     font-weight: 700;
-    font-style: italic;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-synthesis: weight style;

@@ -1,10 +1,10 @@
 # Font credits and usage
 
-## Text style: Courier by default, Montserrat and Corptic optional
+## Text style: Courier Std Bold by default, Montserrat and Corptic optional
 
 Everyone can switch the interface text style from **Edit profile → Text style** (the profile menu at the bottom of the sidebar, or in the mobile drawer). The choice is stored per browser in `localStorage` under `clover_font_choice` and is applied by the inline script in `index.html` before the first paint, so there is no flash of the wrong font.
 
-- **Courier** (default) — `font-family: Courier, "Courier New", "Courier Prime", monospace; font-size: 11px; font-weight: 700; font-style: italic; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
+- **Courier Std Bold** (default) — `font-family: "Courier Std", Courier, "Courier New", "Courier Prime", monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
 - **Montserrat** — the previous default: 16px semibold, mixed case, no slant.
 - **Corptic** — the team's display font: slanted, heavier, tighter and sized up for its small x-height. Numerals are always drawn by Montserrat.
 
@@ -22,9 +22,9 @@ The app uses **Corptic DEMO Regular** by Pandeka Foundry (Pandeka Studio). The f
 
 The demo contains basic Latin letters only: it has no numerals, punctuation or accented characters. The interface explicitly uses Montserrat for digits 0–9, even if a Corptic font with numbers is installed later. Other missing glyphs fall back to Montserrat or system symbol fonts. When Corptic is chosen it is bold and oblique; because the demo has only a regular face, browsers synthesize the heavier letters while Montserrat's variable font supplies its own bold numerals. A larger x-height and roomier spacing make the display font easier to read. Browsers without `font-size-adjust` use a scaled Corptic face when they support the older `size-adjust` font descriptor; browsers without either still retain the spacing and weight improvements.
 
-## Courier
+## Courier Std
 
-Courier is not bundled: the app uses the Courier already on the device (Courier on macOS/iOS, Courier New on Windows). Devices without either (most Android and Linux) get **Courier Prime**, a free Courier redesign by Alan Dague-Greene for Quote-Unquote Apps, bundled through `@fontsource/courier-prime` under the SIL Open Font License 1.1 (regular, bold and italic). Browsers download Courier Prime only when no local Courier is found. The default uses the real Courier Bold Italic face (Courier Bold Oblique on Apple, Courier New Bold Italic on Windows, Courier Prime Bold Italic elsewhere), so nothing is synthesized.
+**Courier Std** is Adobe's commercial Courier (installed with Adobe apps). Its licence does not allow bundling it in a web app, so it is used only where it is installed on the device. Elsewhere the app uses the device's Courier (macOS/iOS) or Courier New (Windows). Devices with none of these (most Android and Linux) get **Courier Prime**, a free Courier redesign by Alan Dague-Greene for Quote-Unquote Apps, bundled through `@fontsource/courier-prime` under the SIL Open Font License 1.1 (regular, bold and italics), and downloaded only when no local Courier is found. The default uses each font's real bold face, upright.
 
 ## Montserrat numbers and fallback
 

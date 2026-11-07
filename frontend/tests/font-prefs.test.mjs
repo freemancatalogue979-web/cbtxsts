@@ -30,7 +30,8 @@ test("Courier is the default text style; Montserrat and Corptic stay options", (
   // The module runs in a separate VM realm, so compare host-realm copies.
   assert.deepEqual(Array.from(FONT_CHOICES, (choice) => choice.id), ["courier", "montserrat", "corptic"]);
   const courier = FONT_CHOICES.find((choice) => choice.id === "courier");
-  assert.equal(courier.stack, 'Courier, "Courier New", "Courier Prime", monospace');
+  assert.equal(courier.label, "Courier Std");
+  assert.equal(courier.stack, '"Courier Std", Courier, "Courier New", "Courier Prime", monospace');
   const montserrat = FONT_CHOICES.find((choice) => choice.id === "montserrat");
   assert.match(montserrat.stack, /^"Montserrat Variable"/);
   assert.doesNotMatch(montserrat.stack, /Corptic/);
