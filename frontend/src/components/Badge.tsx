@@ -466,103 +466,91 @@ const CREST_SHIELDS: Record<BaseTier | PeakTier, string> = {
   absolute_genesis: 'm60 24 45 18-3 50q-4 25-42 43-38-18-42-43l-3-50Z',
 };
 
-/** Level 100: a large diamond-encrusted royal crest, not a standalone crown. */
+/** Level 100: an eight-point obsidian star with a faceted Founder core. */
 export function AbsoluteGenesisCrown({className = '', founderNumber}: {
   className?: string;
-  /** Kept for call-site compatibility; player names are never drawn on the crest. */
+  /** Kept for call-site compatibility; player names are never drawn on the star. */
   playerName?: string;
   founderNumber?: number | null;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const founder = typeof founderNumber === 'number' && founderNumber >= 1 && founderNumber <= 100;
   const number = founder ? String(founderNumber).padStart(3, '0') : '';
-  const jewels = [
-    [90, 56, 0, 1.15], [124, 66, 28, 1], [148, 91, 58, 1], [153, 124, 90, 1.05],
-    [132, 153, 125, 1], [90, 174, 180, 1.15], [48, 153, 235, 1], [27, 124, 270, 1.05],
-    [32, 91, 302, 1], [56, 66, 332, 1],
-  ] as const;
+  const star = 'M90 3 108 52 153 31 136 77 178 98 136 119 153 165 108 144 90 188 72 144 27 165 44 119 2 98 44 77 27 31 72 52Z';
+  const innerStar = 'M90 16 106 59 143 42 129 82 165 98 129 115 143 154 106 137 90 175 74 137 37 154 51 115 15 98 51 82 37 42 74 59Z';
 
   return (
     <svg className={`rank-crest rank-crest--absolute ${className}`} data-tier="absolute_genesis" data-founder={founder ? founderNumber : undefined}
-      viewBox="0 0 180 190" aria-hidden="true" focusable="false" style={{'--crest-glow': '#e5b8ff'} as CSSProperties}>
+      viewBox="0 0 180 190" aria-hidden="true" focusable="false" style={{'--crest-glow': '#b26cff'} as CSSProperties}>
       <defs>
-        <linearGradient id={`${uid}-gold`} x1=".12" y1="0" x2=".88" y2="1">
-          <stop stopColor="#6b3505" /><stop offset=".12" stopColor="#d99618" /><stop offset=".28" stopColor="#fff7b8" />
-          <stop offset=".4" stopColor="#d89513" /><stop offset=".51" stopColor="#fffde0" /><stop offset=".59" stopColor="#e6aa24" />
-          <stop offset=".8" stopColor="#8e4a06" /><stop offset=".93" stopColor="#f8d660" /><stop offset="1" stopColor="#4f2603" />
+        <linearGradient id={`${uid}-edge`} x1=".12" y1="0" x2=".88" y2="1">
+          <stop stopColor="#251238" /><stop offset=".18" stopColor="#b981ef" /><stop offset=".3" stopColor="#f1ddff" />
+          <stop offset=".42" stopColor="#553071" /><stop offset=".58" stopColor="#120a20" /><stop offset=".77" stopColor="#9b5bd1" />
+          <stop offset=".9" stopColor="#e5c6ff" /><stop offset="1" stopColor="#24102f" />
         </linearGradient>
-        <linearGradient id={`${uid}-rim`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor="#fffbe0" /><stop offset=".2" stopColor="#e5aa30" /><stop offset=".47" stopColor="#6c3507" />
-          <stop offset=".7" stopColor="#f5c64d" /><stop offset="1" stopColor="#512503" />
+        <linearGradient id={`${uid}-obsidian`} x1=".18" y1="0" x2=".82" y2="1">
+          <stop stopColor="#594169" /><stop offset=".16" stopColor="#1c1429" /><stop offset=".37" stopColor="#080811" />
+          <stop offset=".53" stopColor="#30203f" /><stop offset=".7" stopColor="#07070e" /><stop offset=".88" stopColor="#1d102d" /><stop offset="1" stopColor="#030308" />
         </linearGradient>
-        <radialGradient id={`${uid}-core`} cx=".4" cy=".25" r=".9">
-          <stop stopColor="#793fa0" /><stop offset=".27" stopColor="#3e195f" /><stop offset=".62" stopColor="#170b31" /><stop offset="1" stopColor="#050610" />
+        <linearGradient id={`${uid}-facet-light`} x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#c9a2e5" stopOpacity=".56" /><stop offset=".42" stopColor="#614275" stopOpacity=".25" /><stop offset="1" stopColor="#090811" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${uid}-facet-dark`} x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#030308" stopOpacity=".1" /><stop offset=".55" stopColor="#030308" stopOpacity=".7" /><stop offset="1" stopColor="#000000" stopOpacity=".94" />
+        </linearGradient>
+        <radialGradient id={`${uid}-core`} cx=".36" cy=".24" r=".9">
+          <stop stopColor="#67417e" /><stop offset=".25" stopColor="#2c193e" /><stop offset=".58" stopColor="#0b0914" /><stop offset="1" stopColor="#020207" />
         </radialGradient>
-        <linearGradient id={`${uid}-diamond`} x1=".18" y1="0" x2=".82" y2="1">
-          <stop stopColor="#ffffff" /><stop offset=".2" stopColor="#e9ddff" /><stop offset=".39" stopColor="#ffffff" />
-          <stop offset=".56" stopColor="#b69be8" /><stop offset=".75" stopColor="#f2e9ff" /><stop offset="1" stopColor="#74549e" />
-        </linearGradient>
-        <linearGradient id={`${uid}-amethyst`} x1=".2" y1="0" x2=".8" y2="1">
-          <stop stopColor="#ffffff" /><stop offset=".18" stopColor="#f0c9ff" /><stop offset=".43" stopColor="#c176ef" />
-          <stop offset=".7" stopColor="#7135b1" /><stop offset="1" stopColor="#271047" />
+        <linearGradient id={`${uid}-diamond`} x1=".2" y1="0" x2=".8" y2="1">
+          <stop stopColor="#ffffff" /><stop offset=".22" stopColor="#eadbff" /><stop offset=".42" stopColor="#ffffff" />
+          <stop offset=".65" stopColor="#a67bc8" /><stop offset="1" stopColor="#4b2e65" />
         </linearGradient>
         <linearGradient id={`${uid}-number`} x1="0" y1="0" x2="0" y2="1">
-          <stop stopColor="#ffffff" /><stop offset=".42" stopColor="#fff4bd" /><stop offset=".55" stopColor="#e4b344" /><stop offset="1" stopColor="#fff8d3" />
+          <stop stopColor="#ffffff" /><stop offset=".42" stopColor="#eedbff" /><stop offset=".55" stopColor="#b782dd" /><stop offset="1" stopColor="#fff4ff" />
         </linearGradient>
         <radialGradient id={`${uid}-aura`}>
-          <stop stopColor="#c889ff" stopOpacity=".5" /><stop offset=".48" stopColor="#8d45da" stopOpacity=".2" /><stop offset="1" stopColor="#6d28d9" stopOpacity="0" />
+          <stop stopColor="#b56cff" stopOpacity=".46" /><stop offset=".48" stopColor="#7132a8" stopOpacity=".2" /><stop offset="1" stopColor="#4c1d95" stopOpacity="0" />
         </radialGradient>
         <filter id={`${uid}-relief`} x="-40%" y="-40%" width="180%" height="190%">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="1.1" floodColor="#000000" floodOpacity=".9" />
+          <feDropShadow dx="0" dy="2" stdDeviation="1.4" floodColor="#000000" floodOpacity=".95" />
         </filter>
-        <filter id={`${uid}-shine`} x="-40%" y="-40%" width="180%" height="180%">
-          <feDropShadow dx="0" dy="0" stdDeviation="2.2" floodColor="#e7c6ff" floodOpacity=".85" />
+        <filter id={`${uid}-shine`} x="-80%" y="-80%" width="260%" height="260%">
+          <feDropShadow dx="0" dy="0" stdDeviation="2.4" floodColor="#dfb4ff" floodOpacity=".9" />
         </filter>
       </defs>
 
-      <ellipse cx="90" cy="110" rx="84" ry="79" fill={`url(#${uid}-aura)`} />
+      <ellipse cx="90" cy="99" rx="87" ry="91" fill={`url(#${uid}-aura)`} />
 
-      {/* The crown is only the summit of a much larger jewel-crested medallion. */}
-      <path d="m47 11 22 20L90 4l21 27 22-20-8 51q-35 16-70 0Z" fill="#03030a" stroke="#03030a" strokeWidth="6" strokeLinejoin="round" />
-      <path d="m47 8 22 20L90 1l21 27 22-20-8 51q-35 16-70 0Z" fill={`url(#${uid}-gold)`} stroke="#764006" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="m57 21 15 17L90 10l18 28 15-17-5 32q-28 12-56 0Z" fill={`url(#${uid}-core)`} stroke="#fff1a1" strokeOpacity=".7" strokeWidth="1" />
-      <path d="M52 14 69 34 90 6l21 28 17-20" fill="none" stroke="#fffbd7" strokeOpacity=".8" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="m90 13 7 12-7 13-7-13Z" fill={`url(#${uid}-amethyst)`} stroke="#fff0a0" strokeWidth="1" filter={`url(#${uid}-relief)`} />
-      <path d="m61 34 5 7-5 8-5-8Zm58 0 5 7-5 8-5-8Z" fill={`url(#${uid}-amethyst)`} stroke="#ffe58d" strokeWidth=".8" />
+      {/* Deep black relief gives every point a sharp, physical silhouette. */}
+      <path d={star} fill="#010104" stroke="#010104" strokeWidth="7" strokeLinejoin="round" transform="translate(0 2)" />
+      <path d={star} fill={`url(#${uid}-edge)`} stroke="#12091e" strokeWidth="1.4" strokeLinejoin="round" filter={`url(#${uid}-relief)`} />
+      <path d={innerStar} fill={`url(#${uid}-obsidian)`} stroke="#e3c2ff" strokeOpacity=".38" strokeWidth="1.1" strokeLinejoin="round" />
 
-      {/* Massive octagonal setting: layered gold, black relief and polished bevels. */}
-      <path d="m90 42 53 22 22 48-20 48-55 27-55-27-20-48 22-48Z" fill="#020208" stroke="#020208" strokeWidth="7" strokeLinejoin="round" />
-      <path d="m90 39 53 22 22 48-20 48-55 27-55-27-20-48 22-48Z" fill={`url(#${uid}-gold)`} stroke="#5e2e04" strokeWidth="1.6" strokeLinejoin="round" filter={`url(#${uid}-relief)`} />
-      <path d="m90 49 46 19 19 42-17 41-48 24-48-24-17-41 19-42Z" fill="#090713" stroke="#fff2a4" strokeOpacity=".72" strokeWidth="1.3" />
-      <path d="m90 57 40 16 16 38-15 35-41 21-41-21-15-35 16-38Z" fill={`url(#${uid}-core)`} stroke={`url(#${uid}-rim)`} strokeWidth="3" strokeLinejoin="round" />
+      {/* Alternating polished facets make the star read as carved obsidian. */}
+      <path d="M90 16 106 59 90 96 74 59ZM143 42 129 82 90 96 106 59ZM165 98 129 115 90 96 129 82ZM143 154 106 137 90 96 129 115ZM90 175 74 137 90 96 106 137ZM37 154 51 115 90 96 74 137ZM15 98 51 82 90 96 51 115ZM37 42 74 59 90 96 51 82Z"
+        fill={`url(#${uid}-facet-light)`} />
+      <path d="M106 59 143 42 129 82 90 96ZM129 82 165 98 129 115 90 96ZM129 115 143 154 106 137 90 96ZM106 137 90 175 74 137 90 96ZM74 137 37 154 51 115 90 96ZM51 115 15 98 51 82 90 96ZM51 82 37 42 74 59 90 96ZM74 59 90 16 106 59 90 96Z"
+        fill={`url(#${uid}-facet-dark)`} opacity=".72" />
+      <path d="M90 16v80M143 42 90 96l75 2M143 154 90 96l0 79M37 154l53-58-75 2M37 42l53 54" fill="none" stroke="#d7b4ed" strokeOpacity=".22" strokeWidth=".85" />
+      <path d="M90 5 108 53 151 33M177 98l-41 21 15 44M90 186l-18-42-43 19M4 98l40-21-15-44" fill="none" stroke="#f0dcff" strokeOpacity=".55" strokeWidth="1.25" strokeLinecap="round" />
 
-      {/* Facets are cut into the amethyst core, never floating around it. */}
-      <path d="m90 57 40 16-17 19-23-12-23 12-17-19Z" fill="#d9a4ff" opacity=".16" />
-      <path d="m50 73 17 19-8 54-10-35Z" fill="#b26be5" opacity=".12" />
-      <path d="m130 73-17 19 8 54 10-35Z" fill="#02030b" opacity=".38" />
-      <path d="m59 146 8-54 23 75Zm62 0-8-54-23 75Z" fill="#05030d" opacity=".28" />
-      <path d="M90 60v17M52 75l15 17M128 75l-15 17M42 143l17 3M138 143l-17 3" fill="none" stroke="#e5bdff" strokeOpacity=".2" strokeWidth=".8" />
-
-      {/* Ten individually cut diamonds form the jewellery setting. */}
-      {jewels.map(([x, y, rotation, scale], i) => (
-        <g key={i} transform={`translate(${x} ${y}) rotate(${rotation}) scale(${scale})`} filter={`url(#${uid}-shine)`}>
-          <path d="m0-9 7 5 2 8-9 9-9-9 2-8Z" fill="#1b0c2e" stroke="#6e3d08" strokeWidth="2.4" strokeLinejoin="round" />
-          <path d="m0-9 7 5 2 8-9 9-9-9 2-8Z" fill={`url(#${uid}-diamond)`} stroke="#fff5c3" strokeWidth=".7" strokeLinejoin="round" />
-          <path d="M-7-4 0-1 7-4M0-9v8M-9 4 0-1 9 4M0-1v14" fill="none" stroke="#644185" strokeOpacity=".7" strokeWidth=".65" />
-          <path d="m-5-3 4-4 2 5-5 5Z" fill="#ffffff" opacity=".7" />
+      {/* Small diamond flashes are cut into four tips, not floating decorations. */}
+      {[[90, 28, 0], [146, 98, 90], [90, 163, 180], [34, 98, 270]].map(([x, y, rotation], i) => (
+        <g key={i} transform={`translate(${x} ${y}) rotate(${rotation})`} filter={`url(#${uid}-shine)`}>
+          <path d="m0-7 4 6-4 8-4-8Z" fill={`url(#${uid}-diamond)`} stroke="#f5e7ff" strokeWidth=".55" />
+          <path d="M-4-1 4-1 0 7ZM0-7v14" fill="none" stroke="#6d4a86" strokeWidth=".5" />
         </g>
       ))}
 
-      {/* Raised centre jewel and its double bezel carry only the Founder number. */}
-      <path d="m90 82 35 18 8 29-18 30-25 12-25-12-18-30 8-29Z" fill="#020208" opacity=".9" transform="translate(0 2)" />
-      <path d="m90 79 35 18 8 29-18 30-25 12-25-12-18-30 8-29Z" fill={`url(#${uid}-rim)`} stroke="#fff0a0" strokeWidth="1.1" strokeLinejoin="round" />
-      <path d="m90 86 29 15 7 24-15 25-21 10-21-10-15-25 7-24Z" fill={`url(#${uid}-core)`} stroke="#572c7b" strokeWidth="1.4" />
-      <path d="m90 86 29 15-29 12-29-12Z" fill="#dca8ff" opacity=".17" />
-      <path d="m61 101 29 12-21 37-15-25Zm58 0-29 12 21 37 15-25Z" fill="#05040e" opacity=".3" />
-      <path d="m66 101 24-11 24 11" fill="none" stroke="#fff1b0" strokeOpacity=".72" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M68 145q22 15 44 0" fill="none" stroke="#d7a53d" strokeOpacity=".6" strokeWidth=".8" />
+      {/* The raised octagonal core carries only the permanent Founder number. */}
+      <path d="m90 67 30 13 14 29-14 31-30 14-30-14-14-31 14-29Z" fill="#010105" stroke="#010105" strokeWidth="5" transform="translate(0 2)" />
+      <path d="m90 65 30 13 14 29-14 31-30 14-30-14-14-31 14-29Z" fill={`url(#${uid}-edge)`} stroke="#c89cec" strokeOpacity=".65" strokeWidth="1" />
+      <path d="m90 72 25 11 12 25-12 26-25 12-25-12-12-26 12-25Z" fill={`url(#${uid}-core)`} stroke="#08050e" strokeWidth="2" />
+      <path d="m90 72 25 11-25 15-25-15Z" fill="#c99ae7" opacity=".18" />
+      <path d="m65 83 25 15-25 36-12-26Zm50 0-25 15 25 36 12-26Z" fill="#020207" opacity=".38" />
+      <path d="m70 84 20-8 20 8M68 130q22 15 44 0" fill="none" stroke="#e5c5f8" strokeOpacity=".45" strokeWidth="1" strokeLinecap="round" />
       {founder ? (
-        <text x="90" y="132" textAnchor="middle" fill={`url(#${uid}-number)`} stroke="#2a1404" strokeWidth="1"
+        <text x="90" y="119" textAnchor="middle" fill={`url(#${uid}-number)`} stroke="#08040d" strokeWidth="1"
           paintOrder="stroke fill" fontFamily="'Courier Std', Courier, monospace" fontSize="29" fontWeight="900"
           fontStyle="italic" letterSpacing="1" filter={`url(#${uid}-relief)`}>{number}</text>
       ) : null}
