@@ -98,11 +98,11 @@ test("digits use Montserrat even if a future Corptic face contains numbers", () 
   }
 });
 
-test("DM Mono is the default text style: 11px, 500, 0.1em, all caps", async () => {
+test("Courier is the default text style: 11px, 500, 0.1em, all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    assert.match(stack, /^"DM Mono",/);
+    assert.match(stack, /^Courier, "Courier New", "Courier Prime",/);
     assert.match(stack, /monospace$/);
     assert.doesNotMatch(stack, /Corptic/);
   }
@@ -117,8 +117,11 @@ test("DM Mono is the default text style: 11px, 500, 0.1em, all caps", async () =
   assert.match(css, /input, textarea, select, button \{\s*text-transform: inherit;/);
   // The font ships with the app (no external font CDN), in the weights used.
   const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
-  assert.match(main, /import "@fontsource\/dm-mono\/500\.css";/);
-  assert.match(main, /import "@fontsource\/dm-mono\/400\.css";/);
+  // Real Courier first; bundled Courier Prime (OFL) only where none is installed.
+  assert.match(main, /import "@fontsource\/courier-prime\/400\.css";/);
+  assert.match(main, /import "@fontsource\/courier-prime\/700\.css";/);
+  assert.doesNotMatch(main, /dm-mono/);
+  assert.doesNotMatch(css, /DM Mono/);
 });
 
 test("Montserrat stays available as a larger, mixed-case option", () => {

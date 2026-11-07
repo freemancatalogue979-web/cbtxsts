@@ -1,10 +1,10 @@
 # Font credits and usage
 
-## Text style: DM Mono by default, Montserrat and Corptic optional
+## Text style: Courier by default, Montserrat and Corptic optional
 
 Everyone can switch the interface text style from **Edit profile → Text style** (the profile menu at the bottom of the sidebar, or in the mobile drawer). The choice is stored per browser in `localStorage` under `clover_font_choice` and is applied by the inline script in `index.html` before the first paint, so there is no flash of the wrong font.
 
-- **DM Mono** (default) — `font-family: "DM Mono", monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
+- **Courier** (default) — `font-family: Courier, "Courier New", "Courier Prime", monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
 - **Montserrat** — the previous default: 16px semibold, mixed case, no slant.
 - **Corptic** — the team's display font: slanted, heavier, tighter and sized up for its small x-height. Numerals are always drawn by Montserrat.
 
@@ -22,9 +22,9 @@ The app uses **Corptic DEMO Regular** by Pandeka Foundry (Pandeka Studio). The f
 
 The demo contains basic Latin letters only: it has no numerals, punctuation or accented characters. The interface explicitly uses Montserrat for digits 0–9, even if a Corptic font with numbers is installed later. Other missing glyphs fall back to Montserrat or system symbol fonts. When Corptic is chosen it is bold and oblique; because the demo has only a regular face, browsers synthesize the heavier letters while Montserrat's variable font supplies its own bold numerals. A larger x-height and roomier spacing make the display font easier to read. Browsers without `font-size-adjust` use a scaled Corptic face when they support the older `size-adjust` font descriptor; browsers without either still retain the spacing and weight improvements.
 
-## DM Mono
+## Courier
 
-DM Mono (by Colophon Foundry for Google) is provided through `@fontsource/dm-mono` under the SIL Open Font License 1.1 and bundled with the app (weights 400, 500 and 500 italic). It has no 600/700 face, so explicitly bold elements are thickened by the browser.
+Courier is not bundled: the app uses the Courier already on the device (Courier on macOS/iOS, Courier New on Windows). Devices without either (most Android and Linux) get **Courier Prime**, a free Courier redesign by Alan Dague-Greene for Quote-Unquote Apps, bundled through `@fontsource/courier-prime` under the SIL Open Font License 1.1 (regular, bold and italic). Browsers download Courier Prime only when no local Courier is found. Courier has regular and bold faces only, so the 500 weight renders with the regular face; bold elements use the real bold face.
 
 ## Montserrat numbers and fallback
 

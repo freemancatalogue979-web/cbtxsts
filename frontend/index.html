@@ -30,12 +30,12 @@
         var stored = null;
         try {
           var font = window.localStorage.getItem("clover_font_choice");
-          root.dataset.font = font === "montserrat" || font === "corptic" ? font : "dmmono";
+          root.dataset.font = font === "montserrat" || font === "corptic" ? font : "courier";
           stored = window.localStorage.getItem("clover_theme_accent");
           root.dataset.backdrop = window.localStorage.getItem("clover_theme_backdrop") === "off" ? "plain" : "hero";
           root.dataset.effects = window.localStorage.getItem("clover_theme_motion") === "calm" ? "calm" : "full";
         } catch (error) {
-          root.dataset.font = "dmmono";
+          root.dataset.font = "courier";
           root.dataset.backdrop = "hero";
           root.dataset.effects = "full";
         }

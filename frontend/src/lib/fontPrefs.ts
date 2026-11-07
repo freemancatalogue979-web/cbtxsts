@@ -1,20 +1,20 @@
 /**
- * Per-browser text style. DM Mono (11px, 500, 0.1em tracking, all caps) is the
+ * Per-browser text style. Courier (11px, 500, 0.1em tracking, all caps) is the
  * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */
 
-export type FontChoice = "dmmono" | "montserrat" | "corptic";
+export type FontChoice = "courier" | "montserrat" | "corptic";
 
 export const FONT_STORAGE_KEY = "clover_font_choice";
-export const DEFAULT_FONT: FontChoice = "dmmono";
+export const DEFAULT_FONT: FontChoice = "courier";
 
 export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack: string }[] = [
   {
-    id: "dmmono",
-    label: "DM Mono",
+    id: "courier",
+    label: "Courier",
     hint: "Default · caps",
-    stack: "\"DM Mono\", ui-monospace, \"SFMono-Regular\", Menlo, Consolas, monospace",
+    stack: "Courier, \"Courier New\", \"Courier Prime\", monospace",
   },
   {
     id: "montserrat",

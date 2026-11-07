@@ -27,11 +27,13 @@
 }
 
 @theme {
-  /* DM Mono is the default text style. Montserrat and Corptic stay available
-     from the profile menu; symbol fonts cover anything DM Mono lacks. */
-  --font-sans: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  /* Courier is the default text style: the system Courier (Apple) or Courier
+     New (Windows), with bundled Courier Prime for devices that have neither.
+     Montserrat and Corptic stay available from the profile menu; symbol fonts
+     cover anything Courier lacks. */
+  --font-sans: Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-mono: Courier, "Courier New", "Courier Prime", "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
@@ -90,7 +92,7 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: DM Mono, 11px, 500, 0.1em, all caps.
+  /* Default text style, everywhere: Courier, 11px, 500, 0.1em, all caps.
      Elements with their own size class (titles, stats) keep that size. */
   body {
     @apply bg-ink text-text font-sans;

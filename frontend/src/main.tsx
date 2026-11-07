@@ -1,6 +1,8 @@
-import "@fontsource/dm-mono/400.css";
-import "@fontsource/dm-mono/500.css";
-import "@fontsource/dm-mono/500-italic.css";
+// Courier Prime: fallback for devices without Courier / Courier New. Browsers
+// fetch it only when no local Courier is found.
+import "@fontsource/courier-prime/400.css";
+import "@fontsource/courier-prime/700.css";
+import "@fontsource/courier-prime/400-italic.css";
 import "@fontsource-variable/montserrat";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";

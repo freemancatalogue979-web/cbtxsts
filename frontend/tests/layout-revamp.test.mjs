@@ -153,11 +153,11 @@ test("symbols in names (like ⚝) have a bundled fallback that loads only when n
   const faces = await readFile(new URL("../node_modules/@fontsource/noto-sans-symbols/500.css", import.meta.url), "utf8");
   const symbols = faces.split("noto-sans-symbols-symbols-500-normal */")[1]?.split("}")[0] ?? "";
   assert.match(symbols, /font-family: 'Noto Sans Symbols'/);
-  // Every face is range-limited, so it is fetched only for characters DM Mono lacks.
+  // Every face is range-limited, so it is fetched only for characters Courier lacks.
   assert.equal((faces.match(/@font-face/g) ?? []).length, (faces.match(/unicode-range:/g) ?? []).length);
   const ranges = symbols.match(/unicode-range: ([^;]+);/)[1].split(",").map((r) => r.trim().replace("U+", "").split("-").map((h) => parseInt(h, 16)));
   assert.ok(ranges.some(([lo, hi = lo]) => lo <= 0x269d && 0x269d <= hi), "⚝ is covered");
-  assert.match(css, /--font-sans: "DM Mono",[^;]*"Noto Sans Symbols"/);
+  assert.match(css, /--font-sans: Courier,[^;]*"Noto Sans Symbols"/);
 });
 
 test("the dashboard header rolls through season goal, team loop and next up", async () => {
