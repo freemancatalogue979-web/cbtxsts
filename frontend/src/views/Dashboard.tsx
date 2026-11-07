@@ -1,5 +1,4 @@
 /** Dashboard shell: routes between the arena tabs. */
-import {AnimatePresence, motion} from 'motion/react';
 import PlayPanel from '../panels/PlayPanel';
 import {Suspense} from 'react';
 import {ErrorBoundary} from '../components/ErrorBoundary';
@@ -31,13 +30,28 @@ const TeachersHub = lazyScreen(() => import('../teach/TeachersHub'));
 const Messages = lazyScreen(() => import('../teach/Messages'));
 const Studio = lazyScreen(() => import('../teach/Studio'));
 
-/** Loaders for the tabs most players open next, warmed when the app is idle. */
+/** Warm every tab so a URL change never has to discover a cold screen chunk. */
 export const LIKELY_TABS = [
-  () => import('../panels/MaterialsPanel'),
   () => import('../panels/StudyPanel'),
-  () => import('../panels/ProfilePanel'),
   () => import('../panels/DuelsPanel'),
   () => import('../panels/RanksPanel'),
+  () => import('../panels/RealmVaultPanel'),
+  () => import('../panels/PrizesPanel'),
+  () => import('../panels/FeedPanel'),
+  () => import('../panels/FriendsPanel'),
+  () => import('../panels/ProfilePanel'),
+  () => import('../panels/ShopPanel'),
+  () => import('../panels/MaterialsPanel'),
+  () => import('../panels/GameArenaPanel'),
+  () => import('../panels/RankedPanel'),
+  () => import('../panels/EventsPanel'),
+  () => import('../panels/MysteryPanel'),
+  () => import('../panels/SupportPanel'),
+  () => import('../panels/WorldMapPanel'),
+  () => import('../panels/TutorPanel'),
+  () => import('../teach/TeachersHub'),
+  () => import('../teach/Messages'),
+  () => import('../teach/Studio'),
 ];
 
 function TabLoading() {
@@ -72,14 +86,7 @@ export default function Dashboard({
   onSignOut: () => void;
 }) {
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={tab}
-        initial={{opacity: 0, y: 12}}
-        animate={{opacity: 1, y: 0}}
-        exit={{opacity: 0, y: -8}}
-        transition={{duration: 0.26, ease: [0.22, 1, 0.36, 1]}}
-      >
+    <div key={tab} className="route-enter">
         <ErrorBoundary key={tab} label={tab} inline>
         <Suspense fallback={<TabLoading />}>
         {tab === 'play' && <PlayPanel onStartExam={onStartExam} onOpenDuels={onOpenDuels} />}
@@ -109,7 +116,6 @@ export default function Dashboard({
         )}
         </Suspense>
         </ErrorBoundary>
-      </motion.div>
-    </AnimatePresence>
+    </div>
   );
 }

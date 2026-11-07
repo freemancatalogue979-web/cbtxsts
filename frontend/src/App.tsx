@@ -1,6 +1,5 @@
 /** Root router: login, dashboard tabs, exam engine, duel arena, results, admin. */
 import {ChevronLeft, Shield} from 'lucide-react';
-import {AnimatePresence, motion} from 'motion/react';
 import {Suspense, useCallback, useEffect, useRef, useState} from 'react';
 import {AppShell} from './components/AppShell';
 import {Wordmark, WalletPill} from './components/Brand';
@@ -284,7 +283,7 @@ export default function App() {
   useEffect(() => {
     if (warmed.current || role !== 'student' || !profile) return;
     warmed.current = true;
-    prefetchWhenIdle([() => import('./views/Result'), ...LIKELY_TABS]);
+    prefetchWhenIdle([() => import('./views/Result'), ...LIKELY_TABS], 250);
   }, [role, profile]);
 
   /* "Ask AI Tutor" from any screen (result, practice, reader…): switch to the
@@ -466,14 +465,7 @@ export default function App() {
     <>
       <ErrorBoundary key={route.view} label={route.view}>
       <Suspense fallback={<ScreenLoading />}>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={route.view}
-          initial={{opacity: 0}}
-          animate={{opacity: 1}}
-          exit={{opacity: 0}}
-          transition={{duration: 0.2}}
-        >
+      <div key={route.view} className="route-enter">
           {route.view === 'dashboard' && pro && (
             <ProShell tab={route.tab} onTab={(tab) => navigate({view: 'dashboard', tab})} onSignOut={signOut} onStartExam={startExam}>
               <ProRoutes
@@ -602,8 +594,7 @@ export default function App() {
               }}
             />
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
       </Suspense>
       </ErrorBoundary>
       {playerId ? <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} /> : null}
