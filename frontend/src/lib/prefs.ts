@@ -224,15 +224,23 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Courier is shared on desktop, tablet and phone; explicit new choices win. */
+/** Courier on desktop; Space Grotesk is the mobile house default. */
 export const DEFAULT_FONT: FontName = 'courier';
+export const DEFAULT_MOBILE_FONT: FontName = 'grotesk';
+
+export function defaultFontForDevice(): FontName {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(min-width: 1024px)').matches ? DEFAULT_FONT : DEFAULT_MOBILE_FONT;
+  }
+  return DEFAULT_FONT;
+}
 
 export function currentFont(): FontName {
   const current = read(FONT_KEY, '');
   const legacyValue = current ? '' : LEGACY_FONT_KEYS.map((key) => read(key, '')).find(Boolean) ?? '';
   const legacy = legacyValue === 'dm-sans' ? '' : legacyValue;
   const stored = current || legacy;
-  const fallback = DEFAULT_FONT;
+  const fallback = defaultFontForDevice();
   const choice = (FONTS.some((font) => font.id === stored) ? stored : fallback) as FontName;
   if (!current && legacy && choice === legacy) write(FONT_KEY, choice);
   return choice;
@@ -240,7 +248,7 @@ export function currentFont(): FontName {
 
 /** Paint a font pack. `persist` is false for boot/mode switches so only a real pick is remembered. */
 export function applyFont(name: FontName, persist = true): void {
-  const font = FONTS.find((option) => option.id === name) ?? FONTS.find((option) => option.id === DEFAULT_FONT) ?? FONTS[0];
+  const font = FONTS.find((option) => option.id === name) ?? FONTS.find((option) => option.id === defaultFontForDevice()) ?? FONTS[0];
   const style = document.documentElement.style;
   style.setProperty('--font-sans', font.sans);
   style.setProperty('--font-display', font.display);

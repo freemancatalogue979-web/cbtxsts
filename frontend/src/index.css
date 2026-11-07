@@ -4068,3 +4068,9 @@ html[data-font='courier'] body,
 html[data-font='courier'] body * {
   font-style: italic;
 }
+
+/* Space Grotesk is the mobile house default (and remains an optional pack). */
+html[data-font='grotesk'] body {
+  font-weight: 400;
+  font-style: normal;
+}

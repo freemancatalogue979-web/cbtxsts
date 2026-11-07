@@ -46,10 +46,11 @@
           grotesk: ["'Space Grotesk Variable', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif", "'Space Grotesk Variable', 'Audiowide', sans-serif"],
           orbit: ["'Montserrat Variable', ui-sans-serif, sans-serif", "'Orbitron', 'Audiowide', sans-serif"]
         };
-        // Match prefs.ts: Courier by default; the old DM Sans default is not migrated.
+        // Match prefs.ts: Courier desktop, Space Grotesk mobile; no old DM Sans default.
         var savedFont = localStorage.getItem('arena.font.v8') || localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
         if (!localStorage.getItem('arena.font.v8') && savedFont === 'dm-sans') savedFont = '';
-        var font = savedFont && FONTS[savedFont] ? savedFont : 'courier';
+        var mobile = window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
+        var font = savedFont && FONTS[savedFont] ? savedFont : (mobile ? 'grotesk' : 'courier');
         document.documentElement.dataset.font = font;
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
@@ -64,6 +65,10 @@
       @font-face {
         font-family: 'DM Sans Variable'; font-style: normal; font-weight: 100 900; font-display: swap;
         src: url('/fonts/dm-sans-latin-variable.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Space Grotesk Variable'; font-style: normal; font-weight: 300 700; font-display: swap;
+        src: url('/fonts/space-grotesk-latin-variable.woff2') format('woff2');
       }
       html, body { background: #07030f; }
       html[data-skin='day'], html[data-skin='day'] body { background-color: #eaf4ff; }
@@ -113,6 +118,9 @@
         position: absolute; left: 0; right: 0; bottom: max(1.6rem, env(safe-area-inset-bottom)); margin: 0; text-align: center;
         font: italic 700 0.6rem/1 Courier, 'Courier New', monospace; letter-spacing: 0.22em;
         text-transform: uppercase; color: rgba(226, 232, 240, 0.32); animation: ag-fade 0.8s ease 0.8s both;
+      }
+      @media (max-width: 1023px) {
+        .ag-splash__tag, .ag-splash__foot { font-family: 'Space Grotesk Variable', ui-sans-serif, sans-serif; font-style: normal; font-weight: 400; }
       }
       /* React's copy takes over mid-animation: no second entrance. */
       .ag-splash--live .ag-splash__logo { animation: none; }
