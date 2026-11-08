@@ -1,9 +1,6 @@
-// Space Mono (Colophon Foundry, SIL OFL): the default text style. Each face
-// downloads only when something on screen uses it.
-import "@fontsource/space-mono/400.css";
-import "@fontsource/space-mono/700.css";
-import "@fontsource/space-mono/400-italic.css";
-import "@fontsource/space-mono/700-italic.css";
+// Space Grotesk (Florian Karsten, SIL OFL): the default text style. One
+// variable font covers weights 300–700, so bold is a real face.
+import "@fontsource-variable/space-grotesk";
 import "@fontsource-variable/montserrat";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";

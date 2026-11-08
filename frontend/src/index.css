@@ -27,12 +27,13 @@
 }
 
 @theme {
-  /* Space Mono Bold is the default text style (bundled, SIL OFL), so it looks
-     the same on every device. Montserrat and Corptic stay available from the
-     profile menu; symbol fonts cover anything Space Mono lacks. */
-  --font-sans: "Space Mono", ui-monospace, Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  /* Space Grotesk Bold is the default text style (bundled variable font,
+     SIL OFL), so it looks the same on every device. Montserrat and Corptic
+     stay available from the profile menu; symbol fonts cover anything Space
+     Grotesk lacks. */
+  --font-sans: "Space Grotesk Variable", "Space Grotesk", "Helvetica Neue", Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
   /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "Space Mono", ui-monospace, Menlo, Consolas, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-mono: "Space Grotesk Variable", "Space Grotesk", "Helvetica Neue", Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
   /* The display font is already compact; don't squeeze headings. */
   --tracking-tight: 0.01em;
 
@@ -91,7 +92,7 @@ html[data-font="corptic"] {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Space Mono Bold (700, upright), 11px,
+  /* Default text style, everywhere: Space Grotesk Bold (700, upright), 11px,
      0.1em, all caps. Elements with their own size or weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;

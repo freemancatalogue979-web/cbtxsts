@@ -1,20 +1,20 @@
 /**
- * Per-browser text style. Space Mono Bold (11px, 700, 0.1em tracking, all caps) is the
+ * Per-browser text style. Space Grotesk Bold (11px, 700, 0.1em tracking, all caps) is the
  * default; Montserrat and the Corptic display font stay available as options. The choice is device-local, like
  * the AI workspace layout, so it never needs an account or network round trip.
  */
 
-export type FontChoice = "spacemono" | "montserrat" | "corptic";
+export type FontChoice = "spacegrotesk" | "montserrat" | "corptic";
 
 export const FONT_STORAGE_KEY = "clover_font_choice";
-export const DEFAULT_FONT: FontChoice = "spacemono";
+export const DEFAULT_FONT: FontChoice = "spacegrotesk";
 
 export const FONT_CHOICES: { id: FontChoice; label: string; hint: string; stack: string }[] = [
   {
-    id: "spacemono",
-    label: "Space Mono",
+    id: "spacegrotesk",
+    label: "Space Grotesk",
     hint: "Default · caps",
-    stack: "\"Space Mono\", ui-monospace, Menlo, Consolas, monospace",
+    stack: "\"Space Grotesk Variable\", \"Space Grotesk\", \"Helvetica Neue\", Arial, sans-serif",
   },
   {
     id: "montserrat",
