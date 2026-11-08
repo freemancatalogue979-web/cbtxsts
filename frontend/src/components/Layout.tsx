@@ -194,8 +194,9 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
   // blocks, so a fixed dialog inside them would be cropped and mispositioned.
   return createPortal(
     <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4" onClick={onClose}>
-      <form className="card p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto space-y-4 bg-panel" onClick={(e) => e.stopPropagation()} onSubmit={save}
+      <div className="card p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto bg-panel" onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label="Edit profile">
+      <form className="space-y-4" onSubmit={save}>
         <div className="flex items-center gap-4">
           <AvatarImg user={user} size={64} />
           <div className="flex-1">
@@ -264,6 +265,7 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
           <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
         </div>
       </form>
+      </div>
     </div>,
     document.body,
   );
@@ -283,7 +285,7 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
           className="rounded-full ring-2 ring-transparent hover:ring-crim/50 transition">
           <AvatarImg user={user} size={34} />
         </button>
-        <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme and text style" aria-label="Appearance settings">
+        <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme" aria-label="Appearance settings">
           <Palette size={15} />
         </button>
         <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
@@ -307,7 +309,7 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
           </span>
         </span>
       </button>
-      <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme and text style" aria-label="Appearance settings">
+      <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme" aria-label="Appearance settings">
         <Palette size={16} />
       </button>
       <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
@@ -401,10 +403,13 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
 
       {/* Mobile top bar */}
       <header className="md:hidden sticky top-0 z-40 bg-panel/80 backdrop-blur-xl border-b border-edge">
-        <div className="flex items-center justify-between px-4 h-14">
-          <Wordmark compact />
-          <div className="flex items-center gap-2">
-            <span className={`chip !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`}><CaseSafe text={user.ign || user.role_label} /></span>
+        <div className="flex items-center justify-between gap-3 px-4 h-14">
+          <span className="shrink-0"><Wordmark compact /></span>
+          <div className="flex min-w-0 items-center gap-2">
+            {/* A long name truncates instead of running into the wordmark. */}
+            <span className={`chip min-w-0 overflow-hidden !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`} title={user.ign || user.role_label}>
+              <span className="truncate"><CaseSafe text={user.ign || user.role_label} /></span>
+            </span>
             <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
               <Search size={17} />
             </button>

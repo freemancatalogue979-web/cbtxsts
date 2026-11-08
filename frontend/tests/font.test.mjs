@@ -35,7 +35,7 @@ test("the other fonts and the font menu are gone", async () => {
   const pkg = await readFile(new URL("../package.json", import.meta.url), "utf8");
   assert.doesNotMatch(pkg, /space-grotesk|space-mono|courier-prime|dm-mono/);
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(layout, /FontPicker|FontChoice|Text style/);
+  assert.doesNotMatch(layout, /FontPicker|FontChoice|[Tt]ext style/);
   const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /fontPrefs|FontChoice/);
   for (const file of ["../src/lib/fontPrefs.ts", "../public/fonts/CorpticDEMO-Regular.otf", "../public/fonts/CorpticDEMO-LICENSE.txt"]) {

@@ -252,3 +252,13 @@ test("pages load on demand while login and the dashboard stay instant", () => {
   }
   assert.match(app, /<Suspense fallback=\{<Spinner label="Opening" \/>\}>\{page\}<\/Suspense>/);
 });
+
+test("the mobile top bar never lets the name badge cover the wordmark", async () => {
+  const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
+  const bar = layout.split("{/* Mobile top bar */}")[1]?.split("</header>")[0] ?? "";
+  assert.match(bar, /justify-between gap-3/);
+  assert.match(bar, /<span className="shrink-0"><Wordmark compact \/><\/span>/);
+  assert.match(bar, /className="flex min-w-0 items-center gap-2"/);
+  assert.match(bar, /chip min-w-0 overflow-hidden/);
+  assert.match(bar, /<span className="truncate"><CaseSafe/);
+});
