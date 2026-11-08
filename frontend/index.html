@@ -13,7 +13,7 @@
     <title>9 CLOVER — The Hub</title>
     <script>
       // Apply the saved appearance before the first paint so there is no flash
-      // of the wrong font or colour: text style, accent, backdrop and motion.
+      // of the wrong colour: accent, backdrop and motion.
       (function () {
         var root = document.documentElement;
         // Default accent per area; kept in sync with SECTION_THEMES in
@@ -29,13 +29,12 @@
         if (!ACCENTS[section]) section = "dashboard";
         var stored = null;
         try {
-          var font = window.localStorage.getItem("clover_font_choice");
-          root.dataset.font = font === "montserrat" || font === "corptic" ? font : "spacegrotesk";
+          // The font menu is gone (Montserrat only); drop any old choice.
+          window.localStorage.removeItem("clover_font_choice");
           stored = window.localStorage.getItem("clover_theme_accent");
           root.dataset.backdrop = window.localStorage.getItem("clover_theme_backdrop") === "off" ? "plain" : "hero";
           root.dataset.effects = window.localStorage.getItem("clover_theme_motion") === "calm" ? "calm" : "full";
         } catch (error) {
-          root.dataset.font = "spacegrotesk";
           root.dataset.backdrop = "hero";
           root.dataset.effects = "full";
         }

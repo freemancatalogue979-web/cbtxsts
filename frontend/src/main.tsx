@@ -1,6 +1,5 @@
-// Space Grotesk (Florian Karsten, SIL OFL): the default text style. One
-// variable font covers weights 300–700, so bold is a real face.
-import "@fontsource-variable/space-grotesk";
+// Montserrat (Julieta Ulanovsky, SIL OFL): the only typeface. One variable
+// font covers weights 100–900, so bold is a real face.
 import "@fontsource-variable/montserrat";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";

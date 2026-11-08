@@ -1,40 +1,13 @@
 @import "tailwindcss";
 
-/* Corptic DEMO is a personal-use typeface by Pandeka Foundry. Montserrat
-   supplies numbers and any punctuation or accents missing from the demo. */
-@font-face {
-  font-family: "Corptic";
-  src: url("/fonts/CorpticDEMO-Regular.otf") format("opentype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  /* Exclude 0–9 so the next font, Montserrat, always draws the numbers. */
-  unicode-range: U+0000-002F, U+003A-10FFFF;
-}
-
-/* Older Chromium versions don't support font-size-adjust, but do support this
-   face descriptor. Keep the same legible Corptic size without changing digits. */
-@supports not (font-size-adjust: 0.6) {
-  @font-face {
-    font-family: "Corptic";
-    src: url("/fonts/CorpticDEMO-Regular.otf") format("opentype");
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    unicode-range: U+0000-002F, U+003A-10FFFF;
-    size-adjust: 120%;
-  }
-}
-
 @theme {
-  /* Space Grotesk Bold is the default text style (bundled variable font,
-     SIL OFL), so it looks the same on every device. Montserrat and Corptic
-     stay available from the profile menu; symbol fonts cover anything Space
-     Grotesk lacks. */
-  --font-sans: "Space Grotesk Variable", "Space Grotesk", "Helvetica Neue", Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-  /* Match code/inputs to the rest of the UI, with the same glyph fallbacks. */
-  --font-mono: "Space Grotesk Variable", "Space Grotesk", "Helvetica Neue", Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-  /* The display font is already compact; don't squeeze headings. */
+  /* Montserrat is the only typeface (bundled variable font, SIL OFL), so it
+     looks the same on every device. Symbol fonts cover the few characters it
+     lacks, such as the star in stylised names. */
+  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* Code and inputs use the same font. */
+  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  /* Keep headings from squeezing together. */
   --tracking-tight: 0.01em;
 
   /* Deep blue-charcoal foundation — tinted, never pure black. */
@@ -75,24 +48,11 @@ html[data-accent="amber"]   { --color-crim: #fbbf24; --color-crim-deep: #b45309;
 html[data-accent="azure"]   { --color-crim: #60a5fa; --color-crim-deep: #1d4ed8; --color-crim-dim: #14243d; --accent-solid: #1d4ed8; --accent-glow: 96 165 250; }
 html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f; --color-crim-dim: #222c0d; --accent-solid: #4d7c0f; --accent-glow: 163 230 53; }
 
-/* Montserrat is an opt-in style: larger, mixed-case text. */
-html[data-font="montserrat"] {
-  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-}
-
-/* Corptic is an opt-in display style, chosen per browser in the profile menu.
-   `data-font` is set before the first paint by the inline script in index.html. */
-html[data-font="corptic"] {
-  --font-sans: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-  --font-mono: "Corptic", "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI", "Segoe UI Symbol", "Noto Sans", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
-}
-
 @layer base {
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Space Grotesk Bold (700, upright), 11px,
+  /* Default text style, everywhere: Montserrat Bold (700, upright), 11px,
      0.1em, all caps. Elements with their own size or weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;
@@ -100,8 +60,6 @@ html[data-font="corptic"] {
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    font-synthesis: weight style;
-    font-synthesis-weight: auto;
     line-height: 1.6;
   }
   /* Form controls don't inherit case by default; make typed text match too.
@@ -111,27 +69,6 @@ html[data-font="corptic"] {
   }
   input::placeholder, textarea::placeholder {
     text-transform: inherit;
-  }
-  /* Montserrat: the previous style. Semibold keeps it crisp on dark surfaces. */
-  html[data-font="montserrat"] body {
-    font-size: 16px;
-    font-style: normal;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    text-transform: none;
-  }
-  /* The display font keeps its slanted, technical look and needs a little
-     more room. Its small x-height gets a size boost; the demo has only one
-     weight, so the browser thickens it. Digits still fall through to
-     Montserrat because the Corptic @font-face excludes 0–9. */
-  html[data-font="corptic"] body {
-    font-size: 16px;
-    text-transform: none;
-    font-style: oblique;
-    font-weight: 700;
-    letter-spacing: 0.035em;
-    font-size-adjust: 0.6;
-    font-feature-settings: "ss01";
   }
   ::selection {
     background: color-mix(in srgb, var(--color-crim) 55%, transparent);

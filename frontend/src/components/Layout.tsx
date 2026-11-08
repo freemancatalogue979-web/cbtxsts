@@ -6,7 +6,6 @@ import { linkOf } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
 import type { User } from "../lib/types";
 import { hashRoute, navigate } from "../lib/util";
-import { FONT_CHOICES, type FontChoice } from "../lib/fontPrefs";
 import { ACCENTS, accentFor, heroArt, sectionTheme, type SectionId, type ThemePrefs } from "../lib/theme";
 import {
   MOBILE_QUICK, NAV_GROUPS, groupLabel, navItem, readNavCollapsed, saveNavCollapsed, visibleNav, type NavItem,
@@ -97,31 +96,6 @@ function SearchButton({ onOpen, compact = false }: { onOpen: () => void; compact
   );
 }
 
-function FontPicker({ value, onChange }: { value: FontChoice; onChange: (choice: FontChoice) => void }) {
-  return (
-    <div className="rounded-lg border border-edge bg-raised px-3.5 py-3">
-      <div className="text-[12px] font-bold">Text style</div>
-      <p className="text-[10.5px] text-faint mt-0.5 leading-relaxed" id="font-picker-hint">
-        Space Grotesk Bold in caps is the default. Pick Montserrat for larger mixed-case text, or Corptic for the slanted display look. Saved on this device only.
-      </p>
-      <div role="radiogroup" aria-label="Text style" aria-describedby="font-picker-hint" className="grid grid-cols-3 gap-2 mt-2.5">
-        {FONT_CHOICES.map((choice) => {
-          const active = choice.id === value;
-          return (
-            <button key={choice.id} type="button" role="radio" aria-checked={active} onClick={() => onChange(choice.id)}
-              className={`min-w-0 rounded-md border px-2.5 py-2 text-left transition-colors ${
-                active ? "border-leaf/60 bg-leaf/10" : "border-edge bg-panel hover:border-edge-2 hover:bg-overlay"
-              }`}>
-              <span className="block break-words text-[12.5px] leading-tight font-bold" style={{ fontFamily: choice.stack }}>{choice.label}</span>
-              <span className={`mt-0.5 block text-[9.5px] leading-snug ${active ? "text-leaf" : "text-faint"}`}>{choice.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function ThemePicker({ theme, onChange }: { theme: ThemePrefs; onChange: (next: ThemePrefs) => void }) {
   const options: { id: ThemePrefs["mode"]; label: string; color: string }[] = [
     { id: "auto", label: "Auto · follows the area", color: "linear-gradient(135deg, #fda4af, #34d399 34%, #fbbf24 62%, #a78bfa)" },
@@ -176,8 +150,8 @@ function ThemePicker({ theme, onChange }: { theme: ThemePrefs; onChange: (next: 
   );
 }
 
-function ProfileModal({ user, font, onFontChange, theme, onThemeChange, onClose, onSaved }: {
-  user: User; font: FontChoice; onFontChange: (choice: FontChoice) => void;
+function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
+  user: User;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
   onClose: () => void; onSaved: (u: User) => void;
 }) {
@@ -283,7 +257,6 @@ function ProfileModal({ user, font, onFontChange, theme, onThemeChange, onClose,
           </Field>
         </div>
         <Field label="Bio"><textarea className="input min-h-20" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} placeholder="Role, goals, offline focus…" /></Field>
-        <FontPicker value={font} onChange={onFontChange} />
         <ThemePicker theme={theme} onChange={onThemeChange} />
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
@@ -296,13 +269,13 @@ function ProfileModal({ user, font, onFontChange, theme, onThemeChange, onClose,
   );
 }
 
-function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, onUserUpdate, collapsed = false }: {
-  user: User; font: FontChoice; onFontChange: (choice: FontChoice) => void;
+function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapsed = false }: {
+  user: User;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
   onLogout: () => void; onUserUpdate: (u: User) => void; collapsed?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const modal = editing && <ProfileModal user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />;
+  const modal = editing && <ProfileModal user={user} theme={theme} onThemeChange={onThemeChange} onClose={() => setEditing(false)} onSaved={(u) => { onUserUpdate(u); setEditing(false); }} />;
   if (collapsed) {
     return (
       <div className="border-t border-edge py-3 flex flex-col items-center gap-2">
@@ -345,9 +318,8 @@ function UserCard({ user, font, onFontChange, theme, onThemeChange, onLogout, on
   );
 }
 
-export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme, onThemeChange, section, hideDesktopNav = false, children }: {
+export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, section, hideDesktopNav = false, children }: {
   user: User; onLogout: () => void; onUserUpdate: (u: User) => void;
-  font: FontChoice; onFontChange: (choice: FontChoice) => void;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
   section: SectionId; hideDesktopNav?: boolean; children: ReactNode;
 }) {
@@ -424,7 +396,7 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
         </div>
         <div className={collapsed ? "py-3" : "px-3 pt-3"}><SearchButton onOpen={openPalette} compact={collapsed} /></div>
         <NavList current={current} user={user} unread={unread} collapsed={collapsed} />
-        <UserCard user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} collapsed={collapsed} />
+        <UserCard user={user} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} collapsed={collapsed} />
       </aside>
 
       {/* Mobile top bar */}
@@ -456,7 +428,7 @@ export function Layout({ user, onLogout, onUserUpdate, font, onFontChange, theme
             </div>
             <div className="px-3 pt-3"><SearchButton onOpen={openPalette} /></div>
             <NavList current={current} user={user} unread={unread} onNavigate={() => setMobileNav(false)} />
-            <UserCard user={user} font={font} onFontChange={onFontChange} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
+            <UserCard user={user} theme={theme} onThemeChange={onThemeChange} onLogout={onLogout} onUserUpdate={onUserUpdate} />
           </div>
         </div>
       )}

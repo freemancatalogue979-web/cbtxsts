@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
-import { applyFontChoice, readFontChoice, saveFontChoice, type FontChoice } from "./lib/fontPrefs";
 import { applyTheme, parseSection, readThemePrefs, saveThemePrefs, type ThemePrefs } from "./lib/theme";
 import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
@@ -51,14 +50,12 @@ export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [booting, setBooting] = useState(true);
   const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(deviceStorage()));
-  const [font, setFont] = useState<FontChoice>(() => readFontChoice(deviceStorage()));
   const [theme, setTheme] = useState<ThemePrefs>(() => readThemePrefs(deviceStorage()));
   const route = useRoute();
   // Before sign-in there is no area yet, so the theme is the login look.
   const section = user ? parseSection(route[0] || "dashboard") : "login";
 
   useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
-  useEffect(() => { applyFontChoice(font); saveFontChoice(deviceStorage(), font); }, [font]);
   useEffect(() => { applyTheme(theme, section); saveThemePrefs(deviceStorage(), theme); }, [theme, section]);
 
   useEffect(() => {
@@ -168,7 +165,7 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onUserUpdate={setUser} font={font} onFontChange={setFont}
+    <Layout user={user} onUserUpdate={setUser}
       theme={theme} onThemeChange={setTheme} section={section}
       hideDesktopNav={section === "ai" && !aiLayout.navigationOpen}
       onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>

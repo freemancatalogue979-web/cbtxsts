@@ -1,31 +1,19 @@
 # Font credits and usage
 
-## Text style: Space Grotesk Bold by default, Montserrat and Corptic optional
+## Text style: Montserrat only
 
-Everyone can switch the interface text style from **Edit profile → Text style** (the profile menu at the bottom of the sidebar, or in the mobile drawer). The choice is stored per browser in `localStorage` under `clover_font_choice` and is applied by the inline script in `index.html` before the first paint, so there is no flash of the wrong font.
+The whole interface uses one typeface, **Montserrat**, with no font menu:
 
-- **Space Grotesk Bold** (default) — `font-family: "Space Grotesk", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;` applied to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size class (titles, stats) keep that size. Anyone who never picks a font gets this.
-- **Montserrat** — the previous default: 16px semibold, mixed case, no slant.
-- **Corptic** — the team's display font: slanted, heavier, tighter and sized up for its small x-height. Numerals are always drawn by Montserrat.
+`font-family: "Montserrat Variable", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;`
 
-No account or server setting is involved, so nothing about a member's choice is sent to the backend.
+This applies to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size or weight class (titles, stats) keep that size or weight.
 
-## Corptic DEMO
+Earlier versions let each browser pick Space Grotesk, Montserrat or the Corptic DEMO display font. That menu and those fonts have been removed. The inline script in `index.html` deletes any old `clover_font_choice` value from `localStorage` on load, so nobody is left on a font that no longer exists. The Corptic DEMO file, which was licensed for personal use only, is no longer shipped.
 
-The app uses **Corptic DEMO Regular** by Pandeka Foundry (Pandeka Studio). The font is served locally from `frontend/public/fonts/CorpticDEMO-Regular.otf`; the author's original license notice is alongside it as `CorpticDEMO-LICENSE.txt`.
+## Montserrat
 
-- [Author's FontSpace page and demo download](https://www.fontspace.com/corptic-font-f147318)
-- [Full font and commercial-license options](https://creativemarket.com/PandekaStudio/291711485-Corptic-Futuristic-Modular-Display)
-- The included demo was retrieved from a [public mirror](https://github.com/MadhumithraSomasundaram/SIH/blob/8e40166e860ce3fd2d35694ea9948f69f62be1a4/public/fonts/CorpticDEMO-Regular.otf). Its SHA-256 is `d0ce19f1515091908cc3ef0eb2ba9a3a1904db5a990565380e58533658bf93e3`.
+**Montserrat** by Julieta Ulanovsky is bundled through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. One variable font covers weights 100–900, so the default bold (700, upright) is a real face and every device shows the same font. `@fontsource-variable/montserrat/wght-italic.css` supplies real italics where text is emphasised.
 
-**The demo is free for personal, non-commercial use only.** Commercial or corporate use requires the appropriate license from the foundry. Check that the license permits the intended web embedding and distribution before deploying it for such use; the existence of this repository does not grant those rights.
+## Symbol fallback
 
-The demo contains basic Latin letters only: it has no numerals, punctuation or accented characters. The interface explicitly uses Montserrat for digits 0–9, even if a Corptic font with numbers is installed later. Other missing glyphs fall back to Montserrat or system symbol fonts. When Corptic is chosen it is bold and oblique; because the demo has only a regular face, browsers synthesize the heavier letters while Montserrat's variable font supplies its own bold numerals. A larger x-height and roomier spacing make the display font easier to read. Browsers without `font-size-adjust` use a scaled Corptic face when they support the older `size-adjust` font descriptor; browsers without either still retain the spacing and weight improvements.
-
-## Space Grotesk
-
-**Space Grotesk** by Florian Karsten (derived from Space Mono by Colophon Foundry) is bundled through `@fontsource-variable/space-grotesk` under the SIL Open Font License 1.1. It is one variable font covering weights 300–700, so every device shows the same font and the default bold (700, upright) is a real face. It has no italic; anything italic is slanted by the browser.
-
-## Montserrat numbers and fallback
-
-Montserrat is provided through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. It supplies numbers and remains available as a fallback for characters missing from Corptic DEMO.
+Montserrat has no glyphs for a few symbols used in stylised member names (for example ⚝). `@fontsource/noto-sans-symbols` (SIL OFL 1.1) is next in the font stack. Every face is range-limited, so the browser downloads it only when such a character is on screen.
