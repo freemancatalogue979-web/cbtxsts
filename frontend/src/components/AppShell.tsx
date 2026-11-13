@@ -513,9 +513,9 @@ export function AppShell({
       <div className="pointer-events-none fixed inset-0 grid-lines opacity-60" />
 
       <header className="ag-shell-header print-hide sticky top-0 z-50 safe-top">
-        <div className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 sm:gap-2.5 sm:px-4 sm:py-2 lg:px-8">
+        <div className="flex w-full items-center justify-between gap-3 px-2.5 py-1.5 sm:gap-4 sm:px-4 sm:py-2 lg:gap-2.5 lg:px-8">
           {/* Mobile hamburger & Callsign & Level */}
-          <div className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2 lg:order-last lg:ml-3">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2 lg:order-last lg:ml-3">
             <button
               onClick={() => setDrawerOpen(true)}
               aria-label="Tactical Command Menu"
