@@ -4046,7 +4046,7 @@ html[data-font='courier'] body * {
   -webkit-text-stroke: .012em currentColor;
 }
 
-/* Space Grotesk is the mobile house default (and remains an optional pack). */
+/* Space Grotesk is an optional bundled pack; phones default to the device font. */
 html[data-font='grotesk'] body {
   font-weight: 400;
   font-style: normal;

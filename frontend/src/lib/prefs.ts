@@ -32,7 +32,9 @@ export const MODES: {id: ModeName; name: string; blurb: string; short: string}[]
 ];
 
 /* ------------------------------------------------------------------ fonts */
-export type FontName = 'courier' | 'grotesk';
+export type FontName = 'courier' | 'grotesk' | 'system';
+
+const SYSTEM_STACK = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
 export const FONTS: {id: FontName; name: string; blurb: string; short: string; sans: string; display: string; style?: 'normal' | 'oblique'}[] = [
   {
@@ -50,6 +52,14 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
     short: 'Modern and geometric.',
     sans: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
     display: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
+  },
+  {
+    id: 'system',
+    name: 'Device default',
+    blurb: "The phone's own system typeface — San Francisco, Roboto or Segoe UI.",
+    short: "Your device's own font.",
+    sans: SYSTEM_STACK,
+    display: SYSTEM_STACK,
   },
 ];
 
@@ -184,7 +194,7 @@ export function applyMode(name: ModeName): void {
 
 /** Courier is the house default on every device; saved choices still win. */
 export const DEFAULT_FONT: FontName = 'courier';
-export const DEFAULT_MOBILE_FONT: FontName = 'courier';
+export const DEFAULT_MOBILE_FONT: FontName = 'system';
 
 export function defaultFontForDevice(): FontName {
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
