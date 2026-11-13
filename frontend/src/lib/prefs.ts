@@ -182,9 +182,9 @@ export function applyMode(name: ModeName): void {
   write(MODE_KEY, name);
 }
 
-/** Courier on desktop; Space Grotesk is the mobile house default. */
+/** Courier is the house default on every device; saved choices still win. */
 export const DEFAULT_FONT: FontName = 'courier';
-export const DEFAULT_MOBILE_FONT: FontName = 'grotesk';
+export const DEFAULT_MOBILE_FONT: FontName = 'courier';
 
 export function defaultFontForDevice(): FontName {
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
