@@ -23,6 +23,7 @@ import type {Tab} from '../lib/nav';
 import {formatNumber} from '../lib/format';
 import {overlayVariants} from '../lib/motion';
 import {useSession} from '../store/session';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 type Tone = 'nova' | 'pulse' | 'flare' | 'gold' | 'mint' | 'cyan' | 'amber';
 
@@ -148,10 +149,10 @@ export default function MoreSheet({
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      unlock();
     };
   }, [open, onClose]);
 

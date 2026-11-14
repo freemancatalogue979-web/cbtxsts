@@ -27,6 +27,7 @@ import {formatNumber, formatRelative} from '../lib/format';
 import {useSession} from '../store/session';
 import InstallApp, {InstallBanner} from './InstallApp';
 import MoreSheet from './MoreSheet';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 const SEEN_KEY = 'arena.notices.seen';
 
@@ -450,9 +451,8 @@ export function AppShell({
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const unlock = lockBodyScroll();
+    return () => unlock();
   }, [drawerOpen]);
 
   /* Collapsible mobile nav: the chat thread asks to take the whole screen, the

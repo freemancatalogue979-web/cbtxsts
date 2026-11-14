@@ -1,6 +1,7 @@
 import {BarChart3, BookOpen, Check, ChevronRight, GraduationCap, ListChecks, Sparkles, X} from 'lucide-react';
 import {useEffect, useRef, useState} from 'react';
 import type {Tab} from '../lib/nav';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 const KEY = 'arena.pro.onboarding.v1';
 const steps: {tab: Tab; title: string; detail: string; icon: typeof GraduationCap}[] = [
@@ -22,8 +23,7 @@ export default function ProOnboarding({onTab}: {onTab: (tab: Tab) => void}) {
 
   useEffect(() => {
     if (!open) return undefined;
-    const before = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     const timer = window.setTimeout(() => closeRef.current?.focus(), 50);
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') finish();
@@ -38,7 +38,7 @@ export default function ProOnboarding({onTab}: {onTab: (tab: Tab) => void}) {
     window.addEventListener('keydown', key);
     return () => {
       clearTimeout(timer);
-      document.body.style.overflow = before;
+      unlock();
       window.removeEventListener('keydown', key);
     };
   }, [open]);

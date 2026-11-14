@@ -11,6 +11,7 @@ import type {CosmeticsRef} from '../lib/cosmetics';
 import {usePlayerPhoto} from '../lib/photos';
 import {EASE, overlayVariants, popIn, sheetVariants} from '../lib/motion';
 import {uiClick} from '../lib/sfx';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 /* ------------------------------------------------------------------ card */
 export function Card({
@@ -1468,10 +1469,10 @@ export function Modal({
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      unlock();
     };
   }, [open, onClose]);
 
@@ -1480,7 +1481,7 @@ export function Modal({
     if (small) drag.start(event);
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -1553,7 +1554,8 @@ export function Modal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

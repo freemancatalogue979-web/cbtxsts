@@ -17,6 +17,7 @@ import {useSession} from '../store/session';
 import CountryFlag from './CountryFlag';
 import {countryName} from '../lib/countries';
 import type {PlayerSummary, PublicAchievement, PublicPlayerActivity} from '../lib/types';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 export function openPlayer(id: number) {
   window.dispatchEvent(new CustomEvent('ag:player', {detail: {id}}));
@@ -78,8 +79,7 @@ export default function PlayerCard({
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     dialogRef.current?.focus();
     const keys = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
@@ -91,7 +91,7 @@ export default function PlayerCard({
       else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', keys);
-    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', keys); previous?.focus(); };
+    return () => { unlock(); document.removeEventListener('keydown', keys); previous?.focus(); };
   }, [onClose]);
 
   useEffect(() => {

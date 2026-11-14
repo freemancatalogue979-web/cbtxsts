@@ -23,6 +23,7 @@ import {askTutor} from '../lib/tutor';
 import {useSession} from '../store/session';
 import {PRO_MOBILE, PRO_NAV, PRO_SETTINGS, proHue, proLabel} from './nav';
 import ProOnboarding from './ProOnboarding';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 const APPEARANCE_NEXT: Record<Appearance, Appearance> = {dark: 'light', light: 'system', system: 'dark'};
 const APPEARANCE_ICON = {dark: Moon, light: Sun, system: Monitor};
@@ -141,9 +142,8 @@ export default function ProShell({
   const [chatThreadOpen, setChatThreadOpen] = useState(false);
   useEffect(() => {
     if (!drawer) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const unlock = lockBodyScroll();
+    return () => unlock();
   }, [drawer]);
   useEffect(() => { if (tab !== 'messages') setChatThreadOpen(false); }, [tab]);
   const chatImmersive = tab === 'tutor' || ((tab === 'messages' || tab === 'friends') && chatThreadOpen);

@@ -10,6 +10,7 @@ import type {RequestStatus, TeacherBadge} from '../lib/teachers';
 import {useSession} from '../store/session';
 import './teach.css';
 import './game.css';
+import {lockBodyScroll} from '../lib/scrollLock';
 
 /* ------------------------------------------------------------- navigation */
 /** `groupId` opens the group screen (tab is ignored). */
@@ -260,11 +261,10 @@ export function Sheet({open, onClose, title, subtitle, children, footer, size = 
       if (event.key === 'Escape') closeRef.current();
     };
     window.addEventListener('keydown', onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockBodyScroll();
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previous;
+      unlock();
     };
   }, [open]);
   const widths = {sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl', xl: 'sm:max-w-4xl'};
