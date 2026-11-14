@@ -358,9 +358,9 @@ export default function ProShell({
 
         {/* ---------------------------------------------------------- drawer */}
         {drawer && (
-          <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <div className="fixed inset-x-0 top-0 z-[60] h-[100dvh] lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
             <button type="button" aria-label="Close navigation" className="scrim absolute inset-0" onClick={() => setDrawer(false)} />
-            <div className="pro-sidebar absolute inset-y-0 left-0 flex w-[min(18rem,86vw)] flex-col overscroll-contain pb-[env(safe-area-inset-bottom)]">
+            <div className="pro-sidebar absolute top-0 left-0 flex h-[100dvh] w-[min(18rem,86vw)] flex-col overflow-hidden overscroll-contain pb-[env(safe-area-inset-bottom)]">
               <div className="flex h-14 items-center justify-between px-4 safe-top">
                 <Brand />
                 <button type="button" className="pro-btn pro-btn-ghost pro-btn-icon" aria-label="Close navigation" onClick={() => setDrawer(false)}>
