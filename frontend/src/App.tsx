@@ -22,6 +22,7 @@ import {useSession} from './store/session';
 import PlayerCard from './components/PlayerCard';
 import {lazyScreen, prefetchWhenIdle} from './lib/lazy';
 import {LIKELY_TABS} from './views/Dashboard';
+import {fontsSettled} from './lib/fontsSettled';
 
 /* In the first download: sign-in, home and the exam engine (an exam must reopen
    offline). The staff console, duels, rooms, groups and result pages download
@@ -195,6 +196,7 @@ export default function App() {
   const {pro} = useExperience();
   const [route, setRoute] = useState<Route>(() => routeFromHash());
   const [started, setStarted] = useState(false);
+  const [typeSettled, setTypeSettled] = useState(false);
 
   /* Register above splash/auth early returns so hook order never changes. */
   useEffect(() => {
@@ -276,6 +278,18 @@ export default function App() {
   useEffect(() => {
     if (ready) setStarted(true);
   }, [ready]);
+
+  /* Hold the splash until the type is in place, so the first real paint
+     never reflows as fonts swap in. */
+  useEffect(() => {
+    let alive = true;
+    void fontsSettled().then(() => {
+      if (alive) setTypeSettled(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* Once a player is in, quietly fetch the screens they usually open next
      (never on Data Saver / 2G). The service worker then keeps them offline. */
@@ -398,7 +412,7 @@ export default function App() {
     [on],
   );
 
-  if (!started || !ready) return <Splash />;
+  if (!started || !ready || !typeSettled) return <Splash />;
 
   /* Admin ⇄ Player: the stored slot for the other role switches instantly;
      without one, the sign-in sheet opens for exactly that role (beginSwitch)
