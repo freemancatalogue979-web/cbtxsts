@@ -50,8 +50,8 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
     name: 'Space Grotesk',
     blurb: 'Modern geometric lettering, bundled for every device.',
     short: 'Modern and geometric.',
-    sans: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
-    display: "'Space Grotesk Variable', ui-sans-serif, sans-serif",
+    sans: "'AG Caps', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
+    display: "'AG Caps', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
   },
   {
     id: 'system',
@@ -194,7 +194,7 @@ export function applyMode(name: ModeName): void {
 
 /** Courier is the house default on every device; saved choices still win. */
 export const DEFAULT_FONT: FontName = 'courier';
-export const DEFAULT_MOBILE_FONT: FontName = 'system';
+export const DEFAULT_MOBILE_FONT: FontName = 'grotesk';
 
 export function defaultFontForDevice(): FontName {
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
