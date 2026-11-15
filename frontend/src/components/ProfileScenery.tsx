@@ -30,7 +30,7 @@ export function OverallRankPlate({tier, level, playerName, founderNumber}: {
       <div className="profile-rank-copy min-w-0 flex-1">
         <p className="profile-rank-eyebrow">{founder ? `Founder's 100 · #${String(founderNumber).padStart(3, '0')}` : 'Overall rank'}</p>
         <p className="profile-rank-name">{tierLabel(tier)}</p>
-        <p className="profile-rank-subtitle">{founder ? 'Your name is carved into the crown forever.' : `Lifetime progression · ${prestigeFor(level).name}`}</p>
+        {!founder && <p className="profile-rank-subtitle">{`Lifetime progression · ${prestigeFor(level).name}`}</p>}
       </div>
       <span className="profile-rank-level"><small>LEVEL</small><strong>{level}</strong></span>
     </div>
