@@ -194,7 +194,8 @@ export function applyMode(name: ModeName): void {
 
 /** Courier is the house default on every device; saved choices still win. */
 export const DEFAULT_FONT: FontName = 'courier';
-export const DEFAULT_MOBILE_FONT: FontName = 'grotesk';
+/* One typeface everywhere: phones use the same font as desktop. */
+export const DEFAULT_MOBILE_FONT: FontName = DEFAULT_FONT;
 
 export function defaultFontForDevice(): FontName {
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {

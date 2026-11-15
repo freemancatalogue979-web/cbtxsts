@@ -19,12 +19,12 @@ function browser(mobile = false) {
 
 for (const mobile of [false, true]) {
   const dom = browser(mobile);
-  const expected = mobile ? 'grotesk' : 'courier';
+  const expected = 'courier';
   assert.equal(prefs.currentFont(), expected);
   prefs.applyFont(prefs.currentFont(), false);
   assert.equal(document.documentElement.dataset.font, expected);
   for (const property of ['--font-sans', '--font-display']) {
-    assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'Familjen Grotesk'/ : /^'Courier Std'/);
+    assert.match(document.documentElement.style.getPropertyValue(property), /^'Courier Std'/);
   }
   assert.equal(window.localStorage.getItem('arena.font.v9'), null, 'boot must not persist a default');
   window.localStorage.setItem('arena.font.v7', 'unknown');
@@ -41,7 +41,7 @@ for (const mobile of [false, true]) {
 {
   const dom = browser(true);
   window.localStorage.setItem('arena.font.v7', 'dm-sans');
-  assert.equal(prefs.currentFont(), 'grotesk', 'the old mobile DM Sans default must migrate to Familjen Grotesk');
+  assert.equal(prefs.currentFont(), 'courier', 'the old mobile DM Sans default must migrate to Courier');
   dom.window.close();
 }
 
@@ -79,7 +79,7 @@ for (const mobile of [false, true]) {
     page.window.matchMedia = () => ({matches: mobile});
     if (selected) page.window.localStorage.setItem('arena.font.v9', selected);
     page.window.eval(inline);
-    assert.equal(page.window.document.documentElement.dataset.font, selected || (mobile ? 'grotesk' : 'courier'));
+    assert.equal(page.window.document.documentElement.dataset.font, selected || 'courier');
     page.window.close();
   }
 }

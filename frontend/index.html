@@ -44,8 +44,7 @@
         };
         // Courier and Familjen Grotesk are bundled; phones default to Familjen Grotesk. Retired packs fall back to these.
         var savedFont = localStorage.getItem('arena.font.v9') || localStorage.getItem('arena.font.v8') || localStorage.getItem('arena.font.v7') || localStorage.getItem('arena.font.v6') || localStorage.getItem('arena.font.v5') || localStorage.getItem('arena.font.v4');
-        var mobile = window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
-        var font = savedFont && FONTS[savedFont] ? savedFont : (mobile ? 'grotesk' : 'courier');
+        var font = savedFont && FONTS[savedFont] ? savedFont : 'courier';
         document.documentElement.dataset.font = font;
         if (FONTS[font]) {
           document.documentElement.style.setProperty('--font-sans', FONTS[font][0]);
