@@ -143,6 +143,8 @@ export default function ProShell({
   useEffect(() => {
     if (!drawer) return undefined;
     const unlock = lockBodyScroll();
+    // Every opening starts at the top of the menu, wherever the page was.
+    document.querySelector<HTMLElement>('.pro-drawer-scroll')?.scrollTo({top: 0});
     return () => unlock();
   }, [drawer]);
   useEffect(() => { if (tab !== 'messages') setChatThreadOpen(false); }, [tab]);
@@ -367,7 +369,7 @@ export default function ProShell({
                   <X className="size-5" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
+              <div className="pro-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
                 <NavList tab={tab} onTab={go} onDone={() => setDrawer(false)} />
               </div>
               <div className="px-2 pt-2" onClick={() => setDrawer(false)}>

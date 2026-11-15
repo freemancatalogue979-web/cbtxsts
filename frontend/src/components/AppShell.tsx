@@ -452,6 +452,8 @@ export function AppShell({
   useEffect(() => {
     if (!drawerOpen) return undefined;
     const unlock = lockBodyScroll();
+    // Every opening starts at the top of the menu, wherever the page was.
+    document.querySelector<HTMLElement>('.ag-mobile-drawer__scroll')?.scrollTo({top: 0});
     return () => unlock();
   }, [drawerOpen]);
 
