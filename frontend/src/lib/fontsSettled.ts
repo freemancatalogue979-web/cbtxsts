@@ -7,8 +7,7 @@
 const FACES = [
   "400 16px 'Courier Std'",
   "900 16px 'Courier Std'",
-  "400 16px 'Space Grotesk Variable'",
-  "400 16px 'AG Caps'",
+  "italic 400 16px 'Familjen Grotesk'",
 ];
 const MAX_WAIT_MS = 2500;
 

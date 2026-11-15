@@ -47,11 +47,11 @@ export const FONTS: {id: FontName; name: string; blurb: string; short: string; s
   },
   {
     id: 'grotesk',
-    name: 'Space Grotesk',
+    name: 'Familjen Grotesk',
     blurb: 'Modern geometric lettering, bundled for every device.',
     short: 'Modern and geometric.',
-    sans: "'AG Caps', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
-    display: "'AG Caps', 'Space Grotesk Variable', ui-sans-serif, sans-serif",
+    sans: "'Familjen Grotesk', ui-sans-serif, sans-serif",
+    display: "'Familjen Grotesk', ui-sans-serif, sans-serif",
   },
   {
     id: 'system',
@@ -92,7 +92,7 @@ export function applySkin(name: SkinName): void {
 
 const THEME_KEY = 'arena.theme';
 const MODE_KEY = 'arena.mode';
-// v9 retains only Courier and Space Grotesk; retired packs use the device default.
+// v9 retains Courier and Familjen Grotesk; retired packs use the device default.
 const FONT_KEY = 'arena.font.v9';
 const LEGACY_FONT_KEYS = ['arena.font.v8', 'arena.font.v7', 'arena.font.v6', 'arena.font.v5', 'arena.font.v4'];
 const MASCOT_KEY = 'arena.mascot';

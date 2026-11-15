@@ -24,7 +24,7 @@ for (const mobile of [false, true]) {
   prefs.applyFont(prefs.currentFont(), false);
   assert.equal(document.documentElement.dataset.font, expected);
   for (const property of ['--font-sans', '--font-display']) {
-    assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'AG Caps', 'Space Grotesk Variable'/ : /^'Courier Std'/);
+    assert.match(document.documentElement.style.getPropertyValue(property), mobile ? /^'Familjen Grotesk'/ : /^'Courier Std'/);
   }
   assert.equal(window.localStorage.getItem('arena.font.v9'), null, 'boot must not persist a default');
   window.localStorage.setItem('arena.font.v7', 'unknown');
@@ -41,7 +41,7 @@ for (const mobile of [false, true]) {
 {
   const dom = browser(true);
   window.localStorage.setItem('arena.font.v7', 'dm-sans');
-  assert.equal(prefs.currentFont(), 'grotesk', 'the old mobile DM Sans default must migrate to Space Grotesk');
+  assert.equal(prefs.currentFont(), 'grotesk', 'the old mobile DM Sans default must migrate to Familjen Grotesk');
   dom.window.close();
 }
 
