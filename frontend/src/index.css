@@ -3973,6 +3973,11 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   background: linear-gradient(160deg, #111427, #1b1733 55%, #07080f);
 }
+.profile-rank-diamond::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: linear-gradient(118deg, transparent 38%, #ffffff26 47%, transparent 56%);
+}
 .profile-rank-diamond > span { position: relative; line-height: 1; font-family: 'Courier Std', Courier, monospace; font-weight: 900; font-style: italic; }
 .profile-rank-diamond__word { font-size: .56rem; letter-spacing: .14em; color: var(--rank-metal); }
 .profile-rank-diamond__numeral { margin-top: 3px; font-size: .92rem; letter-spacing: .04em; color: #fff4ba; }
