@@ -8,26 +8,31 @@
  * Strategy
  * - Page loads (navigations): network first, but give up after a few seconds
  *   and serve the saved shell, so a weak 3G signal never means a white screen.
- * - /assets/* (hashed Vite output, never changes under the same name): cache
- *   first. Chunks are saved the first time any screen downloads them.
+ * - /assets/* (hashed Vite output): every chunk of this build is saved when the
+ *   app is first installed, so opening any screen is instant and only live data
+ *   comes from the network. Any chunk missed is cached on first use.
  * - Icons, fonts, the manifest: cache, refreshed in the background.
  * - Never touched: /api, /ws, /live (always live data) and /music (large audio
  *   streamed with Range requests).
  *
- * Bump VERSION to drop every old cache on the next visit.
+ * The build stamps BUILD and APP_ASSETS into this file (see vite.config.ts), so
+ * every deploy installs a fresh worker and the previous build's caches are
+ * deleted as soon as the new one takes over.
  */
-const VERSION = 'v44';
+const BUILD = '__SW_BUILD__';
 /* Registered as /sw.js?mode=dev by the Vite dev server (start-arena): it only
    makes the app installable and gives an offline fallback page; it never
    caches dev modules, so hot reload behaves exactly as before. */
 const DEV = new URL(self.location.href).searchParams.get('mode') === 'dev';
-const SHELL = `arena-shell-${VERSION}`;
-const ASSETS = `arena-assets-${VERSION}`;
-const STATIC = `arena-static-${VERSION}`;
+/* Every chunk this build ships (filled in at build time; empty in dev). */
+const BUILD_ASSETS = '__SW_ASSETS__';
+const APP_ASSETS = Array.isArray(BUILD_ASSETS) ? BUILD_ASSETS : [];
+const SHELL = `arena-shell-${BUILD}`;
+const ASSETS = `arena-assets-${BUILD}`;
+const STATIC = `arena-static-${BUILD}`;
 const KEEP = [SHELL, ASSETS, STATIC];
 const SHELL_URL = '/index.html';
 const NAV_TIMEOUT_MS = 4000;
-const MAX_ASSETS = 160;
 /* Vite marks module scripts `crossorigin`, so the page sends an Origin header
    while our precache did not; servers answer with `Vary: Origin`, which would
    make every lookup miss offline. Hashed files are identical either way. */
@@ -58,6 +63,19 @@ function assetsIn(html) {
   return [...found];
 }
 
+/** Fetch with a small concurrency limit so a first visit does not open 80 connections at once. */
+async function pool(items, size, work) {
+  let next = 0;
+  const lanes = Array.from({length: Math.min(size, items.length)}, async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await work(item);
+    }
+  });
+  await Promise.all(lanes);
+}
+
 async function precacheShell() {
   const response = await fetch('/', {cache: 'no-store'});
   if (!response.ok) return;
@@ -65,7 +83,8 @@ async function precacheShell() {
   const shell = await caches.open(SHELL);
   await shell.put(SHELL_URL, response);
   const assets = await caches.open(ASSETS);
-  await Promise.all(assetsIn(html).map((url) => assets.add(url).catch(() => undefined)));
+  const wanted = [...new Set([...assetsIn(html), ...APP_ASSETS])];
+  await pool(wanted, 6, (url) => assets.match(url, MATCH).then((hit) => hit || assets.add(url).catch(() => undefined)));
   const statics = await caches.open(STATIC);
   await Promise.all(STATIC_PRECACHE.map((url) => statics.add(url).catch(() => undefined)));
 }
@@ -84,13 +103,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-/** Keep the asset cache bounded (old deploys' chunks fall out first). */
-async function trimAssets() {
-  const cache = await caches.open(ASSETS);
-  const keys = await cache.keys();
-  const extra = keys.length - MAX_ASSETS;
-  for (let i = 0; i < extra; i += 1) await cache.delete(keys[i]);
-}
 
 async function handleNavigation(request) {
   const shell = await caches.open(SHELL);
@@ -123,7 +135,6 @@ async function handleAsset(request) {
   const response = await fetch(request);
   if (response.ok) {
     await cache.put(request, response.clone());
-    trimAssets().catch(() => undefined);
   }
   return response;
 }

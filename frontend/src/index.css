@@ -3981,6 +3981,20 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-diamond > span { position: relative; line-height: 1; font-family: 'Courier Std', Courier, monospace; font-weight: 900; font-style: italic; }
 .profile-rank-diamond__word { font-size: .56rem; letter-spacing: .14em; color: var(--rank-metal); }
 .profile-rank-diamond__numeral { margin-top: 3px; font-size: .92rem; letter-spacing: .04em; color: #fff4ba; }
+/* Premium finish: a faceted metal bezel, a lit inner face and a glowing numeral. */
+.profile-rank-diamond {
+  width: 96px; height: 64px;
+  background: linear-gradient(160deg, #fffbe0 0%, var(--rank-metal) 26%, color-mix(in srgb, var(--rank-metal) 40%, #2a1a05) 50%, var(--rank-metal) 74%, #fff4ba 100%);
+}
+.profile-rank-diamond::before {
+  inset: 2.5px;
+  background:
+    radial-gradient(ellipse at 50% 16%, color-mix(in srgb, var(--rank-metal) 32%, transparent), transparent 62%),
+    linear-gradient(180deg, #16162d, #07070f 88%);
+}
+.profile-rank-diamond__word { text-shadow: 0 1px 0 #000; }
+.profile-rank-diamond__numeral { text-shadow: 0 0 10px color-mix(in srgb, var(--rank-metal) 70%, transparent), 0 1px 0 #000; }
+
 @media (max-width: 639px) {
   .profile-rank-plate { justify-content: center; }
   .profile-rank-plate .profile-rank-copy,
