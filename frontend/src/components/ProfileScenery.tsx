@@ -17,6 +17,14 @@ export function prestigeFor(level: number) {
   return {name: 'Rookie', color: '#6ee7b7'};
 }
 
+/** "Gold III" → ["GOLD", "III"]; a label without a numeral keeps the word alone. */
+function tierWords(tier: Tier): [string, string] {
+  const words = tierLabel(tier).trim().split(/\s+/);
+  const last = words[words.length - 1] ?? '';
+  const numeral = words.length > 1 && /^[IVX]+$/.test(last) ? last : '';
+  return [(numeral ? words.slice(0, -1) : words).join(' ').toUpperCase(), numeral];
+}
+
 export function OverallRankPlate({tier, level, playerName, founderNumber}: {
   tier: Tier;
   level: number;
@@ -24,12 +32,17 @@ export function OverallRankPlate({tier, level, playerName, founderNumber}: {
   founderNumber?: number | null;
 }) {
   const founder = typeof founderNumber === 'number' && founderNumber >= 1 && founderNumber <= 100;
+  const [word, numeral] = tierWords(tier);
   return (
     <div className="profile-rank-plate" data-tier={tier} style={{'--rank-metal': TIER_PALETTES[tier]?.bright ?? TIER_PALETTES.bronze.bright} as CSSProperties}>
       <RankCrest tier={tier} playerName={playerName} founderNumber={founderNumber} />
+      {/* The tier sits beside the badge as a diamond set into the plate. */}
+      <span className="profile-rank-diamond" aria-label={tierLabel(tier)}>
+        <span className="profile-rank-diamond__word">{word}</span>
+        {numeral && <span className="profile-rank-diamond__numeral">{numeral}</span>}
+      </span>
       <div className="profile-rank-copy min-w-0 flex-1">
         <p className="profile-rank-eyebrow">{founder ? `Founder's 100 · #${String(founderNumber).padStart(3, '0')}` : 'Overall rank'}</p>
-        <p className="profile-rank-name">{tierLabel(tier)}</p>
         {!founder && <p className="profile-rank-subtitle">{`Lifetime progression · ${prestigeFor(level).name}`}</p>}
       </div>
       <span className="profile-rank-level"><small>LEVEL</small><strong>{level}</strong></span>

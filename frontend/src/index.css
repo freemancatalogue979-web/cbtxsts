@@ -3961,7 +3961,21 @@ button.wallet-pill:hover { border-color: rgb(250 204 21 / 0.4); }
 .profile-rank-plate { gap: 8px; padding: 8px 12px 8px 4px; min-height: 104px; border-radius: 18px; border-color: color-mix(in srgb, var(--rank-metal) 65%, transparent); background: radial-gradient(ellipse at 20% 0, color-mix(in srgb, var(--rank-metal) 15%, transparent), transparent 70%), linear-gradient(115deg, #141a30, #0b1021); color: #f3f5fd; box-shadow: inset 0 1px #ffffff35, inset 0 -3px #0007, 0 12px 22px -17px #000a; }
 .profile-rank-plate::before { content: ''; position: absolute; inset: 5px; border: 1px solid color-mix(in srgb, var(--rank-metal) 22%, transparent); border-radius: 13px; pointer-events: none; }
 .profile-rank-plate::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 30%, #ffffff06 44%, transparent 45%); }
-/* Phones show only the carved rank crest; the words and level stay on desktop. */
+/* The tier is a diamond set into the plate beside the badge. */
+.profile-rank-diamond {
+  position: relative; flex: 0 0 auto; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 92px; height: 60px; color: var(--rank-metal);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: linear-gradient(135deg, #fff4ba, var(--rank-metal) 38%, #81531b 68%, #fff4ba);
+}
+.profile-rank-diamond::before {
+  content: ''; position: absolute; inset: 3px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: linear-gradient(160deg, #111427, #1b1733 55%, #07080f);
+}
+.profile-rank-diamond > span { position: relative; line-height: 1; font-family: 'Courier Std', Courier, monospace; font-weight: 900; font-style: italic; }
+.profile-rank-diamond__word { font-size: .56rem; letter-spacing: .14em; color: var(--rank-metal); }
+.profile-rank-diamond__numeral { margin-top: 3px; font-size: .92rem; letter-spacing: .04em; color: #fff4ba; }
 @media (max-width: 639px) {
   .profile-rank-plate { justify-content: center; }
   .profile-rank-plate .profile-rank-copy,

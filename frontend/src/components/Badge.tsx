@@ -20,7 +20,7 @@ import {useId, type CSSProperties} from 'react';
 import {Award, Crown, Flame, Gem, Medal, Shield, Sparkles, Star, Sun, Trophy, Zap} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
 import type {BaseTier, PeakTier, Tier} from '../lib/tiers';
-import {TIER_ORDER, TIER_PALETTES, tierDivision, tierFamily, tierLabel} from '../lib/tiers';
+import {TIER_ORDER, TIER_PALETTES, tierDivision, tierFamily} from '../lib/tiers';
 
 /** The glyphs a badge can carry. Mapped to lucide icons. */
 export type BadgeGlyph =
@@ -93,6 +93,18 @@ export function tierRank(tier: Tier | string): number {
 }
 
 /** Each metal family has its own readable centre emblem. */
+const TIER_ICONS: Record<BaseTier | PeakTier, LucideIcon> = {
+  bronze: Shield,
+  silver: Star,
+  gold: Trophy,
+  platinum: Gem,
+  diamond: Sparkles,
+  obsidian: Flame,
+  mythril: Zap,
+  aurora: Sun,
+  genesis: Crown,
+  absolute_genesis: Crown,
+};
 
 /* ------------------------------------------------------------------ colour */
 
@@ -547,15 +559,6 @@ export function AbsoluteGenesisCrown({className = '', founderNumber}: {
 }
 
 /** Premium metalwork contained within the crown, shield and folded ribbon. */
-/** "Gold III" → ["GOLD", "III"]; a label without a numeral carves the word alone. */
-function carvedTierLabel(tier: Tier): [string, string] {
-  const words = tierLabel(tier).trim().split(/\s+/);
-  const last = words[words.length - 1] ?? '';
-  const numeral = words.length > 1 && /^[IVX]+$/.test(last) ? last : '';
-  const word = (numeral ? words.slice(0, -1) : words).join(' ').toUpperCase();
-  return [word, numeral];
-}
-
 export function HeraldicCrest({tier, className = '', playerName, founderNumber}: {
   tier: Tier;
   className?: string;
@@ -568,7 +571,7 @@ export function HeraldicCrest({tier, className = '', playerName, founderNumber}:
   if (family === 'absolute_genesis') {
     return <AbsoluteGenesisCrown className={className} playerName={playerName} founderNumber={founderNumber} />;
   }
-  const [carvedWord, carvedNumeral] = carvedTierLabel(tier);
+  const Icon = TIER_ICONS[family];
   const stars = tierDivision(tier);
   const genesis = family === 'genesis';
   const accent = metal.accent ?? metal.light;
@@ -638,19 +641,7 @@ export function HeraldicCrest({tier, className = '', playerName, founderNumber}:
       <path d="m60 53 14 5 6 15-6 14-14 6-14-6-6-14 6-15Z" fill={`url(#${uid}-core)`} stroke={metal.light} strokeOpacity=".72" strokeWidth=".9" />
       <path d="m60 53 14 5-14 7-14-7ZM40 73l6-15 6 15-6 14ZM80 73l-6-15-6 15 6 14ZM60 93l-14-6 14-6 14 6Z" fill={metal.bright} opacity=".16" />
       <path d="M46 59 60 54l14 5" fill="none" stroke="#fff" strokeOpacity=".6" strokeWidth="1" />
-      {/* The tier is cut into the shield itself: a dark recess, lit lower lip and a shadowed upper wall. */}
-      <g fontFamily="'Courier Std', Courier, monospace" fontWeight="900" textAnchor="middle" filter={`url(#${uid}-relief)`}>
-        <text x="60" y={carvedNumeral ? 70 : 78} fontSize="10" letterSpacing=".6" textLength={carvedNumeral ? 36 : 40} lengthAdjust="spacingAndGlyphs" fill={metal.light} opacity=".6" transform="translate(0 1)">{carvedWord}</text>
-        <text x="60" y={carvedNumeral ? 70 : 78} fontSize="10" letterSpacing=".6" textLength={carvedNumeral ? 36 : 40} lengthAdjust="spacingAndGlyphs" fill={metal.deep} transform="translate(0 -.7)">{carvedWord}</text>
-        <text x="60" y={carvedNumeral ? 70 : 78} fontSize="10" letterSpacing=".6" textLength={carvedNumeral ? 36 : 40} lengthAdjust="spacingAndGlyphs" fill="#07070f">{carvedWord}</text>
-        {carvedNumeral && (
-          <>
-            <text x="60" y="92" fontSize="20" letterSpacing="1" textLength="30" lengthAdjust="spacingAndGlyphs" fill={metal.light} opacity=".6" transform="translate(0 1)">{carvedNumeral}</text>
-            <text x="60" y="92" fontSize="20" letterSpacing="1" textLength="30" lengthAdjust="spacingAndGlyphs" fill={metal.deep} transform="translate(0 -.9)">{carvedNumeral}</text>
-            <text x="60" y="92" fontSize="20" letterSpacing="1" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#07070f">{carvedNumeral}</text>
-          </>
-        )}
-      </g>
+      <Icon x="47" y="60" width="26" height="26" color={metal.light} strokeWidth={1.75} filter={`url(#${uid}-relief)`} />
       <path d="m60 45 2.2 3.4L60 51l-2.2-2.6Z" fill={accent} />
 
       {/* Folded, engraved rank ribbon with raised division stars. */}
