@@ -295,7 +295,10 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
     const scrim = scrims.find((s) => s.id === scrimIdParam) ?? null;
     const tmatch = tQueue.find((m) => m.id === tmatchParam) ?? null;
     const draftSource = scrim?.games?.length ? [...scrim.games].reverse().find((g) => g.draft?.our_picks)?.draft
-      : tmatch?.draft?.our_picks ? tmatch.draft as Review["draft"] : undefined;
+      : tmatch?.games?.length
+        // Series: review the last game we lost, else the last game with a draft.
+        ? ([...tmatch.games].reverse().find((g) => g.result === "LOSS") ?? tmatch.games[tmatch.games.length - 1]).draft as Review["draft"]
+        : tmatch?.draft?.our_picks ? tmatch.draft as Review["draft"] : undefined;
     return (
       <div className="max-w-3xl">
         <button className="label !text-crim mb-4 block" onClick={() => navigate("reviews")}>← All reviews</button>

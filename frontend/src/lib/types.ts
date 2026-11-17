@@ -56,6 +56,12 @@ export interface Attachment {
   kind?: string;
 }
 
+export interface TournamentGameDraft {
+  game_no: number;
+  result: "WIN" | "LOSS" | "";
+  draft: Draft;
+}
+
 export interface TournamentMatchT {
   id: number;
   match_no: number;
@@ -71,6 +77,11 @@ export interface TournamentMatchT {
   notes: string;
   draft: { our_bans?: (string | null)[]; enemy_bans?: (string | null)[];
     our_picks?: Record<string, string>; enemy_picks?: Record<string, string> };
+  /** One draft per game of the series (game 1, 2, 3…), sorted by game number. */
+  games?: TournamentGameDraft[];
+  /** Draft slots this match offers: one per game in the score (min 1), capped by the format. */
+  game_slots?: number;
+  max_games?: number;
   attachments: { kind: string; label: string; url: string }[];
   review_queued: boolean;
   has_review: boolean;

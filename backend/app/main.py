@@ -72,6 +72,7 @@ def startup() -> None:
         for stmt in (
             "ALTER TABLE intel_links ADD COLUMN level INTEGER",
             "ALTER TABLE intel_links ADD COLUMN rank_level INTEGER",
+            "ALTER TABLE tournament_matches ADD COLUMN game_drafts TEXT DEFAULT '[]'",
         ):
             try:
                 conn.exec_driver_sql(stmt)

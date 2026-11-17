@@ -135,6 +135,7 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   postStream: <T>(path: string, body: unknown, onStage: (stage: string) => void) => postStream<T>(path, body, onStage),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
+  put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
   upload: <T>(path: string, form: FormData) => uploadForm<T>(path, form),
 };

@@ -1,7 +1,7 @@
 import { ClipboardList, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { DraftPlan, Hero, Meta, Tournament, TournamentMatchT, User } from "../lib/types";
+import type { Draft, Hero, Meta, Tournament, TournamentGameDraft, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
@@ -206,38 +206,119 @@ const blankTDraft = () => ({
   our_picks: {} as Record<string, string>, enemy_picks: {} as Record<string, string>,
 });
 
-function DraftForm({ tournament, match, heroes, onSaved, onClose }: {
-  tournament: Tournament; match: TournamentMatchT; heroes: Hero[]; onSaved: () => void; onClose: () => void;
+/** Saved per-game drafts (falls back to the old single draft as game 1). */
+export function seriesGames(m: TournamentMatchT): TournamentGameDraft[] {
+  if (m.games) return m.games;
+  return hasDraft(m.draft) ? [{ game_no: 1, result: "", draft: m.draft }] : [];
+}
+
+function hasDraft(d?: Draft | null): boolean {
+  return Boolean(d && ((d.our_bans ?? []).some(Boolean) || (d.enemy_bans ?? []).some(Boolean)
+    || Object.values(d.our_picks ?? {}).some(Boolean) || Object.values(d.enemy_picks ?? {}).some(Boolean)));
+}
+
+/** Game numbers to offer: one per game in the score (BO3 2–0 → 1,2 · 2–1 → 1,2,3). */
+function slotNumbers(m: TournamentMatchT): number[] {
+  const played = m.score_us + m.score_them;
+  const fallback = Math.min(Math.max(played, 1), m.max_games ?? 7);
+  const saved = Math.max(0, ...seriesGames(m).map((g) => g.game_no));
+  const n = Math.max(m.game_slots ?? fallback, saved);
+  return Array.from({ length: n }, (_, i) => i + 1);
+}
+
+/** Pre-fill a game's result when the score makes it certain (2–0 → all wins, 0–2 → all losses). */
+function impliedResult(m: TournamentMatchT): "WIN" | "LOSS" | "" {
+  if (m.status !== "played") return "";
+  if (m.score_us > 0 && m.score_them === 0) return "WIN";
+  if (m.score_them > 0 && m.score_us === 0) return "LOSS";
+  return "";
+}
+
+function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
+  tournament: Tournament; match: TournamentMatchT; gameNo: number; heroes: Hero[]; onSaved: () => void; onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(() => ({ ...blankTDraft(), ...(match.draft?.our_bans ? match.draft : {}) }));
+  const existing = seriesGames(match).find((g) => g.game_no === gameNo);
+  const [draft, setDraft] = useState(() => ({ ...blankTDraft(), ...(existing?.draft ?? {}) }));
+  const [result, setResult] = useState<"WIN" | "LOSS" | "">(existing?.result || impliedResult(match));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const total = slotNumbers(match).length;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
-      await api.patch(`/tournaments/matches/${match.id}`, { draft });
+      await api.put(`/tournaments/matches/${match.id}/games/${gameNo}`, { draft, result });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
     } finally { setBusy(false); }
   }
 
+  async function clear() {
+    if (!confirm(`Clear the game ${gameNo} draft vs ${match.opponent}?`)) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.del(`/tournaments/matches/${match.id}/games/${gameNo}`);
+      onSaved();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Clear failed");
+    } finally { setBusy(false); }
+  }
+
   return (
-    <Modal title={`Draft — vs ${match.opponent} (${tournament.name})`} onClose={onClose} wide>
+    <Modal title={`Game ${gameNo}${total > 1 ? ` of ${total}` : ""} draft — vs ${match.opponent} (${tournament.name})`} onClose={onClose} wide>
       <form onSubmit={save} className="space-y-5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="label">Game {gameNo} result</span>
+          {(["WIN", "LOSS", ""] as const).map((r) => (
+            <button key={r || "none"} type="button" aria-pressed={result === r} onClick={() => setResult(r)}
+              className={`chip !py-1 ${result === r
+                ? r === "WIN" ? "text-leaf border-leaf/60 bg-leaf/10" : r === "LOSS" ? "text-danger border-danger/60 bg-danger/10" : "text-text border-edge-2 bg-raised"
+                : "text-faint border-edge"}`}>
+              {r === "WIN" ? "Win" : r === "LOSS" ? "Loss" : "Not set"}
+            </button>
+          ))}
+        </div>
         <div className="card p-5">
           <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)}
             theirsLabel={(match.opponent || "Enemy")} />
         </div>
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
+          {existing && <button type="button" className="btn-ghost !text-danger mr-auto" disabled={busy} onClick={clear}><Trash2 size={13} /> Clear game {gameNo}</button>}
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy}>Save draft</button>
+          <button className="btn-primary" disabled={busy}>Save game {gameNo} draft</button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Read-only series view: one tab per saved game draft. */
+function SeriesDrafts({ match }: { match: TournamentMatchT }) {
+  const games = seriesGames(match);
+  const [active, setActive] = useState(games[0]?.game_no ?? 1);
+  const game = games.find((g) => g.game_no === active) ?? games[0];
+  if (!game) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      {games.length > 1 && (
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={`Drafts vs ${match.opponent}`}>
+          {games.map((g) => (
+            <button key={g.game_no} role="tab" aria-selected={g.game_no === game.game_no} onClick={() => setActive(g.game_no)}
+              className={`chip !py-1 ${g.game_no === game.game_no ? "text-sky border-sky/60 bg-sky/10" : "text-mute border-edge"}`}>
+              Game {g.game_no}
+              {g.result && <span className={g.result === "WIN" ? "text-leaf" : "text-danger"}> · {g.result === "WIN" ? "W" : "L"}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="text-[11px] text-faint">
+        Game {game.game_no}{game.result ? ` · ${game.result === "WIN" ? "Win" : "Loss"}` : ""}
+      </div>
+      <DraftBoard draft={game.draft} theirsLabel={(match.opponent || "Enemy")} />
+    </div>
   );
 }
 
@@ -297,7 +378,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
   const [showMatch, setShowMatch] = useState(false);
   const [editMatch, setEditMatch] = useState<null | TournamentMatchT>(null);
   const [showResult, setShowResult] = useState<null | TournamentMatchT>(null);
-  const [showDraft, setShowDraft] = useState<null | TournamentMatchT>(null);
+  const [showDraft, setShowDraft] = useState<null | { match: TournamentMatchT; game: number }>(null);
   const [showEvidence, setShowEvidence] = useState<null | TournamentMatchT>(null);
   const [draftOpen, setDraftOpen] = useState<number | null>(null);
 
@@ -446,9 +527,17 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                           {m.status === "played" ? "Edit result" : "Record result"}
                         </button>
                         <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setEditMatch(m)}>Edit match</button>
-                        <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setShowDraft(m)}>
-                          {(m.draft?.our_picks && Object.values(m.draft.our_picks).some(Boolean)) || (m.draft?.our_bans ?? []).some(Boolean) ? "Edit draft" : "+ Draft"}
-                        </button>
+                        {slotNumbers(m).map((no) => {
+                          const saved = seriesGames(m).some((g) => g.game_no === no);
+                          const many = slotNumbers(m).length > 1;
+                          return (
+                            <button key={no} className={`btn-ghost !py-1 !px-2.5 !text-[11px] ${saved ? "!text-sky" : ""}`}
+                              onClick={() => setShowDraft({ match: m, game: no })}
+                              title={saved ? `Edit the game ${no} draft` : `Add the game ${no} draft`}>
+                              {saved ? `Edit ${many ? `G${no} ` : ""}draft` : many ? `+ G${no} draft` : "+ Draft"}
+                            </button>
+                          );
+                        })}
                         <button className="btn-ghost !py-1 !px-2.5 !text-[11px]" onClick={() => setShowEvidence(m)}>
                           Evidence ({m.attachments.length})
                         </button>
@@ -464,15 +553,16 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                     )}
 
                     {/* draft display */}
-                    {((m.draft?.our_picks && Object.values(m.draft.our_picks).some(Boolean)) || (m.draft?.our_bans ?? []).some(Boolean)) && (
+                    {seriesGames(m).length > 0 && (
                       <div className="mt-2.5">
                         <button className="label !text-sky" onClick={() => setDraftOpen(draftOpen === m.id ? null : m.id)}>
-                          {draftOpen === m.id ? "Hide draft ▲" : "Show draft ▼"}
+                          {(() => {
+                            const n = seriesGames(m).length;
+                            const what = n > 1 ? `${n} drafts` : "draft";
+                            return draftOpen === m.id ? `Hide ${what} ▲` : `Show ${what} ▼`;
+                          })()}
                         </button>
-                        {draftOpen === m.id && (
-                          <div className="mt-2"><DraftBoard draft={m.draft as DraftPlan["draft"]} theirsLabel={(m.opponent || "Enemy")}
-                            {...(m.status === "played" ? { scoreUS: m.score_us, scoreThem: m.score_them } : {})} /></div>
-                        )}
+                        {draftOpen === m.id && <SeriesDrafts key={`${m.id}-${seriesGames(m).length}`} match={m} />}
                       </div>
                     )}
                   </div>
@@ -495,7 +585,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
         {showMatch && <AddMatchForm tournament={t} onClose={() => setShowMatch(false)} onSaved={() => { setShowMatch(false); load(); }} />}
         {editMatch && <AddMatchForm tournament={t} initial={editMatch} onClose={() => setEditMatch(null)} onSaved={() => { setEditMatch(null); load(); }} />}
         {showResult && <ResultForm match={showResult} onClose={() => setShowResult(null)} onSaved={() => { setShowResult(null); load(); }} />}
-        {showDraft && <DraftForm tournament={t} match={showDraft} heroes={heroes} onClose={() => setShowDraft(null)} onSaved={() => { setShowDraft(null); load(); }} />}
+        {showDraft && <DraftForm key={`${showDraft.match.id}-${showDraft.game}`} tournament={t} match={showDraft.match} gameNo={showDraft.game} heroes={heroes}
+          onClose={() => setShowDraft(null)} onSaved={() => { setDraftOpen(showDraft.match.id); setShowDraft(null); load(); }} />}
         {showEvidence && <EvidenceForm match={showEvidence} onClose={() => setShowEvidence(null)} onSaved={() => { setShowEvidence(null); load(); }} />}
       </div>
     );

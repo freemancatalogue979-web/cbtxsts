@@ -318,7 +318,9 @@ class TournamentMatch(Base):
     score_us: Mapped[int] = mapped_column(Integer, default=0)
     score_them: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
-    draft: Mapped[str] = mapped_column(Text, default="{}")  # JSON bans/picks
+    draft: Mapped[str] = mapped_column(Text, default="{}")  # legacy single draft (read as game 1)
+    # JSON [{game_no, result: WIN|LOSS|"", draft: {bans/picks}}] — one draft per game in the series
+    game_drafts: Mapped[str] = mapped_column(Text, default="[]")
     attachments: Mapped[str] = mapped_column(Text, default="[]")  # JSON evidence [{kind,label,url}]
     review_queued: Mapped[bool] = mapped_column(Boolean, default=False)  # enters review flow
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
