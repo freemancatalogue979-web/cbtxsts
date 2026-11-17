@@ -28,6 +28,7 @@ class AISettings(Base):
     share_profile: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     share_pool: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     share_scrims: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    share_games: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # own solo games
     use_history: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     coaching_goal: Mapped[str] = mapped_column(String(600), default="", nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)

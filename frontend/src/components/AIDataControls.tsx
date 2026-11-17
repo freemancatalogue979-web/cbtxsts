@@ -94,6 +94,9 @@ export function AIDataControls({ settings, context, onChange, onClearAttachments
         <Toggle label="Scrim assignments" checked={settings.share_scrims} disabled={busy || notesBusy || learningBusy}
           description="Up to 5 recent scrims where you’re listed in the lineup or substitutes. Notes, drafts and other players’ records are excluded."
           onChange={() => save({ share_scrims: !settings.share_scrims })} />
+        <Toggle label="My solo games" checked={!!settings.share_games} disabled={busy || notesBusy || learningBusy}
+          description="A summary of the ranked/classic games you added in Utility AI — win rates, KDA and rating per hero, your recent form and the latest 12 games. Notes and source files are excluded."
+          onChange={() => save({ share_games: !settings.share_games })} />
         <Toggle label="Recent conversation history" checked={settings.use_history} disabled={busy || notesBusy || learningBusy}
           description="Include up to 8 recent messages (6,500 characters) from this chat. Turning it off does not delete stored conversations."
           onChange={() => save({ use_history: !settings.use_history })} />

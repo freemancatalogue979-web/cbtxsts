@@ -310,6 +310,7 @@ class CloverAITests(unittest.TestCase):
                     "share_account_stats": False,
                     "share_pool": False,
                     "share_scrims": False,
+                    "share_games": False,
                     "use_history": False,
                     "coaching_goal": "",
                 },

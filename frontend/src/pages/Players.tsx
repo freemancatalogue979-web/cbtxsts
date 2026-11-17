@@ -34,6 +34,11 @@ function PoolPlayedLine({ played, alert }: { played: PoolPlayed; alert?: FocusAl
       {(where || played.kda != null) && (
         <div className="text-[9.5px] text-faint mt-0.5">{where}{played.kda != null ? `${where ? " · " : ""}KDA ${kdaText(played.kda)}` : ""}</div>
       )}
+      {played.solo && played.solo.games > 0 && (
+        <div className="text-[9.5px] text-mute mt-0.5 tabular-nums" title="Your own ranked/classic games (only you and staff see these)">
+          + {played.solo.games} solo {played.solo.games === 1 ? "game" : "games"} · <span className="text-leaf">{played.solo.wins}W</span>–<span className="text-danger">{played.solo.losses}L</span>{played.solo.win_rate != null ? ` · ${played.solo.win_rate}%` : ""}
+        </div>
+      )}
       {flag && <div className={`text-[10px] font-bold mt-1 ${flag.tone === "bad" ? "text-danger" : "text-amber"}`}>{flag.title}</div>}
     </div>
   );

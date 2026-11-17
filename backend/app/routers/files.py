@@ -22,7 +22,8 @@ EXT_KIND = {
     "png": "image", "jpg": "image", "jpeg": "image", "webp": "image", "gif": "image",
     "mp4": "video", "webm": "video", "mov": "video",
     "pdf": "pdf",
-    "txt": "file", "md": "file", "csv": "file", "zip": "file",
+    "txt": "file", "md": "file", "csv": "file", "tsv": "file", "json": "file", "zip": "file",
+    "xlsx": "file", "docx": "file",
 }
 
 
@@ -30,7 +31,7 @@ def _safe_name(filename: str) -> tuple[str, str]:
     ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
     if ext not in EXT_KIND:
         raise HTTPException(status_code=422,
-            detail="File type not allowed — use images, video, PDF, text or zip")
+            detail="File type not allowed — use images, video, PDF, Word, Excel, CSV, text or zip")
     return secrets.token_hex(10) + "." + ext, ext
 
 

@@ -1,6 +1,6 @@
 import {
   AlertTriangle, ArrowRight, Bell, BrainCircuit, CalendarDays, ClipboardList, Clock, Coins, Crosshair, Crown,
-  Flame, Layers, Swords, Target, Timer, Trophy, Turtle,
+  Flame, Layers, Swords, Target, Timer, Trophy, Turtle, Upload,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
@@ -166,7 +166,10 @@ function MyForm({ form }: { form: NonNullable<Dashboard["my_form"]> }) {
   );
   return (
     <section className="card p-4 sm:p-5 space-y-4" aria-label="My form">
-      <SectionTitle right={<button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("players", form.user_id)}>My profile <ArrowRight size={13} aria-hidden="true" /></button>}>
+      <SectionTitle right={<span className="flex flex-wrap gap-1.5">
+        <button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("ai", "utility")}><Upload size={13} aria-hidden="true" /> Add my games</button>
+        <button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("players", form.user_id)}>My profile <ArrowRight size={13} aria-hidden="true" /></button>
+      </span>}>
         My form
       </SectionTitle>
       <div className="grid gap-4 lg:grid-cols-5">
@@ -196,6 +199,19 @@ function MyForm({ form }: { form: NonNullable<Dashboard["my_form"]> }) {
                 ))}
               </ul>
             </div>
+          )}
+          {form.solo && form.solo.games > 0 && (
+            <button type="button" onClick={() => navigate("ai", "learning")} aria-label="My solo games: open Learning utility"
+              className="w-full text-left rounded-lg border border-leaf/30 bg-leaf/5 px-3 py-2 hover:border-leaf/60 transition">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="label">My solo games</span>
+                <FormDots form={form.solo.form} label="My recent solo games" />
+              </div>
+              <div className="text-[11.5px] text-mute tabular-nums mt-0.5">
+                <b className="text-text">{form.solo.games}</b> games · {form.solo.wins}W – {form.solo.losses}L · {pct(form.solo.win_rate)}{form.solo.kda != null ? ` · KDA ${kdaText(form.solo.kda)}` : ""}
+              </div>
+              {form.solo.alert && <div className={`text-[10.5px] font-bold mt-1 ${form.solo.alert.tone === "bad" ? "text-danger" : "text-amber"}`}>{form.solo.alert.title}</div>}
+            </button>
           )}
         </div>
         <div className="lg:col-span-3 min-w-0">

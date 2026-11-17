@@ -12,6 +12,7 @@ from .routers import (
     admin,
     ai_tools,
     archive,
+    solo_games,
     clover_ai,
     auth,
     bans,
@@ -85,7 +86,8 @@ app.add_middleware(TrashReceipt)
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
-               programs, files, tournaments, intel, items, archive, esports, clover_ai, trash, ai_tools):
+               programs, files, tournaments, intel, items, archive, esports, clover_ai, trash, ai_tools,
+               solo_games):
     api.include_router(module.router)
 app.include_router(api)
 
@@ -107,6 +109,7 @@ def startup() -> None:
             "ALTER TABLE scrim_games ADD COLUMN lineup TEXT DEFAULT '{}'",
             "ALTER TABLE scrim_games ADD COLUMN player_stats TEXT DEFAULT '{}'",
             "ALTER TABLE scrim_games ADD COLUMN enemy_stats TEXT DEFAULT '{}'",
+            "ALTER TABLE clover_ai_settings ADD COLUMN share_games BOOLEAN NOT NULL DEFAULT 0",
         ):
             try:
                 conn.exec_driver_sql(stmt)

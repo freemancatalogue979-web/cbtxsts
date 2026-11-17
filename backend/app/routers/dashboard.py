@@ -19,6 +19,7 @@ from ..models import (
     loads,
 )
 from ..performance import player_performance, squad_focus
+from ..solo_games import solo_stats, user_games
 from ..serializers import activity_out, event_out, scrim_out, settings_out, week_out
 
 STAFF_ROLES = {"admin", "captain", "coach", "analyst"}
@@ -28,10 +29,17 @@ def my_form(db: Session, user) -> dict | None:
     """The signed-in member's games across scrims + tournaments and the heroes to work on."""
     perf = player_performance(db, user.id)
     perf.pop("_heroes_by_key", None)
-    if not perf["overall"]["games"] and not perf["focus"]:
+    solo_rows = user_games(db, user.id)
+    if not perf["overall"]["games"] and not perf["focus"] and not solo_rows:
         return None
+    solo = None
+    if solo_rows:  # the member's own ranked/classic games — kept apart from team numbers
+        stats = solo_stats(solo_rows)
+        solo = {**{k: stats["overall"][k] for k in ("games", "wins", "losses", "win_rate")},
+                "kda": stats["overall"]["kda"]["ratio"] if stats["overall"]["kda"] else None,
+                "form": stats["form"][:5], "alert": next((a for a in stats["alerts"] if a["tone"] != "good"), None)}
     return {"overall": perf["overall"], "scrims": perf["scrims"], "tournaments": perf["tournaments"],
-            "top_heroes": perf["heroes"][:3], "focus": perf["focus"][:4], "user_id": user.id}
+            "top_heroes": perf["heroes"][:3], "focus": perf["focus"][:4], "user_id": user.id, "solo": solo}
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 

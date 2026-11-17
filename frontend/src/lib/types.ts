@@ -358,6 +358,86 @@ export interface PoolPlayed {
   rating?: number | null;
   last_played: string | null;
   form: string[];
+  /** The player's own solo games on this hero — only for the player and staff. */
+  solo?: { games: number; wins: number; losses: number; win_rate: number | null };
+}
+
+/** One of a member's own games (ranked/classic…), from the Utility AI or added by hand. */
+export interface SoloGame {
+  id: number;
+  played_on: string | null;
+  mode: string;
+  hero: string;
+  lane: string;
+  result: "WIN" | "LOSS" | "";
+  duration_min: number | null;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+  rating: number | null;
+  gold: number | null;
+  damage: number | null;
+  damage_taken: number | null;
+  turret_damage: number | null;
+  mvp: boolean;
+  notes: string;
+  source: "manual" | "screenshot" | "document" | "sheet" | string;
+  source_file: string;
+  batch: string;
+  created_at: string | null;
+}
+
+export interface SoloBlock {
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  kda: KdaLine | null;
+  rating: { games: number; avg: number } | null;
+  mvps: number;
+  avg_gold?: number;
+  gold_per_min?: number;
+}
+
+export interface SoloGroup extends SoloBlock { name: string; form: string[]; last_played: string | null; loss_streak: number }
+
+export interface SoloAlert { kind: string; tone: "bad" | "warn" | "good"; title: string; detail: string; hero?: string }
+
+export interface SoloStats {
+  overall: SoloBlock;
+  streak: { result: string; count: number };
+  form: string[];
+  heroes: SoloGroup[];
+  lanes: SoloGroup[];
+  modes: SoloGroup[];
+  trend: { recent: SoloBlock; before: SoloBlock; win_rate: number | null; kda: number | null; rating: number | null; deaths: number | null } | null;
+  alerts: SoloAlert[];
+  last_played: string | null;
+}
+
+export interface SoloGamesPayload { user: { id: number; name: string } | null; games: SoloGame[]; total: number; stats: SoloStats }
+
+export interface SoloCheck { tone: "ok" | "info" | "warn"; text: string }
+
+export interface SoloImport {
+  batch: string | null;
+  file: string;
+  source: string;
+  used_ai: boolean;
+  added: SoloGame[];
+  duplicates: number;
+  checks: SoloCheck[];
+}
+
+export interface SoloCoaching {
+  headline: string;
+  summary: string;
+  strengths: { title: string; detail: string }[];
+  fixes: { title: string; detail: string; drill: string }[];
+  heroes: Record<"keep" | "work_on" | "try", { hero: string; why: string }[]>;
+  next_games: string[];
+  games_used: number;
+  focus: string;
 }
 
 export interface RatingLine { games: number; avg: number | null; mvps: number }
@@ -558,6 +638,8 @@ export interface Dashboard {
     tournaments: PerfSummary;
     top_heroes: HeroPerf[];
     focus: FocusAlert[];
+    /** Own ranked/classic games from Utility AI (separate from team numbers). */
+    solo?: { games: number; wins: number; losses: number; win_rate: number | null; kda: number | null; form: string[]; alert: SoloAlert | null } | null;
   } | null;
   /** Staff: the most urgent hero alert per roster player. */
   squad_focus?: { user_id: number; name: string; alert: FocusAlert; more: number }[];

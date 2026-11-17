@@ -289,6 +289,36 @@ class ScrimGame(Base):
     scrim: Mapped[Scrim] = relationship(back_populates="games")
 
 
+class SoloGame(Base):
+    """A member's own game (ranked/classic/brawl…), added by hand or read by the AI
+    from a screenshot, document or spreadsheet. Counts straight away for that member."""
+    __tablename__ = "solo_games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    played_on: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    mode: Mapped[str] = mapped_column(String(30), default="")  # Ranked|Classic|Brawl|Custom|…
+    hero: Mapped[str] = mapped_column(String(60), default="")
+    lane: Mapped[str] = mapped_column(String(10), default="")
+    result: Mapped[str] = mapped_column(String(8), default="")  # WIN|LOSS
+    duration_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    kills: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deaths: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assists: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    damage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    damage_taken: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    turret_damage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mvp: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[str] = mapped_column(String(400), default="")
+    source: Mapped[str] = mapped_column(String(20), default="manual")  # manual|screenshot|document|sheet
+    source_file: Mapped[str] = mapped_column(String(300), default="")
+    batch: Mapped[str] = mapped_column(String(32), default="", index=True)  # one import, for undo
+    fingerprint: Mapped[str] = mapped_column(String(40), default="", index=True)  # duplicate check
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Tournament(Base):
     """Named competitions (MPL Snapshot Cup): schedule → matches → drafts/results."""
     __tablename__ = "tournaments"

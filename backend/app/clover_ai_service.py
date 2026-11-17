@@ -114,6 +114,7 @@ def settings_for(db: Session, user_id: int) -> AISettings:
         share_profile=False,
         share_pool=False,
         share_scrims=False,
+        share_games=False,
         use_history=True,
         coaching_goal="",
     )
@@ -131,7 +132,7 @@ def account_stats_consent(db: Session, user_id: int) -> bool:
 def settings_dict(item: AISettings, share_account_stats: bool = False) -> dict[str, Any]:
     result = {
         key: getattr(item, key)
-        for key in ("share_profile", "share_pool", "share_scrims", "use_history", "coaching_goal")
+        for key in ("share_profile", "share_pool", "share_scrims", "share_games", "use_history", "coaching_goal")
     }
     result["share_account_stats"] = share_account_stats
     return result
@@ -581,6 +582,16 @@ def build_evidence(
         if games:
             facts["member_team_games"] = games
             sources.append({"kind": "personal", "label": "Your scrim & tournament games", "route": f"players/{user.id}"})
+    if prefs.share_games:
+        from .solo_games import ai_summary, user_games
+        solo = user_games(db, user.id, limit=200)
+        if solo:
+            facts["member_solo_games"] = {
+                **ai_summary(solo),
+                "notice": "The member's own ranked/classic games, uploaded by them (screenshots, files or by hand). "
+                          "Separate from team scrims and tournaments.",
+            }
+            sources.append({"kind": "personal", "label": f"Your {len(solo)} solo {'game' if len(solo) == 1 else 'games'}", "route": "ai"})
     records = team_records_for(db, search, user)
     if records:
         facts["team_records"] = records

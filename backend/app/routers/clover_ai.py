@@ -108,6 +108,7 @@ class SettingsIn(BaseModel):
     share_account_stats: bool | None = None
     share_pool: bool | None = None
     share_scrims: bool | None = None
+    share_games: bool | None = None
     use_history: bool | None = None
     coaching_goal: str | None = Field(default=None, max_length=600)
 
@@ -438,7 +439,7 @@ def clear_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -
         if row is None:
             row = AISettings(user_id=user.id)
             db.add(row)
-        row.share_profile = row.share_pool = row.share_scrims = row.use_history = False
+        row.share_profile = row.share_pool = row.share_scrims = row.share_games = row.use_history = False
         row.coaching_goal = ""
         row.updated_at = utcnow()
         notes = db.query(AIMemoryNote).filter_by(user_id=user.id).all()

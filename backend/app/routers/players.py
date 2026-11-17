@@ -12,8 +12,11 @@ from ..trash import send_to_trash
 from ..models import DevelopmentEntry, Hero, HeroPoolEntry, Scrim, User, dumps, loads
 from ..schemas import DevIn, OptionalDate, PoolIn, PoolPatch
 from ..serializers import dev_out, pool_out, user_out
-from ..performance import player_performance, pool_played
+from ..performance import hero_key, player_performance, pool_played
+from ..solo_games import grouped, user_games
 from .tournaments import player_tournament_stats
+
+SOLO_STAFF = {"admin", "captain", "coach", "analyst"}
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -72,9 +75,16 @@ def player_detail(user_id: int, db: Session = Depends(get_db), user=Depends(get_
     performance = player_performance(db, player.id, pool)
     heroes_by_key = performance.pop("_heroes_by_key")
     pool_by_cat: dict[str, list] = {"comfort": [], "meta": [], "pocket": [], "emergency": []}
+    # Solo games are private to the player and team staff; team numbers stay team-only.
+    solo_by_key: dict[str, dict] = {}
+    if user.id == player.id or user.role in SOLO_STAFF:
+        solo_by_key = {hero_key(h["name"]): h for h in grouped(user_games(db, player.id), lambda g: g.hero)}
     for e in pool:
         row = pool_out(e)
         row["played"] = pool_played(e, heroes_by_key)  # team games: scrims + tournaments
+        solo = solo_by_key.get(hero_key(e.hero.name if e.hero else ""))
+        if solo:
+            row["played"]["solo"] = {k: solo[k] for k in ("games", "wins", "losses", "win_rate")}
         pool_by_cat.setdefault(e.category, []).append(row)
 
     entries = db.scalars(

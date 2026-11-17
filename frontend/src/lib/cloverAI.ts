@@ -16,6 +16,8 @@ export type AISettings = {
   share_account_stats: boolean;
   share_pool: boolean;
   share_scrims: boolean;
+  /** Own solo games (Utility AI uploads) in chat context. */
+  share_games?: boolean;
   use_history: boolean;
   coaching_goal: string;
 };

@@ -141,7 +141,7 @@ export default function App() {
   let page: React.ReactNode;
   switch (section) {
     case "ai":
-      page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} />;
+      page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} view={rest[0]} />;
       break;
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;
