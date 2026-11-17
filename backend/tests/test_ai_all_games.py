@@ -915,8 +915,8 @@ class WholeSeriesChatTests(unittest.TestCase):
         )
         content = sent[0]["messages"][-1]["content"]
         facts = json.loads(
-            content.split("Saved match evidence (JSON):\n", 1)[1].rsplit(
-                "\n\nQuestion:", 1
+            content.split("Match data (JSON):\n", 1)[1].split(
+                "\n\nHero reference (JSON):", 1
             )[0]
         )
         self.assertEqual(

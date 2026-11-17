@@ -775,7 +775,8 @@ class CloverAITests(unittest.TestCase):
             sample = facts["selected_aerena_matches"]
             self.assertLessEqual(len(json.dumps(sample, ensure_ascii=False)), MAX_CONTEXT_CHARS)
             self.assertEqual([m["match_id"] for m in sample["matches"]], ["MATCH-ONE", "MATCH-TWO"])
-            self.assertFalse(sample["matches"][0]["source_verified"])
+            # Match data is treated as verified: no per-match "unverified" flag.
+            self.assertNotIn("source_verified", sample["matches"][0])
             self.assertEqual(sample["matches"][0]["games"][0]["draft_coverage"], "partial")
             self.assertIsNone(sample["matches"][0]["games"][0]["draft"][0]["sequence"])
             self.assertEqual(sample["matches"][1]["games"], [])

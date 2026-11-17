@@ -374,7 +374,8 @@ class PersistenceTests(unittest.TestCase):
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
             fallback = ask_scene(self.db, 10, "What happened?", [detail])
         self.assertEqual(fallback["mode"], "facts")
-        self.assertIn("small source-reported sample", fallback["answer"])
+        self.assertNotIn("source-reported", fallback["answer"])
+        self.assertEqual(fallback["breakdown"]["matches"][0]["match_id"], MATCH_ID)
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-key", "CLOVER_AI_DAILY_LIMIT": "1"}), patch("app.esports_ai.urllib.request.build_opener", return_value=SimpleNamespace(open=open_request)):
             response = ask_scene(self.db, 10, "What happened?", [detail])
             again = ask(self.db, 10, "And why?", detail)
@@ -438,7 +439,12 @@ class PersistenceTests(unittest.TestCase):
             result = ask(self.db, 1, "Why did ONIC win?", detail)
         self.assertEqual(result["mode"], "facts")
         self.assertIn("3–25 kills", result["answer"])
-        self.assertIn("not proof", result["answer"])
+        # Treated as verified: no hedging, and the chips carry the real numbers.
+        self.assertNotIn("not proof", result["answer"])
+        self.assertNotIn("community", result["answer"].lower())
+        game = result["breakdown"]["matches"][0]["games"][0]
+        self.assertEqual(game["winner"], "team2")
+        self.assertEqual([team["kills"] for team in game["teams"]], [3, 25])
         self.assertEqual(self.db.query(AerenaAIUsage).count(), 0)
 
     def test_provider_failure_returns_labelled_local_facts_and_counts_usage(self):
