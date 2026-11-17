@@ -79,7 +79,7 @@ function TrainingBlock({ dash }: { dash: Dashboard }) {
             <div className="label">Training week</div>
             <div className="text-4xl font-extrabold tabular-nums leading-none">{String(week.number).padStart(2, "0")}</div>
             <div className="label mt-3">Current focus</div>
-            <div className="text-lg font-extrabold text-crim leading-snug break-words">{week.focus}</div>
+            <div className="text-lg font-extrabold text-crim leading-snug break-words">{nice(week.focus)}</div>
             <div className="text-[11px] text-faint mt-2">
               {week.activity_counts.done} of {week.activity_counts.total} sessions complete
               {week.start_date && <> · {dayLabel(week.start_date)} → {dayLabel(week.end_date)}</>}
@@ -183,7 +183,7 @@ export function DashboardPage({ me }: { me?: User }) {
     slides.push({
       eyebrow: goal.length ? `${label} · season goal` : "Season goal",
       title: goal.length ? goal.join(" — ") : season,
-      sub: week ? `Training week ${String(week.number).padStart(2, "0")} · focus: ${week.focus} · ${week.progress}% done` : undefined,
+      sub: week ? `Training week ${String(week.number).padStart(2, "0")} · focus: ${nice(week.focus)} · ${week.progress}% done` : undefined,
     });
   }
   slides.push({

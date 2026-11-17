@@ -166,7 +166,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             <AvatarImg user={p} size={56} />
             <div>
               <div className="text-xl font-extrabold">{p.ign}</div>
-              <div className="text-[13px] text-mute">{p.name} · {p.main_role || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
+              <div className="text-[13px] text-mute">{p.name} · {nice(p.main_role) || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
               {(() => {
                 const l = links.get(p.id);
                 if (!l?.linked) return null;
@@ -314,7 +314,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                 <div className="font-extrabold truncate">{p.ign}
                   {p.role === "captain" && <span className="text-amber text-[10px] font-bold"> · C</span>}
                 </div>
-                <div className="text-[11px] text-faint flex items-center gap-1.5">{p.main_role || p.role_label}
+                <div className="text-[11px] text-faint flex items-center gap-1.5">{nice(p.main_role) || p.role_label}
                   {links.get(p.id)?.linked && (
                     <span className="chip !text-[8.5px] text-leaf border-leaf/40 inline-flex items-center gap-1">
                       <Gamepad2 size={9} /> MLBB ✓

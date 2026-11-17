@@ -313,7 +313,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                     <div className="text-[12px] font-extrabold leading-tight truncate">{h.name}</div>
                     <span className="text-[11px] font-extrabold text-crim tabular-nums shrink-0">{h.clover_rating.toFixed(1)}</span>
                   </div>
-                  <div className="text-[10px] text-faint truncate">{h.hero_class} · {h.win_rate.toFixed(1)}% WR · {h.pick_rate.toFixed(1)}% PK</div>
+                  <div className="text-[10px] text-faint truncate">{h.hero_class} · {h.win_rate.toFixed(1)}% WR · {h.pick_rate.toFixed(1)}% pick</div>
                 </button>
               ))}
             </div>

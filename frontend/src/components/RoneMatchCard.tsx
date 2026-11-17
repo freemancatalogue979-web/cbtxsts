@@ -43,7 +43,7 @@ export function RoneMatchCard({ match, onOpen, compact = false, detailsUnavailab
       <MatchTeam team={match.team1} winner={match.winner === "team1"} />
       <div className="text-center self-start pt-4 tabular-nums">
         {hasScore ? <div className="text-xl sm:text-2xl font-black whitespace-nowrap">{esportsNumber(match.score1)} <span className="text-mute text-sm">:</span> {esportsNumber(match.score2)}</div>
-          : <div className="text-xs font-black text-mute tracking-[0.16em] pt-1.5">VS</div>}
+          : <div className="text-xs font-black text-mute tracking-[0.16em] pt-1.5">vs</div>}
         <div className="text-[9px] font-bold text-mute tracking-wide mt-1">{status}</div>
       </div>
       <MatchTeam team={match.team2} winner={match.winner === "team2"} />

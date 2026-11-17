@@ -121,7 +121,7 @@ function LockerGrid({ me }: { me: User }) {
                     {f.owner?.main_role ? ` · ${nice(f.owner.main_role)}` : ""}
                   </div>
                 </div>
-                {f.tag && <span className="chip text-amber border-amber/40 bg-amber/10 shrink-0">{f.tag}</span>}
+                {f.tag && <span className="chip text-amber border-amber/40 bg-amber/10 shrink-0">{nice(f.tag)}</span>}
               </div>
               <div className="mt-3 pt-3 border-t border-edge/60 flex items-center gap-3 text-[11px] text-faint">
                 <span className="font-semibold text-mute">
@@ -270,7 +270,7 @@ function LockerView({ me, folderId }: { me: User; folderId: number }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base font-extrabold tracking-wide">{locker.name}</h1>
-              {locker.tag && <span className="chip text-amber border-amber/40 bg-amber/10">{locker.tag}</span>}
+              {locker.tag && <span className="chip text-amber border-amber/40 bg-amber/10">{nice(locker.tag)}</span>}
               {isMine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">Yours</span>}
             </div>
             <div className="text-[12px] text-mute mt-0.5">

@@ -121,7 +121,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
             <Field label="Week">
               <select className="input" value={String(f.week_id)} onChange={(e) => set("week_id", e.target.value)}>
                 <option value="">Standalone</option>
-                {weeks.map((w) => <option key={w.id} value={w.id}>Week {String(w.number).padStart(2, "0")} — {w.focus}</option>)}
+                {weeks.map((w) => <option key={w.id} value={w.id}>Week {String(w.number).padStart(2, "0")} — {nice(w.focus)}</option>)}
               </select>
             </Field>
           </div>
@@ -400,7 +400,7 @@ function ProgramWeekForm({ program, week, weeks, onSaved, onClose }: {
           <select className="input" required disabled={edit} value={String(twId)} onChange={(e) => setTwId(Number(e.target.value))}>
             <option value="">— pick a scheduled week —</option>
             {choices.map((w) => (
-              <option key={w.id} value={w.id}>W{String(w.number).padStart(2, "0")} — {w.focus}{w.start_date ? ` (${dayLabel(w.start_date)})` : ""}</option>
+              <option key={w.id} value={w.id}>W{String(w.number).padStart(2, "0")} — {nice(w.focus)}{w.start_date ? ` (${dayLabel(w.start_date)})` : ""}</option>
             ))}
           </select>
         </Field>
@@ -485,7 +485,7 @@ function ProgramCard({ p, me, onOpen }: { p: Program; me: User; onOpen: () => vo
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[15px] font-extrabold truncate">{p.name}</div>
-          <div className="text-[11px] text-faint mt-0.5 truncate">{p.focus || "General"}
+          <div className="text-[11px] text-faint mt-0.5 truncate">{nice(p.focus) || "General"}
             {enrolledYou && <span className="text-leaf font-bold"> · you're in</span>}</div>
         </div>
         <Badge cls={p.status === "active" ? "text-leaf border-leaf/40" : "text-mute"}>{p.status}</Badge>
@@ -578,7 +578,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
     return (
       <div className="space-y-5">
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training programs</button>
-        <PageTitle title={p.name} sub={`${p.focus || "General"} · ${p.week_count} ${p.week_count === 1 ? "task" : "tasks"} · ${enrolled.length} enrolled${p.status === "archived" ? " · archived" : ""}`}
+        <PageTitle title={p.name} sub={`${nice(p.focus) || "General"} · ${p.week_count} ${p.week_count === 1 ? "task" : "tasks"} · ${enrolled.length} enrolled${p.status === "archived" ? " · archived" : ""}`}
           right={canManage && (
             <div className="flex gap-2">
               <button className="btn-ghost" onClick={() => setShowProgramForm({ program: p })}>Edit</button>
@@ -845,13 +845,13 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
     return (
       <div className="space-y-5">
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training center</button>
-        <PageTitle title={`Week ${String(w.number).padStart(2, "0")} — ${w.focus}`}
+        <PageTitle title={`Week ${String(w.number).padStart(2, "0")} — ${nice(w.focus)}`}
           sub={w.objective}
           right={canManage && (
             <div className="flex gap-2">
               <button className="btn-ghost" onClick={() => setShowWeekForm(w)}>Edit week</button>
               <button className="btn-ghost !text-crim" title="Delete week"
-                onClick={async () => { if (confirm(`Delete W${String(w.number).padStart(2, "0")} "${w.focus}"? Activities keep their records.`)) { await api.del(`/training/weeks/${w.id}`); navigate("training", "schedule"); } }}>
+                onClick={async () => { if (confirm(`Delete W${String(w.number).padStart(2, "0")} "${nice(w.focus)}"? Activities keep their records.`)) { await api.del(`/training/weeks/${w.id}`); navigate("training", "schedule"); } }}>
                 <Trash2 size={13} />
               </button>
             </div>
@@ -935,7 +935,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
             <div>
               <div className="section-pill">Current block</div>
               <div className="text-xl font-extrabold mt-1">
-                Week {String(activeWeek.number).padStart(2, "0")} — <span className="text-crim">{activeWeek.focus}</span>
+                Week {String(activeWeek.number).padStart(2, "0")} — <span className="text-crim">{nice(activeWeek.focus)}</span>
               </div>
               <div className="text-[12px] text-faint mt-1">{activeWeek.objective}</div>
             </div>
@@ -982,7 +982,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                 <span className="text-lg font-extrabold tabular-nums">W{String(w.number).padStart(2, "0")}</span>
                 <Badge cls={w.status === "active" ? "text-crim border-crim/50" : w.status === "completed" ? "text-leaf border-leaf/40" : "text-mute"}>{w.status}</Badge>
               </div>
-              <div className="text-[13px] font-bold text-crim tracking-wide mt-1">{w.focus}</div>
+              <div className="text-[13px] font-bold text-crim tracking-wide mt-1">{nice(w.focus)}</div>
               <div className="mt-3"><Progress value={w.progress} /></div>
               <div className="text-[10.5px] text-faint mt-1.5">{w.activity_counts.done}/{w.activity_counts.total} sessions · {dayLabel(w.start_date)}</div>
             </button>

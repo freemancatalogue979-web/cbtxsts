@@ -122,7 +122,7 @@ function DraftHeader({ oursLabel, theirsLabel, scoreUS, scoreThem, caption }: {
             <span className="text-2xl font-black text-crim tabular-nums">{scoreThem}</span>
           </div>
         ) : (
-          <span className="text-sm font-black tracking-[0.35em] text-mute">VS</span>
+          <span className="text-sm font-black tracking-[0.35em] text-mute">vs</span>
         )}
         <div className="label !text-[7.5px] mt-0.5">{caption ?? (hasScore ? "Series" : "Draft phase")}</div>
       </div>
@@ -218,7 +218,7 @@ function StageHeader({ oursLabel, theirsLabel, scoreUS, scoreThem }: {
             <span className="text-3xl font-black italic text-crim tabular-nums drop-shadow-[0_0_14px_rgba(225,29,72,0.45)]">{scoreThem}</span>
           </div>
         ) : (
-          <span className="text-3xl font-black italic tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-b from-amber via-amber to-crim drop-shadow-[0_2px_16px_rgba(245,185,66,0.35)]">VS</span>
+          <span className="text-3xl font-black italic tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-b from-amber via-amber to-crim drop-shadow-[0_2px_16px_rgba(245,185,66,0.35)]">vs</span>
         )}
       </div>
       <div className="flex items-center gap-3 min-w-0">
@@ -432,7 +432,7 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
           ))}
         </div>
         <div className="flex flex-col items-center gap-1 px-1">
-          <span className="text-2xl font-black tracking-[0.2em] text-mute">VS</span>
+          <span className="text-2xl font-black tracking-[0.2em] text-mute">vs</span>
           <span className="label !text-[7.5px] whitespace-nowrap">Click to pick</span>
         </div>
         <div className="grid grid-cols-5 gap-3">
