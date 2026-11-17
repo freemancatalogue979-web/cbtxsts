@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..deps import ROLE_CAPTAIN, ROLE_PLAYER, can, get_current_user, get_db, require
 from ..models import DevelopmentEntry, Hero, HeroPoolEntry, Scrim, User, dumps, loads
-from ..schemas import DevIn, PoolIn, PoolPatch
+from ..schemas import DevIn, OptionalDate, PoolIn, PoolPatch
 from ..serializers import dev_out, pool_out, user_out
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -161,7 +161,7 @@ def add_development(user_id: int, payload: DevIn, db: Session = Depends(get_db),
         require(can.rate_players(user), "rate players")
         source = "coach"
     entry = DevelopmentEntry(
-        user_id=user_id, entry_date=payload.date, source=source,
+        user_id=user_id, entry_date=payload.date or dt_date.today(), source=source,
         category=payload.category.upper(), rating=payload.rating,
         notes=payload.notes, created_by=user.id,
     )
@@ -175,7 +175,7 @@ class DevPatch(BaseModel):
     category: str | None = None
     rating: float | None = None
     notes: str | None = None
-    date: dt_date | None = None
+    date: OptionalDate = None
 
 
 @router.patch("/development/{entry_id}")

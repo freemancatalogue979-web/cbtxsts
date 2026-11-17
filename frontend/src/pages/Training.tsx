@@ -93,7 +93,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
     e.preventDefault();
     setBusy(true);
     setErr(null);
-    const body = { ...f, week_id: f.week_id === "" ? null : Number(f.week_id), duration_min: Number(f.duration_min) || 60 };
+    const body = { ...f, week_id: f.week_id === "" ? null : Number(f.week_id), date: f.date || null, duration_min: Number(f.duration_min) || 60 };
     try {
       if (edit) await api.patch(`/training/activities/${initial.id}`, body);
       else await api.post("/training/activities", body);

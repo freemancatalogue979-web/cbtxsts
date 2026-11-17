@@ -4,10 +4,24 @@ export class ApiError extends Error {
   payload: unknown;
   constructor(status: number, payload: unknown) {
     const detail = (payload as { detail?: unknown })?.detail;
-    super(typeof detail === "string" ? detail : `Request failed (${status})`);
+    super(typeof detail === "string" ? detail : validationMessage(detail) ?? `Request failed (${status})`);
     this.status = status;
     this.payload = payload;
   }
+}
+
+/** FastAPI 422s carry a list like [{loc: ["body", "date"], msg: "Input should be a valid date"}].
+ *  Turn it into "Date: input should be a valid date" instead of "Request failed (422)". */
+export function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail) || !detail.length) return null;
+  const parts = detail.slice(0, 3).map((item) => {
+    const loc = Array.isArray(item?.loc) ? item.loc.filter((part: unknown) => part !== "body") : [];
+    const field = String(loc[loc.length - 1] ?? "").replace(/_id$/, "").replace(/_/g, " ");
+    const msg = String(item?.msg ?? "is invalid").replace(/^Value error, /, "");
+    const text = msg.charAt(0).toLowerCase() + msg.slice(1);
+    return field ? `${field.charAt(0).toUpperCase()}${field.slice(1)}: ${text}` : msg;
+  });
+  return parts.join(" · ");
 }
 
 const TOKEN_KEY = "clover_token";

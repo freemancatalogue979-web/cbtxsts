@@ -7,7 +7,6 @@ tournament LOSS never blocks future booking — review is opt-in here.
 """
 from __future__ import annotations
 
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
 from ..models import MatchReview, Tournament, TournamentMatch, dumps, loads, utcnow
+from ..schemas import OptionalDate
 from ..serializers import review_out
 
 router = APIRouter(prefix="/tournaments", tags=["tournaments"])
@@ -84,8 +84,8 @@ class TournamentIn(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     status: str = "upcoming"
     review_queued: bool = False
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: OptionalDate = None
+    end_date: OptionalDate = None
     notes: str = ""
 
 
@@ -93,14 +93,14 @@ class TournamentPatch(BaseModel):
     name: str | None = None
     status: str | None = None
     review_queued: bool | None = None
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: OptionalDate = None
+    end_date: OptionalDate = None
     notes: str | None = None
 
 
 class MatchIn(BaseModel):
     stage: str = ""
-    scheduled_date: date | None = None
+    scheduled_date: OptionalDate = None
     start_time: str = ""
     opponent: str = Field(min_length=1, max_length=120)
     format: str = "BO3"
@@ -110,7 +110,7 @@ class MatchIn(BaseModel):
 
 class MatchPatch(BaseModel):
     stage: str | None = None
-    scheduled_date: date | None = None
+    scheduled_date: OptionalDate = None
     start_time: str | None = None
     opponent: str | None = None
     format: str | None = None

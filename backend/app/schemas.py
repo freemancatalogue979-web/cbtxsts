@@ -2,9 +2,20 @@
 from __future__ import annotations
 
 from datetime import date as dt_date
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
+
+
+def _blank_to_none(value: Any) -> Any:
+    """Forms send "" for an optional date or link they left empty; that means "none",
+    not an invalid value (it used to fail with 422 Unprocessable Entity)."""
+    return None if isinstance(value, str) and not value.strip() else value
+
+
+# Optional dates and optional links to other records (nullable foreign keys).
+OptionalDate = Annotated[dt_date | None, BeforeValidator(_blank_to_none)]
+OptionalId = Annotated[int | None, BeforeValidator(_blank_to_none)]
 
 
 class LoginIn(BaseModel):
@@ -42,8 +53,8 @@ class WeekIn(BaseModel):
     objective: str = ""
     performance_target: str = ""
     notes: str = ""
-    start_date: dt_date | None = None
-    end_date: dt_date | None = None
+    start_date: OptionalDate = None
+    end_date: OptionalDate = None
     status: str = "planned"
     weakness_text: str = ""
     weakness_drills_target: int = 0
@@ -55,19 +66,19 @@ class WeekPatch(BaseModel):
     objective: str | None = None
     performance_target: str | None = None
     notes: str | None = None
-    start_date: dt_date | None = None
-    end_date: dt_date | None = None
+    start_date: OptionalDate = None
+    end_date: OptionalDate = None
     status: str | None = None
     weakness_text: str | None = None
     weakness_drills_target: int | None = None
 
 
 class ActivityIn(BaseModel):
-    week_id: int | None = None
+    week_id: OptionalId = None
     title: str
     description: str = ""
     category: str = "MACRO"
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str = ""
     duration_min: int = 60
     coach_name: str = ""
@@ -79,15 +90,15 @@ class ActivityIn(BaseModel):
     result: str = ""
     score: str = ""
     lessons: str = ""
-    scrim_id: int | None = None
+    scrim_id: OptionalId = None
 
 
 class ActivityPatch(BaseModel):
-    week_id: int | None = None
+    week_id: OptionalId = None
     title: str | None = None
     description: str | None = None
     category: str | None = None
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str | None = None
     duration_min: int | None = None
     coach_name: str | None = None
@@ -99,12 +110,12 @@ class ActivityPatch(BaseModel):
     result: str | None = None
     score: str | None = None
     lessons: str | None = None
-    scrim_id: int | None = None
+    scrim_id: OptionalId = None
 
 
 class ScrimIn(BaseModel):
     opponent: str
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str = ""
     format: str = "BO3"
     server: str = ""
@@ -117,7 +128,7 @@ class ScrimIn(BaseModel):
 
 class ScrimPatch(BaseModel):
     opponent: str | None = None
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str | None = None
     format: str | None = None
     server: str | None = None
@@ -140,10 +151,10 @@ class GameIn(BaseModel):
 
 
 class ReviewIn(BaseModel):
-    scrim_id: int | None = None
-    tournament_match_id: int | None = None
+    scrim_id: OptionalId = None
+    tournament_match_id: OptionalId = None
     opponent: str = ""
-    date: dt_date | None = None
+    date: OptionalDate = None
     duration_min: float = 0
     result: str = "LOSS"
     player_ids: list[int] = Field(default_factory=list)
@@ -156,14 +167,14 @@ class ReviewIn(BaseModel):
     what_change: str = ""
     lesson: str = ""
     action_item: str = ""
-    action_assignee_id: int | None = None
-    action_deadline: dt_date | None = None
+    action_assignee_id: OptionalId = None
+    action_deadline: OptionalDate = None
     status: str = "open"
 
 
 class ReviewPatch(BaseModel):
     opponent: str | None = None
-    date: dt_date | None = None
+    date: OptionalDate = None
     duration_min: float | None = None
     result: str | None = None
     player_ids: list[int] | None = None
@@ -176,8 +187,8 @@ class ReviewPatch(BaseModel):
     what_change: str | None = None
     lesson: str | None = None
     action_item: str | None = None
-    action_assignee_id: int | None = None
-    action_deadline: dt_date | None = None
+    action_assignee_id: OptionalId = None
+    action_deadline: OptionalDate = None
     status: str | None = None
 
 
@@ -221,7 +232,7 @@ class PoolIn(BaseModel):
     hero_id: int
     category: str = "comfort"
     confidence: int = 5
-    last_played: dt_date | None = None
+    last_played: OptionalDate = None
     games: int = 0
     wins: int = 0
     losses: int = 0
@@ -231,7 +242,7 @@ class PoolIn(BaseModel):
 class PoolPatch(BaseModel):
     category: str | None = None
     confidence: int | None = None
-    last_played: dt_date | None = None
+    last_played: OptionalDate = None
     games: int | None = None
     wins: int | None = None
     losses: int | None = None
@@ -243,7 +254,7 @@ class DevIn(BaseModel):
     category: str = "GENERAL"
     rating: int | None = None
     notes: str = ""
-    date: dt_date | None = None
+    date: OptionalDate = None
 
 
 class BanIn(BaseModel):
@@ -271,25 +282,25 @@ class BanPatch(BaseModel):
 class EventIn(BaseModel):
     title: str
     kind: str = "other"
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str = ""
     end_time: str = ""
     location: str = ""
     description: str = ""
     link: str = ""
-    scrim_id: int | None = None
+    scrim_id: OptionalId = None
 
 
 class EventPatch(BaseModel):
     title: str | None = None
     kind: str | None = None
-    date: dt_date | None = None
+    date: OptionalDate = None
     time: str | None = None
     end_time: str | None = None
     location: str | None = None
     description: str | None = None
     link: str | None = None
-    scrim_id: int | None = None
+    scrim_id: OptionalId = None
 
 
 class StrategyIn(BaseModel):
