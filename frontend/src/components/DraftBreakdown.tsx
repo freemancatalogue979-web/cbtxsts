@@ -46,10 +46,11 @@ function HeroChip({ pick, tone, struck = false, highlight = false }: { pick: Bre
   </span>;
 }
 
+/** Banned hero: the portrait stays recognisable, crossed by a thin red slash. */
 function BanChip({ hero }: { hero: string }) {
-  return <span className="relative inline-flex" title={`Banned: ${hero}`}>
-    <HeroImg name={hero} size={20} className="rounded-full grayscale opacity-60" />
-    <Ban size={20} className="absolute inset-0 text-rose-300/80" aria-hidden="true" />
+  return <span className="relative inline-flex overflow-hidden rounded-full ring-1 ring-rose-300/40" title={`Banned: ${hero}`}>
+    <HeroImg name={hero} size={22} className="rounded-full grayscale-[60%] opacity-80" />
+    <span className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-[130%] -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-rose-300/90" aria-hidden="true" />
     <span className="sr-only">Banned {hero}</span>
   </span>;
 }
@@ -91,18 +92,18 @@ function PlanBlock({ plan }: { plan: BreakdownPlan }) {
   </div>;
 }
 
-function TeamColumn({ team }: { team: BreakdownGameTeam }) {
+function TeamColumn({ team, gameNumber }: { team: BreakdownGameTeam; gameNumber: number | null }) {
   const tone = TONE[team.key];
   const standout = team.standout;
-  return <section className={`min-w-0 rounded-xl border p-3 ${team.won ? "border-leaf/30 bg-leaf/[0.035]" : "border-edge bg-panel/60"}`} aria-label={`${code(team)} draft`}>
+  return <section className={`min-w-0 rounded-xl border p-3 ${team.won ? "border-leaf/30 bg-leaf/[0.035]" : "border-edge bg-panel/60"}`} aria-label={`${code(team)} draft, game ${gameNumber ?? "?"}`}>
     <header className="flex items-center gap-2">
       <Logo team={team} />
       <span className={`min-w-0 truncate text-[12px] font-black ${tone.text}`}>{code(team)}</span>
       {team.side && <span className={`rounded-full border px-1.5 py-px text-[8.5px] font-extrabold ${tone.border} ${tone.bg} ${tone.text}`}>{team.side} side</span>}
       <span className={`ml-auto rounded-full px-2 py-0.5 text-[9px] font-black ${team.won ? "bg-leaf/15 text-leaf" : "bg-white/[0.05] text-mute"}`}>{team.won ? "WIN" : "LOSS"}</span>
     </header>
-    {team.picks.length > 0 && <div className="mt-2.5 flex flex-wrap gap-1.5" aria-label={`${code(team)} picks`}>{team.picks.map((pick, index) => <HeroChip key={`${pick.hero}-${index}`} pick={pick} />)}</div>}
-    {team.bans.some(Boolean) && <div className="mt-2 flex items-center gap-1.5"><span className="text-[8.5px] font-extrabold tracking-[0.14em] text-mute">Bans</span>{team.bans.map((hero, index) => hero && <BanChip key={`${hero}-${index}`} hero={hero} />)}</div>}
+    {team.picks.length > 0 && <div className="mt-2.5 flex flex-wrap gap-1.5">{team.picks.map((pick, index) => <HeroChip key={`${pick.hero}-${index}`} pick={pick} />)}</div>}
+    {team.bans.some(Boolean) && <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="inline-flex items-center gap-1 text-[8.5px] font-extrabold tracking-[0.14em] text-mute"><Ban size={10} aria-hidden="true" />Bans</span>{team.bans.map((hero, index) => hero && <BanChip key={`${hero}-${index}`} hero={hero} />)}</div>}
     {standout && <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-edge bg-ink/40 px-2 py-1.5">
       {standout.hero && <HeroImg name={standout.hero} size={22} className="rounded-full" />}
       <span className="min-w-0 flex-1 truncate text-[10px] font-bold">{standout.player || "Unknown"}<span className="text-mute"> · {standout.hero}</span></span>
@@ -133,7 +134,7 @@ function GameCard({ game }: { game: BreakdownGame }) {
     {game.deciding_factor && <p className="mt-2.5 flex gap-2 rounded-lg border border-amber/25 bg-amber/[0.06] px-2.5 py-2 text-[10.5px] leading-relaxed">
       <Zap size={13} className="mt-px shrink-0 text-amber" aria-hidden="true" /><span><span className="font-extrabold text-amber">Deciding factor · </span>{game.deciding_factor}</span>
     </p>}
-    <div className="mt-3 grid gap-3 lg:grid-cols-2">{game.teams.map((team) => <TeamColumn key={team.key} team={team} />)}</div>
+    <div className="mt-3 grid gap-3 lg:grid-cols-2">{game.teams.map((team) => <TeamColumn key={team.key} team={team} gameNumber={game.number} />)}</div>
   </article>;
 }
 

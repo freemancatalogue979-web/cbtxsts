@@ -288,8 +288,19 @@ a bounded aggregate across the saved season, not just the selected examples.
 Rates use complete 10-pick/10-ban drafts as their denominator; partial or missing
 drafts, unknown hero names and truncation are reported separately. Stage filters
 use saved stage labels. Explicit match attachments override this automatic season
-aggregate. Saved detail may be missing or incomplete, and the source is
-community-compiled, not independently verified.
+aggregate. Saved match data is treated as verified; games or drafts that were
+never recorded are simply absent.
+
+**Match draft breakdowns.** In a match's details (and for up to eight matches from
+the Esports list), Ask 9 Clover AI returns a breakdown for every game and both
+drafts: the draft's win condition, the proper way to execute it (ordered steps),
+a verdict (executed, partly executed or not executed) and hero swaps where a pick
+was the weak link (which hero out, which in, why, and how the plan changes). It
+renders as hero, team, stat, verdict and swap chips. Kills, gold, turtles, lords,
+duration, picks, bans and standout KDA always come from the saved match data,
+never from the AI. A swap is shown only if the outgoing hero was really drafted
+by that team and the replacement is a real hero that was not picked or banned
+in that game. Without an AI provider the same chips show the recorded facts.
 
 For an explicitly named MPL region (PH, ID, MY or KH) and schedule, standings or
 playoff request, chat can also retrieve one public Rone feed. Only the allowlisted
