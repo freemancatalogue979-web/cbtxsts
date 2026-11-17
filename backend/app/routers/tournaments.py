@@ -7,6 +7,7 @@ tournament LOSS never blocks future booking — review is opt-in here.
 """
 from __future__ import annotations
 
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
