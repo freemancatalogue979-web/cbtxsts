@@ -7,10 +7,11 @@ import { Empty, SectionTitle, StatTile } from "./ui";
 
 /** Match stats for one tournament (or all of them): series + game records from
  *  the scores, and who played each game with the heroes they were on. */
-export function TournamentStats({ stats, title = "Match stats", overall = false, tiles = true }: {
-  stats: TournamentStatsT; title?: string; overall?: boolean; tiles?: boolean;
+export function TournamentStats({ stats, title = "Match stats", overall = false, tiles = true, kind = "tournament" }: {
+  stats: TournamentStatsT; title?: string; overall?: boolean; tiles?: boolean; kind?: "tournament" | "scrim";
 }) {
   const { series, games, players, heroes } = stats;
+  const hasKda = players.some((p) => p.kda != null);
   const missing = Math.max(0, games.played - games.with_lineup);
   const tone = (w: number, l: number) => (w > l ? "good" : l > w ? "bad" : undefined);
   return (
@@ -36,9 +37,11 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
           )}
         </div>
         {players.length === 0 ? (
-          <Empty title="No lineups recorded" hint={games.played
-            ? "Open a played match and add who played each game — player stats show here."
-            : "Record results, then add who played each game."} />
+          <Empty title="No lineups recorded" hint={kind === "scrim"
+            ? "Book scrims with a lineup (or set who played on each game) and record the games."
+            : games.played
+              ? "Open a played match and add who played each game — player stats show here."
+              : "Record results, then add who played each game."} />
         ) : (
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-[12px] min-w-[560px]">
@@ -50,6 +53,7 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
                   <th className="label font-normal px-1 pb-2 text-right">W–L</th>
                   <th className="label font-normal px-1 pb-2 text-right">Win</th>
                   {overall && <th className="label font-normal px-1 pb-2 text-right">Series</th>}
+                  {hasKda && <th className="label font-normal px-1 pb-2 text-right" title="(kills + assists) / deaths, games with K/D/A recorded">KDA</th>}
                   <th className="label font-normal px-1 pb-2 pl-4">Heroes</th>
                 </tr>
               </thead>
@@ -69,6 +73,11 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
                     </td>
                     <td className={`px-1 py-2 text-right tabular-nums ${p.win_rate == null ? "text-faint" : p.win_rate >= 50 ? "text-leaf" : "text-danger"}`}>{pct(p.win_rate)}</td>
                     {overall && <td className="px-1 py-2 text-right tabular-nums text-mute">{p.series}</td>}
+                    {hasKda && (
+                      <td className={`px-1 py-2 text-right tabular-nums ${p.kda == null ? "text-faint" : p.kda >= 3 ? "text-leaf" : p.kda < 2 ? "text-danger" : ""}`}>
+                        {p.kda == null ? "—" : p.kda.toFixed(2)}
+                      </td>
+                    )}
                     <td className="px-1 py-2 pl-4">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {p.heroes.length === 0 && <span className="text-faint">—</span>}

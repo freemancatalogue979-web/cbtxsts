@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from datetime import date as _date
 
+from sqlalchemy import select
+from sqlalchemy.orm import object_session
+
 from .config import AVATAR_DIR
 from .models import (
     BanEntry,
@@ -144,7 +147,13 @@ def activity_out(a: TrainingActivity) -> dict:
     }
 
 
-def game_out(g: ScrimGame) -> dict:
+def game_out(g: ScrimGame, names: dict[int, str] | None = None) -> dict:
+    from .performance import clean_player_stats, scrim_game_lineup
+
+    if names is None:
+        db = object_session(g)
+        names = {u.id: (u.ign or u.name) for u in db.scalars(select(User)).all()} if db is not None else {}
+    lineup, from_scrim = scrim_game_lineup(g.scrim, g) if g.scrim is not None else ({}, False)
     return {
         "id": g.id,
         "scrim_id": g.scrim_id,
@@ -153,7 +162,17 @@ def game_out(g: ScrimGame) -> dict:
         "duration_min": g.duration_min,
         "stats": loads(g.stats, {}),
         "draft": loads(g.draft, {}),
+        "lineup": lineup,
+        "lineup_from_scrim": from_scrim,
+        "players": {lane: names.get(uid, f"Player {uid}") for lane, uid in lineup.items()},
+        "player_stats": clean_player_stats(loads(g.player_stats or "{}", {})),
     }
+
+
+def _games_out(s: Scrim) -> list[dict]:
+    db = object_session(s)
+    names = {u.id: (u.ign or u.name) for u in db.scalars(select(User)).all()} if db is not None else {}
+    return [game_out(g, names) for g in s.games]
 
 
 def scrim_out(s: Scrim, *, with_games: bool = True) -> dict:
@@ -178,7 +197,7 @@ def scrim_out(s: Scrim, *, with_games: bool = True) -> dict:
         "has_review": s.review is not None,
         "review_status": s.review.status if s.review else None,
         "needs_review": bool(s.status == "played" and s.result == "LOSS" and s.review is None),
-        "games": [game_out(g) for g in s.games] if with_games else [],
+        "games": _games_out(s) if with_games else [],
         "created_by": s.created_by,
     }
 

@@ -28,6 +28,7 @@ from .models import (
     TrainingWeek,
     User,
     dumps,
+    loads,
 )
 from .security import ROLE_ADMIN, ROLE_ANALYST, ROLE_CAPTAIN, ROLE_COACH, ROLE_PLAYER, hash_password
 
@@ -540,6 +541,24 @@ def _draft(our_bans, enemy_bans, our_picks, enemy_picks) -> str:
                   "our_picks": our_picks, "enemy_picks": enemy_picks})
 
 
+# Share of the team's kills / deaths / assists each lane takes in a demo game.
+_LANE_SHARE = {"EXP": (0.2, 0.2, 0.45), "JUNGLE": (0.32, 0.15, 0.5), "MID": (0.2, 0.15, 0.6),
+               "GOLD": (0.25, 0.2, 0.35), "ROAM": (0.03, 0.3, 0.85)}
+
+
+def _player_lines(stats: str, draft: str) -> str:
+    """Demo K/D/A per lane, split from the team line (Karrie games feed a bit)."""
+    st, dr = loads(stats, {}), loads(draft, {})
+    kills, deaths = int(st.get("kills") or 0), int(st.get("deaths") or 0)
+    out = {}
+    for lane, (ks, ds, as_) in _LANE_SHARE.items():
+        k, dd = round(kills * ks), round(deaths * ds)
+        if dr.get("our_picks", {}).get(lane) == "Karrie":
+            k, dd = max(k - 2, 0), dd + 3
+        out[lane] = {"kills": k, "deaths": dd, "assists": round(kills * as_)}
+    return dumps(out)
+
+
 STD_BANS_OURS = ["Suyou", "Lukas", "Zhuxin", "Chip", "Fredrinn"]
 STD_BANS_THEIRS = ["Fanny", "Nolan", "Joy", "Angela", "Valentina"]
 OUR_A = {"EXP": "Arlott", "JUNGLE": "Hayabusa", "MID": "Yve", "GOLD": "Karrie", "ROAM": "Khufra"}
@@ -574,7 +593,8 @@ def seed_scrims(db: Session, users: dict[str, User]) -> dict[str, Scrim]:
         for i, g in enumerate(games, start=1):
             res, dur, stats, draft = g
             db.add(ScrimGame(scrim_id=s.id, game_no=i, result="WIN" if res == "W" else "LOSS",
-                             duration_min=dur, stats=stats, draft=draft))
+                             duration_min=dur, stats=stats, draft=draft,
+                             player_stats=_player_lines(stats, draft)))
         return s
 
     # --- Scrim #023: the plan's fully-reviewed example -----------------------

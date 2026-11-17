@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
 from ..trash import send_to_trash
-from ..models import Scrim, ScrimGame, dumps, loads
+from ..models import Scrim, ScrimGame, User, dumps, loads
+from ..performance import appearances, clean_lineup, clean_player_stats, team_stats
+from ..security import LANES
 from ..schemas import GameIn, ScrimIn, ScrimPatch
 from ..serializers import game_out, scrim_out
 
@@ -123,6 +125,43 @@ def scrims_summary(db: Session = Depends(get_db), user=Depends(get_current_user)
     }
 
 
+@router.get("/stats")
+def scrim_stats(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Who played every scrim game (and on which heroes), plus series/game records."""
+    played = db.scalars(select(Scrim).where(Scrim.status == "played")).all()
+    games = [g for s in played for g in s.games]
+    wins = sum(1 for s in played if s.result == "WIN")
+    losses = sum(1 for s in played if s.result == "LOSS")
+    g_w = sum(1 for g in games if g.result == "WIN")
+    g_l = sum(1 for g in games if g.result == "LOSS")
+    apps = [a for a in appearances(db) if a.source == "scrim"]
+    names = {u.id: (u.ign or u.name) for u in db.scalars(select(User)).all()}
+    pct = lambda w, t: round(100 * w / t, 1) if t else None  # noqa: E731
+    out = team_stats(apps, names,
+                     series={"played": len(played), "wins": wins, "losses": losses,
+                             "draws": len(played) - wins - losses, "win_rate": pct(wins, len(played))},
+                     games={"played": len(games), "wins": g_w, "losses": g_l, "win_rate": pct(g_w, g_w + g_l),
+                            "with_lineup": len({(a.match_id, a.game_no) for a in apps}),
+                            "with_player_stats": sum(1 for g in games if loads(g.player_stats or "{}", {}))})
+    return out
+
+
+def _game_lineup(db: Session, lineup: dict | None) -> dict[str, int] | None:
+    """Validate who played a game. None = not sent (keep what's saved)."""
+    if lineup is None:
+        return None
+    unknown = sorted({str(k).upper() for k in lineup} - set(LANES))
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown lane(s): {', '.join(unknown)}")
+    clean = clean_lineup(lineup)
+    ids = list(clean.values())
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=422, detail="A player can only play one lane in a game")
+    if ids and len(db.scalars(select(User.id).where(User.id.in_(ids))).all()) != len(ids):
+        raise HTTPException(status_code=422, detail="Lineup has a player who doesn't exist")
+    return clean
+
+
 @router.get("/{scrim_id}")
 def get_scrim(scrim_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     scrim = db.get(Scrim, scrim_id)
@@ -221,9 +260,11 @@ def add_game(scrim_id: int, payload: GameIn, db: Session = Depends(get_db),
     result = payload.result.upper()
     if result not in {"WIN", "LOSS", ""}:
         raise HTTPException(status_code=422, detail="result must be WIN or LOSS")
+    lineup = _game_lineup(db, payload.lineup)
     game = ScrimGame(scrim_id=scrim.id, game_no=payload.game_no, result=result,
                      duration_min=payload.duration_min,
-                     stats=dumps(payload.stats), draft=dumps(payload.draft))
+                     stats=dumps(payload.stats), draft=dumps(payload.draft),
+                     lineup=dumps(lineup or {}), player_stats=dumps(clean_player_stats(payload.player_stats)))
     db.add(game)
     us = sum(1 for g in scrim.games if g.result == "WIN") + (1 if result == "WIN" else 0)
     them = sum(1 for g in scrim.games if g.result == "LOSS") + (1 if result == "LOSS" else 0)
@@ -266,6 +307,8 @@ class GamePatch(BaseModel):
     duration_min: float | None = None
     stats: dict | None = None
     draft: dict | None = None
+    lineup: dict[str, int | None] | None = None
+    player_stats: dict[str, dict] | None = None
 
 
 @router.patch("/{scrim_id}/games/{game_id}")
@@ -286,6 +329,10 @@ def update_game(scrim_id: int, game_id: int, payload: GamePatch, db: Session = D
         game.stats = dumps(st)
     if (dr := data.pop("draft", None)) is not None:
         game.draft = dumps(dr)
+    if "lineup" in data:
+        game.lineup = dumps(_game_lineup(db, data.pop("lineup")) or {})
+    if "player_stats" in data:
+        game.player_stats = dumps(clean_player_stats(data.pop("player_stats")))
     for k, v in data.items():
         setattr(game, k, v)
     db.flush()

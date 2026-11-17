@@ -103,6 +103,8 @@ def startup() -> None:
             "ALTER TABLE intel_links ADD COLUMN level INTEGER",
             "ALTER TABLE intel_links ADD COLUMN rank_level INTEGER",
             "ALTER TABLE tournament_matches ADD COLUMN game_drafts TEXT DEFAULT '[]'",
+            "ALTER TABLE scrim_games ADD COLUMN lineup TEXT DEFAULT '{}'",
+            "ALTER TABLE scrim_games ADD COLUMN player_stats TEXT DEFAULT '{}'",
         ):
             try:
                 conn.exec_driver_sql(stmt)

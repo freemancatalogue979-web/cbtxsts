@@ -18,7 +18,20 @@ from ..models import (
     TrainingWeek,
     loads,
 )
+from ..performance import player_performance, squad_focus
 from ..serializers import activity_out, event_out, scrim_out, settings_out, week_out
+
+STAFF_ROLES = {"admin", "captain", "coach", "analyst"}
+
+
+def my_form(db: Session, user) -> dict | None:
+    """The signed-in member's games across scrims + tournaments and the heroes to work on."""
+    perf = player_performance(db, user.id)
+    perf.pop("_heroes_by_key", None)
+    if not perf["overall"]["games"] and not perf["focus"]:
+        return None
+    return {"overall": perf["overall"], "scrims": perf["scrims"], "tournaments": perf["tournaments"],
+            "top_heroes": perf["heroes"][:3], "focus": perf["focus"][:4], "user_id": user.id}
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -153,4 +166,6 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
         "weakness": weakness,
         "mandatory_reviews": [scrim_out(s, with_games=False) for s in pending_reviews(db)],
         "open_action_items": open_action_items(db),
+        "my_form": my_form(db, user),
+        "squad_focus": squad_focus(db) if user.role in STAFF_ROLES else [],
     }

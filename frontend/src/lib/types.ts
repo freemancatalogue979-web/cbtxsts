@@ -78,11 +78,13 @@ export interface TournamentPlayerStat {
   main_lane: string;
   lanes: Record<string, number>;
   heroes: { hero: string; games: number; wins: number }[];
+  /** Scrims only, when K/D/A was recorded: (kills + assists) / deaths. */
+  kda?: number | null;
 }
 
 export interface TournamentStatsT {
   series: { played: number; wins: number; losses: number; draws: number; win_rate: number | null };
-  games: { played: number; wins: number; losses: number; win_rate: number | null; with_lineup: number };
+  games: { played: number; wins: number; losses: number; win_rate: number | null; with_lineup: number; with_player_stats?: number };
   players: TournamentPlayerStat[];
   heroes: { hero: string; games: number; wins: number; losses: number; win_rate: number | null }[];
   tournaments?: number;
@@ -189,7 +191,14 @@ export interface ScrimGame {
   duration_min: number;
   stats: Record<string, number | string | boolean | null>;
   draft: Draft;
+  /** Who played ({LANE: user_id}) — the game's own lineup, else the scrim's. */
+  lineup: Record<string, number>;
+  lineup_from_scrim: boolean;
+  players: Record<string, string>;
+  player_stats: Record<string, PlayerLine>;
 }
+
+export interface PlayerLine { kills?: number; deaths?: number; assists?: number }
 
 export interface Draft {
   our_bans?: (string | null)[];
@@ -304,6 +313,91 @@ export interface PoolEntry {
   losses: number;
   win_rate: number | null;
   coach_notes: string;
+  /** Team games played with this hero (scrims + tournaments). */
+  played?: PoolPlayed;
+}
+
+export interface PoolPlayed {
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  scrim_games: number;
+  tournament_games: number;
+  kda: number | null;
+  last_played: string | null;
+  form: string[];
+}
+
+export interface KdaLine { games: number; kills: number; deaths: number; assists: number; ratio: number }
+
+export interface PerfSummary {
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  series: number;
+  main_lane: string;
+  lanes: Record<string, number>;
+  kda: KdaLine | null;
+  form: string[];
+}
+
+export interface HeroPerf {
+  hero: string;
+  key: string;
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  decided: number;
+  scrim_games: number;
+  tournament_games: number;
+  kda: KdaLine | null;
+  form: string[];
+  loss_streak: number;
+  last_played: string | null;
+  lanes: string[];
+}
+
+export interface FocusAlert {
+  kind: "struggling" | "low_kda" | "cold_streak" | "no_reps" | "strength";
+  tone: "bad" | "warn" | "good";
+  hero: string;
+  title: string;
+  detail: string;
+  tip: string;
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  kda: number | null;
+  pool: string | null;
+}
+
+export interface GamePlayed {
+  source: "scrim" | "tournament";
+  event_id: number;
+  match_id: number;
+  label: string;
+  opponent: string;
+  date: string | null;
+  game_no: number;
+  lane: string;
+  hero: string;
+  result: string;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+}
+
+export interface PlayerPerformance {
+  overall: PerfSummary;
+  scrims: PerfSummary;
+  tournaments: PerfSummary;
+  heroes: HeroPerf[];
+  focus: FocusAlert[];
+  recent: GamePlayed[];
 }
 
 export interface DevEntry {
@@ -328,6 +422,7 @@ export interface PlayerDetail extends User {
     recent: { scrim_id: number; number: number; opponent: string; result: string; score_us: number; score_them: number; date: string | null }[];
   };
   tournament_stats?: PlayerTournamentStats;
+  performance?: PlayerPerformance;
   pool: Record<string, PoolEntry[]>;
   development: DevEntry[];
   avg_rating: number | null;
@@ -417,6 +512,17 @@ export interface Dashboard {
   } | null;
   mandatory_reviews: Scrim[];
   open_action_items: number;
+  /** Your own games and heroes to work on (null if you haven't played yet). */
+  my_form?: {
+    user_id: number;
+    overall: PerfSummary;
+    scrims: PerfSummary;
+    tournaments: PerfSummary;
+    top_heroes: HeroPerf[];
+    focus: FocusAlert[];
+  } | null;
+  /** Staff: the most urgent hero alert per roster player. */
+  squad_focus?: { user_id: number; name: string; alert: FocusAlert; more: number }[];
 }
 
 export interface ScrimSummary {

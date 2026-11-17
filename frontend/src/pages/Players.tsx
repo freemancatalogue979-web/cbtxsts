@@ -10,9 +10,34 @@ import { HeroImg } from "../components/HeroImg";
 import { linkedRoster } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
 import { nice } from "../lib/caseText";
+import { FormDots, kdaText, PerformancePanel } from "../components/PlayerPerformance";
+import type { FocusAlert, PoolPlayed } from "../lib/types";
 
 const POOL_LABEL: Record<string, string> = { comfort: "Comfort picks", meta: "Meta picks", pocket: "Pocket picks", emergency: "Emergency picks" };
 const POOL_ORDER = ["comfort", "meta", "pocket", "emergency"];
+
+/** Pool card: how many team games (scrims + tournaments) on this hero, and how they went. */
+function PoolPlayedLine({ played, alert }: { played: PoolPlayed; alert?: FocusAlert }) {
+  const where = [played.scrim_games ? `${played.scrim_games} scrim` : "", played.tournament_games ? `${played.tournament_games} tournament` : ""].filter(Boolean).join(" · ");
+  const flag = alert && alert.tone !== "good" ? alert : undefined;
+  return (
+    <div className={`mt-2 rounded-md border px-2 py-1.5 ${flag ? (flag.tone === "bad" ? "border-danger/45 bg-danger/5" : "border-amber/45 bg-amber/5") : "border-edge/60 bg-panel/50"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] tabular-nums">
+          <span className="font-extrabold">{played.games}</span> team {played.games === 1 ? "game" : "games"}
+          {played.games > 0 && (
+            <span className="text-mute"> · <span className="text-leaf">{played.wins}W</span>–<span className="text-danger">{played.losses}L</span>{played.win_rate != null ? ` · ${played.win_rate}%` : ""}</span>
+          )}
+        </span>
+        <FormDots form={played.form.slice(0, 4)} label="Form on this hero" />
+      </div>
+      {(where || played.kda != null) && (
+        <div className="text-[9.5px] text-faint mt-0.5">{where}{played.kda != null ? `${where ? " · " : ""}KDA ${kdaText(played.kda)}` : ""}</div>
+      )}
+      {flag && <div className={`text-[10px] font-bold mt-1 ${flag.tone === "bad" ? "text-danger" : "text-amber"}`}>{flag.title}</div>}
+    </div>
+  );
+}
 
 function Confidence({ value }: { value: number }) {
   return (
@@ -158,6 +183,8 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
     const p = detail;
     const stats = p.scrim_stats;
     const canEditPool = p.can_rate || p.is_self;
+    // A hero card is flagged when that hero is on the "work on" list.
+    const focusByHero = new Map((p.performance?.focus ?? []).map((a) => [a.hero, a] as const));
     return (
       <div className="space-y-6">
         <button className="label !text-crim" onClick={() => navigate("players")}>← Roster</button>
@@ -211,42 +238,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           </div>
         </div>
 
-        {p.tournament_stats && p.tournament_stats.games > 0 && (() => {
-          const ts = p.tournament_stats;
-          return (
-            <section aria-label="Tournament games" className="space-y-2.5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <StatTile label="Tournament games" value={ts.games} hint={`${ts.wins}W – ${ts.losses}L · ${ts.series} series`} />
-                <StatTile label="Tournament game win" value={pct(ts.win_rate)} tone={ts.win_rate == null ? "default" : ts.win_rate >= 50 ? "good" : "bad"} />
-                <StatTile label="Tournaments" value={ts.tournaments} hint={ts.main_lane ? `mostly ${nice(ts.main_lane)}` : undefined} />
-                <div className="card px-3.5 py-3">
-                  <div className="section-pill mb-1.5">Tournament form</div>
-                  <div className="flex gap-1 mt-1">
-                    {ts.form.filter(Boolean).length === 0 && <span className="text-faint text-sm">—</span>}
-                    {ts.form.filter(Boolean).map((r, i) => <ResultBadge key={i} result={r} />)}
-                  </div>
-                </div>
-              </div>
-              <div className="card p-3.5">
-                <div className="section-pill mb-2">Recent tournament games</div>
-                <ul className="divide-y divide-edge/60">
-                  {ts.recent.map((r) => (
-                    <li key={`${r.match_id}-${r.game_no}`}>
-                      <button className="w-full flex items-center gap-2.5 py-1.5 text-left hover:text-sky" onClick={() => navigate("tournaments", r.tournament_id)}>
-                        {r.hero ? <HeroImg name={r.hero} size={22} className="rounded" /> : <span className="w-[22px]" />}
-                        <span className="flex-1 min-w-0 truncate text-[12px]">
-                          <span className="font-bold">{r.tournament}</span> · vs {r.opponent} · game {r.game_no}
-                          <span className="text-faint"> · {nice(r.lane)}{r.hero ? ` · ${r.hero}` : ""}</span>
-                        </span>
-                        {r.result ? <ResultBadge result={r.result} /> : <span className="text-faint text-[11px]">—</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          );
-        })()}
+        {p.performance && <PerformancePanel perf={p.performance} ign={p.ign} isSelf={p.is_self} />}
 
         <ProgressPanel userId={p.id} ign={p.ign} />
 
@@ -271,8 +263,11 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <Confidence value={e.confidence} />
-                        <span className="text-[10px] text-mute tabular-nums">{e.games}g{e.win_rate != null ? ` · ${e.win_rate}%` : ""}</span>
+                        {(e.games > 0 || !e.played) && (
+                          <span className="text-[10px] text-mute tabular-nums" title="Logged by hand (solo queue, practice)">{e.games}g{e.win_rate != null ? ` · ${e.win_rate}%` : ""}</span>
+                        )}
                       </div>
+                      {e.played && <PoolPlayedLine played={e.played} alert={focusByHero.get(e.hero_name)} />}
                       {e.coach_notes && <div className="text-[10.5px] text-amber/90 mt-1.5 italic">{e.coach_notes}</div>}
                       {e.last_played && <div className="text-[9.5px] text-faint mt-1">last played {dayLabel(e.last_played)}</div>}
                       {canEditPool && (

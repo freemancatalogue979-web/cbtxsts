@@ -8,6 +8,8 @@ import type { Dashboard, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge, useCountdown } from "../lib/util";
 import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide } from "../components/ui";
 import { nice } from "../lib/caseText";
+import { FocusAlerts, FormDots, kdaText } from "../components/PlayerPerformance";
+import { HeroImg } from "../components/HeroImg";
 
 function greeting(now = new Date()): string {
   const hour = now.getHours();
@@ -152,6 +154,88 @@ function FormStrip({ results }: { results: Dashboard["recent_results"] }) {
   );
 }
 
+/** The signed-in player's games across scrims + tournaments, and heroes to work on. */
+function MyForm({ form }: { form: NonNullable<Dashboard["my_form"]> }) {
+  const { overall, scrims, tournaments } = form;
+  const line = (label: string, s: typeof overall) => (
+    <div className="rounded-lg border border-edge/70 bg-raised/50 px-3 py-2">
+      <div className="label">{label}</div>
+      <div className="text-lg font-extrabold tabular-nums leading-tight">{s.games}<span className="text-[11px] text-faint font-bold"> games</span></div>
+      <div className="text-[11px] text-mute tabular-nums">{s.games ? `${s.wins}W – ${s.losses}L · ${pct(s.win_rate)}` : "none yet"}</div>
+    </div>
+  );
+  return (
+    <section className="card p-4 sm:p-5 space-y-4" aria-label="My form">
+      <SectionTitle right={<button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("players", form.user_id)}>My profile <ArrowRight size={13} aria-hidden="true" /></button>}>
+        My form
+      </SectionTitle>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-2 space-y-3 min-w-0">
+          <div className="grid grid-cols-3 gap-2">
+            {line("All", overall)}
+            {line("Scrims", scrims)}
+            {line("Tournaments", tournaments)}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-mute">
+            <span className="inline-flex items-center gap-2">Last games <FormDots form={overall.form} label="My recent games" /></span>
+            {overall.kda && <span>KDA <b className="text-text tabular-nums">{kdaText(overall.kda.ratio)}</b></span>}
+            {overall.main_lane && <span>Mostly {nice(overall.main_lane)}</span>}
+          </div>
+          {form.top_heroes.length > 0 && (
+            <div>
+              <div className="label mb-1.5">Most played</div>
+              <ul className="flex flex-wrap gap-2">
+                {form.top_heroes.map((h) => (
+                  <li key={h.key} className="flex items-center gap-2 rounded-lg border border-edge/70 bg-raised/50 pr-2.5">
+                    <HeroImg name={h.hero} size={30} className="rounded-l-lg" />
+                    <span className="text-[11.5px] leading-tight">
+                      <b>{h.hero}</b>
+                      <span className="block text-faint tabular-nums">{h.games}g · {pct(h.win_rate)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+        <div className="lg:col-span-3 min-w-0">
+          <div className="label mb-2">Heroes to work on</div>
+          <FocusAlerts alerts={form.focus} compact empty="Nothing to flag: none of your heroes is losing more than it wins. Keep it up." />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Staff: the most urgent hero alert for each player. */
+function SquadFocus({ rows }: { rows: NonNullable<Dashboard["squad_focus"]> }) {
+  const tone = { bad: "text-danger border-danger/45", warn: "text-amber border-amber/45", good: "text-leaf border-leaf/45" };
+  return (
+    <section className="card p-4 sm:p-5" aria-label="Squad heroes to work on">
+      <SectionTitle right={<span className="text-[11px] text-faint">scrims + tournaments</span>}>Squad heroes to work on</SectionTitle>
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((r) => (
+          <li key={r.user_id}>
+            <button onClick={() => navigate("players", r.user_id)}
+              className="w-full flex items-center gap-3 rounded-xl border border-edge bg-raised/50 p-2.5 text-left transition-colors hover:border-edge-2 hover:bg-raised">
+              <HeroImg name={r.alert.hero} size={38} className="rounded-lg shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-[12.5px] font-extrabold truncate">{r.name}</span>
+                  <span className={`chip !py-0 !text-[9px] ${tone[r.alert.tone]}`}>{r.alert.tone === "good" ? "strength" : r.alert.tone === "bad" ? "work on" : "watch"}</span>
+                </span>
+                <span className="block text-[12px] font-bold truncate">{r.alert.title}</span>
+                <span className="block text-[11px] text-faint truncate">{r.alert.detail}{r.more ? ` · +${r.more} more` : ""}</span>
+              </span>
+              <ArrowRight size={14} className="text-faint shrink-0" aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const QUICK = [
   { id: "ai", label: "Ask 9 Clover AI", icon: BrainCircuit, primary: true },
   { id: "reviews", label: "Reviews", icon: ClipboardList },
@@ -236,6 +320,9 @@ export function DashboardPage({ me }: { me?: User }) {
         <div className="lg:col-span-5"><TrainingBlock dash={dash} /></div>
         <div className="lg:col-span-7"><NextUp dash={dash} /></div>
       </div>
+
+      {dash.my_form && <MyForm form={dash.my_form} />}
+      {dash.squad_focus && dash.squad_focus.length > 0 && <SquadFocus rows={dash.squad_focus} />}
 
       <section>
         <SectionTitle right={<span className="text-[11px] text-faint">last {perf.games_analyzed} scrim games</span>}>
