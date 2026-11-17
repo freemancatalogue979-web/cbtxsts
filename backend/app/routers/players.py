@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import ROLE_CAPTAIN, ROLE_PLAYER, can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import DevelopmentEntry, Hero, HeroPoolEntry, Scrim, User, dumps, loads
 from ..schemas import DevIn, OptionalDate, PoolIn, PoolPatch
 from ..serializers import dev_out, pool_out, user_out
@@ -142,6 +143,10 @@ def delete_pool_entry(entry_id: int, db: Session = Depends(get_db), user=Depends
     if entry is None:
         raise HTTPException(status_code=404, detail="Pool entry not found")
     require(can.rate_players(user) or user.id == entry.user_id, "edit this hero pool")
+    owner = db.get(User, entry.user_id)
+    hero = db.get(Hero, entry.hero_id)
+    send_to_trash(db, [entry], user=user, kind="pool_entry", area="players", viewers=[entry.user_id],
+                  label=f"{hero.name if hero else 'Hero'} · {owner.ign if owner else 'player'}'s pool", target_id=entry.user_id)
     db.delete(entry)
     db.commit()
     return None
@@ -207,6 +212,10 @@ def delete_development(entry_id: int, db: Session = Depends(get_db), user=Depend
         raise HTTPException(status_code=404, detail="Entry not found")
     staff = can.rate_players(user)
     require(staff or (entry.source == "self" and entry.created_by == user.id), "delete this entry")
+    owner = db.get(User, entry.user_id)
+    send_to_trash(db, [entry], user=user, kind="development_entry", area="players", viewers=[entry.user_id],
+                  label=f"{entry.category.title()} entry · {owner.ign if owner else 'player'}"
+                        + (f" · {entry.entry_date.isoformat()}" if entry.entry_date else ""), target_id=entry.user_id)
     db.delete(entry)
     db.commit()
     return None

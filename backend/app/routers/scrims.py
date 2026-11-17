@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import Scrim, ScrimGame, dumps, loads
 from ..schemas import GameIn, ScrimIn, ScrimPatch
 from ..serializers import game_out, scrim_out
@@ -235,6 +236,20 @@ def add_game(scrim_id: int, payload: GameIn, db: Session = Depends(get_db),
     return game_out(game)
 
 
+def _restore_scrim_game(db: Session, item, remap) -> list[str]:
+    """After a game comes back from Trash, its scrim's series score follows."""
+    from ..models import loads as _loads
+
+    rows = _loads(item.payload, {}).get("rows", [])
+    scrim_ids = {r["d"].get("scrim_id") for r in rows if r["t"] == "scrim_games"}
+    for sid in scrim_ids:
+        scrim = db.get(Scrim, sid)
+        if scrim is not None:
+            db.refresh(scrim)
+            _rescore(scrim)
+    return []
+
+
 def _rescore(scrim: Scrim) -> None:
     """Recompute series score/result from the (remaining) games."""
     us = sum(1 for g in scrim.games if g.result == "WIN")
@@ -289,6 +304,8 @@ def delete_game(scrim_id: int, game_id: int, db: Session = Depends(get_db),
     if game is None or game.scrim_id != scrim_id:
         raise HTTPException(status_code=404, detail="Game not found")
     scrim = game.scrim
+    send_to_trash(db, [game], user=user, kind="scrim_game", area="scrims",
+                  label=f"Game {game.game_no} · Scrim #{scrim.number} vs {scrim.opponent}")
     db.delete(game)
     db.flush()
     db.refresh(scrim)
@@ -308,6 +325,12 @@ def delete_scrim(scrim_id: int, db: Session = Depends(get_db), user=Depends(get_
     scrim = db.get(Scrim, scrim_id)
     if scrim is None:
         raise HTTPException(status_code=404, detail="Scrim not found")
+    send_to_trash(db, [scrim], user=user, kind="scrim", area="scrims", label=f"Scrim #{scrim.number} vs {scrim.opponent}")
     db.delete(scrim)
     db.commit()
     return None
+
+
+from ..trash import RESTORE_HOOKS as _HOOKS  # noqa: E402
+
+_HOOKS["scrim_game"] = _restore_scrim_game

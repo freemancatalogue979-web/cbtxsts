@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import BanEntry, Hero
 from ..schemas import BanIn, BanPatch
 from ..serializers import ban_out
@@ -75,6 +76,8 @@ def delete_ban(ban_id: int, db: Session = Depends(get_db), user=Depends(get_curr
     entry = db.get(BanEntry, ban_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Ban entry not found")
+    send_to_trash(db, [entry], user=user, kind="ban", area="bans",
+                  label=f"Ban: {entry.hero_name or 'hero'}" + (f" vs {entry.opponent}" if entry.opponent else f" · {entry.scope}"))
     db.delete(entry)
     db.commit()
     return None

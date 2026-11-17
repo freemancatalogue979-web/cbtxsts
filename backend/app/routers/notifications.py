@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..deps import get_current_user, get_db
+from ..trash import send_to_trash
 from ..models import Notification, User, utcnow
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -140,9 +141,15 @@ def delete_notification(notification_id: int, retract_all: bool = Query(default=
                 select(Notification).where(Notification.actor_id == row.actor_id,
                                            Notification.title == row.title,
                                            Notification.kind == row.kind))
-        for c in db.scalars(stmt).all():
+        copies = db.scalars(stmt).all()
+        send_to_trash(db, copies, user=user, kind="announcement", area="notifications",
+                      label=f"Announcement: {row.title}", summary=f"{len(copies)} {'copy' if len(copies) == 1 else 'copies'}")
+        for c in copies:
             db.delete(c)
     else:
+        # Someone's own inbox: private to them (and to the staff member who cleared it).
+        send_to_trash(db, [row], user=user, kind="notification", area="notifications",
+                      restricted=True, viewers=[row.user_id, user.id], label=row.title or "Notification", summary="")
         db.delete(row)
     db.commit()
 
@@ -173,6 +180,9 @@ def retract_announcement(payload: RetractIn, db: Session = Depends(get_db), user
                 Notification.created_at == latest.created_at,
                 Notification.kind == latest.kind))
     rows = db.scalars(stmt).all()
+    if rows:
+        send_to_trash(db, rows, user=user, kind="announcement", area="notifications",
+                      label=f"Announcement: {title}", summary=f"{len(rows)} {'copy' if len(rows) == 1 else 'copies'}")
     for r in rows:
         db.delete(r)
     db.commit()

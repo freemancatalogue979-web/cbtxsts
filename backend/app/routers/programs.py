@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import ProgramWeek, TrainingProgram, TrainingWeek, User, WeekProgress, dumps, loads, utcnow
 from ..serializers import ROLE_LABELS, avatar_url
 from .notifications import notify
@@ -199,7 +200,9 @@ def update_program(program_id: int, payload: ProgramPatch, db: Session = Depends
 @router.delete("/{program_id}", status_code=204)
 def delete_program(program_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     require(can.manage_training(user), "delete programs")
-    db.delete(_get(db, program_id))
+    p = _get(db, program_id)
+    send_to_trash(db, [p], user=user, kind="program", area="training", label=p.name)
+    db.delete(p)
     db.commit()
 
 
@@ -251,6 +254,8 @@ def delete_week(week_id: int, db: Session = Depends(get_db), user=Depends(get_cu
     w = db.get(ProgramWeek, week_id)
     if w is None:
         raise HTTPException(status_code=404, detail="Week not found")
+    send_to_trash(db, [w], user=user, kind="program_week", area="training",
+                  label=f"Week {w.number} · {w.title} · {w.program.name}", target_id=w.program_id)
     db.delete(w)
     db.commit()
 

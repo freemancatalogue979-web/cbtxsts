@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import MapBoard, dumps, loads
 from ..schemas import MapBoardIn, MapBoardPatch
 from ..serializers import board_out
@@ -75,5 +76,6 @@ def delete_board(board_id: int, db: Session = Depends(get_db), user=Depends(get_
     b = db.get(MapBoard, board_id)
     if b is None:
         raise HTTPException(status_code=404, detail="Board not found")
+    send_to_trash(db, [b], user=user, kind="map_board", area="maps", label=b.name)
     db.delete(b)
     db.commit()

@@ -592,3 +592,29 @@ class ArchiveComment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     item: Mapped[ArchiveItem] = relationship(back_populates="comments")
+
+
+# ---------------------------------------------------------------------------
+# Trash — every delete lands here first and can be restored
+# ---------------------------------------------------------------------------
+class TrashItem(Base):
+    """A deleted thing (plus everything that was deleted with it), kept as a
+    restorable snapshot until someone allowed to purge it empties it."""
+
+    __tablename__ = "trash_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)   # scrim, tournament, archive_item…
+    area: Mapped[str] = mapped_column(String(40), index=True)   # app section it came from
+    label: Mapped[str] = mapped_column(String(200))             # safe display title
+    summary: Mapped[str] = mapped_column(String(300), default="")  # "3 games · 1 review"
+    target_id: Mapped[str] = mapped_column(String(64), default="")  # id of the main row (for links)
+    deleted_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    # Private content (AI chats, private archive drops, personal inbox) is only
+    # visible to viewer_ids — never to admins who aren't listed.
+    restricted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    viewer_ids: Mapped[str] = mapped_column(Text, default="[]")  # JSON [user_id]
+    payload: Mapped[str] = mapped_column(Text, default="{}")     # JSON snapshot
+    files: Mapped[str] = mapped_column(Text, default="[]")       # JSON [{trash, original}]
+    row_count: Mapped[int] = mapped_column(Integer, default=0)

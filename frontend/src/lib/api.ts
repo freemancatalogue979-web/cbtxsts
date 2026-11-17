@@ -30,6 +30,18 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t: string | null) =>
   t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
 
+/** Deletes move things to Trash; the server lists the new trash ids in this
+ *  header so the app can offer Undo right away. */
+export const TRASH_EVENT = "clover:trashed";
+export const RESTORED_EVENT = "clover:restored";
+
+function announceTrash(res: Response) {
+  const raw = res.headers?.get?.("X-Clover-Trash");
+  if (!raw) return;
+  const ids = raw.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (ids.length) window.dispatchEvent(new CustomEvent(TRASH_EVENT, { detail: { ids } }));
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -47,6 +59,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     await new Promise((r) => setTimeout(r, 900));
     res = await attempt();
   }
+  if (res.ok) announceTrash(res);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let payload: unknown = undefined;

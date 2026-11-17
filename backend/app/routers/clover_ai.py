@@ -12,7 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
-from sqlalchemy import func, or_, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from ..ai_credentials import key_status
 from ..ai_privacy import public_ai_mode, public_ai_text
 from ..clover_ai_models import AIAccountConsent, AIActionAudit, AIActionProposal, AIContribution, AIConversation, AIKnowledge, AILearnedMemory, AILearningSettings, AIMemoryNote, AIMessage, AISettings
 from ..deps import get_current_user, get_db
+from ..trash import send_to_trash
 from ..hero_profiles import profile_for
 from ..models import Hero, User, dumps, loads, utcnow
 
@@ -440,6 +441,10 @@ def clear_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -
         row.share_profile = row.share_pool = row.share_scrims = row.use_history = False
         row.coaching_goal = ""
         row.updated_at = utcnow()
+        notes = db.query(AIMemoryNote).filter_by(user_id=user.id).all()
+        if notes:
+            send_to_trash(db, notes, user=user, kind="ai_memory", area="ai", restricted=True, viewers=[user.id],
+                          label=f"Coaching notes ({len(notes)})", summary="Cleared with Forget everything")
         db.query(AIMemoryNote).filter_by(user_id=user.id).delete(synchronize_session=False)
         db.query(AIAccountConsent).filter_by(user_id=user.id).delete(synchronize_session=False)
         _clear_learned_context(db, user.id)
@@ -502,6 +507,8 @@ def update_memory(
 @router.delete("/memory-notes/{memory_id}", status_code=204)
 def delete_memory(memory_id: str, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
     row = own_memory(db, user, memory_id)
+    send_to_trash(db, [row], user=user, kind="ai_memory", area="ai", restricted=True, viewers=[user.id],
+                  label="Coaching note", summary=row.content[:120])
     db.delete(row)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -538,6 +545,10 @@ def update_learning_settings(data: LearningSettingsIn, user: User = Depends(ai_u
 
 @router.delete("/learned-memory", status_code=204)
 def delete_all_learned_memory(user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
+    learned = db.query(AILearnedMemory).filter_by(owner_id=user.id).all()
+    if learned:
+        send_to_trash(db, learned, user=user, kind="ai_learned", area="ai", restricted=True, viewers=[user.id],
+                      label=f"Everything the AI learned ({len(learned)})", summary="")
     db.query(AILearnedMemory).filter_by(owner_id=user.id).delete(synchronize_session=False)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -548,6 +559,8 @@ def delete_learned_memory(memory_id: str, user: User = Depends(ai_user), db: Ses
     row = db.query(AILearnedMemory).filter_by(owner_id=user.id, id=memory_id).first()
     if row is None:
         raise HTTPException(404, "Memory not found.")
+    send_to_trash(db, [row], user=user, kind="ai_learned", area="ai", restricted=True, viewers=[user.id],
+                  label=f"Learned: {row.topic}", summary=row.content[:120])
     db.delete(row)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -625,6 +638,8 @@ def rename_conversation(
 @router.delete("/conversations/{conversation_id}", status_code=204)
 def delete_conversation(conversation_id: str, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
     row = own_conversation(db, user, conversation_id)
+    send_to_trash(db, [row], user=user, kind="ai_conversation", area="ai", restricted=True, viewers=[user.id],
+                  label=row.title or "Conversation")
     db.delete(row)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -1260,14 +1275,20 @@ def remove_knowledge(knowledge_id: str, user: User = Depends(admin_user), db: Se
     row = db.query(AIKnowledge).filter_by(id=knowledge_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Knowledge note not found.")
+    before = None
     if row.contribution_id:
         submission = db.get(AIContribution, row.contribution_id)
         if submission is not None:
+            before = {"id": submission.id, "status": submission.status, "review_note": submission.review_note,
+                      "reviewed_by": submission.reviewed_by,
+                      "reviewed_at": submission.reviewed_at.isoformat() if submission.reviewed_at else None}
             submission.status = "removed"
             submission.review_note = (
                 "Removed from the shared knowledge library by an admin. " + submission.review_note[:430]
             )
             submission.reviewed_by, submission.reviewed_at = user.id, utcnow()
+    send_to_trash(db, [row], user=user, kind="ai_knowledge", area="ai", label=f"Knowledge: {row.title}",
+                  summary=row.content[:120], custom={"submission": before} if before else None)
     db.delete(row)
     db.commit()
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
@@ -1338,6 +1359,8 @@ def withdraw_contribution(
     # Atomic conditional delete prevents a withdrawal racing an admin approval.
     from sqlalchemy import delete
 
+    send_to_trash(db, [row], user=user, kind="ai_contribution", area="ai", restricted=True, viewers=[user.id],
+                  label=f"Submission: {row.title}", summary=row.content[:120])
     result = db.execute(
         delete(AIContribution).where(
             AIContribution.id == contribution_id,
@@ -1417,3 +1440,56 @@ def review(
         raise HTTPException(status_code=409, detail="A matching note was approved concurrently.") from None
     db.refresh(row)
     return contribution_json(row)
+
+
+# ------------------------------ Trash restore -------------------------------- #
+from datetime import datetime as _dt  # noqa: E402
+
+from .. import trash as _trash  # noqa: E402
+
+
+def _free_slot(db: Session, table, owner_col: str, owner, limit: int) -> int | None:
+    taken = {s for (s,) in db.execute(select(table.c.slot).where(table.c[owner_col] == owner)).all()}
+    return next((s for s in range(limit) if s not in taken), None)
+
+
+def _fix_memory_note(db: Session, row: dict):
+    table = AIMemoryNote.__table__
+    if db.query(AIMemoryNote).filter_by(user_id=row["user_id"], content=row["content"]).first():
+        return None, "That coaching note was already back."
+    if db.query(AIMemoryNote).filter_by(user_id=row["user_id"], slot=row["slot"]).first() is None:
+        return row, None
+    slot = _free_slot(db, table, "user_id", row["user_id"], service.MAX_MEMORY_NOTES)
+    if slot is None:
+        raise _trash.RestoreConflict(
+            f"Can't restore: your coaching notes are full ({service.MAX_MEMORY_NOTES}). Delete one, then restore.")
+    return {**row, "slot": slot}, None
+
+
+def _fix_learned(db: Session, row: dict):
+    table = AILearnedMemory.__table__
+    if db.query(AILearnedMemory).filter_by(owner_id=row["owner_id"], fingerprint=row["fingerprint"]).first():
+        return None, "Some learned notes were already known again, so they were skipped."
+    if db.query(AILearnedMemory).filter_by(owner_id=row["owner_id"], slot=row["slot"]).first() is None:
+        return row, None
+    slot = _free_slot(db, table, "owner_id", row["owner_id"], 200)
+    if slot is None:
+        raise _trash.RestoreConflict("Can't restore: the AI's learned memory is full. Delete some notes, then restore.")
+    return {**row, "slot": slot}, None
+
+
+def _after_knowledge_restore(db: Session, item, _remap) -> list[str]:
+    before = (loads(item.payload, {}).get("custom") or {}).get("submission")
+    if before:
+        sub = db.get(AIContribution, before["id"])
+        if sub is not None and sub.status == "removed":
+            sub.status = before["status"]
+            sub.review_note = before["review_note"]
+            sub.reviewed_by = before["reviewed_by"]
+            sub.reviewed_at = _dt.fromisoformat(before["reviewed_at"]) if before["reviewed_at"] else None
+    return []
+
+
+_trash.ROW_FIXERS[AIMemoryNote.__tablename__] = _fix_memory_note
+_trash.ROW_FIXERS[AILearnedMemory.__tablename__] = _fix_learned
+_trash.RESTORE_HOOKS["ai_knowledge"] = _after_knowledge_restore

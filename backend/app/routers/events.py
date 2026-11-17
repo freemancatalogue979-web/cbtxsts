@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import Event, Scrim, TrainingActivity
 from ..schemas import EventIn, EventPatch
 from ..serializers import event_out
@@ -102,6 +103,7 @@ def delete_event(event_id: int, db: Session = Depends(get_db), user=Depends(get_
     event = db.get(Event, event_id)
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
+    send_to_trash(db, [event], user=user, kind="event", area="events", label=event.title)
     db.delete(event)
     db.commit()
     return None

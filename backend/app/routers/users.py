@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..config import AVATAR_DIR
 from ..deps import get_current_user, get_db
+from ..trash import send_to_trash
 from ..models import User
 from ..schemas import UserSelfPatch
 from ..serializers import user_out
@@ -58,7 +59,9 @@ async def upload_avatar(file: UploadFile, db: Session = Depends(get_db), user: U
 def delete_avatar(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     p = _avatar_path(user.id)
     if p.exists():
-        p.unlink()
+        send_to_trash(db, user=user, kind="avatar", area="players", restricted=True, viewers=[user.id],
+                      label="Profile picture", summary="", files=[p], target_id=user.id)
+        db.commit()
 
 
 @router.get("/me")

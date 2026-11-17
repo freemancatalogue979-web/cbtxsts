@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { api, ApiError, getToken, setToken } from "./lib/api";
+import { Fragment, lazy, Suspense, useEffect, useState } from "react";
+import { api, ApiError, getToken, RESTORED_EVENT, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
 import { applyTheme, parseSection, readThemePrefs, saveThemePrefs, type ThemePrefs } from "./lib/theme";
@@ -31,6 +31,7 @@ const NotificationsPage = lazy(() => import("./pages/Notifications").then((m) =>
 const StrategyPage = lazy(() => import("./pages/Strategy").then((m) => ({ default: m.StrategyPage })));
 const EventsPage = lazy(() => import("./pages/Events").then((m) => ({ default: m.EventsPage })));
 const ArchivePage = lazy(() => import("./pages/Archive").then((m) => ({ default: m.ArchivePage })));
+const TrashPage = lazy(() => import("./pages/Trash").then((m) => ({ default: m.TrashPage })));
 const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
 
 function deviceStorage(): Storage | null {
@@ -63,6 +64,13 @@ export default function App() {
 
   useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
   useEffect(() => { applyTheme(theme, section); saveThemePrefs(deviceStorage(), theme); }, [theme, section]);
+  // Undo from the Trash toast: remount the open page so it shows the restored item.
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const bump = () => setRevision((r) => r + 1);
+    window.addEventListener(RESTORED_EVENT, bump);
+    return () => window.removeEventListener(RESTORED_EVENT, bump);
+  }, []);
 
   useEffect(() => {
     const refreshMeta = () => { void api.get<Meta>("/meta").then(setMeta).catch(() => undefined); };
@@ -183,12 +191,17 @@ export default function App() {
     case "notifications":
       page = <NotificationsPage me={user} />;
       break;
+    case "trash":
+      page = <TrashPage me={user} />;
+      break;
     case "admin":
       page = <AdminPage me={user} meta={meta} />;
       break;
     default:
       page = <DashboardPage me={user} />;
   }
+  // A new key after Undo remounts the page, so it refetches and shows the restored item.
+  page = <Fragment key={revision}>{page}</Fragment>;
 
   return (
     <Layout user={user} onUserUpdate={setUser}

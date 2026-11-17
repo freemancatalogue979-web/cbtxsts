@@ -14,6 +14,8 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ARCHIVE_DIR = DATA_DIR / "archive"
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+TRASH_DIR = DATA_DIR / "trash"  # files of deleted items, kept until purged from Trash
+TRASH_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load_dotenv(path: Path) -> None:

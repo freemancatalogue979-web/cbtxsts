@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import StrategyNote, dumps
 from ..schemas import StrategyIn, StrategyPatch
 from ..serializers import strategy_out
@@ -75,6 +76,7 @@ def delete_note(note_id: int, db: Session = Depends(get_db), user=Depends(get_cu
     note = db.get(StrategyNote, note_id)
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
+    send_to_trash(db, [note], user=user, kind="strategy_note", area="strategy", label=note.title)
     db.delete(note)
     db.commit()
     return None

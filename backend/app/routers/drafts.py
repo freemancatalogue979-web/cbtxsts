@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import DraftPlan, dumps, loads
 from ..schemas import DraftIn, DraftPatch
 from ..serializers import draft_out
@@ -88,6 +89,8 @@ def delete_draft(draft_id: int, db: Session = Depends(get_db), user=Depends(get_
     draft = db.get(DraftPlan, draft_id)
     if draft is None:
         raise HTTPException(status_code=404, detail="Draft not found")
+    send_to_trash(db, [draft], user=user, kind="draft", area="drafts",
+                  label=draft.name + (f" vs {draft.opponent}" if draft.opponent else ""))
     db.delete(draft)
     db.commit()
     return None

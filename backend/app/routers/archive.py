@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from ..config import ARCHIVE_DIR
 from ..deps import ROLE_ADMIN, get_current_user, get_db
+from ..trash import send_to_trash
 from ..models import ArchiveComment, ArchiveFolder, ArchiveItem, User, dumps, loads, utcnow
 from ..schemas import ArchiveCommentIn, ArchiveFolderIn, ArchiveFolderPatch, ArchiveItemPatch
 from ..serializers import user_brief
@@ -212,8 +213,19 @@ def delete_folder(folder_id: int, db: Session = Depends(get_db), user: User = De
     folder = _get_folder(db, folder_id)
     if folder.owner_id != user.id and user.role != ROLE_ADMIN:
         raise HTTPException(status_code=403, detail="Only the owner (or an admin) can delete this locker")
-    for item in folder.items:
-        _unlink(item.file_stored)
+    items = list(folder.items)
+    private = sum(1 for it in items if it.visibility == "private")
+    comments = sum(len(it.comments) for it in items)
+    parts = [f"{len(items)} {'drop' if len(items) == 1 else 'drops'}" + (f" ({private} private)" if private else "")] if items else []
+    if comments:
+        parts.append(f"{comments} {'comment' if comments == 1 else 'comments'}")
+    owner = folder.owner
+    # Shared entry (the locker itself is visible to everyone), but its contents
+    # are never listed in Trash — private drops stay private.
+    send_to_trash(db, [folder], user=user, kind="archive_folder", area="archive", viewers=[folder.owner_id],
+                  label=f"Locker: {folder.name}" + (f" · {owner.ign}" if owner and owner.ign else ""),
+                  summary=" · ".join(parts),
+                  files=[ARCHIVE_DIR / it.file_stored for it in items if it.file_stored])
     db.delete(folder)
     db.commit()
     return None
@@ -324,7 +336,11 @@ def delete_item(item_id: int, db: Session = Depends(get_db), user: User = Depend
     folder = item.folder
     if folder.owner_id != user.id and item.created_by != user.id and user.role != ROLE_ADMIN:
         raise HTTPException(status_code=403, detail="Only the owner (or an admin) can delete this drop")
-    _unlink(item.file_stored)
+    private = item.visibility == "private"
+    send_to_trash(db, [item], user=user, kind="archive_item", area="archive",
+                  restricted=private, viewers=[folder.owner_id, item.created_by],
+                  label=("Private drop: " if private else "Drop: ") + item.title,
+                  files=[ARCHIVE_DIR / item.file_stored] if item.file_stored else [], target_id=folder.id)
     db.delete(item)
     _touch(folder)
     db.commit()
@@ -392,6 +408,12 @@ def delete_comment(comment_id: int, db: Session = Depends(get_db), user: User = 
     if (comment.user_id != user.id and comment.item.folder.owner_id != user.id
             and user.role != ROLE_ADMIN):
         raise HTTPException(status_code=403, detail="Not your comment")
+    parent = comment.item
+    private = parent.visibility == "private"
+    send_to_trash(db, [comment], user=user, kind="archive_comment", area="archive",
+                  restricted=private, viewers=[comment.user_id, parent.folder.owner_id],
+                  label=f"Comment on “{parent.title}”", target_id=parent.folder_id,
+                  summary=(comment.body[:120] if not private else ""))
     db.delete(comment)
     db.commit()
     return None

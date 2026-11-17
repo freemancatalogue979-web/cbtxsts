@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user
+from ..trash import send_to_trash
 from ..models import User, utcnow
 from ..platform_data import TeamEquipment
 from ..platform_schemas import EquipmentIn, EquipmentPatch
@@ -112,5 +113,6 @@ def delete_item(item_id: int, _user: User = Depends(item_admin), db: Session = D
     row = db.get(TeamEquipment, item_id)
     if row is None:
         raise HTTPException(404, "Equipment record not found.")
+    send_to_trash(db, [row], user=_user, kind="equipment", area="heroes", label=f"Equipment: {row.name}")
     db.delete(row)
     db.commit()

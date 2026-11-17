@@ -33,6 +33,7 @@ from .routers import (
     scrims,
     strategy,
     training,
+    trash,
     users,
 )
 from .seed import seed_if_empty
@@ -49,12 +50,41 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Clover-Trash"],
 )
+
+
+class TrashReceipt:
+    """Deletes move things to Trash; tell the app which trash ids a request made
+    (X-Clover-Trash) so it can offer Undo. Plain ASGI so streaming is untouched."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.inner(scope, receive, send)
+            return
+        from .trash import begin_request
+
+        ids = begin_request()
+
+        async def send_with_receipt(message):
+            if message["type"] == "http.response.start" and ids and message.get("status", 500) < 400:
+                headers = list(message.get("headers") or [])
+                headers.append((b"x-clover-trash", ",".join(str(i) for i in ids).encode()))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.inner(scope, receive, send_with_receipt)
+
+
+app.add_middleware(TrashReceipt)
 
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
-               programs, files, tournaments, intel, items, archive, esports, clover_ai):
+               programs, files, tournaments, intel, items, archive, esports, clover_ai, trash):
     api.include_router(module.router)
 app.include_router(api)
 

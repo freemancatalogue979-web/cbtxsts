@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import BanEntry, Hero, HeroPoolEntry, dumps
 from ..schemas import HeroIn, HeroPatch
 from ..serializers import hero_out
@@ -119,6 +120,7 @@ def delete_hero(hero_id: int, db: Session = Depends(get_db), user=Depends(get_cu
     hero = db.get(Hero, hero_id)
     if hero is None:
         raise HTTPException(status_code=404, detail="Hero not found")
+    send_to_trash(db, [hero], user=user, kind="hero", area="heroes", label=hero.name)
     db.delete(hero)
     db.commit()
     return None

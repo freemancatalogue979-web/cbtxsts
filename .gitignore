@@ -26,6 +26,8 @@ backend/data/*.sqlite*
 # Documents staff upload as course materials (kept on the server, never in git).
 backend/data/material_files/
 backend/data/import-jobs/
+# Files of deleted items waiting in Trash (restorable, server-only).
+backend/data/trash/
 # Teacher Network uploads (materials, chat attachments, qualification documents).
 backend/data/teacher_files/
 .env

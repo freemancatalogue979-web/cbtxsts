@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import MatchReview, Scrim, TournamentMatch, dumps, loads
 from ..schemas import ReviewIn, ReviewPatch
 from ..serializers import review_out
@@ -110,6 +111,9 @@ def delete_review(review_id: int, db: Session = Depends(get_db), user=Depends(ge
     review = db.get(MatchReview, review_id)
     if review is None:
         raise HTTPException(status_code=404, detail="Review not found")
+    send_to_trash(db, [review], user=user, kind="review", area="reviews",
+                  label=f"Review vs {review.opponent or 'unknown'}"
+                        + (f" · {review.review_date.isoformat()}" if review.review_date else ""))
     db.delete(review)
     db.commit()
     return None

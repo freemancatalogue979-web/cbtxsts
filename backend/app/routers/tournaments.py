@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import MatchReview, Tournament, TournamentMatch, User, dumps, loads, utcnow
 from ..security import LANES
 from ..schemas import OptionalDate
@@ -404,7 +405,9 @@ def update_tournament(tournament_id: int, payload: TournamentPatch, db: Session 
 @router.delete("/{tournament_id}", status_code=204)
 def delete_tournament(tournament_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     require(can.manage_scrims(user), "delete tournaments")
-    db.delete(_get(db, tournament_id))
+    t = _get(db, tournament_id)
+    send_to_trash(db, [t], user=user, kind="tournament", area="tournaments", label=t.name)
+    db.delete(t)
     db.commit()
 
 
@@ -515,6 +518,14 @@ def clear_game_draft(match_id: int, game_no: int, db: Session = Depends(get_db),
                      user=Depends(get_current_user)):
     require(can.upload_results(user), "clear tournament drafts")
     m = _get_match(db, match_id)
+    game = next((g for g in match_games(m) if g["game_no"] == game_no), None)
+    if game is None:
+        raise HTTPException(status_code=404, detail=f"Game {game_no} has nothing saved")
+    send_to_trash(db, user=user, kind="tournament_game", area="tournaments",
+                  label=f"Game {game_no} · M{m.match_no} vs {m.opponent} · {m.tournament.name}",
+                  summary=" · ".join(x for x in ("who played" if game["lineup"] else "",
+                                                  "draft" if draft_has_content(game["draft"]) else "") if x),
+                  custom={"match_id": m.id, "game": game}, target_id=m.tournament_id)
     _store_game(m, game_no, None, None, None)
     db.commit()
     db.refresh(m)
@@ -524,5 +535,29 @@ def clear_game_draft(match_id: int, game_no: int, db: Session = Depends(get_db),
 @router.delete("/matches/{match_id}", status_code=204)
 def delete_match(match_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     require(can.upload_results(user), "delete tournament matches")
-    db.delete(_get_match(db, match_id))
+    m = _get_match(db, match_id)
+    send_to_trash(db, [m], user=user, kind="tournament_match", area="tournaments",
+                  label=f"M{m.match_no} vs {m.opponent} · {m.tournament.name}")
+    db.delete(m)
     db.commit()
+
+
+def _restore_game_sheet(db: Session, item) -> list[str]:
+    """Put a cleared game sheet (who played + draft) back on its match."""
+    custom = loads(item.payload, {}).get("custom") or {}
+    m = db.get(TournamentMatch, custom.get("match_id"))
+    if m is None:
+        from ..trash import RestoreConflict
+        raise RestoreConflict("Can't restore: its match no longer exists. Restore the match from Trash first.")
+    game = custom.get("game") or {}
+    no = int(game.get("game_no") or 0)
+    if any(g["game_no"] == no for g in match_games(m)):
+        from ..trash import RestoreConflict
+        raise RestoreConflict(f"Can't restore: game {no} already has a new sheet. Clear it first, then restore.")
+    _store_game(m, no, game.get("draft") or {}, game.get("result") or "", game.get("lineup") or {})
+    return []
+
+
+from ..trash import CUSTOM_RESTORERS as _CUSTOM  # noqa: E402
+
+_CUSTOM["tournament_game"] = _restore_game_sheet

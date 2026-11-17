@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import TrainingActivity, TrainingWeek, User, dumps
 from ..schemas import ActivityIn, ActivityPatch, WeekIn, WeekPatch
 from ..serializers import activity_out, avatar_url, week_out
@@ -98,6 +99,8 @@ def delete_week(week_id: int, db: Session = Depends(get_db), user=Depends(get_cu
     week = db.get(TrainingWeek, week_id)
     if week is None:
         raise HTTPException(status_code=404, detail="Week not found")
+    send_to_trash(db, [week], user=user, kind="training_week", area="training",
+                  label=f"Week {week.number}" + (f" · {week.focus}" if week.focus else ""))
     db.query(TrainingActivity).filter(TrainingActivity.week_id == week_id).update({"week_id": None})
     db.delete(week)
     db.commit()
@@ -208,6 +211,7 @@ def delete_activity(activity_id: int, db: Session = Depends(get_db), user=Depend
     activity = db.get(TrainingActivity, activity_id)
     if activity is None:
         raise HTTPException(status_code=404, detail="Activity not found")
+    send_to_trash(db, [activity], user=user, kind="training_activity", area="training", label=activity.title)
     db.delete(activity)
     db.commit()
     return None

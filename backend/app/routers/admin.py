@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..ai_credentials import CredentialStorageError, key_status, remove_key, save_key
 from ..deps import can, get_current_user, get_db, require
+from ..trash import send_to_trash
 from ..models import TeamSettings, User
 from ..schemas import SettingsPatch, UserIn, UserPatch
 from ..security import ROLES, hash_password
@@ -214,6 +215,19 @@ def data_wipe(payload: DataWipeIn, db: Session = Depends(get_db), user=Depends(g
     unknown = [t for t in payload.tables if t not in WIPEABLE]
     if unknown:
         raise HTTPException(status_code=422, detail=f"Unknown tables: {', '.join(unknown)}")
+    from ..db import Base
+
+    roots = []
+    for name in payload.tables:
+        table = Base.metadata.tables.get(name)
+        if table is not None:
+            rows = [dict(r) for r in db.execute(table.select()).mappings().all()]
+            if rows:
+                roots.append((table, rows))
+    if roots:
+        send_to_trash(db, user=user, kind="data_wipe", area="admin", tables=roots,
+                      label="Data wipe: " + ", ".join(WIPEABLE[t] for t in payload.tables)[:180],
+                      target_id="")
     deleted: dict[str, int] = {}
     for table in payload.tables:
         n = db.execute(text(f"DELETE FROM {table}")).rowcount  # noqa: S608 - allowlisted names

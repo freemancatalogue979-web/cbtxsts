@@ -1,6 +1,6 @@
 import {
   Archive, Bell, BookOpenText, BrainCircuit, CalendarDays, ClipboardList, Crosshair, Dumbbell,
-  Gamepad2, Home, Layers, Map, Radar, RadioTower, Settings2, ShieldBan, Swords, Trophy, Users,
+  Gamepad2, Home, Layers, Map, Radar, RadioTower, Settings2, ShieldBan, Swords, Trash2, Trophy, Users,
   type LucideIcon,
 } from "lucide-react";
 import type { SectionId } from "./theme";
@@ -38,6 +38,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "ai", label: "9 Clover AI", short: "AI", icon: BrainCircuit, group: "command", blurb: "Ask about drafts, matchups and esports", keywords: "assistant chat coach" },
   { id: "notifications", label: "Notifications", short: "Alerts", icon: Bell, group: "command", blurb: "Everything that needs your attention", keywords: "inbox alerts" },
   { id: "events", label: "Calendar", short: "Calendar", icon: CalendarDays, group: "command", blurb: "Scrims, training and tournaments by date", keywords: "events schedule" },
+  { id: "trash", label: "Trash", short: "Trash", icon: Trash2, group: "command", blurb: "Everything deleted waits here to be restored", keywords: "deleted recycle bin restore undo recover" },
 
   { id: "training", label: "Training Center", short: "Train", icon: Dumbbell, group: "team", blurb: "Programs, weekly blocks and drills", keywords: "practice drills weeks" },
   { id: "scrims", label: "Scrims", short: "Scrims", icon: Swords, group: "team", blurb: "Book, record and review every scrim", keywords: "matches practice games" },
