@@ -8,6 +8,7 @@ import type { Hero, Meta, User } from "../lib/types";
 import { navigate, HERO_STATUS_STYLE } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Tabs } from "../components/ui";
 import { HeroImg } from "../components/HeroImg";
+import { nice } from "../lib/caseText";
 
 const TIER_TONE: Record<string, string> = {
   "S+": "text-crim border-crim/70 bg-crim/10", S: "text-crim border-crim/50", A: "text-amber border-amber/40",
@@ -66,7 +67,7 @@ function HeroForm({ meta, initial, onSaved, onClose }: {
           <Field label="Name"><input className="input" required value={String(f.name)} onChange={(e) => set("name", e.target.value)} /></Field>
           <Field label="Role">
             <select className="input" value={String(f.role)} onChange={(e) => set("role", e.target.value)}>
-              {meta.lanes.map((l) => <option key={l}>{l}</option>)}
+              {meta.lanes.map((l) => <option key={l} value={l}>{nice(l)}</option>)}
             </select>
           </Field>
           <Field label="Class"><input className="input" value={String(f.hero_class)} onChange={(e) => set("hero_class", e.target.value)} /></Field>
@@ -75,7 +76,7 @@ function HeroForm({ meta, initial, onSaved, onClose }: {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Field label="Meta status">
             <select className="input" value={String(f.meta_status)} onChange={(e) => set("meta_status", e.target.value)}>
-              {meta.hero_statuses.map((s) => <option key={s}>{s}</option>)}
+              {meta.hero_statuses.map((s) => <option key={s} value={s}>{nice(s)}</option>)}
             </select>
           </Field>
           <Field label="Tier">
@@ -84,7 +85,7 @@ function HeroForm({ meta, initial, onSaved, onClose }: {
             </select>
           </Field>
           <Field label="Patch"><input className="input" value={String(f.patch)} onChange={(e) => set("patch", e.target.value)} /></Field>
-          {rate("clover_rating", "9 CLOVER /10")}
+          {rate("clover_rating", "9 Clover /10")}
         </div>
         <div className="grid grid-cols-3 gap-4">
           {rate("win_rate", "Win rate %")}{rate("pick_rate", "Pick rate %")}{rate("ban_rate", "Ban rate %")}
@@ -152,9 +153,9 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         <div className="flex flex-wrap items-start gap-6">
           <HeroImg name={h.name} size={96} eager className="rounded-lg border border-edge-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)]" />
           <div className="flex-1 min-w-56">
-            <PageTitle title={h.name} sub={`${p ? `${p.title} · ` : ""}${h.role} · ${h.hero_class} · difficulty ${h.difficulty}/10 · saved patch ${h.patch || "unknown"}`} />
+            <PageTitle title={h.name} sub={`${p ? `${p.title} · ` : ""}${nice(h.role)} · ${h.hero_class} · difficulty ${h.difficulty}/10 · saved patch ${h.patch || "unknown"}`} />
             <div className="flex flex-wrap items-center gap-2 mt-1">
-              <span className={`chip ${HERO_STATUS_STYLE[h.meta_status] ?? "text-mute"}`}>{h.meta_status}</span>
+              <span className={`chip ${HERO_STATUS_STYLE[h.meta_status] ?? "text-mute"}`}>{nice(h.meta_status)}</span>
               <span className={`chip ${TIER_TONE[h.tier] ?? ""}`}>Tier {h.tier}</span>
               {canAnnotate && <button className="btn-ghost !py-1.5 !text-[12px]" onClick={() => setForm(h)}>Edit</button>}
             </div>
@@ -166,11 +167,11 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[["Win rate", `${h.win_rate.toFixed(1)}%`], ["Pick rate", `${h.pick_rate.toFixed(1)}%`],
-            ["Ban rate", `${h.ban_rate.toFixed(1)}%`], ["9 CLOVER rating", `${h.clover_rating.toFixed(1)}/10`]].map(([l, v]) => (
+            ["Ban rate", `${h.ban_rate.toFixed(1)}%`], ["9 Clover rating", `${h.clover_rating.toFixed(1)}/10`]].map(([l, v]) => (
             <div key={l} className="card p-4">
               <div className="label">{l}</div>
               <div className="text-xl font-extrabold mt-1.5 tabular-nums">{v}</div>
-              {l === "9 CLOVER rating" && (
+              {l === "9 Clover rating" && (
                 <div className="flex gap-0.5 mt-3">
                   {Array.from({ length: 10 }).map((_, i) => (
                     <span key={i} className={`h-1 flex-1 rounded-full ${i < Math.round(h.clover_rating) ? "bg-crim" : "bg-raised border border-edge/60"}`} />
@@ -202,7 +203,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             <div className="space-y-1">
               {(h.specialists ?? []).map((s) => (
                 <button key={s.user_id} onClick={() => navigate("players", s.user_id)} className="w-full flex items-center justify-between text-left hover:bg-raised rounded-lg px-3 py-2.5 transition-colors">
-                  <span className="text-sm font-semibold">{s.ign} <span className="text-faint text-[11px] font-semibold">{s.main_role}</span></span>
+                  <span className="text-sm font-semibold">{s.ign} <span className="text-faint text-[11px] font-semibold">{nice(s.main_role)}</span></span>
                   <span className="text-[11px] text-mute">{s.category} · conf {s.confidence}/10{s.win_rate != null ? ` · ${s.win_rate}% WR` : ""}</span>
                 </button>
               ))}
@@ -214,7 +215,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             <div className="space-y-2.5">
               {(h.on_ban_board ?? []).map((b, i) => (
                 <div key={i} className="text-[13px] leading-relaxed">
-                  <span className="font-bold text-crim uppercase">{b.scope === "standard" ? `Standard P${b.priority}` : b.scope === "opponent" ? `vs ${b.opponent}` : `Patch ${b.patch}`}</span>
+                  <span className="font-bold text-crim">{b.scope === "standard" ? `Standard P${b.priority}` : b.scope === "opponent" ? `vs ${b.opponent}` : `Patch ${b.patch}`}</span>
                   <span className="text-mute"> — {b.reason}</span>
                 </div>
               ))}
@@ -247,7 +248,7 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                      ["Ability effects", p.ratings.ability_effects], ["Difficulty", p.ratings.difficulty]] as [string, number][]).map(([label, v]) => (
                     <div key={label}>
                       <div className="flex justify-between text-[11px] mb-1.5">
-                        <span className="text-mute font-semibold uppercase tracking-[0.14em]">{label}</span>
+                        <span className="text-mute font-semibold tracking-[0.14em]">{label}</span>
                         <span className="font-extrabold tabular-nums">{v}/10</span>
                       </div>
                       <div className="flex gap-1">
@@ -288,13 +289,13 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
           </select>
         </label>
       </div>
-      <Tabs value={role} onChange={setRole} tabs={[{ id: "", label: "All" }, ...meta.lanes.map((l) => ({ id: l, label: l }))]} />
+      <Tabs value={role} onChange={setRole} tabs={[{ id: "", label: "All" }, ...meta.lanes.map((l) => ({ id: l, label: nice(l) }))]} />
       {!heroes && <Spinner />}
       <div className="space-y-10">
         {Object.entries(grouped).map(([lane, list]) => (
           <section key={lane}>
             <div className="flex items-center gap-3 mb-4">
-              <h2 className="section-pill">{lane}</h2>
+              <h2 className="section-pill">{nice(lane)}</h2>
               <span className="text-[11px] font-bold text-faint tabular-nums">{list.length}</span>
               <span className="h-px flex-1 bg-edge/70" />
             </div>
@@ -382,7 +383,7 @@ function SkillDesc({ text }: { text: string }) {
 
 function skillKey(idx: number, total: number): string {
   if (idx === 0) return "P";
-  if (idx === total - 1) return "ULT";
+  if (idx === total - 1) return "Ult";
   return `S${idx}`;
 }
 
@@ -464,7 +465,7 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
         {fallbackNames.map((s, i) => (
           <div key={`${s}-${i}`} className="flex items-center gap-3 bg-raised border border-edge/60 rounded-lg px-3.5 py-3">
             <span className="w-7 h-7 rounded bg-overlay border border-edge-2 flex items-center justify-center text-[10px] font-extrabold text-crim shrink-0">
-              {i === 0 ? "P" : i === fallbackNames.length - 1 ? "ULT" : `S${i}`}
+              {i === 0 ? "P" : i === fallbackNames.length - 1 ? "Ult" : `S${i}`}
             </span>
             <span className="text-[13px] font-bold leading-tight">{s}</span>
           </div>
@@ -504,12 +505,12 @@ function LiveSkillsCard({ heroName, fallbackNames }: { heroName: string; fallbac
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="text-[13px] font-extrabold leading-tight truncate">{s.name}</span>
-                      {s.cd ? <span className="text-[9.5px] text-faint font-semibold shrink-0 uppercase tracking-wide">{s.cd}</span> : null}
+                      {s.cd ? <span className="text-[9.5px] text-faint font-semibold shrink-0 tracking-wide">{s.cd}</span> : null}
                     </span>
                     {s.tags.length > 0 && (
                       <span className="flex flex-wrap gap-1 mt-0.5">
                         {s.tags.map((t, ti) => (
-                          <span key={ti} className="text-[8.5px] px-1.5 py-px rounded border border-edge-2 uppercase tracking-wide"
+                          <span key={ti} className="text-[8.5px] px-1.5 py-px rounded border border-edge-2 tracking-wide"
                             style={{ color: s.tagsRgb[ti] ? `#${s.tagsRgb[ti].replace(/^#/, "")}` : undefined }}>{t}</span>
                         ))}
                       </span>
@@ -581,7 +582,7 @@ function SkillCombosCard({ heroName }: { heroName: string }) {
           return (
             <div key={i} className="bg-raised border border-edge/60 rounded-lg px-4 py-3.5">
               <div className="flex flex-wrap items-center gap-2.5 mb-1.5">
-                {d.title && <span className="chip border-crim/40 text-crim !text-[9px] uppercase">{d.title}</span>}
+                {d.title && <span className="chip border-crim/40 text-crim !text-[9px]">{d.title}</span>}
                 {seq.length > 0 && (
                   <div className="flex items-center gap-1">
                     {seq.map((s, j) => (

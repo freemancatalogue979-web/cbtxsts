@@ -1,9 +1,9 @@
-# ☘ 9 CLOVER — Competitive Training & Analysis Hub
+# ☘ 9 Clover — Competitive Training & Analysis Hub
 
 *PLAY. REVIEW. ADAPT. DOMINATE.*
 
-A private esports training, analysis, strategy and team-management platform for **9 CLOVER**
-(IX CLOVER ☘︎). Dark premium dashboard, deep crimson accents, subtle clover green, Montserrat.
+A private esports training, analysis, strategy and team-management platform for **9 Clover**
+(IX Clover ☘︎). Dark premium dashboard, deep crimson accents, subtle clover green, Courier Std Bold italic.
 
 ```
 backend/    FastAPI + SQLAlchemy + SQLite          → http://localhost:9000  (docs at /docs)
@@ -24,7 +24,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Scrim Manager** | Book scrims (opponent, format BO1/BO3/BO5, server, lineup + subs, expected strategy), record per-game stat sheets and drafts, attach screenshots / replays / stats / VOD / stream links |
 | **Match Review System** | The most important feature. 5+5 bans, lane picks both sides, match statistics, biggest mistakes, why it happened / what we should have done / who was involved / what we change, the lesson, and one action item with owner + deadline (open → in progress → resolved) |
 | **Scrims Database** | Searchable history: filter by opponent / result, head-to-head records, series & game win rates, average duration / kills / deaths / objectives |
-| **Hero Database** | Role, class, difficulty, meta status, tier, patch stats, internal 9 CLOVER rating, notes, counters, synergy, player specialists — 40+ heroes pre-loaded |
+| **Hero Database** | Role, class, difficulty, meta status, tier, patch stats, internal 9 Clover rating, notes, counters, synergy, player specialists — 40+ heroes pre-loaded |
 | **Player Hero Pools** | Comfort / meta / pocket / emergency picks per player with 0–10 confidence, games, win rate and coach notes |
 | **Ban Board** | Standard bans (priority 1–3), opponent-specific bans with reasons, patch-specific bans |
 | **Players & Development** | Roster cards, series form (last five), coach ratings and player self-reviews |
@@ -32,7 +32,7 @@ frontend/   React 19 + Vite + Tailwind v4          → http://localhost:9009
 | **Draft Lab** | Saved pick/ban boards: 5+5 bans, lane picks both sides, status idea → testing → approved |
 | **Calendar & Events** | Tournaments, scrims, training and review deadlines in one feed |
 | **Esports** | Saved Aerena seasons and matches, source-reported team/player stats and ordered draft coverage when available, plus bounded evidence-based analysis |
-| **9 CLOVER AI** | Private chats, owner-controlled taught memory, saveable research, saved esports evidence, opt-in boards and reviewed admin change proposals |
+| **9 Clover AI** | Private chats, owner-controlled taught memory, saveable research, saved esports evidence, opt-in boards and reviewed admin change proposals |
 
 ## Roles & permissions
 
@@ -124,9 +124,9 @@ the database is first created; changing them later does not change an existing
 account. If example data is opted in, the example accounts use the same initial
 password and must also be changed or removed before real use.
 
-## 9 CLOVER AI — member workspace
+## 9 Clover AI — member workspace
 
-Every signed-in member has a **9 CLOVER AI** tab, private conversations, rename,
+Every signed-in member has a **9 Clover AI** tab, private conversations, rename,
 delete, owner-only search across chat titles and messages, paginated older chats,
 optional feedback, suggested prompts and source-context labels. A conversation
 can be downloaded as plaintext JSON: the browser collects a consistent snapshot
@@ -554,7 +554,7 @@ See [theme and appearance](docs/reference/theme.md).
 
 ## Fonts
 
-The interface uses **Montserrat Regular Italic** everywhere (11px, weight 400, italic, 0.1em tracking, all caps), bundled under the SIL Open Font License. There is no font menu. See [docs/reference/fonts.md](docs/reference/fonts.md) for credits.
+The interface uses **Courier Std Bold** in heavy italic everywhere (11px, weight 900, italic, 0.1em tracking). Nothing is shown in all caps. Courier Std is an Adobe font that cannot be bundled, so it is used wherever it is installed; elsewhere the app ships Courier Prime Bold Italic under the SIL Open Font License. There is no font menu. See [docs/reference/fonts.md](docs/reference/fonts.md) for credits.
 
 ## Tests
 

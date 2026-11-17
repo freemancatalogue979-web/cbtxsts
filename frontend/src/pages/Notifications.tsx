@@ -68,7 +68,7 @@ function AnnounceComposer({ onSent }: { onSent: () => void }) {
         <div className="flex flex-wrap gap-1.5">
           {([["all", "Everyone"], ["role", "Role group"], ["user", "One person"]] as const).map(([id, label]) => (
             <button type="button" key={id}
-              className={`chip !cursor-pointer !text-[10px] uppercase ${audience === id ? "border-crim/50 text-crim bg-crim/10" : "text-faint border-edge"}`}
+              className={`chip !cursor-pointer !text-[10px] ${audience === id ? "border-crim/50 text-crim bg-crim/10" : "text-faint border-edge"}`}
               onClick={() => setAudience(id)}>{label}</button>
           ))}
           {audience === "role" && (
@@ -120,7 +120,7 @@ export function NotificationsPage({ me }: { me: User }) {
 
   async function deleteItem(n: NoticeItem, retract: boolean) {
     const msg = retract
-      ? `Retract "${n.title}" for EVERYONE it was sent to?`
+      ? `Retract "${n.title}" for everyone it was sent to?`
       : `Remove "${n.title}" from your inbox?`;
     if (!confirm(msg)) return;
     if (retract) await api.post("/notifications/retract", { title: n.title });
@@ -162,7 +162,7 @@ export function NotificationsPage({ me }: { me: User }) {
                 <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.read ? "bg-edge-2" : "bg-crim animate-pulse"}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`chip !text-[8.5px] uppercase ${n.kind === "reminder" ? "text-amber border-amber/40 bg-amber/10" : "text-sky border-sky/40 bg-sky/10"}`}>
+                    <span className={`chip !text-[8.5px] ${n.kind === "reminder" ? "text-amber border-amber/40 bg-amber/10" : "text-sky border-sky/40 bg-sky/10"}`}>
                       {n.kind}
                     </span>
                     <span className="text-[13px] font-extrabold">{n.title}</span>

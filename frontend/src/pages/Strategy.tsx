@@ -4,6 +4,7 @@ import { api, qs } from "../lib/api";
 import type { Meta, StrategyNote, User } from "../lib/types";
 import { dayLabel } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Tabs } from "../components/ui";
+import { nice } from "../lib/caseText";
 
 function NoteForm({ meta, initial, onSaved, onClose }: {
   meta: Meta; initial: Partial<StrategyNote>; onSaved: () => void; onClose: () => void;
@@ -37,7 +38,7 @@ function NoteForm({ meta, initial, onSaved, onClose }: {
           <Field label="Title"><input className="input" required value={String(f.title)} onChange={(e) => set("title", e.target.value)} /></Field>
           <Field label="Category">
             <select className="input" value={String(f.category)} onChange={(e) => set("category", e.target.value)}>
-              {meta.strategy_categories.map((c) => <option key={c}>{c}</option>)}
+              {meta.strategy_categories.map((c) => <option key={c} value={c}>{nice(c)}</option>)}
             </select>
           </Field>
         </div>
@@ -87,7 +88,7 @@ export function StrategyPage({ me, meta }: { me: User; meta: Meta }) {
           <input className="input !w-52 !pl-8" placeholder="Search the playbook…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
-      <Tabs value={cat} onChange={setCat} tabs={[{ id: "", label: "All" }, ...meta.strategy_categories.map((c) => ({ id: c, label: c.toLowerCase() }))]} />
+      <Tabs value={cat} onChange={setCat} tabs={[{ id: "", label: "All" }, ...meta.strategy_categories.map((c) => ({ id: c, label: nice(c) }))]} />
 
       {!notes && <Spinner />}
       <div className="space-y-2.5">
@@ -99,7 +100,7 @@ export function StrategyPage({ me, meta }: { me: User; meta: Meta }) {
                 <div className="flex flex-wrap items-center gap-2">
                   {n.pinned === true && <Pin size={12} className="text-crim" />}
                   <span className="text-sm font-bold">{n.title}</span>
-                  <Badge cls="text-sky border-sky/30 bg-sky/5">{n.category}</Badge>
+                  <Badge cls="text-sky border-sky/30 bg-sky/5">{nice(n.category)}</Badge>
                   {n.opponent && <Badge cls="text-crim border-crim/30">vs {n.opponent}</Badge>}
                   {n.patch && <Badge>{n.patch}</Badge>}
                   <span className="text-[11px] text-faint ml-auto">updated {dayLabel(n.updated_at?.slice(0, 10))}</span>

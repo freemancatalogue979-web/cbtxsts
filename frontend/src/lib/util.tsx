@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { nice } from "./caseText";
 
 /** "Tue 13 Oct" style date from an ISO yyyy-mm-dd string. */
 export function fmtDate(iso: string | null | undefined, withYear = false): string {
@@ -56,7 +57,7 @@ export const RESULT_STYLE: Record<string, string> = {
 
 export function ResultBadge({ result }: { result: string | null | undefined }) {
   if (!result) return <span className="chip text-mute">—</span>;
-  return <span className={`chip ${RESULT_STYLE[result] || "text-mute"}`}>{result}</span>;
+  return <span className={`chip ${RESULT_STYLE[result] || "text-mute"}`}>{nice(result)}</span>;
 }
 
 export const HERO_STATUS_STYLE: Record<string, string> = {
@@ -75,7 +76,7 @@ export const REVIEW_STATUS_STYLE: Record<string, { label: string; cls: string }>
 };
 
 export const LANE_SHORT: Record<string, string> = {
-  EXP: "EXP", JUNGLE: "JGL", MID: "MID", GOLD: "GOLD", ROAM: "ROAM",
+  EXP: "EXP", JUNGLE: "Jgl", MID: "Mid", GOLD: "Gold", ROAM: "Roam",
 };
 
 export function pct(v: number | null | undefined, digits = 0): string {

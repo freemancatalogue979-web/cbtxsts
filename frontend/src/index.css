@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  /* Montserrat is the only typeface (bundled variable font, SIL OFL), so it
-     looks the same on every device. Symbol fonts cover the few characters it
+  /* Courier Std Bold is the typeface wherever it is installed (Adobe-licensed,
+     so it cannot be bundled); otherwise the bundled Courier Prime (SIL OFL)
+     draws the same Courier shapes. Symbol fonts cover the few characters it
      lacks, such as the star in stylised names. */
-  --font-sans: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  --font-sans: "Courier Std", "Courier Prime", "Courier New", Courier, ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Code and inputs use the same font. */
-  --font-mono: "Montserrat Variable", "Helvetica Neue", Helvetica, Arial, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", sans-serif;
+  --font-mono: "Courier Std", "Courier Prime", "Courier New", Courier, ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Keep headings from squeezing together. */
   --tracking-tight: 0.01em;
 
@@ -52,25 +53,23 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Montserrat Regular Italic (400, real
-     italic face), 11px, 0.1em, all caps. Elements with their own size or
-     weight class keep it. */
+  /* Default text style, everywhere: Courier Std Bold, heavy (900) italic,
+     11px, 0.1em, normal case. Courier has no face heavier than Bold, so a thin
+     stroke in the text's own colour gives the extra 900 weight. Elements with
+     their own size class keep it. */
   body {
     @apply bg-ink text-text font-sans;
     font-size: 11px;
-    font-weight: 400;
+    font-weight: 900;
     font-style: italic;
+    -webkit-text-stroke-width: 0.02em;
     letter-spacing: 0.1em;
-    text-transform: uppercase;
     line-height: 1.6;
   }
-  /* Form controls don't inherit case by default; make typed text match too.
-     Only the display changes; the saved value keeps what was typed. */
-  input, textarea, select, button {
-    text-transform: inherit;
-  }
-  input::placeholder, textarea::placeholder {
-    text-transform: inherit;
+  /* Nothing is shown in all caps: text appears exactly as written, and this
+     guard stops any shouted-caps styling from coming back. */
+  *, *::before, *::after, ::placeholder {
+    text-transform: none !important;
   }
   ::selection {
     background: color-mix(in srgb, var(--color-crim) 55%, transparent);
@@ -176,7 +175,6 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     font-size: 10.5px;
     font-weight: 800;
     letter-spacing: 0.2em;
-    text-transform: uppercase;
     color: var(--color-crim);
     margin-bottom: 0.15rem;
   }
@@ -185,7 +183,6 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     font-weight: 800;
     letter-spacing: 0.08em;
     line-height: 1.25;
-    text-transform: uppercase;
     overflow-wrap: anywhere;
     perspective: 600px;
     /* Extruded edge in the area's colour, then a soft drop shadow: real depth. */
@@ -335,7 +332,6 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     font-size: 11.5px;
     font-weight: 800;
     letter-spacing: 0.1em;
-    text-transform: uppercase;
     white-space: nowrap;
     transition: color 160ms, background-color 160ms, box-shadow 160ms;
   }
@@ -397,7 +393,6 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     font-size: 9.5px;
     font-weight: 800;
     letter-spacing: 0.22em;
-    text-transform: uppercase;
     color: color-mix(in srgb, var(--color-faint) 85%, transparent);
   }
   .nav-item {
@@ -487,7 +482,7 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     letter-spacing: 0.04em;
   }
   .label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-faint;
+    @apply text-[11px] font-semibold tracking-[0.16em] text-faint;
     line-height: 1.45;
   }
   /* Angular section/eyebrow headings, not form labels or action buttons. */
@@ -517,7 +512,6 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     font-weight: 800;
     letter-spacing: 0.13em;
     line-height: 1.5;
-    text-transform: uppercase;
     overflow-wrap: anywhere;
     animation: section-pill-enter 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
@@ -575,7 +569,7 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     @apply inline-flex items-center gap-1 rounded border border-edge bg-raised px-2 py-0.5 text-[11px] font-semibold;
   }
   .th {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-faint text-left px-3 py-2 border-b border-edge;
+    @apply text-[11px] font-semibold tracking-[0.16em] text-faint text-left px-3 py-2 border-b border-edge;
     line-height: 1.45;
   }
   .td {

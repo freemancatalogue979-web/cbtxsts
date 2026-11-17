@@ -5,41 +5,80 @@ import test from "node:test";
 const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
 const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
 
-test("Montserrat Regular Italic is the only text style: 11px, 400 italic, 0.1em, all caps", async () => {
+test("Courier Std Bold is the only text style: 11px, 900 italic, 0.1em, never all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    assert.match(stack, /^"Montserrat Variable", "Helvetica Neue",/);
+    // The licensed Courier Std is used wherever it is installed; Courier Prime is the bundled stand-in.
+    assert.match(stack, /^"Courier Std", "Courier Prime", "Courier New", Courier,/);
     assert.match(stack, /"Noto Sans Symbols"/, "symbol fallback for stylised names");
-    assert.match(stack, /sans-serif$/);
+    assert.match(stack, /monospace$/);
   }
   const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-size:\s*11px/);
-  assert.match(body, /font-weight:\s*400/);
+  assert.match(body, /font-weight:\s*900/);
   assert.match(body, /font-style:\s*italic/);
   assert.doesNotMatch(body, /oblique/, "a real italic face, not a synthetic slant");
+  assert.match(body, /-webkit-text-stroke-width:\s*0\.02em/, "Courier tops out at Bold, so a hairline stroke gives the 900 weight");
   assert.match(body, /letter-spacing:\s*0\.1em/);
-  assert.match(body, /text-transform:\s*uppercase/);
+  assert.doesNotMatch(body, /text-transform/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);
-  // Typed text and placeholders follow the same case.
-  assert.match(css, /input, textarea, select, button \{\s*text-transform: inherit;/);
-  // Montserrat ships with the app (no external font CDN) as a variable font.
-  assert.match(main, /import "@fontsource-variable\/montserrat";/);
-  const face = await readFile(new URL("../node_modules/@fontsource-variable/montserrat/index.css", import.meta.url), "utf8");
-  assert.match(face, /font-family: 'Montserrat Variable'/);
-  assert.match(face, /font-weight: 100 900/);
-  // The real italic face ships too, covering the 400 weight.
-  assert.match(main, /import "@fontsource-variable\/montserrat\/wght-italic\.css";/);
-  const italic = await readFile(new URL("../node_modules/@fontsource-variable/montserrat/wght-italic.css", import.meta.url), "utf8");
-  assert.match(italic, /font-style: italic/);
-  assert.match(italic, /font-weight: 100 900/);
+  // The bold italic face ships with the app (no external font CDN).
+  assert.match(main, /import "@fontsource\/courier-prime\/700-italic\.css";/);
+  const face = await readFile(new URL("../node_modules/@fontsource/courier-prime/700-italic.css", import.meta.url), "utf8");
+  assert.match(face, /font-family: 'Courier Prime'/);
+  assert.match(face, /font-style: italic/);
+  assert.match(face, /font-weight: 700/);
+});
+
+test("nothing is displayed in all caps", async () => {
+  // A global guard beats any stray all-caps rule, including placeholders and pseudo-elements.
+  assert.match(css, /\*, \*::before, \*::after, ::placeholder \{\s*text-transform: none !important;/);
+  const { readdir } = await import("node:fs/promises");
+  const files = [];
+  const walk = async (dir) => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const url = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
+      if (entry.isDirectory()) await walk(url);
+      else if (/\.(tsx?|css)$/.test(entry.name)) files.push(url);
+    }
+  };
+  await walk(new URL("../src/", import.meta.url));
+  // Built from pieces so Tailwind's source scanner doesn't generate the utility from this test.
+  const UP = "upper" + "case";
+  for (const file of files) {
+    const text = await readFile(file, "utf8");
+    assert.doesNotMatch(text, new RegExp(`text-transform:\\s*${UP}`), `${file.pathname} shouts text`);
+    assert.doesNotMatch(text, new RegExp(`className=[^>]*\\b${UP}\\b`), `${file.pathname} uses the caps utility`);
+    assert.doesNotMatch(text, new RegExp(`@apply[^;]*\\b${UP}\\b`), `${file.pathname} applies the caps utility`);
+  }
+  // Inputs keep what the member typed.
+  for (const page of ["Admin", "Archive", "Training"]) {
+    const source = await readFile(new URL(`../src/pages/${page}.tsx`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /e\.target\.value\.toUpperCase\(\)/, `${page} forces typed text to caps`);
+  }
+});
+
+test("stored enums are shown in normal case while acronyms stay", async () => {
+  const ts = (await import("typescript")).default;
+  const source = await readFile(new URL("../src/lib/caseText.ts", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } });
+  const { nice } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+  assert.equal(nice("JUNGLE"), "Jungle");
+  assert.equal(nice("BANNED/RESTRICTED"), "Banned/restricted");
+  assert.equal(nice("OPPONENT FILE"), "Opponent file");
+  assert.equal(nice("WIN"), "Win");
+  assert.equal(nice("EXP"), "EXP");
+  assert.equal(nice("MLBB MATCH REVIEW"), "MLBB match review");
+  assert.equal(nice("Kagura ⚝"), "Kagura ⚝", "already-friendly text is untouched");
+  assert.equal(nice(null), "");
 });
 
 test("the other fonts and the font menu are gone", async () => {
-  for (const gone of [/Corptic/i, /Space Grotesk/, /Space Mono/, /DM Mono/, /Courier/, /data-font/]) assert.doesNotMatch(css, gone);
-  for (const gone of [/space-grotesk/, /space-mono/, /dm-mono/, /courier-prime/]) assert.doesNotMatch(main, gone);
+  for (const gone of [/Corptic/i, /Space Grotesk/, /Space Mono/, /DM Mono/, /Montserrat/, /data-font/]) assert.doesNotMatch(css, gone);
+  for (const gone of [/space-grotesk/, /space-mono/, /dm-mono/, /montserrat/]) assert.doesNotMatch(main, gone);
   const pkg = await readFile(new URL("../package.json", import.meta.url), "utf8");
-  assert.doesNotMatch(pkg, /space-grotesk|space-mono|courier-prime|dm-mono/);
+  assert.doesNotMatch(pkg, /space-grotesk|space-mono|montserrat|dm-mono/);
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(layout, /FontPicker|FontChoice|[Tt]ext style/);
   const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");

@@ -18,8 +18,8 @@ function ContributionCard({ item, children }: { item: AIContribution; children?:
   const source = safeExternal(item.source_url);
   return <article className="rounded-lg border border-edge bg-raised/40 p-4 min-w-0">
     <div className="flex flex-wrap items-center gap-2">
-      <span className={`chip !text-[9px] uppercase ${TONES[item.status]}`}>{item.status}</span>
-      <span className="text-[10px] uppercase font-bold text-faint">{item.kind} · {shortDate(item.created_at)}{item.author ? ` · ${item.author}` : ""}</span>
+      <span className={`chip !text-[9px] ${TONES[item.status]}`}>{item.status}</span>
+      <span className="text-[10px] font-bold text-faint">{item.kind} · {shortDate(item.created_at)}{item.author ? ` · ${item.author}` : ""}</span>
     </div>
     <h3 className="text-[13px] font-extrabold mt-2 break-words">{item.title}</h3>
     <p className="text-[12px] text-mute leading-relaxed whitespace-pre-wrap break-words mt-1.5">{item.content}</p>
@@ -71,7 +71,7 @@ export function AIContributions() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="section-pill section-pill--leaf">BUILD IT TOGETHER</div>
+        <div className="section-pill section-pill--leaf">Build it together</div>
         <h2 className="text-xl font-extrabold mt-1">Share what you know.</h2>
         <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Found something useful or spotted a mistake? Send it to the review queue. Your private chats are never copied or submitted automatically.</p>
       </div>
@@ -148,7 +148,7 @@ export function AIReviewQueue() {
   useEffect(() => { void load(); }, [load]);
   return <div className="space-y-5">
     <div className="flex items-start gap-3"><ShieldCheck size={22} className="text-leaf shrink-0 mt-1" /><div>
-      <div className="section-pill section-pill--leaf">ADMIN REVIEW</div><h2 className="text-xl font-extrabold mt-1">Keep the library trustworthy.</h2>
+      <div className="section-pill section-pill--leaf">Admin review</div><h2 className="text-xl font-extrabold mt-1">Keep the library trustworthy.</h2>
       <p className="text-[12px] text-mute mt-1.5 leading-relaxed">Check sources and relevance before publishing. Questions and feedback can be acknowledged but are never published as facts. Exact duplicates are detected; no automatic fact-checking is claimed.</p>
     </div></div>
     <ErrorNote error={error} />

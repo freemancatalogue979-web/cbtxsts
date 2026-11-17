@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import type { Dashboard, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge, useCountdown } from "../lib/util";
 import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide } from "../components/ui";
+import { nice } from "../lib/caseText";
 
 function greeting(now = new Date()): string {
   const hour = now.getHours();
@@ -49,7 +50,7 @@ function CountdownTiles({ date, time }: { date?: string | null; time?: string | 
       {parts.map((part) => (
         <div key={part.l} className="min-w-[52px] rounded-lg border border-edge bg-raised/80 px-2 py-1.5 text-center">
           <div className="text-[22px] font-extrabold leading-none tabular-nums">{String(part.v).padStart(2, "0")}</div>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-faint">{part.l}</div>
+          <div className="mt-1 text-[9px] font-bold tracking-[0.18em] text-faint">{part.l}</div>
         </div>
       ))}
     </div>
@@ -70,7 +71,7 @@ function TrainingBlock({ dash }: { dash: Dashboard }) {
             <div className="absolute inset-0 grid place-items-center text-center">
               <div>
                 <div className="text-2xl font-extrabold tabular-nums leading-none">{week.progress}%</div>
-                <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-faint">progress</div>
+                <div className="mt-1 text-[9px] font-bold tracking-[0.18em] text-faint">progress</div>
               </div>
             </div>
           </div>
@@ -104,7 +105,7 @@ function NextUp({ dash }: { dash: Dashboard }) {
           <div className="min-w-0">
             <div className="text-xl sm:text-2xl font-extrabold leading-tight break-words">{activity.title}</div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[13px] text-mute">
-              <span className="chip border-crim/40 text-crim">{activity.category}</span>
+              <span className="chip border-crim/40 text-crim">{nice(activity.category)}</span>
               <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} aria-hidden="true" /> {dayLabel(activity.date)}</span>
               <span className="inline-flex items-center gap-1.5"><Clock size={13} aria-hidden="true" /> {fmtTime(activity.time)} · {activity.duration_min} min</span>
               {activity.coach_name && <span>Coach {activity.coach_name}</span>}
@@ -121,7 +122,7 @@ function NextUp({ dash }: { dash: Dashboard }) {
           className="mt-4 w-full flex items-center gap-3 rounded-xl border border-edge bg-raised/60 px-3.5 py-3 text-left transition-colors hover:border-edge-2 hover:bg-raised">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-crim/15 text-crim"><Swords size={17} aria-hidden="true" /></span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-faint">Next scrim</span>
+            <span className="block text-[10px] font-bold tracking-[0.18em] text-faint">Next scrim</span>
             <span className="block truncate text-[14px] font-bold">
               #{scrim.number} vs {scrim.opponent}<span className="text-mute font-semibold"> · {scrim.format}</span>
             </span>
@@ -152,7 +153,7 @@ function FormStrip({ results }: { results: Dashboard["recent_results"] }) {
 }
 
 const QUICK = [
-  { id: "ai", label: "Ask 9 CLOVER AI", icon: BrainCircuit, primary: true },
+  { id: "ai", label: "Ask 9 Clover AI", icon: BrainCircuit, primary: true },
   { id: "reviews", label: "Reviews", icon: ClipboardList },
   { id: "drafts", label: "Draft Lab", icon: Layers },
 ];
@@ -186,7 +187,7 @@ export function DashboardPage({ me }: { me?: User }) {
     });
   }
   slides.push({
-    eyebrow: "The 9 CLOVER loop",
+    eyebrow: "The 9 Clover loop",
     title: "Play. Review. Train. Improve.",
     steps: ["Play", "Review", "Train", "Improve"],
   });
@@ -194,7 +195,7 @@ export function DashboardPage({ me }: { me?: User }) {
     slides.push({
       eyebrow: `Next up · ${dayLabel(activity.date)} · ${fmtTime(activity.time)}`,
       title: activity.title,
-      sub: `${activity.category} · ${activity.duration_min} min${activity.coach_name ? ` · coach ${activity.coach_name}` : ""}${activity.required ? " · attendance required" : ""}`,
+      sub: `${nice(activity.category)} · ${activity.duration_min} min${activity.coach_name ? ` · coach ${activity.coach_name}` : ""}${activity.required ? " · attendance required" : ""}`,
     });
   }
 
@@ -202,7 +203,7 @@ export function DashboardPage({ me }: { me?: User }) {
     <div className="space-y-6">
       <PageTitle
         title={name ? `${greeting()}, ${name}` : "The Hub"}
-        sub={<>{today}{season ? ` · ${season}` : ""}<span className="hidden sm:inline"> · PLAY → REVIEW → TRAIN → IMPROVE</span></>}
+        sub={<>{today}{season ? ` · ${season}` : ""}<span className="hidden sm:inline"> · Play → review → train → improve</span></>}
         slides={slides}
         right={
           <>
@@ -222,7 +223,7 @@ export function DashboardPage({ me }: { me?: User }) {
         <button onClick={() => navigate("reviews")} className="w-full text-left card border-danger/60 bg-danger-dim/40 p-4 flex items-start gap-3 hover:bg-danger-dim/60 transition-colors">
           <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
           <div>
-            <div className="text-sm font-bold text-danger uppercase tracking-wide">No review, no next scrim</div>
+            <div className="text-sm font-bold text-danger tracking-wide">No review, no next scrim</div>
             <div className="text-[13px] text-text/80 mt-1">
               {dash.mandatory_reviews.map((s) => `Scrim #${s.number} vs ${s.opponent}`).join(" · ")}{" "}
               was a loss and has no match review. New scrims are blocked until it is filed.
@@ -302,11 +303,11 @@ export function DashboardPage({ me }: { me?: User }) {
                 <button key={s.id} onClick={() => navigate("scrims", s.id)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors text-left">
                   <span className="w-14 shrink-0 [&>.chip]:w-full [&>.chip]:justify-center"><ResultBadge result={s.result} /></span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate">9 CLOVER <span className="tabular-nums">{s.score_us} - {s.score_them}</span> {s.opponent}</div>
+                    <div className="text-sm font-bold truncate">9 Clover <span className="tabular-nums">{s.score_us} - {s.score_them}</span> {s.opponent}</div>
                     <div className="text-[11px] text-faint">{dayLabel(s.date)} · Scrim #{s.number} · {s.format}</div>
                   </div>
                   {s.needs_review && (
-                    <span className="chip border-amber/40 text-amber !text-[9px] uppercase"><Bell size={10} aria-hidden="true" /> review due</span>
+                    <span className="chip border-amber/40 text-amber !text-[9px]"><Bell size={10} aria-hidden="true" /> review due</span>
                   )}
                 </button>
               ))}
@@ -323,13 +324,13 @@ export function DashboardPage({ me }: { me?: User }) {
             {dash.upcoming_events.map((ev) => (
               <div key={ev.id} className="px-4 py-3 flex items-start gap-3">
                 <div className="w-12 shrink-0 overflow-hidden rounded-lg border border-edge text-center">
-                  <div className="bg-crim/20 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-crim">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { month: "short" }) : "—"}</div>
+                  <div className="bg-crim/20 py-0.5 text-[9px] font-extrabold tracking-wider text-crim">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { month: "short" }) : "—"}</div>
                   <div className="bg-raised py-1 text-lg font-extrabold leading-none tabular-nums">{ev.date ? ev.date.slice(8) : "—"}</div>
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-semibold leading-snug">{ev.title}</div>
                   <div className="text-[11px] text-faint mt-0.5">
-                    <span className="uppercase font-bold mr-1.5">{ev.kind}</span>
+                    <span className="font-bold mr-1.5">{ev.kind}</span>
                     {fmtTime(ev.time)}{ev.location ? ` · ${ev.location}` : ""}
                   </div>
                 </div>

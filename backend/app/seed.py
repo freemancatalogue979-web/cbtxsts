@@ -67,7 +67,7 @@ def seed_users(db: Session, *, include_demo: bool = False) -> dict[str, User]:
             role=role,
             main_role=lane,
             roster=roster,
-            bio="9 CLOVER competitive roster." if roster else "9 CLOVER staff.",
+            bio="9 Clover competitive roster." if roster else "9 Clover staff.",
         )
         db.add(u)
         users[key] = u

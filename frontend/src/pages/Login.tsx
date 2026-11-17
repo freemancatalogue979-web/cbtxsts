@@ -33,9 +33,9 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
         <div className="flex flex-col items-center mb-8">
           <HeroMark size={188} />
           <div className="mt-4 text-2xl font-extrabold tracking-[0.25em]">
-            9&nbsp;<span className="text-crim">CLOVER</span>
+            9&nbsp;<span className="text-crim">Clover</span>
           </div>
-          <div className="mt-5 chip border-leaf/30 text-leaf/90 text-[10px] tracking-[0.2em] uppercase">
+          <div className="mt-5 chip border-leaf/30 text-leaf/90 text-[10px] tracking-[0.2em]">
             Play. Review. Adapt. Dominate.
           </div>
         </div>

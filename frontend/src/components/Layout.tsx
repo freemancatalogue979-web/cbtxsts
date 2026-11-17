@@ -15,6 +15,7 @@ import { CommandPalette } from "./CommandPalette";
 import { Wordmark, BrandImg } from "./Logo";
 import { AvatarImg } from "./Avatar";
 import { ErrorNote, Field, PageChrome, CaseSafe } from "./ui";
+import { nice } from "../lib/caseText";
 
 const ROLE_TONE: Record<string, string> = {
   admin: "text-crim border-crim/50",
@@ -227,7 +228,7 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
                     : <Gamepad2 size={16} className="text-leaf" />}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] font-extrabold text-leaf truncate">{mlbb.name || "MLBB account"} <span className="text-[9px] uppercase text-faint font-bold">· connected</span></div>
+                  <div className="text-[12.5px] font-extrabold text-leaf truncate">{mlbb.name || "MLBB account"} <span className="text-[9px] text-faint font-bold">· connected</span></div>
                   <div className="text-[10px] text-faint">
                     {mlbb.level != null ? `Lv ${mlbb.level} · ` : ""}{mlbb.rank_level != null ? `rank tier ${mlbb.rank_level} · ` : ""}ID {mlbb.role_id}
                   </div>
@@ -253,7 +254,7 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
           <Field label="In-game name"><input className="input" value={f.ign} onChange={(e) => setF({ ...f, ign: e.target.value })} /></Field>
           <Field label="Main lane">
             <select className="input" value={f.main_role} onChange={(e) => setF({ ...f, main_role: e.target.value })}>
-              {["", "EXP", "JUNGLE", "MID", "GOLD", "ROAM"].map((l) => <option key={l} value={l}>{l || "—"}</option>)}
+              {["", "EXP", "JUNGLE", "MID", "GOLD", "ROAM"].map((l) => <option key={l} value={l}>{nice(l) || "—"}</option>)}
             </select>
           </Field>
         </div>
@@ -304,8 +305,8 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
         <span className="min-w-0">
           <span className="block text-[13px] font-bold truncate"><CaseSafe text={user.ign || user.name} /></span>
           <span className="flex items-center gap-1.5 mt-0.5">
-            <span className={`chip !text-[9px] !px-1.5 !py-0 uppercase ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
-            {user.main_role && <span className="text-[10px] text-faint font-bold">{user.main_role}</span>}
+            <span className={`chip !text-[9px] !px-1.5 !py-0 ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
+            {user.main_role && <span className="text-[10px] text-faint font-bold">{nice(user.main_role)}</span>}
           </span>
         </span>
       </button>
@@ -407,7 +408,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
           <span className="shrink-0"><Wordmark compact /></span>
           <div className="flex min-w-0 items-center gap-2">
             {/* A long name truncates instead of running into the wordmark. */}
-            <span className={`chip min-w-0 overflow-hidden !text-[9px] uppercase ${ROLE_TONE[user.role] || ""}`} title={user.ign || user.role_label}>
+            <span className={`chip min-w-0 overflow-hidden !text-[9px] ${ROLE_TONE[user.role] || ""}`} title={user.ign || user.role_label}>
               <span className="truncate"><CaseSafe text={user.ign || user.role_label} /></span>
             </span>
             <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
@@ -455,7 +456,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
             const accessibleLabel = item.label === short || item.label.endsWith(` ${short}`) ? item.label : `${short} — ${item.label}`;
             return (
               <button key={item.id} onClick={() => navigate(item.id)} aria-label={accessibleLabel} aria-current={active ? "page" : undefined}
-                className={`relative flex flex-col items-center gap-1 py-2 text-[10px] font-bold uppercase tracking-wide ${active ? "text-crim" : "text-mute"}`}>
+                className={`relative flex flex-col items-center gap-1 py-2 text-[10px] font-bold tracking-wide ${active ? "text-crim" : "text-mute"}`}>
                 {active && <span aria-hidden="true" className="absolute top-0 h-[3px] w-8 rounded-b-full bg-crim shadow-[0_0_12px_rgb(var(--accent-glow)/0.9)]" />}
                 <span className={`grid h-7 w-10 place-items-center rounded-full transition-colors ${active ? "bg-crim/15" : ""}`}><Icon size={17} /></span>
                 {short}

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { Meta, User } from "../lib/types";
 import { Badge, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { TeamFocusPanel } from "../components/TeamFocusPanel";
+import { nice } from "../lib/caseText";
 
 function UserForm({ meta, initial, onSaved, onClose }: {
   meta: Meta; initial: Partial<User>; onSaved: () => void; onClose: () => void;
@@ -37,7 +38,7 @@ function UserForm({ meta, initial, onSaved, onClose }: {
       <form onSubmit={save} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Name"><input className="input" required value={String(f.name)} onChange={(e) => set("name", e.target.value)} /></Field>
-          <Field label="In-game name"><input className="input" value={String(f.ign)} onChange={(e) => set("ign", e.target.value.toUpperCase())} placeholder="KAZE" /></Field>
+          <Field label="In-game name"><input className="input" value={String(f.ign)} onChange={(e) => set("ign", e.target.value)} placeholder="Kaze" /></Field>
         </div>
         <Field label="Email"><input className="input" type="email" required value={String(f.email)} onChange={(e) => set("email", e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-4">
@@ -49,7 +50,7 @@ function UserForm({ meta, initial, onSaved, onClose }: {
           <Field label="Main lane (players)">
             <select className="input" value={String(f.main_role)} onChange={(e) => set("main_role", e.target.value)}>
               <option value="">—</option>
-              {meta.lanes.map((l) => <option key={l}>{l}</option>)}
+              {meta.lanes.map((l) => <option key={l} value={l}>{nice(l)}</option>)}
             </select>
           </Field>
         </div>

@@ -100,7 +100,7 @@ function TeamColumn({ team, gameNumber }: { team: BreakdownGameTeam; gameNumber:
       <Logo team={team} />
       <span className={`min-w-0 truncate text-[12px] font-black ${tone.text}`}>{code(team)}</span>
       {team.side && <span className={`rounded-full border px-1.5 py-px text-[8.5px] font-extrabold ${tone.border} ${tone.bg} ${tone.text}`}>{team.side} side</span>}
-      <span className={`ml-auto rounded-full px-2 py-0.5 text-[9px] font-black ${team.won ? "bg-leaf/15 text-leaf" : "bg-white/[0.05] text-mute"}`}>{team.won ? "WIN" : "LOSS"}</span>
+      <span className={`ml-auto rounded-full px-2 py-0.5 text-[9px] font-black ${team.won ? "bg-leaf/15 text-leaf" : "bg-white/[0.05] text-mute"}`}>{team.won ? "Win" : "Loss"}</span>
     </header>
     {team.picks.length > 0 && <div className="mt-2.5 flex flex-wrap gap-1.5">{team.picks.map((pick, index) => <HeroChip key={`${pick.hero}-${index}`} pick={pick} />)}</div>}
     {team.bans.some(Boolean) && <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="inline-flex items-center gap-1 text-[8.5px] font-extrabold tracking-[0.14em] text-mute"><Ban size={10} aria-hidden="true" />Bans</span>{team.bans.map((hero, index) => hero && <BanChip key={`${hero}-${index}`} hero={hero} />)}</div>}
@@ -124,7 +124,7 @@ function GameCard({ game }: { game: BreakdownGame }) {
   const kills = pair(game, "kills"), turtles = pair(game, "turtles"), lords = pair(game, "lords");
   return <article className="rounded-2xl border border-edge bg-raised/40 p-3 sm:p-4" aria-label={`Game ${game.number ?? ""}`}>
     <header className="flex flex-wrap items-center gap-1.5">
-      <span className="rounded-md bg-crim/15 px-2.5 py-1 text-[10.5px] font-black tracking-[0.12em] text-crim">GAME {game.number ?? "?"}</span>
+      <span className="rounded-md bg-crim/15 px-2.5 py-1 text-[10.5px] font-black tracking-[0.12em] text-crim">Game {game.number ?? "?"}</span>
       {winner && <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black ${TONE[winner.key].border} ${TONE[winner.key].bg} ${TONE[winner.key].text}`}><Trophy size={11} aria-hidden="true" />{code(winner)} win</span>}
       {game.duration_seconds != null && <StatChip icon={<Clock3 size={11} />} label="Duration" value={gameDuration(game.duration_seconds)} />}
       {kills && <StatChip icon={<Swords size={11} />} label="Kills" value={kills} title="Kills" />}

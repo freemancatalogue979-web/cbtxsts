@@ -271,7 +271,7 @@ export function AccountMLBBPage() {
           <div className="card p-4 max-w-md text-[12px] text-mute leading-relaxed flex items-start gap-2.5">
             <ShieldCheck size={15} className="text-leaf mt-0.5 shrink-0" />
             Verification goes through the official in-game mail flow upstream. Your session token lives only on our
-            server, tied to your 9 CLOVER login — never in the browser, never in logs.
+            server, tied to your 9 Clover login — never in the browser, never in logs.
           </div>
         </>
       ) : (

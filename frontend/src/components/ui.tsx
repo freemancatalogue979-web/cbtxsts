@@ -309,7 +309,7 @@ export function Modal({ title, onClose, children, wide = false }: {
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className={`relative card w-full ${wide ? "max-w-3xl" : "max-w-lg"} max-h-[92vh] flex flex-col rounded-b-none sm:rounded-b-md`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
-          <div className="text-[13px] font-bold uppercase tracking-[0.14em]">{title}</div>
+          <div className="text-[13px] font-bold tracking-[0.14em]">{title}</div>
           <button className="btn-ghost !px-2 !py-1.5" onClick={onClose} aria-label="Close">
             <X size={15} />
           </button>

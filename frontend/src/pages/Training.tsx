@@ -6,6 +6,7 @@ import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner, Tabs } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
 import { FilePick } from "../components/FilePick";
+import { nice } from "../lib/caseText";
 
 const SECTIONS: { id: string; label: string; category: string | null; desc: string }[] = [
   { id: "A", label: "Weekly Training", category: "WEEKS", desc: "Training blocks & focus weeks" },
@@ -31,7 +32,7 @@ const STATUS_STYLE: Record<string, string> = {
 function ActivityRow({ a, me, onOpen }: { a: Activity; me: User; onOpen: () => void }) {
   return (
     <button onClick={onOpen} className="w-full text-left card card-hover p-3.5 flex items-center gap-3">
-      <div className={`chip ${STATUS_STYLE[a.status] || "text-mute"} !text-[9px] uppercase shrink-0 w-24 justify-center`}>
+      <div className={`chip ${STATUS_STYLE[a.status] || "text-mute"} !text-[9px] shrink-0 w-24 justify-center`}>
         {a.status}
       </div>
       <div className="flex-1 min-w-0">
@@ -41,14 +42,14 @@ function ActivityRow({ a, me, onOpen }: { a: Activity; me: User; onOpen: () => v
           {a.assigned_player_ids.includes(me.id) && <span className="text-leaf text-[11px] font-bold"> · assigned to you</span>}
         </div>
         <div className="text-[11px] text-faint mt-0.5">
-          {a.category} · {dayLabel(a.date)} {fmtTime(a.time)}
+          {nice(a.category)} · {dayLabel(a.date)} {fmtTime(a.time)}
           {a.week_number ? ` · Week ${String(a.week_number).padStart(2, "0")}` : ""}
         </div>
         {(a.assigned ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {(a.assigned ?? []).map((u) => (
               <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-                {u.ign}{u.main_role ? ` · ${u.main_role}` : ""}
+                {u.ign}{u.main_role ? ` · ${nice(u.main_role)}` : ""}
               </span>
             ))}
           </div>
@@ -114,7 +115,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Category">
               <select className="input" value={String(f.category)} onChange={(e) => set("category", e.target.value)}>
-                {meta.activity_categories.map((c) => <option key={c}>{c}</option>)}
+                {meta.activity_categories.map((c) => <option key={c} value={c}>{nice(c)}</option>)}
               </select>
             </Field>
             <Field label="Week">
@@ -139,7 +140,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
             <input className="input" type="number" min={5} value={Number(f.duration_min)} onChange={(e) => set("duration_min", e.target.value)} />
           </Field>
           <Field label="Coach">
-            <input className="input" value={String(f.coach_name)} onChange={(e) => set("coach_name", e.target.value)} placeholder="ICHIZU" />
+            <input className="input" value={String(f.coach_name)} onChange={(e) => set("coach_name", e.target.value)} placeholder="Ichizu" />
           </Field>
         </div>
         <Field label={`Assigned players (${(f.assigned_player_ids as number[]).length})`}>
@@ -151,7 +152,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
                 <button type="button" key={u.id}
                   onClick={() => set("assigned_player_ids", on ? ids.filter((i) => i !== u.id) : [...ids, u.id])}
                   className={`chip ${on ? "border-crim/60 text-crim bg-crim-dim/40" : "text-mute"}`}>
-                  {u.ign} <span className="text-faint text-[9px]">{u.main_role}</span>
+                  {u.ign} <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
                 </button>
               );
             })}
@@ -244,7 +245,7 @@ function WeekForm({ initial, nextNumber, onSaved, onClose }: {
           </Field>
         </div>
         <Field label="Focus">
-          <input className="input uppercase" required value={String(f.focus)} onChange={(e) => set("focus", e.target.value.toUpperCase())} placeholder="OBJECTIVE CONTROL" />
+          <input className="input" required value={String(f.focus)} onChange={(e) => set("focus", e.target.value)} placeholder="Objective control" />
         </Field>
         <Field label="Main objective">
           <textarea className="input min-h-16" value={String(f.objective)} onChange={(e) => set("objective", e.target.value)} />
@@ -313,7 +314,7 @@ function ProgramForm({ users, program, onSaved, onClose }: {
             <input className="input" required value={String(f.name)} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Jungle pathing" />
           </Field>
           <Field label="Focus">
-            <input className="input" value={String(f.focus)} onChange={(e) => set("focus", e.target.value)} placeholder="e.g. JUNGLE · Macro · Team fight" />
+            <input className="input" value={String(f.focus)} onChange={(e) => set("focus", e.target.value)} placeholder="e.g. Jungle · Macro · Team fight" />
           </Field>
         </div>
         <Field label="What this program is about">
@@ -328,7 +329,7 @@ function ProgramForm({ users, program, onSaved, onClose }: {
                 <button type="button" key={u.id}
                   onClick={() => set("enrolled_ids", on ? ids.filter((i) => i !== u.id) : [...ids, u.id])}
                   className={`chip ${on ? "border-crim/60 text-crim bg-crim-dim/40" : "text-mute"}`}>
-                  {u.ign} <span className="text-faint text-[9px]">{u.main_role}</span>
+                  {u.ign} <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
                 </button>
               );
             })}
@@ -407,7 +408,7 @@ function ProgramWeekForm({ program, week, weeks, onSaved, onClose }: {
           <div className="card !bg-raised/40 p-3">
             <div className="flex items-center gap-2">
               <Badge cls={chosen.status === "active" ? "text-crim border-crim/50" : chosen.status === "completed" ? "text-leaf border-leaf/40" : "text-mute"}>{chosen.status}</Badge>
-              <span className="text-[10px] font-extrabold text-crim uppercase tracking-wide">{dayLabel(chosen.start_date)} → {dayLabel(chosen.end_date)}</span>
+              <span className="text-[10px] font-extrabold text-crim tracking-wide">{dayLabel(chosen.start_date)} → {dayLabel(chosen.end_date)}</span>
             </div>
             {chosen.objective && <p className="text-[12px] text-mute leading-relaxed mt-1.5 line-clamp-3">{chosen.objective}</p>}
           </div>
@@ -492,7 +493,7 @@ function ProgramCard({ p, me, onOpen }: { p: Program; me: User; onOpen: () => vo
       <div className="flex flex-wrap gap-1 mt-2.5">
         {p.enrolled.map((u) => (
           <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-            {u.ign}{u.main_role ? ` · ${u.main_role}` : ""}
+            {u.ign}{u.main_role ? ` · ${nice(u.main_role)}` : ""}
           </span>
         ))}
         {p.enrolled.length === 0 && <span className="text-[11px] text-faint">No players enrolled yet</span>}
@@ -604,7 +605,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                       <th key={u.id} className="px-2 py-2.5 text-center min-w-16">
                         <div className="flex flex-col items-center gap-1">
                           <AvatarImg user={u} size={22} />
-                          <span className="text-[9.5px] font-extrabold text-mute uppercase tracking-wide">{u.ign}</span>
+                          <span className="text-[9.5px] font-extrabold text-mute tracking-wide">{u.ign}</span>
                         </div>
                       </th>
                     ))}
@@ -738,7 +739,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                           <div key={u.id} className="flex items-start gap-2">
                             <AvatarImg user={u} size={20} />
                             <div className="min-w-0 flex-1">
-                              <div className="text-[10px] font-extrabold text-mute uppercase">
+                              <div className="text-[10px] font-extrabold text-mute">
                                 {u.ign}
                                 {c?.status === "done" && <span className="text-leaf"> ✓</span>}
                                 {c?.completed_at && <span className="text-faint normal-case font-semibold"> · {dayLabel(c.completed_at.split("T")[0])}</span>}
@@ -790,7 +791,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
     return (
       <div className="max-w-3xl space-y-5">
         <button className="label !text-crim" onClick={() => navigate("training")}>← Training center</button>
-        <PageTitle title={a.title} sub={`${a.category}${a.week_number ? ` · Week ${String(a.week_number).padStart(2, "0")}` : ""}`}
+        <PageTitle title={a.title} sub={`${nice(a.category)}${a.week_number ? ` · Week ${String(a.week_number).padStart(2, "0")}` : ""}`}
           right={canManage && (
             <div className="flex gap-2">
               <button className="btn-ghost" onClick={() => setShowActivityForm(a)}>Edit</button>
@@ -803,7 +804,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
         <div className="card p-4 grid sm:grid-cols-2 gap-x-6 gap-y-2">
           <div><span className="label">When</span><div className="text-sm font-semibold mt-0.5">{dayLabel(a.date)} · {fmtTime(a.time)} · {a.duration_min} min</div></div>
           <div><span className="label">Coach</span><div className="text-sm font-semibold mt-0.5">{a.coach_name || "—"}</div></div>
-          <div><span className="label">Status</span><div className="mt-1"><span className={`chip ${STATUS_STYLE[a.status] || ""} uppercase !text-[10px]`}>{a.status}</span></div></div>
+          <div><span className="label">Status</span><div className="mt-1"><span className={`chip ${STATUS_STYLE[a.status] || ""} !text-[10px]`}>{a.status}</span></div></div>
           <div><span className="label">Assigned</span>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {(a.assigned ?? []).length === 0 && (
@@ -813,7 +814,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                 <span key={u.id} className="flex items-center gap-1.5 chip !py-1 text-mute border-edge-2" title={u.name}>
                   <AvatarImg user={u} size={18} />
                   <span className="font-bold text-text">{u.ign}</span>
-                  {u.main_role && <span className="text-crim font-bold !text-[9px] uppercase">{u.main_role}</span>}
+                  {u.main_role && <span className="text-crim font-bold !text-[9px]">{nice(u.main_role)}</span>}
                 </span>
               ))}
             </div>
@@ -892,7 +893,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
   const tab = view === "schedule" ? "schedule" : "programs";
   return (
     <div className="space-y-6">
-      <PageTitle title="Training Center" sub="Every rep is tracked. PLAY → RECORD → REVIEW → IDENTIFY → TRAIN → APPLY → IMPROVE."
+      <PageTitle title="Training Center" sub="Every rep is tracked. Play → record → review → identify → train → apply → improve."
         right={canManage && (
           tab === "programs" ? (
             <button className="btn-primary" onClick={() => setShowProgramForm({ program: null })}><Plus size={15} /> Program</button>
@@ -992,7 +993,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
       {/* Activities */}
       <section id="activity-list">
         <SectionTitle right={filterCat && <button className="label !text-crim" onClick={() => setFilterCat("")}>Clear filter ✕</button>}>
-          Training activities {filterCat && <span className="text-crim">· {filterCat}</span>}
+          Training activities {filterCat && <span className="text-crim">· {nice(filterCat)}</span>}
         </SectionTitle>
         {!activities && <Spinner />}
         <div className="space-y-2">

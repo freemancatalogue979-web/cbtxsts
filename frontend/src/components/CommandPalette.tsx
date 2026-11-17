@@ -96,7 +96,7 @@ export function CommandPalette({ items, current, onClose, onGo }: {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 text-[13.5px] font-bold text-text">
                     {item.label}
-                    {item.id === current && <span className="chip !py-0 !text-[9px] uppercase">You are here</span>}
+                    {item.id === current && <span className="chip !py-0 !text-[9px]">You are here</span>}
                   </span>
                   <span className="block truncate text-[11.5px] text-faint">{groupLabel(item.group)} · {item.blurb}</span>
                 </span>

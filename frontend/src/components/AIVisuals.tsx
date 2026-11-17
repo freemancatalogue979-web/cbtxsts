@@ -39,7 +39,7 @@ export function parseAIDiagram(raw: string): Diagram | null {
 
 function DiagramCard({ diagram }: { diagram: Diagram }) {
   return <section role="group" aria-label={`${diagram.title} diagram`} className="my-4 rounded-xl border border-leaf/25 bg-leaf/[0.04] p-3 sm:p-4">
-    <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-leaf"><GitBranch size={15} aria-hidden="true" /> {diagram.title}</div>
+    <div className="flex items-center gap-2 text-[10px] font-extrabold tracking-wider text-leaf"><GitBranch size={15} aria-hidden="true" /> {diagram.title}</div>
     <ol className="mt-3 space-y-1 list-none p-0">{diagram.steps.map((step, index) => <Fragment key={`${index}-${step.label}`}>
       {index > 0 && <li aria-hidden="true" className="flex pl-4 text-leaf/75"><ArrowDown size={15} /></li>}
       <li className="flex items-center gap-3 rounded-lg border border-edge bg-panel/70 p-2.5">
@@ -82,12 +82,12 @@ function HeroCard({ visual }: { visual: Extract<AIVisual, { kind: "hero" }> }) {
       <div className="h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-edge">
         <HeroImg name={visual.name} variant="art" size={96} className="!w-full !h-full object-top" />
       </div>
-      <div className="min-w-0 flex-1"><div className="text-[10px] font-extrabold uppercase tracking-wider text-leaf">Hero reference</div>
+      <div className="min-w-0 flex-1"><div className="text-[10px] font-extrabold tracking-wider text-leaf">Hero reference</div>
         <div className="mt-1 text-[15px] font-extrabold text-text break-words">{visual.name}</div>
         {shortText(visual.title, 100) && <div className="text-[11px] text-mute break-words">{shortText(visual.title, 100)}</div>}
         {!!roles.length && <div className="mt-1 text-[10px] font-semibold text-mute">{roles.join(" · ")}</div>}
         {!!ratings.length && <dl className="mt-2 space-y-1">{ratings.map(([label, value]) => <div key={label} className="grid grid-cols-[74px_1fr_auto] items-center gap-2 text-[9px] text-mute">
-          <dt className="capitalize truncate">{label.replace(/_/g, " ")}</dt>
+          <dt className="truncate">{label.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}</dt>
           <dd aria-hidden="true" className="h-1.5 rounded-full bg-overlay overflow-hidden"><div className="h-full rounded-full bg-leaf" style={{ width: `${value * 10}%` }} /></dd>
           <dd className="font-bold tabular-nums text-text">{value}/10</dd>
         </div>)}</dl>}
@@ -102,7 +102,7 @@ function PicksChart({ visual }: { visual: Extract<AIVisual, { kind: "picks_chart
   if (!bars.length) return null;
   const max = Math.max(...bars.map((bar) => bar.value));
   return <section role="group" aria-label={shortText(visual.title, 120)} className="rounded-xl border border-leaf/25 bg-panel/65 p-3 sm:p-4">
-    <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider text-leaf"><BarChart3 size={15} aria-hidden="true" /> {shortText(visual.title, 120)}</div>
+    <div className="flex items-center gap-2 text-[10px] font-extrabold tracking-wider text-leaf"><BarChart3 size={15} aria-hidden="true" /> {shortText(visual.title, 120)}</div>
     <p className="mt-1 text-[10px] text-mute">{visual.complete_games} complete {visual.complete_games === 1 ? "game" : "games"} counted{visual.incomplete_data ? " · some data is incomplete" : ""}</p>
     <ol className="mt-3 space-y-2 list-none p-0">{bars.map((bar, index) => <li key={`${bar.label}-${index}`} className="flex items-center gap-2">
       <HeroImg name={bar.label} size={30} className="rounded-md shrink-0" />

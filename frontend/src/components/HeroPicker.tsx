@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import type { Hero } from "../lib/types";
 import { Modal } from "./ui";
 import { HeroImg } from "./HeroImg";
+import { nice } from "../lib/caseText";
 
 const LANES = ["", "EXP", "GOLD", "MID", "ROAM", "JUNGLE"] as const;
 const STATUS_RANK: Record<string, number> = { META: 0, STRONG: 1, VIABLE: 2, SITUATIONAL: 3, WEAK: 4 };
@@ -47,7 +48,7 @@ export function HeroPickerModal({ heroes, value, onChange, onCustom, placeholder
           <>
             <HeroImg name={sel.name} size={26} className="rounded" />
             <span className="text-[13px] font-bold truncate">{sel.name}</span>
-            <span className="chip !text-[8.5px] border-edge-2 text-faint ml-auto shrink-0">{sel.role}</span>
+            <span className="chip !text-[8.5px] border-edge-2 text-faint ml-auto shrink-0">{nice(sel.role)}</span>
           </>
         ) : (
           <span className="text-faint text-[13px]">{placeholder}</span>
@@ -64,9 +65,9 @@ export function HeroPickerModal({ heroes, value, onChange, onCustom, placeholder
             <div className="flex flex-wrap gap-1.5">
               {LANES.map((l) => (
                 <button key={l || "all"} type="button" onClick={() => setLane(l)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border transition ${
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wide border transition ${
                     lane === l ? "border-crim/60 bg-crim-dim/40 text-crim" : "border-edge text-faint hover:text-mute"}`}>
-                  {l || "All lanes"}
+                  {nice(l) || "All lanes"}
                 </button>
               ))}
             </div>
@@ -79,7 +80,7 @@ export function HeroPickerModal({ heroes, value, onChange, onCustom, placeholder
                       : "border-[#C8AA6E]/10 bg-[#111111] hover:border-[#C8AA6E]/40 hover:brightness-110"}`}>
                   <HeroImg name={h.name} size={52} className="rounded-md !w-13 !h-13" />
                   <span className="text-[10px] font-bold leading-tight truncate w-full">{h.name}</span>
-                  <span className="text-[8px] text-faint uppercase tracking-wide -mt-0.5">{h.role}</span>
+                  <span className="text-[8px] text-faint tracking-wide -mt-0.5">{nice(h.role)}</span>
                 </button>
               ))}
               {list.length === 0 && (

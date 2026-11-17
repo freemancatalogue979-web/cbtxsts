@@ -71,7 +71,7 @@ function DraftEditor({ meta, heroes, initial, onSaved, onBack }: {
 
       <div className="card p-5">
         <DraftSimulator heroes={heroes} value={f.draft} onChange={(d) => set("draft", d)}
-          theirsLabel={(f.opponent || "Enemy").toUpperCase()} lanes={meta.lanes} />
+          theirsLabel={(f.opponent || "Enemy")} lanes={meta.lanes} />
       </div>
 
       <Field label="Notes / win condition">
@@ -139,7 +139,7 @@ export function DraftsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                 </span>
               )}
             </div>
-            <DraftBoard draft={d.draft} theirsLabel={(d.opponent || "Enemy").toUpperCase()} />
+            <DraftBoard draft={d.draft} theirsLabel={(d.opponent || "Enemy")} />
             {d.notes && <div className="text-[12px] text-mute px-1 leading-relaxed">{d.notes}</div>}
           </div>
         ))}

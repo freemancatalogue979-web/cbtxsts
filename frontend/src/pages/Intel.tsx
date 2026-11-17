@@ -337,8 +337,8 @@ export function IntelPage({ me, parts }: { me: User; parts: string[] }) {
             </select>
           </label>
           <label className="label flex items-center gap-2">Rank
-            <select className="input !w-auto !py-1 capitalize" value={rank} onChange={(e) => setRank(e.target.value)}>
-              {RANK_TIERS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <select className="input !w-auto !py-1" value={rank} onChange={(e) => setRank(e.target.value)}>
+              {RANK_TIERS.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
             </select>
           </label>
           {fetchedAt && <span className="text-[11px] text-faint ml-auto">Loaded {fetchedAt.toLocaleTimeString()} · saved snapshots may be older</span>}
@@ -378,7 +378,7 @@ export function IntelPage({ me, parts }: { me: User; parts: string[] }) {
       )}
 
       {tab === "equipment" && <div className="space-y-6"><TeamEquipment canEdit={me.role === "admin"} />
-        <section><div className="section-pill mb-3">COMMUNITY EQUIPMENT</div><ReferenceGrid path="academy/equipment/expanded" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["equipskilldesc", "skilldesc", "description", "itemdesc", "desc"]} /></section></div>}
+        <section><div className="section-pill mb-3">Community equipment</div><ReferenceGrid path="academy/equipment/expanded" searchKeys={["equipname"]} iconKeys={["equipicon", "icon"]} titleKeys={["equipname", "name"]} descKeys={["equipskilldesc", "skilldesc", "description", "itemdesc", "desc"]} /></section></div>}
       {tab === "emblems" && <ReferenceGrid path="academy/emblems" searchKeys={["emblemname", "skillname"]} iconKeys={["emblemicon", "skillicon", "icon"]} titleKeys={["emblemname", "skillname", "name"]} descKeys={["skilldesc", "skilldescemblem", "description"]} />}
       {tab === "spells" && <ReferenceGrid path="academy/spells" searchKeys={["skillname", "name"]} iconKeys={["skillicon", "icon"]} titleKeys={["skillname", "name"]} descKeys={["skilldesc", "description"]} />}
       {tab === "ranks" && <ReferenceGrid path="academy/ranks" searchKeys={["bigrank_name", "minrank_name"]} iconKeys={["icon"]} titleKeys={["bigrank_name", "name"]} descKeys={["minrank_name", "description"]} />}

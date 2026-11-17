@@ -6,6 +6,7 @@ import { navigate } from "../lib/util";
 import { Empty, Field, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { BattlefieldMap } from "../components/BattlefieldMap";
 import { MapBoardEditor } from "../components/MapBoardEditor";
+import { nice } from "../lib/caseText";
 
 export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
   const canManage = ["admin", "captain", "coach"].includes(me.role);
@@ -26,7 +27,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
   if (tab === "guide") return <MapGuideView onBack={() => setTab("boards")} />;
 
   async function create(kind: string, name: string, opponent: string, draftId: number | null) {
-    const b = await api.post<MapBoard>("/maps", { kind, name: name || `${kind.toUpperCase()} board`, opponent, draft_id: draftId });
+    const b = await api.post<MapBoard>("/maps", { kind, name: name || `${kind.charAt(0).toUpperCase()}${kind.slice(1)} board`, opponent, draft_id: draftId });
     navigate("maps", b.id);
   }
 
@@ -41,7 +42,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
       <div className="flex gap-1.5">
         {[{ id: "", label: "All" }, { id: "strategy", label: "Strategy" }, { id: "draft", label: "Drafts" }, { id: "scrim-review", label: "Scrim review" }].map((t) => (
           <button key={t.id}
-            className={`chip !cursor-pointer uppercase !text-[10px] ${kindFilter === t.id ? "border-crim/50 text-crim bg-crim/10" : "text-faint border-edge"}`}
+            className={`chip !cursor-pointer !text-[10px] ${kindFilter === t.id ? "border-crim/50 text-crim bg-crim/10" : "text-faint border-edge"}`}
             onClick={() => setKindFilter(t.id)}>{t.label}</button>
         ))}
       </div>
@@ -52,7 +53,7 @@ export function MapsPage({ me, parts }: { me: User; parts: string[] }) {
           <button key={b.id} onClick={() => navigate("maps", b.id)} className="card card-hover p-4 text-left">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm font-extrabold leading-tight">{b.name}</div>
-              <span className={`chip !text-[9px] uppercase ${b.kind === "draft" ? "text-sky border-sky/40" : b.kind === "scrim-review" ? "text-amber border-amber/40" : "text-leaf border-leaf/40"}`}>{b.kind}</span>
+              <span className={`chip !text-[9px] ${b.kind === "draft" ? "text-sky border-sky/40" : b.kind === "scrim-review" ? "text-amber border-amber/40" : "text-leaf border-leaf/40"}`}>{b.kind}</span>
             </div>
             {b.opponent && <div className="text-[11px] text-faint mt-1 flex items-center gap-1"><Swords size={10} /> vs {b.opponent}</div>}
             <div className="flex items-center justify-between mt-3 text-[10.5px] text-mute">
@@ -134,9 +135,9 @@ function MapGuideView({ onBack }: { onBack: () => void }) {
           onKeyDown={(e) => { if (e.key === "ArrowRight") { e.preventDefault(); step(1); } if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); } }}>
           <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60">
             {Object.entries(SIDE_TONE).map(([k, t]) => (
-              <span key={k} className={`chip !text-[9.5px] uppercase ${t.chip}`}>{t.label}</span>
+              <span key={k} className={`chip !text-[9.5px] ${t.chip}`}>{t.label}</span>
             ))}
-            <span className="ml-auto text-[10px] text-faint uppercase tracking-widest font-semibold">← → to move between points</span>
+            <span className="ml-auto text-[10px] text-faint tracking-widest font-semibold">← → to move between points</span>
           </div>
           <div className="p-2 sm:p-3">
             <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-edge">
@@ -166,8 +167,8 @@ function MapGuideView({ onBack }: { onBack: () => void }) {
               <div>
                 <div className="text-[15px] font-extrabold leading-tight">{pin.name}</div>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  <span className={`chip !text-[9px] uppercase ${(SIDE_TONE[pin.side] ?? SIDE_TONE.shared).chip}`}>{(SIDE_TONE[pin.side] ?? SIDE_TONE.shared).label}</span>
-                  <span className="chip !text-[9px] uppercase text-mute border-edge-2">{CAT_LABEL[pin.category] ?? pin.category}</span>
+                  <span className={`chip !text-[9px] ${(SIDE_TONE[pin.side] ?? SIDE_TONE.shared).chip}`}>{(SIDE_TONE[pin.side] ?? SIDE_TONE.shared).label}</span>
+                  <span className="chip !text-[9px] text-mute border-edge-2">{CAT_LABEL[pin.category] ?? nice(pin.category)}</span>
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
@@ -206,7 +207,7 @@ function MapGuideView({ onBack }: { onBack: () => void }) {
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {data.rotations.map((r) => (
             <div key={r.role} className="card p-4">
-              <div className="text-sm font-extrabold mb-2.5">{r.role}</div>
+              <div className="text-sm font-extrabold mb-2.5">{nice(r.role)}</div>
               <ol className="space-y-2">
                 {r.steps.map((s, i) => (
                   <li key={i} className="text-[12px] text-mute leading-relaxed flex gap-2">

@@ -3,6 +3,7 @@ import type { Draft, Hero } from "../lib/types";
 import { CircleSlash2 } from "lucide-react";
 import { BrandImg } from "./Logo";
 import { artFor, artVersion, heroArt, heroHead, subscribeArt } from "../lib/mlbb";
+import { nice } from "../lib/caseText";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
@@ -52,7 +53,7 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
               ? "linear-gradient(90deg, transparent, rgb(52,211,153), transparent)"
               : "linear-gradient(90deg, transparent, rgb(225,29,72), transparent)",
           }} />
-          <div className="text-[9.5px] font-semibold uppercase tracking-wide leading-tight truncate text-center text-[#E8E6E3]">{name}</div>
+          <div className="text-[9.5px] font-semibold tracking-wide leading-tight truncate text-center text-[#E8E6E3]">{name}</div>
         </div>
       )}
     </div>
@@ -110,7 +111,7 @@ function DraftHeader({ oursLabel, theirsLabel, scoreUS, scoreThem, caption }: {
         <span className="rounded-lg border border-leaf/30 bg-leaf-dim/30 p-1 shrink-0"><BrandImg size={28} /></span>
         <div className="min-w-0">
           <div className="text-[13px] font-extrabold tracking-wide text-leaf truncate">{oursLabel}</div>
-          <div className="label !text-[8px] !text-leaf/50">BLUE SIDE</div>
+          <div className="label !text-[8px] !text-leaf/50">Blue side</div>
         </div>
       </div>
       <div className="text-center shrink-0">
@@ -123,12 +124,12 @@ function DraftHeader({ oursLabel, theirsLabel, scoreUS, scoreThem, caption }: {
         ) : (
           <span className="text-sm font-black tracking-[0.35em] text-mute">VS</span>
         )}
-        <div className="label !text-[7.5px] mt-0.5">{caption ?? (hasScore ? "SERIES" : "DRAFT PHASE")}</div>
+        <div className="label !text-[7.5px] mt-0.5">{caption ?? (hasScore ? "Series" : "Draft phase")}</div>
       </div>
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="min-w-0 text-right">
           <div className="text-[13px] font-extrabold tracking-wide text-crim truncate">{theirsLabel}</div>
-          <div className="label !text-[8px] !text-crim/50">RED SIDE</div>
+          <div className="label !text-[8px] !text-crim/50">Red side</div>
         </div>
         <span className="w-[34px] h-[34px] rounded-lg border border-crim/30 bg-crim-dim/30 flex items-center justify-center text-[11px] font-black text-crim shrink-0">
           {initials(theirsLabel)}
@@ -176,7 +177,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
             <CircleSlash2 size={20} className="text-faint/50" />
           </div>
         )}
-        {/* name strip: gradient + team-colored hairline + small uppercase name */}
+        {/* name strip: gradient + team-colored hairline + small name */}
         {filled && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent px-1 pb-1 pt-3">
             <div className="mb-0.5 h-px w-full" style={{
@@ -184,7 +185,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
                 ? "linear-gradient(90deg, transparent, rgb(52,211,153), transparent)"
                 : "linear-gradient(90deg, transparent, rgb(225,29,72), transparent)",
             }} />
-            <span className="block truncate text-center font-semibold uppercase tracking-wide text-[#E8E6E3] text-[10px]">{name}</span>
+            <span className="block truncate text-center font-semibold tracking-wide text-[#E8E6E3] text-[10px]">{name}</span>
           </div>
         )}
       </div>
@@ -205,8 +206,8 @@ function StageHeader({ oursLabel, theirsLabel, scoreUS, scoreThem }: {
       <div className="flex items-center gap-3 min-w-0">
         <span className="rounded-xl border-2 border-leaf/50 bg-leaf-dim/30 p-1.5 shrink-0 shadow-[0_0_22px_rgba(52,211,153,0.3)]"><BrandImg size={38} /></span>
         <div className="min-w-0">
-          <div className="text-[15px] font-black italic tracking-wider text-leaf truncate uppercase">{oursLabel}</div>
-          <div className="label !text-[8px] !text-leaf/60">BLUE SIDE</div>
+          <div className="text-[15px] font-black italic tracking-wider text-leaf truncate">{oursLabel}</div>
+          <div className="label !text-[8px] !text-leaf/60">Blue side</div>
         </div>
       </div>
       <div className="text-center shrink-0">
@@ -222,8 +223,8 @@ function StageHeader({ oursLabel, theirsLabel, scoreUS, scoreThem }: {
       </div>
       <div className="flex items-center gap-3 min-w-0">
         <div className="min-w-0 text-right">
-          <div className="text-[15px] font-black italic tracking-wider text-crim truncate uppercase">{theirsLabel}</div>
-          <div className="label !text-[8px] !text-crim/60">RED SIDE</div>
+          <div className="text-[15px] font-black italic tracking-wider text-crim truncate">{theirsLabel}</div>
+          <div className="label !text-[8px] !text-crim/60">Red side</div>
         </div>
         <span className="w-[42px] h-[42px] rounded-xl border-2 border-crim/50 bg-crim-dim/30 flex items-center justify-center text-sm font-black italic text-crim shrink-0 shadow-[0_0_22px_rgba(225,29,72,0.3)]">
           {initials(theirsLabel)}
@@ -244,7 +245,7 @@ function BanRow({ bans, ours }: { bans?: (string | null)[]; ours: boolean }) {
   );
 }
 
-export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY", scoreUS, scoreThem, players }: {
+export function DraftBoard({ draft, oursLabel = "9 Clover", theirsLabel = "Enemy", scoreUS, scoreThem, players }: {
   draft?: Draft; oursLabel?: string; theirsLabel?: string; scoreUS?: number; scoreThem?: number;
   players?: Record<string, string>;
 }) {
@@ -267,7 +268,7 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
       {/* bans across the top — round sim circles, enemy row mirrors */}
       <div className="relative hidden lg:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
         <BanRow bans={d.our_bans} ours />
-        <span className="label !text-[8px] tracking-[0.3em]">BANS</span>
+        <span className="label !text-[8px] tracking-[0.3em]">Bans</span>
         <BanRow bans={d.enemy_bans} ours={false} />
       </div>
 
@@ -293,14 +294,14 @@ export function DraftBoard({ draft, oursLabel = "9 CLOVER", theirsLabel = "ENEMY
       {/* phase caption footer — desktop */}
       <div className="relative hidden lg:flex items-center gap-3 pt-1">
         <span className="h-px flex-1 bg-gradient-to-r from-transparent via-edge to-transparent" />
-        <span className="text-[10px] font-black italic tracking-[0.4em] text-amber/90 drop-shadow-[0_0_10px_rgba(245,185,66,0.35)]">THE DRAFTING PHASE</span>
+        <span className="text-[10px] font-black italic tracking-[0.4em] text-amber/90 drop-shadow-[0_0_10px_rgba(245,185,66,0.35)]">The drafting phase</span>
         <span className="h-px flex-1 bg-gradient-to-r from-transparent via-edge to-transparent" />
       </div>
 
       {/* mobile: ban strips then lane rows */}
       <div className="relative lg:hidden grid grid-cols-2 gap-4 border-y border-edge/60 py-3">
-        <BanStrip bans={d.our_bans} ours label={`${oursLabel} BANS`} />
-        <BanStrip bans={d.enemy_bans} ours={false} label={`${theirsLabel} BANS`} />
+        <BanStrip bans={d.our_bans} ours label={`${oursLabel} bans`} />
+        <BanStrip bans={d.enemy_bans} ours={false} label={`${theirsLabel} bans`} />
       </div>
       <div className="relative lg:hidden divide-y divide-edge/50">
         {LANES.map((lane) => {
@@ -344,7 +345,7 @@ function HeroPopover({ heroes, value, onChange, anchor, close }: {
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-raised ${h.name === value ? "bg-raised" : ""}`}>
               <HeroImg name={h.name} size={26} className="rounded" />
               <span className="text-[12px] font-bold truncate">{h.name}</span>
-              <span className={`ml-auto chip !text-[8px] !px-1 !py-0 uppercase ${
+              <span className={`ml-auto chip !text-[8px] !px-1 !py-0 ${
                 h.meta_status === "META" ? "text-crim border-crim/40" : h.meta_status === "STRONG" ? "text-leaf border-leaf/40" : "text-faint border-edge"}`}>
                 {h.meta_status.toLowerCase()}
               </span>
@@ -379,7 +380,7 @@ function Slot({ heroes, value, onChange, ours, kind, order, anchor, fluid = fals
 
 /** Interactive pro-league pick/ban board — same broadcast layout as DraftBoard, editable.
  *  Render inside your own card/section wrapper. */
-export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursLabel = "9 CLOVER", theirsLabel = "ENEMY" }: {
+export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursLabel = "9 Clover", theirsLabel = "Enemy" }: {
   heroes: Hero[]; value: DraftValue; onChange: (next: DraftValue) => void;
   lanes?: string[]; oursLabel?: string; theirsLabel?: string;
 }) {
@@ -398,7 +399,7 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
     return (
       <div className={ours ? "" : "text-right"}>
         <div className={`label !text-[8.5px] mb-1.5 ${ours ? "text-leaf/70" : "text-crim/70"}`}>
-          {ours ? `${oursLabel} BANS` : `${theirsLabel} BANS`}
+          {ours ? `${oursLabel} bans` : `${theirsLabel} bans`}
         </div>
         <ol className={`flex flex-wrap gap-1.5 ${ours ? "" : "justify-end"}`}>
           {list.map((b, i) => (
@@ -426,20 +427,20 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
             <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
               <Slot kind="pick" heroes={heroes} ours anchor="left" fluid bare
                 value={value.our_picks?.[lane] ?? ""} onChange={(v) => setPick("our_picks", lane, v)} />
-              <span className="label !text-[8px] mt-0.5">{lane}</span>
+              <span className="label !text-[8px] mt-0.5">{nice(lane)}</span>
             </div>
           ))}
         </div>
         <div className="flex flex-col items-center gap-1 px-1">
           <span className="text-2xl font-black tracking-[0.2em] text-mute">VS</span>
-          <span className="label !text-[7.5px] whitespace-nowrap">CLICK TO PICK</span>
+          <span className="label !text-[7.5px] whitespace-nowrap">Click to pick</span>
         </div>
         <div className="grid grid-cols-5 gap-3">
           {lanes.map((lane) => (
             <div key={lane} className="flex flex-col items-center gap-1 min-w-0">
               <Slot kind="pick" heroes={heroes} ours={false} anchor="right" fluid bare
                 value={value.enemy_picks?.[lane] ?? ""} onChange={(v) => setPick("enemy_picks", lane, v)} />
-              <span className="label !text-[8px] mt-0.5">{lane}</span>
+              <span className="label !text-[8px] mt-0.5">{nice(lane)}</span>
             </div>
           ))}
         </div>
@@ -452,7 +453,7 @@ export function DraftBoardEditor({ heroes, value, onChange, lanes = LANES, oursL
               <Slot kind="pick" heroes={heroes} ours anchor="right"
                 value={value.our_picks?.[lane] ?? ""} onChange={(v) => setPick("our_picks", lane, v)} />
             </div>
-            <span className="label w-16 text-center !text-[9px]">{lane}</span>
+            <span className="label w-16 text-center !text-[9px]">{nice(lane)}</span>
             <div className="flex justify-start">
               <Slot kind="pick" heroes={heroes} ours={false} anchor="left"
                 value={value.enemy_picks?.[lane] ?? ""} onChange={(v) => setPick("enemy_picks", lane, v)} />
@@ -475,7 +476,7 @@ import { Check, Search, X } from "lucide-react";
 
 type ArmTarget = { side: "our" | "enemy"; kind: "pick" | "ban"; key: string | number };
 
-export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLabel = "9 CLOVER", theirsLabel = "ENEMY" }: {
+export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLabel = "9 Clover", theirsLabel = "Enemy" }: {
   heroes: Hero[]; value: DraftValue; onChange: (next: DraftValue) => void;
   lanes?: string[]; oursLabel?: string; theirsLabel?: string;
 }) {
@@ -562,9 +563,9 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
     const bansUsed = [...(value.our_bans ?? []), ...(value.enemy_bans ?? [])].filter(Boolean).length;
     const picksUsed = Object.values(value.our_picks ?? {}).filter(Boolean).length
       + Object.values(value.enemy_picks ?? {}).filter(Boolean).length;
-    if (bansUsed < 10 && picksUsed === 0) return { label: "BAN PHASE", left: 10 - bansUsed };
-    if (picksUsed < 10) return { label: "PICK PHASE", left: 10 - picksUsed };
-    return { label: "DRAFT COMPLETE", left: 0 };
+    if (bansUsed < 10 && picksUsed === 0) return { label: "Ban phase", left: 10 - bansUsed };
+    if (picksUsed < 10) return { label: "Pick phase", left: 10 - picksUsed };
+    return { label: "Draft complete", left: 0 };
   }, [value]);
 
   const isArmed = (t: ArmTarget) => !!armed && armed.side === t.side && armed.kind === t.kind && armed.key === t.key;
@@ -574,7 +575,7 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
     const picks = (ours ? value.our_picks : value.enemy_picks) ?? {};
     return (
       <div className={`rounded-xl border p-3 space-y-2 ${ours ? "border-leaf/40 bg-leaf/5" : "border-crim/40 bg-crim/5"}`}>
-        <div className={`text-[10px] font-bold uppercase tracking-[0.18em] ${ours ? "text-leaf" : "text-crim"}`}>
+        <div className={`text-[10px] font-bold tracking-[0.18em] ${ours ? "text-leaf" : "text-crim"}`}>
           {ours ? oursLabel : theirsLabel}
         </div>
         {lanes.map((lane) => {
@@ -598,7 +599,7 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
                 )}
               </span>
               <span className="min-w-0">
-                <span className={`block text-[8.5px] font-bold uppercase tracking-widest ${ours ? "text-leaf/70" : "text-crim/70"}`}>{lane}</span>
+                <span className={`block text-[8.5px] font-bold tracking-widest ${ours ? "text-leaf/70" : "text-crim/70"}`}>{nice(lane)}</span>
                 <span className="block text-[11.5px] font-bold truncate">{name || (active ? "Select hero →" : "Empty slot")}</span>
               </span>
               {active && <Check size={13} className="ml-auto text-amber shrink-0" />}
@@ -651,12 +652,12 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         {banRow("our_bans")}
         <div className="text-center px-3">
-          <div className={`text-[12px] font-black tracking-[0.22em] ${phase.label === "PICK PHASE" ? "text-leaf" : phase.label === "BAN PHASE" ? "text-crim" : "text-mute"}`}>
+          <div className={`text-[12px] font-black tracking-[0.22em] ${phase.label === "Pick phase" ? "text-leaf" : phase.label === "Ban phase" ? "text-crim" : "text-mute"}`}>
             {phase.label}
           </div>
           <div className="label !text-[8px] mt-0.5">
-            {phase.left > 0 ? `${phase.left} LEFT` : "READY"}
-            {armed ? ` · SELECTING ${armed.kind.toUpperCase()} (${armed.side === "our" ? oursLabel : theirsLabel})` : " · CLICK A SLOT TO ARM"}
+            {phase.left > 0 ? `${phase.left} left` : "Ready"}
+            {armed ? ` · Selecting ${armed.kind} (${armed.side === "our" ? oursLabel : theirsLabel})` : " · Click a slot to arm"}
           </div>
         </div>
         {banRow("enemy_bans")}
@@ -670,9 +671,9 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
           <div className="flex flex-wrap items-center gap-1 mb-2.5">
             {LANE_TABS.map((t) => (
               <button key={t} type="button" onClick={() => setLaneTab(t)}
-                className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide border transition
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wide border transition
                   ${laneTab === t ? "border-crim/60 bg-crim-dim/40 text-crim" : "border-edge text-faint hover:text-mute"}`}>
-                {t === "ALL" ? "All Lanes" : t}
+                {t === "ALL" ? "All lanes" : nice(t)}
               </button>
             ))}
             <div className="relative ml-auto">
@@ -692,10 +693,10 @@ export function DraftSimulator({ heroes, value, onChange, lanes = LANES, oursLab
                       : !armed ? "border-[#C8AA6E]/10 opacity-70"
                         : "border-[#C8AA6E]/15 hover:border-amber hover:shadow-[0_0_10px_rgba(245,185,66,0.25)] hover:scale-[1.06]"}`}>
                   <HeroImg name={h.name} size={58} variant="icon" className="w-full rounded-none aspect-square" />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-2 pb-0.5 text-[8px] font-semibold uppercase tracking-wide leading-none truncate px-0.5 select-none text-[#E8E6E3]">
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-2 pb-0.5 text-[8px] font-semibold tracking-wide leading-none truncate px-0.5 select-none text-[#E8E6E3]">
                     {h.name}
                   </span>
-                  {taken && <span className="absolute inset-0 grid place-items-center text-[8px] font-black text-crim tracking-widest bg-black/30">TAKEN</span>}
+                  {taken && <span className="absolute inset-0 grid place-items-center text-[8px] font-black text-crim tracking-widest bg-black/30">Taken</span>}
                 </button>
               );
             })}

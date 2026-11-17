@@ -92,14 +92,14 @@ export function EventsPage({ me, meta }: { me: User; meta: Meta }) {
   const RowV = ({ ev }: { ev: EventItem }) => (
     <div className="card p-3.5 flex items-start gap-3.5">
       <div className="w-12 shrink-0 text-center bg-raised border border-edge rounded py-1.5">
-        <div className="text-[9px] font-bold uppercase text-crim">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { month: "short" }) : "—"}</div>
+        <div className="text-[9px] font-bold text-crim">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { month: "short" }) : "—"}</div>
         <div className="text-lg font-extrabold leading-none">{ev.date ? ev.date.slice(8) : "—"}</div>
-        <div className="text-[8.5px] text-faint uppercase">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { weekday: "short" }) : ""}</div>
+        <div className="text-[8.5px] text-faint">{ev.date ? new Date(`${ev.date}T00:00`).toLocaleDateString(undefined, { weekday: "short" }) : ""}</div>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-bold">{ev.title}</span>
-          <span className={`chip !text-[9px] uppercase ${KIND_TONE[ev.kind] ?? ""}`}>{ev.kind}</span>
+          <span className={`chip !text-[9px] ${KIND_TONE[ev.kind] ?? ""}`}>{ev.kind}</span>
           {dayLabel(ev.date) === "Today" && <Badge cls="text-leaf border-leaf/40">today</Badge>}
         </div>
         <div className="text-[12px] text-faint mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">

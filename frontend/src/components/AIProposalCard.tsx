@@ -17,7 +17,7 @@ function Value({ value }: { value: unknown }) {
   if (Array.isArray(value)) return value.length ? <ul className="space-y-1">{value.map((item, index) => <li key={index}><Value value={item} /></li>)}</ul> : <span className="text-mute">None</span>;
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
-    return entries.length ? <dl className="space-y-2 border-l border-edge-2 pl-3">{entries.map(([key, item]) => <div key={key} className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-wide text-mute">{readable(key)}</dt><dd className="mt-0.5"><Value value={item} /></dd></div>)}</dl> : <span className="text-mute">None</span>;
+    return entries.length ? <dl className="space-y-2 border-l border-edge-2 pl-3">{entries.map(([key, item]) => <div key={key} className="min-w-0"><dt className="text-[10px] font-bold tracking-wide text-mute">{readable(key)}</dt><dd className="mt-0.5"><Value value={item} /></dd></div>)}</dl> : <span className="text-mute">None</span>;
   }
   return <span className="whitespace-pre-wrap break-words">{String(value)}</span>;
 }
@@ -85,7 +85,7 @@ export function AIProposalCard({ proposal, onChange }: { proposal: AIProposal; o
   return <div className="rounded-xl border border-leaf/25 bg-leaf/[0.04] p-3 mt-4" aria-label="AI change proposal">
     <div className="flex flex-wrap items-start gap-2"><ShieldCheck size={16} className="text-leaf mt-0.5 shrink-0" /><div className="min-w-0 flex-1"><div className="text-[12px] font-extrabold">{labels[proposal.kind]}</div>
       <p className="text-[11px] text-mute mt-1">{expired ? "Expired — ask for a new proposal." : proposal.status === "applied" ? "Applied after admin confirmation." : proposal.status === "discarded" ? "Discarded. Nothing was changed." : `Ready for admin review · expires ${shortDate(proposal.expires_at)}. Nothing has changed yet.`}</p></div>
-      <span className={`text-[9px] font-bold uppercase ${proposal.status === "applied" ? "text-leaf" : "text-mute"}`}>{expired ? "Expired" : proposal.status}</span>
+      <span className={`text-[9px] font-bold ${proposal.status === "applied" ? "text-leaf" : "text-mute"}`}>{expired ? "Expired" : proposal.status}</span>
     </div>
     <div className="flex flex-wrap gap-2 mt-3">
       <button type="button" className="btn-ghost !text-[11px]" onClick={() => { setError(null); setOpen(true); }}>{resolved || expired ? "View details" : "Review proposal"} <ChevronRight size={13} /></button>

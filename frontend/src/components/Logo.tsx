@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-/** 9 CLOVER brand mark: the glossy four-leaf "9" emblem + wordmark.
+/** 9 Clover brand mark: the glossy four-leaf "9" emblem + wordmark.
  *
  * All brand files are generated from frontend/public/brand/logo-source.png by
  * scripts/make-brand.py. The SVG mark below is only an offline fallback. */
@@ -28,7 +28,7 @@ export function BrandImg({ size, className = "", rounded = "rounded" }: { size: 
   return (
     <img
       src={CANDIDATES[idx]}
-      alt="9 CLOVER"
+      alt="9 Clover"
       width={size}
       height={size}
       onError={() => setIdx((i) => i + 1)}
@@ -45,7 +45,7 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
       <BrandImg size={compact ? 26 : 32} />
       <div className="leading-none">
         <div className="font-extrabold tracking-[0.22em] text-[15px]">
-          9&nbsp;<span className="text-crim">CLOVER</span>
+          9&nbsp;<span className="text-crim">Clover</span>
         </div>
       </div>
     </div>
@@ -59,7 +59,7 @@ export function HeroMark({ size = 180 }: { size?: number }) {
   return (
     <img
       src="/brand/logo-full.png"
-      alt="9 CLOVER"
+      alt="9 Clover"
       onError={() => setFailed(true)}
       className="brand-emblem mx-auto"
       style={{ height: size, width: "auto" }}

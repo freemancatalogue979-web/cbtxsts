@@ -68,7 +68,7 @@ function HistoryPanel({ conversations, searchResults, selected, filter, setFilte
   const active = term.length >= 2;
   const visible = active ? searchResults : term ? [] : conversations;
   return <div className="h-full flex flex-col p-3 min-w-0">
-    <div className="flex items-center justify-between px-1 mb-3"><div><div className="section-pill">YOUR SPACE</div><div className="text-[13px] font-extrabold mt-1">Conversations</div></div><LockKeyhole size={15} className="text-faint" /></div>
+    <div className="flex items-center justify-between px-1 mb-3"><div><div className="section-pill">Your space</div><div className="text-[13px] font-extrabold mt-1">Conversations</div></div><LockKeyhole size={15} className="text-faint" /></div>
     <button type="button" className="btn-ghost w-full !justify-start !text-[12px] !py-2.5 border-dashed" disabled={disabled} onClick={onNew}><Plus size={15} className="text-crim" /> New conversation</button>
     <label className="block mt-3"><span className="sr-only">Search all your chats</span><input className="input !text-[11px]" placeholder="Search your chats…" maxLength={100} value={filter} onChange={(e) => setFilter(e.target.value)} /></label>
     <div className="mt-3 flex-1 overflow-y-auto min-h-0 space-y-1" aria-live="polite">
@@ -163,8 +163,8 @@ function MessageBubble({ message, conversationId, onFeedback, onManageMemory, on
     <div className="rounded-lg bg-raised border border-edge p-1 shrink-0"><BrandImg size={24} /></div>
     <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-edge bg-raised/50 p-3 sm:p-4">
       <div className="flex flex-wrap items-center gap-2 mb-2">
-        <span className="text-[10px] tracking-[0.14em] uppercase font-extrabold">9 Clover AI</span>
-        <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-bold uppercase ${message.mode === "ai" || message.mode === "think" || message.mode === "guidance" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : message.mode === "think" ? "Deep analysis" : message.mode === "guidance" ? "Next step" : "Local facts only"}</span>
+        <span className="text-[10px] tracking-[0.14em] font-extrabold">9 Clover AI</span>
+        <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-bold ${message.mode === "ai" || message.mode === "think" || message.mode === "guidance" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : message.mode === "think" ? "Deep analysis" : message.mode === "guidance" ? "Next step" : "Local facts only"}</span>
       </div>
       <div className="ai-markdown text-[12px] sm:text-[13px] text-text/90 leading-relaxed break-words">
         <AIMarkdown content={message.content} />
@@ -524,12 +524,12 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   }`;
   return <div className="space-y-4 pb-3">
     <header className="relative overflow-hidden rounded-xl border border-edge bg-panel" style={{ backgroundImage: "radial-gradient(circle at 85% -40%, rgba(52,211,153,.14), transparent 42%), radial-gradient(circle at 0% 0%, rgba(225,29,72,.12), transparent 35%)" }}>
-      <h1 className="sr-only">9 CLOVER AI</h1>
+      <h1 className="sr-only">9 Clover AI</h1>
       <div id="ai-workspace-intro" className={`${desktopLayout.headerOpen ? "" : "md:hidden"} flex flex-wrap items-start justify-between gap-4 p-4 sm:p-6 pb-4`}>
         <div className="flex items-start gap-3 min-w-0">
           <div className="rounded-xl border border-edge-2 bg-ink/70 p-1.5 shrink-0"><BrandImg size={40} /></div>
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="section-pill section-pill--leaf">YOUR MLBB INTELLIGENCE</span><span className="text-[9px] uppercase font-extrabold tracking-wider text-faint">· Member workspace</span></div>
-            <p aria-hidden="true" className="text-[22px] sm:text-3xl font-extrabold tracking-tight leading-tight mt-1">9 CLOVER <span className="text-leaf">AI</span></p>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="section-pill section-pill--leaf">Your MLBB intelligence</span><span className="text-[9px] font-extrabold tracking-wider text-faint">· Member workspace</span></div>
+            <p aria-hidden="true" className="text-[22px] sm:text-3xl font-extrabold tracking-tight leading-tight mt-1">9 Clover <span className="text-leaf">AI</span></p>
             <p className="text-[11px] sm:text-[12px] text-mute mt-1.5">Your game. Your questions. Your edge.</p>
           </div>
         </div>
@@ -541,7 +541,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
       <div className={`flex flex-wrap lg:flex-nowrap items-center ${desktopLayout.headerOpen ? "border-t border-edge/70" : "border-t border-edge/70 md:border-t-0"}`}>
         <nav aria-label="AI workspace sections" className="flex gap-1 overflow-x-auto min-w-0 w-full flex-none lg:w-auto lg:flex-1 px-3 sm:px-5">
           {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}
-            className={`flex items-center gap-1.5 px-3 py-3 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider border-b-2 whitespace-nowrap ${tab === id ? "border-leaf text-text" : "border-transparent text-faint hover:text-mute"}`}><Icon size={14} />{label}</button>)}
+            className={`flex items-center gap-1.5 px-3 py-3 text-[10px] sm:text-[11px] font-extrabold tracking-wider border-b-2 whitespace-nowrap ${tab === id ? "border-leaf text-text" : "border-transparent text-faint hover:text-mute"}`}><Icon size={14} />{label}</button>)}
         </nav>
         <div role="group" aria-label="Desktop layout controls" className="hidden md:flex items-center gap-1.5 shrink-0 ml-auto lg:ml-0 pr-3 py-1.5">
           <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[10px]" aria-controls="site-desktop-navigation" aria-expanded={desktopLayout.navigationOpen}
@@ -571,7 +571,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           <button type="button" className="btn-ghost hidden lg:inline-flex !p-2 !text-[10px]" aria-controls="ai-desktop-history" aria-expanded={desktopLayout.historyOpen}
             aria-label={desktopLayout.historyOpen ? "Hide chats (conversation history)" : "Show chats (conversation history)"} title={desktopLayout.historyOpen ? "Hide conversation history" : "Show conversation history"}
             onClick={() => onToggleDesktopLayout("historyOpen")}><History size={15} /><span className="hidden lg:inline">{desktopLayout.historyOpen ? "Hide chats" : "Show chats"}</span></button>
-          <div className={`min-w-[160px] flex-1 ${desktopLayout.headerOpen ? "" : "md:min-w-0"}`}><div className={desktopLayout.headerOpen ? "" : "md:hidden"}><div className="section-pill">PRIVATE CONVERSATION</div></div><div className={`text-[12px] font-extrabold truncate mt-1 ${desktopLayout.headerOpen ? "" : "md:mt-0"}`}>{current?.title || "New conversation"}</div></div>
+          <div className={`min-w-[160px] flex-1 ${desktopLayout.headerOpen ? "" : "md:min-w-0"}`}><div className={desktopLayout.headerOpen ? "" : "md:hidden"}><div className="section-pill">Private conversation</div></div><div className={`text-[12px] font-extrabold truncate mt-1 ${desktopLayout.headerOpen ? "" : "md:mt-0"}`}>{current?.title || "New conversation"}</div></div>
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
             {selected && <><button type="button" className="btn-ghost !p-2" aria-label="Download conversation" title="Download conversation" disabled={busy || exporting} onClick={() => void exportChat()}>{exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}</button>
               <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => setRename(current?.title ?? "")}><PenLine size={14} /></button>
@@ -591,7 +591,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
               {waiting && ((waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>)}
             </div> :
             <div className="min-h-full flex flex-col justify-center max-w-2xl mx-auto py-2">
-              <div className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-leaf uppercase"><Sparkles size={13} /> Made for your game</div>
+              <div className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-leaf"><Sparkles size={13} /> Made for your game</div>
               <h2 className="text-[22px] sm:text-[28px] leading-tight font-extrabold mt-2">What are we working on, <span className="text-leaf">{me.ign || me.name}</span>?</h2>
               <p className="text-[12px] text-mute leading-relaxed mt-2 max-w-lg">Ask about MLBB, explore ideas, or use your own data for coaching. You choose what personal context to share.</p>
               <div className="grid sm:grid-cols-2 gap-2 mt-6">{SUGGESTIONS.map(({ label, hint, icon: Icon, prompt }) => <button key={label} type="button" disabled={waiting || !workspaceReady} onClick={() => void send(prompt)} className="group text-left rounded-lg border border-edge bg-raised/40 hover:bg-raised hover:border-leaf/30 p-3 transition-colors min-w-0">
@@ -608,13 +608,13 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           <ErrorNote error={error} />
           {!workspaceReady && Boolean(error) && <button type="button" className="text-[11px] text-leaf underline mt-2" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>Retry loading AI controls</button>}
           {attachedMatches.length > 0 && <div className="mt-2 rounded-lg border border-leaf/20 bg-leaf/5 p-2.5" aria-label="Attached match context">
-            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Esports context</span>{attachedMatches.map((match) => <button type="button" key={match.label} disabled={waiting || exporting}
+            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold tracking-wider text-leaf mr-1">Esports context</span>{attachedMatches.map((match) => <button type="button" key={match.label} disabled={waiting || exporting}
               aria-label={`Remove ${match.label} from chat`} onClick={() => setAttachedMatches([])}
               className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">{match.label}</span><X size={11} className="shrink-0" /></button>)}</div>
             <p className="text-[10px] text-mute mt-1.5 leading-relaxed">Clover loads missing games when you send. Short follow-ups may reuse this public selection when chat history is enabled.</p>
           </div>}
           {(attachedDrafts.length > 0 || attachedMaps.length > 0) && <div className="mt-2 rounded-lg border border-leaf/20 bg-leaf/5 p-2.5" aria-label="Attached board context">
-            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold uppercase tracking-wider text-leaf mr-1">Saved boards</span>
+            <div className="flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-extrabold tracking-wider text-leaf mr-1">Saved boards</span>
               {attachedDrafts.map((board) => <button type="button" key={`draft-${board.id}`} disabled={waiting || exporting} aria-label={`Remove draft ${board.name} from chat`} onClick={() => setAttachedDrafts((previous) => previous.filter((item) => item.id !== board.id))}
                 className="max-w-full inline-flex items-center gap-1 rounded-md border border-edge-2 bg-panel px-2 py-1 text-[10px] font-semibold text-mute hover:text-crim disabled:opacity-50"><span className="truncate">Draft · {board.name}</span><X size={11} className="shrink-0" /></button>)}
               {attachedMaps.map((board) => <button type="button" key={`map-${board.id}`} disabled={waiting || exporting} aria-label={`Remove map ${board.name} from chat`} onClick={() => setAttachedMaps((previous) => previous.filter((item) => item.id !== board.id))}

@@ -6,6 +6,7 @@ import { navigate } from "../lib/util";
 import { Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { HeroImg } from "../components/HeroImg";
 import { HeroPickerModal } from "../components/HeroPicker";
+import { nice } from "../lib/caseText";
 
 function BanForm({ heroes, meta, initial, onSaved, onClose }: {
   heroes: Hero[]; meta: Meta; initial: Partial<Ban>; onSaved: () => void; onClose: () => void;
@@ -96,7 +97,7 @@ function BanCard({ ban, heroMap, canManage, onToggle, onEdit, onDelete }: {
             </button>
             <span className="chip !text-[10px] text-crim border-crim/40 shrink-0">P{ban.priority ?? "—"}</span>
           </div>
-          <div className="text-[11px] text-faint mt-0.5">{hero ? `${hero.role} · ${hero.meta_status}` : ""}</div>
+          <div className="text-[11px] text-faint mt-0.5">{hero ? `${nice(hero.role)} · ${nice(hero.meta_status)}` : ""}</div>
         </div>
       </div>
       <p className="text-[12.5px] text-mute mt-2.5 leading-relaxed">{ban.reason}</p>

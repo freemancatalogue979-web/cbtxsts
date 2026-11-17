@@ -7,6 +7,7 @@ import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { FilePick } from "../components/FilePick";
 import { FileText, Film, ImageIcon, Link2 } from "lucide-react";
+import { nice } from "../lib/caseText";
 
 // --------------------------------------------------------------------------- //
 // forms
@@ -178,7 +179,7 @@ function ResultForm({ match, onSaved, onClose }: {
           </Field>
           <Field label="Result">
             <select className="input" value={String(f.result)} onChange={(e) => set("result", e.target.value)}>
-              {["", "WIN", "LOSS", "DRAW"].map((r) => <option key={r} value={r}>{r || "—"}</option>)}
+              {["", "WIN", "LOSS", "DRAW"].map((r) => <option key={r} value={r}>{nice(r) || "—"}</option>)}
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-2">
@@ -228,7 +229,7 @@ function DraftForm({ tournament, match, heroes, onSaved, onClose }: {
       <form onSubmit={save} className="space-y-5">
         <div className="card p-5">
           <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)}
-            theirsLabel={(match.opponent || "Enemy").toUpperCase()} />
+            theirsLabel={(match.opponent || "Enemy")} />
         </div>
         <ErrorNote error={err} />
         <div className="flex justify-end gap-2">
@@ -368,7 +369,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
           </div>
           {canManage && (
             <button className={`chip ${t.review_queued ? "border-leaf/50 text-leaf" : "text-mute"}`} onClick={() => toggleReviewT(t)}>
-              {t.review_queued ? "Review: ON" : "Review: OFF"}
+              {t.review_queued ? "Review: on" : "Review: off"}
             </button>
           )}
         </div>
@@ -394,7 +395,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                           vs {m.opponent}
                           {m.status === "played" && m.result && (
                             <span className={`ml-2 text-[11px] font-extrabold ${m.result === "WIN" ? "text-leaf" : m.result === "LOSS" ? "text-crim" : "text-amber"}`}>
-                              {m.result} {m.score_us}–{m.score_them}
+                              {nice(m.result)} {m.score_us}–{m.score_them}
                             </span>
                           )}
                         </div>
@@ -469,7 +470,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                           {draftOpen === m.id ? "Hide draft ▲" : "Show draft ▼"}
                         </button>
                         {draftOpen === m.id && (
-                          <div className="mt-2"><DraftBoard draft={m.draft as DraftPlan["draft"]} theirsLabel={(m.opponent || "Enemy").toUpperCase()}
+                          <div className="mt-2"><DraftBoard draft={m.draft as DraftPlan["draft"]} theirsLabel={(m.opponent || "Enemy")}
                             {...(m.status === "played" ? { scoreUS: m.score_us, scoreThem: m.score_them } : {})} /></div>
                         )}
                       </div>
@@ -515,7 +516,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
               <Trophy size={13} className="text-amber shrink-0" />
               <div className="flex-1 min-w-0 text-[13px] font-bold truncate">
                 {m.tournament_name} · {m.stage || "Match"} — vs {m.opponent}
-                <span className={`ml-2 text-[11px] font-extrabold ${m.result === "WIN" ? "text-leaf" : "text-crim"}`}>{m.result} {m.score_us}–{m.score_them}</span>
+                <span className={`ml-2 text-[11px] font-extrabold ${m.result === "WIN" ? "text-leaf" : "text-crim"}`}>{nice(m.result)} {m.score_us}–{m.score_them}</span>
               </div>
               {canReview ? (
                 <button className="chip !py-1 text-amber border-amber/50" onClick={() => navigate("reviews", "new", `tmatch=${m.id}`)}>

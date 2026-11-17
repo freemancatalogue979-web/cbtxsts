@@ -62,20 +62,20 @@ export function BattlefieldMap({ className = "" }: { className?: string }) {
       {/* objective pits (traced from render: Lord NW of center, Turtle SE toward gold) */}
       <circle cx="38" cy="40" r="4.8" fill="#241a33" stroke="#7c4dda" strokeWidth="0.9" />
       <text x="38" y="41.4" textAnchor="middle" fontSize="3.1" fill="#c4abf2" fontWeight="800">L</text>
-      <text x="38" y="48.6" textAnchor="middle" fontSize="2.6" fill="#8b76bd">LORD</text>
+      <text x="38" y="48.6" textAnchor="middle" fontSize="2.6" fill="#8b76bd">Lord</text>
       <circle cx="63" cy="60" r="4.8" fill="#1d2f24" stroke="#3ecf8e" strokeWidth="0.9" />
       <text x="63" y="61.4" textAnchor="middle" fontSize="3.1" fill="#9af2cd" fontWeight="800">T</text>
-      <text x="63" y="68.6" textAnchor="middle" fontSize="2.6" fill="#6fae92">TURTLE</text>
+      <text x="63" y="68.6" textAnchor="middle" fontSize="2.6" fill="#6fae92">Turtle</text>
 
       {/* buffs: purple (EXP-side) / orange (gold-side) for both teams */}
       <circle cx="29" cy="24" r="2.6" fill="#3d1f4f" stroke="#a855f7" strokeWidth="0.6" />
       <circle cx="71" cy="29" r="2.6" fill="#3d1f4f" stroke="#a855f7" strokeWidth="0.6" />
       <circle cx="71" cy="74" r="2.6" fill="#4f2a1f" stroke="#f78a4d" strokeWidth="0.6" />
       <circle cx="29" cy="73" r="2.6" fill="#4f2a1f" stroke="#f78a4d" strokeWidth="0.6" />
-      <text x="29" y="30" textAnchor="middle" fontSize="2.2" fill="#b588d9">BUFF</text>
-      <text x="71" y="25" textAnchor="middle" fontSize="2.2" fill="#b588d9">BUFF</text>
-      <text x="71" y="80" textAnchor="middle" fontSize="2.2" fill="#d9a988">BUFF</text>
-      <text x="29" y="79" textAnchor="middle" fontSize="2.2" fill="#d9a988">BUFF</text>
+      <text x="29" y="30" textAnchor="middle" fontSize="2.2" fill="#b588d9">Buff</text>
+      <text x="71" y="25" textAnchor="middle" fontSize="2.2" fill="#b588d9">Buff</text>
+      <text x="71" y="80" textAnchor="middle" fontSize="2.2" fill="#d9a988">Buff</text>
+      <text x="29" y="79" textAnchor="middle" fontSize="2.2" fill="#d9a988">Buff</text>
 
       {/* small camps */}
       {[[15, 23], [22, 40], [85, 27], [84, 72], [76, 88], [40, 68], [60, 34]].map(([x, y], i) => (
@@ -87,14 +87,14 @@ export function BattlefieldMap({ className = "" }: { className?: string }) {
 
       {/* bases */}
       <circle cx="10" cy="86" r="8.5" fill="url(#bf-base-blue)" stroke="#3b82f6" strokeWidth="1" />
-      <text x="10" y="87" textAnchor="middle" fontSize="3.3" fill="#9ecdff" fontWeight="800">OUR</text>
+      <text x="10" y="87" textAnchor="middle" fontSize="3.3" fill="#9ecdff" fontWeight="800">Our</text>
       <circle cx="90" cy="14" r="8.5" fill="url(#bf-base-red)" stroke="#e11d48" strokeWidth="1" />
-      <text x="90" y="15" textAnchor="middle" fontSize="3.3" fill="#ffb3c1" fontWeight="800">FOE</text>
+      <text x="90" y="15" textAnchor="middle" fontSize="3.3" fill="#ffb3c1" fontWeight="800">Foe</text>
 
       {/* lane labels */}
       <text x="11.5" y="48" fontSize="3" fill="#7b849c" fontWeight="600" transform="rotate(-90 11.5 48)">EXP</text>
-      <text x="52" y="97.5" fontSize="3" fill="#7b849c" fontWeight="600">GOLD</text>
-      <text x="46" y="58" fontSize="3" fill="#7b849c" fontWeight="600" transform="rotate(-45 46 58)">MID</text>
+      <text x="52" y="97.5" fontSize="3" fill="#7b849c" fontWeight="600">Gold</text>
+      <text x="46" y="58" fontSize="3" fill="#7b849c" fontWeight="600" transform="rotate(-45 46 58)">Mid</text>
     </svg>
   );
 }

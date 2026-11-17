@@ -9,6 +9,7 @@ import { HeroPickerModal } from "../components/HeroPicker";
 import { HeroImg } from "../components/HeroImg";
 import { linkedRoster } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
+import { nice } from "../lib/caseText";
 
 const POOL_LABEL: Record<string, string> = { comfort: "Comfort picks", meta: "Meta picks", pocket: "Pocket picks", emergency: "Emergency picks" };
 const POOL_ORDER = ["comfort", "meta", "pocket", "emergency"];
@@ -111,7 +112,7 @@ function DevForm({ player, me, meta, initial, onSaved, onClose }: {
         <div className="grid grid-cols-2 gap-4">
           <Field label="Category">
             <select className="input" value={f.category} onChange={(e) => set("category", e.target.value)}>
-              {meta.dev_categories.map((c) => <option key={c}>{c}</option>)}
+              {meta.dev_categories.map((c) => <option key={c} value={c}>{nice(c)}</option>)}
             </select>
           </Field>
           <Field label={source === "self" ? "Self rating 0-10" : "Rating 0-10"}>
@@ -178,7 +179,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                     </span>
                     <div>
                       <div className="text-[11.5px] font-extrabold text-leaf flex items-center gap-1.5">
-                        {l.name || "MLBB account"} <span className="text-[8.5px] uppercase font-bold text-faint">· linked</span>
+                        {l.name || "MLBB account"} <span className="text-[8.5px] font-bold text-faint">· linked</span>
                       </div>
                       <div className="text-[10px] text-faint">
                         in-game: {l.name}{l.level != null ? ` · Lv ${l.level}` : ""}{l.rank_level != null ? ` · rank tier ${l.rank_level}` : ""}
@@ -261,12 +262,12 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             {p.development.length === 0 && <Empty title="No entries yet" />}
             {p.development.map((d: DevEntry) => (
               <div key={d.id} className="card p-3.5 flex items-start gap-3">
-                <span className={`chip !text-[9px] uppercase shrink-0 mt-0.5 ${d.source === "self" ? "text-sky border-sky/40 bg-sky/10" : "text-crim border-crim/40 bg-crim-dim/40"}`}>
+                <span className={`chip !text-[9px] shrink-0 mt-0.5 ${d.source === "self" ? "text-sky border-sky/40 bg-sky/10" : "text-crim border-crim/40 bg-crim-dim/40"}`}>
                   {d.source === "self" ? "Self" : "Coach"}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-faint">
-                    <span className="font-bold text-mute">{d.category}</span>
+                    <span className="font-bold text-mute">{nice(d.category)}</span>
                     <span>{dayLabel(d.date)}</span>
                     {d.created_by_name && <span>by {d.created_by_name}</span>}
                   </div>
@@ -315,7 +316,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                 </div>
                 <div className="text-[11px] text-faint flex items-center gap-1.5">{p.main_role || p.role_label}
                   {links.get(p.id)?.linked && (
-                    <span className="chip !text-[8.5px] uppercase text-leaf border-leaf/40 inline-flex items-center gap-1">
+                    <span className="chip !text-[8.5px] text-leaf border-leaf/40 inline-flex items-center gap-1">
                       <Gamepad2 size={9} /> MLBB ✓
                     </span>
                   )}
@@ -351,7 +352,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
 
   return (
     <section>
-      <SectionTitle>Progress · {ign.toUpperCase()}</SectionTitle>
+      <SectionTitle>Progress · {ign}</SectionTitle>
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="card p-4 col-span-1 sm:col-span-2">
           <div className="flex items-baseline justify-between mb-2.5">

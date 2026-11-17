@@ -30,7 +30,7 @@ def _out(n: Notification, actors: dict[int, User]) -> dict:
         "title": n.title,
         "body": n.body,
         "link": n.link,
-        "from": actor.ign or actor.name if actor else "9 CLOVER",
+        "from": actor.ign or actor.name if actor else "9 Clover",
         "read": n.read_at is not None,
         "created_at": n.created_at.isoformat() if n.created_at else None,
     }

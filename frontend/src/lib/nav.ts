@@ -35,7 +35,7 @@ export const NAV_GROUPS: { id: NavGroupId; label: string }[] = [
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", short: "Home", icon: Home, group: "command", blurb: "Team pulse, next session and form", keywords: "home hub overview" },
-  { id: "ai", label: "9 CLOVER AI", short: "AI", icon: BrainCircuit, group: "command", blurb: "Ask about drafts, matchups and esports", keywords: "assistant chat coach" },
+  { id: "ai", label: "9 Clover AI", short: "AI", icon: BrainCircuit, group: "command", blurb: "Ask about drafts, matchups and esports", keywords: "assistant chat coach" },
   { id: "notifications", label: "Notifications", short: "Alerts", icon: Bell, group: "command", blurb: "Everything that needs your attention", keywords: "inbox alerts" },
   { id: "events", label: "Calendar", short: "Calendar", icon: CalendarDays, group: "command", blurb: "Scrims, training and tournaments by date", keywords: "events schedule" },
 

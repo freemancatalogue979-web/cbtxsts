@@ -23,7 +23,7 @@
 }
 
 .team-focus__section-name { gap: 9px; }
-.team-focus__section-tag { color: #a29da7; font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.team-focus__section-tag { color: #a29da7; font-size: 9px; font-weight: 750; letter-spacing: .13em; }
 
 .team-focus__shell {
   position: relative;
@@ -101,7 +101,7 @@
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .1em;
-  text-transform: uppercase;
+
   white-space: nowrap;
 }
 .team-focus__scope > span { width: 6px; height: 6px; border-radius: 50%; background: #f24767; box-shadow: 0 0 9px rgba(242, 71, 103, .65); }
@@ -124,7 +124,7 @@
 .team-focus__form-number { color: #a19ba7; font-size: 10px; font-weight: 750; letter-spacing: .1em; white-space: nowrap; }
 .team-focus__field { min-width: 0; }
 .team-focus__label-row { justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.team-focus__label-row label { color: #c7c3cc; font-size: 10px; font-weight: 800; letter-spacing: .1em; line-height: 1.4; text-transform: uppercase; }
+.team-focus__label-row label { color: #c7c3cc; font-size: 10px; font-weight: 800; letter-spacing: .1em; line-height: 1.4; }
 .team-focus__label-row > span { color: #a29ba7; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .team-focus__control,
 .team-focus__stepper {

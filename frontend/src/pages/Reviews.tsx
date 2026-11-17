@@ -5,6 +5,7 @@ import type { Hero, Meta, Review, Scrim, TournamentMatchT, User } from "../lib/t
 import { dayLabel, navigate, REVIEW_STATUS_STYLE } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
+import { nice } from "../lib/caseText";
 
 const STAT_FIELDS: [string, string][] = [
   ["kills", "Kills"], ["deaths", "Deaths"], ["gold", "Gold"], ["turrets", "Turrets"],
@@ -86,7 +87,7 @@ function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onCl
         <Field label="Duration (min)"><input className="input" inputMode="decimal" value={String(f.duration_min)} onChange={(e) => set("duration_min", e.target.value)} /></Field>
         <Field label="Result">
           <select className="input" value={String(f.result)} onChange={(e) => set("result", e.target.value)}>
-            <option>LOSS</option><option>WIN</option><option>DRAW</option>
+            <option value="LOSS">Loss</option><option value="WIN">Win</option><option value="DRAW">Draw</option>
           </select>
         </Field>
       </div>
@@ -94,7 +95,7 @@ function ReviewForm({ meta, users, heroes, initial, scrim, tmatch, onSaved, onCl
       {/* Draft — pro-league board */}
       <section className="card p-5">
         <DraftBoardEditor heroes={heroes} lanes={meta.lanes} value={draft}
-          onChange={(d) => set("draft", d)} theirsLabel={String(f.opponent || "Enemy").toUpperCase()} />
+          onChange={(d) => set("draft", d)} theirsLabel={String(f.opponent || "Enemy")} />
       </section>
 
       {/* Stats */}
@@ -176,7 +177,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
       <button className="label !text-crim" onClick={() => navigate("reviews")}>← All reviews</button>
       <PageTitle
         title={`Match Review — ${review.tournament_name ? `🏆 ${review.tournament_name}${review.tournament_stage ? ` · ${review.tournament_stage}` : ""}` : review.scrim_number ? `Scrim #${review.scrim_number}` : "Post-game"}`}
-        sub={`vs ${review.opponent} · ${dayLabel(review.date)} · ${review.result}${review.duration_min ? ` · ${review.duration_min} min` : ""}`}
+        sub={`vs ${review.opponent} · ${dayLabel(review.date)} · ${nice(review.result)}${review.duration_min ? ` · ${review.duration_min} min` : ""}`}
         right={<div className="flex items-center gap-2">
           <Badge cls={st.cls}>{st.label}</Badge>
           {review.mandatory && <Badge cls="text-amber border-amber/40 bg-amber/10">mandatory</Badge>}
@@ -184,7 +185,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
       />
 
       <div className="grid grid-cols-1 gap-4">
-        <DraftBoard draft={review.draft} theirsLabel={review.opponent.toUpperCase()} />
+        <DraftBoard draft={review.draft} theirsLabel={review.opponent} />
         <div className="card p-4">
           <div className="section-pill mb-3">Match statistics</div>
           {Object.keys(review.stats || {}).length === 0 && <div className="text-[13px] text-faint">No stat line attached.</div>}
@@ -308,7 +309,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
               <div className="flex flex-wrap gap-1.5">
                 {scrims.filter((s) => s.status === "played" && !s.has_review).map((s) => (
                   <button key={s.id} className="chip card-hover" onClick={() => navigate("reviews", "new", `scrim=${s.id}`)}>
-                    #{s.number} vs {s.opponent} · {s.result}
+                    #{s.number} vs {s.opponent} · {nice(s.result)}
                   </button>
                 ))}
                 {scrims.filter((s) => s.status === "played" && !s.has_review).length === 0 && (
@@ -323,7 +324,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
                   {tQueue.map((m) => (
                     <button key={m.id} className="chip card-hover !text-amber border-amber/40"
                       onClick={() => navigate("reviews", "new", `tmatch=${m.id}`)}>
-                      <Trophy size={10} /> {m.tournament_name} · {m.stage || "M" + m.match_no} vs {m.opponent} · {m.result}
+                      <Trophy size={10} /> {m.tournament_name} · {m.stage || "M" + m.match_no} vs {m.opponent} · {nice(m.result)}
                     </button>
                   ))}
                 </div>
@@ -369,7 +370,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
     return <ReviewDetail review={review} users={users} canEdit={canEdit}
       onEdit={() => setEditing(true)}
       onStatus={async (status) => { await api.patch(`/reviews/${review.id}`, { status }); load(); }} onDelete={async () => {
-        if (confirm("Delete this review? If the scrim stays unreviewed, the NO-REVIEW rule may block new bookings.")) {
+        if (confirm("Delete this review? If the scrim stays unreviewed, the no-review rule may block new bookings.")) {
           await api.del(`/reviews/${review.id}`);
           load();
           navigate("reviews");
@@ -382,7 +383,7 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
   return (
     <div className="space-y-5">
       <PageTitle title="Match Review System"
-        sub="NO REVIEW, NO NEXT SCRIM. After every lost competitive game, the review is mandatory."
+        sub="No review, no next scrim. After every lost competitive game, the review is mandatory."
         right={canEdit && <button className="btn-primary" onClick={() => navigate("reviews", "new")}><Plus size={15} /> File review</button>} />
 
       <div className="card border-crim/40 bg-crim-dim/20 px-4 py-3 flex items-center gap-2.5 text-[13px]">
@@ -405,14 +406,14 @@ export function ReviewsPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             <button key={r.id} onClick={() => navigate("reviews", r.id)} className="w-full text-left card card-hover p-4">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className={`chip ${st.cls}`}>{st.label}</span>
-                {r.mandatory && <Badge cls="text-amber border-amber/40 bg-amber/10 !text-[9px] uppercase">mandatory</Badge>}
+                {r.mandatory && <Badge cls="text-amber border-amber/40 bg-amber/10 !text-[9px]">mandatory</Badge>}
                 {r.tournament_name && (
                   <span className="chip !py-0.5 !text-[9px] text-amber border-amber/40"><Trophy size={9} /> {r.tournament_name}</span>
                 )}
                 <span className="text-sm font-bold">
                   {r.tournament_name ? (r.tournament_stage || "Match") : r.scrim_number ? `Scrim #${r.scrim_number}` : "Review"} vs {r.opponent}
                 </span>
-                <span className="text-[11px] text-faint">{dayLabel(r.date)} · {r.result}</span>
+                <span className="text-[11px] text-faint">{dayLabel(r.date)} · {nice(r.result)}</span>
               </div>
               {r.lesson && <div className="text-[13px] text-mute mt-2 italic">“{r.lesson}”</div>}
               {r.action_item && (

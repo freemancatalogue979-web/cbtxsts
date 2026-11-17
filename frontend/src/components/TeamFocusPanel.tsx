@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { focusHasChanges, focusPayload, parseDrillTarget, toTeamFocusDraft, type TeamFocusDraft } from "../lib/teamFocus";
 import type { Meta, Settings } from "../lib/types";
 import "./TeamFocusPanel.css";
+import { nice } from "../lib/caseText";
 
 export function TeamFocusPanel({ meta }: { meta: Meta }) {
   const [saved, setSaved] = useState<Settings | null>(null);
@@ -99,7 +100,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
           <div className="team-focus__intro-content">
             <div className="team-focus__icon"><Crosshair size={20} strokeWidth={1.8} aria-hidden="true" /></div>
             <div className="team-focus__intro-copy">
-              <div className="team-focus__eyebrow section-pill">9 CLOVER <span>/</span> TEAM DEVELOPMENT</div>
+              <div className="team-focus__eyebrow section-pill">9 Clover <span>/</span> Team development</div>
               <h3>One team. One focus<span>.</span></h3>
               <p>Turn a team weakness into a clear training goal.</p>
             </div>
@@ -119,7 +120,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
               <div className="team-focus__layout">
                 <div className="team-focus__form-column">
                   <div className="team-focus__form-heading">
-                    <div><span className="team-focus__eyebrow section-pill">THE GAME PLAN</span><h4>Focus details</h4></div>
+                    <div><span className="team-focus__eyebrow section-pill">The game plan</span><h4>Focus details</h4></div>
                     <span className="team-focus__form-number" aria-hidden="true">01 / 02</span>
                   </div>
 
@@ -152,7 +153,7 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
                           onChange={(event) => change("weakness_category", event.target.value)} aria-describedby="focus-category-help">
                           {!draft.weakness_category && <option value="">Choose a category</option>}
                           {!categoryIsListed && draft.weakness_category && <option value={draft.weakness_category}>{draft.weakness_category}</option>}
-                          {meta.activity_categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                          {meta.activity_categories.map((category) => <option key={category} value={category}>{nice(category)}</option>)}
                         </select>
                         <ChevronDown className="team-focus__chevron" size={16} aria-hidden="true" />
                       </div>
@@ -176,19 +177,19 @@ export function TeamFocusPanel({ meta }: { meta: Meta }) {
                 </div>
 
                 <aside className="team-focus__preview" aria-label="Dashboard preview">
-                  <div className="team-focus__preview-top"><div><span className="team-focus__eyebrow section-pill">A LOOK AHEAD</span><h4>Dashboard preview</h4></div><span className="team-focus__preview-icon"><Eye size={16} aria-hidden="true" /></span></div>
+                  <div className="team-focus__preview-top"><div><span className="team-focus__eyebrow section-pill">A look ahead</span><h4>Dashboard preview</h4></div><span className="team-focus__preview-icon"><Eye size={16} aria-hidden="true" /></span></div>
                   <div className="team-focus__preview-card">
                     <div className="team-focus__preview-brand">
                       <span className="team-focus__preview-crest"><img src="/brand/logo.png" alt="" aria-hidden="true" /></span>
-                      <div><strong>THE HUB</strong><span>{previewSeason}</span></div>
-                      <span className="team-focus__preview-badge">PREVIEW</span>
+                      <div><strong>The hub</strong><span>{previewSeason}</span></div>
+                      <span className="team-focus__preview-badge">Preview</span>
                     </div>
                     <div className="team-focus__preview-divider" />
-                    <div className="team-focus__preview-label section-pill">CURRENT TEAM WEAKNESS</div>
+                    <div className="team-focus__preview-label section-pill">Current team weakness</div>
                     <div className={`team-focus__preview-weakness${draft.current_weakness.trim() ? "" : " team-focus__preview-weakness--empty"}`}>{previewWeakness}</div>
                     <div className="team-focus__preview-footer">
-                      <div><span>DRILL CATEGORY</span><strong>{draft.weakness_category || "Not selected"}</strong></div>
-                      <div><span>DRILL TARGET</span><strong>{target === null ? "—" : target.toLocaleString()} <small>{target === 1 ? "drill" : "drills"}</small></strong></div>
+                      <div><span>Drill category</span><strong>{nice(draft.weakness_category) || "Not selected"}</strong></div>
+                      <div><span>Drill target</span><strong>{target === null ? "—" : target.toLocaleString()} <small>{target === 1 ? "drill" : "drills"}</small></strong></div>
                     </div>
                   </div>
                   <p className="team-focus__preview-note"><span aria-hidden="true">✦</span>{draft.current_weakness.trim() ? "Changes appear on the dashboard after saving." : "After saving, no focus appears until a weakness is added."}</p>

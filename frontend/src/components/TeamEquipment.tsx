@@ -56,7 +56,7 @@ export function TeamEquipment({ canEdit }: { canEdit: boolean }) {
   }
   const filtered = (items ?? []).filter((item) => `${item.name} ${item.category} ${item.description}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <section className="space-y-3" aria-label="Team equipment">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="section-pill section-pill--leaf">TEAM EQUIPMENT</div><p className="text-[11px] text-mute mt-2">Team-maintained entries are separate from the community feed and aren’t automatically verified.</p></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="section-pill section-pill--leaf">Team equipment</div><p className="text-[11px] text-mute mt-2">Team-maintained entries are separate from the community feed and aren’t automatically verified.</p></div>
       {canEdit && <button type="button" className="btn-ghost !text-[11px]" onClick={() => setEditing("new")}><PackagePlus size={14} /> Add equipment</button>}</div>
     <ErrorNote error={error} />
     {items === null ? (error ? <button type="button" className="text-[11px] text-leaf underline" onClick={() => void load()}>Retry loading team equipment</button> : <p className="text-[11px] text-mute flex gap-2"><Loader2 className="animate-spin" size={13} /> Loading team equipment…</p>) : <>

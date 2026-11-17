@@ -5,6 +5,7 @@ import type { Meta, Scrim, ScrimSummary, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Tabs } from "../components/ui";
 import { DraftBoard } from "../components/DraftBoard";
+import { nice } from "../lib/caseText";
 
 function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
   return (
@@ -15,7 +16,7 @@ function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-bold truncate">
-          {s.status === "scheduled" ? <>vs {s.opponent}</> : <>9 CLOVER {s.score_us} - {s.score_them} {s.opponent}</>}
+          {s.status === "scheduled" ? <>vs {s.opponent}</> : <>9 Clover {s.score_us} - {s.score_them} {s.opponent}</>}
           <span className="text-faint font-semibold"> · {s.format}</span>
         </div>
         <div className="text-[11px] text-faint mt-0.5">
@@ -26,7 +27,7 @@ function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
       </div>
       {s.status === "scheduled" && <Badge cls="text-sky border-sky/40 bg-sky/10">scheduled</Badge>}
       {s.status === "played" && <ResultBadge result={s.result} />}
-      {s.needs_review && <Badge cls="text-amber border-amber/40 bg-amber/10 uppercase !text-[9px]">review due</Badge>}
+      {s.needs_review && <Badge cls="text-amber border-amber/40 bg-amber/10 !text-[9px]">review due</Badge>}
     </button>
   );
 }
@@ -91,7 +92,7 @@ function NewScrimForm({ meta, users, initial, onSaved, onClose }: {
       {blocked && (
         <div className="rounded border border-amber/50 bg-amber/10 p-3.5 mb-4">
           <div className="flex items-center gap-2 text-amber font-bold text-sm">
-            <ShieldAlert size={15} /> NO REVIEW, NO NEXT SCRIM
+            <ShieldAlert size={15} /> No review, no next scrim
           </div>
           <p className="text-[13px] text-text/80 mt-1.5">{blocked.message}</p>
           <div className="flex flex-wrap gap-2 mt-3">
@@ -132,7 +133,7 @@ function NewScrimForm({ meta, users, initial, onSaved, onClose }: {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {meta.lanes.map((lane) => (
               <label key={lane} className="block">
-                <span className="label block mb-1">{lane}</span>
+                <span className="label block mb-1">{nice(lane)}</span>
                 <select className="input !px-2" value={String((f.lineup as Record<string, number | "">)[lane] ?? "")}
                   onChange={(e) => set("lineup", { ...(f.lineup as Record<string, number | "">), [lane]: e.target.value === "" ? "" : Number(e.target.value) })}>
                   <option value="">—</option>
@@ -221,13 +222,13 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
           <Field label="Game #"><input className="input" value={f.game_no} onChange={(e) => set("game_no", e.target.value)} /></Field>
           <Field label="Result">
             <select className="input" value={f.result} onChange={(e) => set("result", e.target.value)}>
-              <option>WIN</option><option>LOSS</option>
+              <option value="WIN">Win</option><option value="LOSS">Loss</option>
             </select>
           </Field>
           <Field label="Duration (min)"><input className="input" value={f.duration_min} onChange={(e) => set("duration_min", e.target.value)} /></Field>
         </div>
         <div>
-          <div className="section-pill section-pill--leaf mb-2">9 CLOVER</div>
+          <div className="section-pill section-pill--leaf mb-2">9 Clover</div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {num("kills", "Kills")}{num("deaths", "Deaths")}{num("gold", "Gold")}
             {num("turrets", "Turrets")}{num("turtles", "Turtles")}{num("lords", "Lords")}
@@ -326,7 +327,7 @@ function AttachmentForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: ()
                 <div key={i} className="flex items-center gap-2 rounded-lg border border-edge bg-raised/50 px-2.5 py-1.5">
                   <Icon size={13} className="text-crim shrink-0" />
                   <span className="text-[12px] font-semibold truncate flex-1">{a.label}</span>
-                  <span className="text-faint text-[9px] uppercase shrink-0">{a.kind}</span>
+                  <span className="text-faint text-[9px] shrink-0">{a.kind}</span>
                   <button type="button" className="text-faint hover:text-crim shrink-0" title="Remove"
                     onClick={() => setStaged((p) => p.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
                 </div>
@@ -445,7 +446,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         {s.needs_review && (
           <div className="card border-amber/50 bg-amber/10 p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 text-amber text-sm font-bold">
-              <AlertTriangle size={16} /> This loss has no review. Rule: NO REVIEW, NO NEXT SCRIM.
+              <AlertTriangle size={16} /> This loss has no review. Rule: no review, no next scrim.
             </div>
             {["admin", "captain", "coach", "analyst"].includes(me.role) && (
               <button className="btn-primary" onClick={() => navigate("reviews", "new", `scrim=${s.id}`)}>File the review</button>
@@ -459,7 +460,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             <div className="space-y-1">
               {meta.lanes.map((lane) => (
                 <div key={lane} className="flex justify-between text-[13px]">
-                  <span className="text-faint font-bold w-14">{lane}</span>
+                  <span className="text-faint font-bold w-14">{nice(lane)}</span>
                   <span className="font-semibold">{userName(s.lineup?.[lane])}</span>
                 </div>
               ))}
@@ -498,7 +499,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                   return (
                     <span key={i} className="flex items-center gap-2">
                       <a href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] text-sky hover:underline min-w-0">
-                        <Icon size={12} /> {a.label || a.kind} <span className="text-faint text-[10px] uppercase">{a.kind}</span>
+                        <Icon size={12} /> {a.label || a.kind} <span className="text-faint text-[10px]">{a.kind}</span>
                       </a>
                       {canManage && (
                         <button className="text-faint hover:text-crim shrink-0" title="Remove"
@@ -564,7 +565,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                   {(g.draft?.our_picks || g.draft?.our_bans) && (
                     <details className="mt-3">
                       <summary className="label cursor-pointer hover:text-mute">Draft</summary>
-                      <div className="mt-2"><DraftBoard draft={g.draft} theirsLabel={s.opponent.toUpperCase()}
+                      <div className="mt-2"><DraftBoard draft={g.draft} theirsLabel={s.opponent}
                         {...(s.status === "played" ? { scoreUS: s.score_us, scoreThem: s.score_them } : {})}
                         players={Object.fromEntries(Object.entries(s.lineup ?? {})
                           .filter(([, uid]) => uid != null)
@@ -624,7 +625,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             <input className="input !w-44" placeholder="Opponent…" value={filters.opponent}
               onChange={(e) => setFilters((p) => ({ ...p, opponent: e.target.value }))} />
             <select className="input !w-36" aria-label="Filter by result" value={filters.result} onChange={(e) => setFilters((p) => ({ ...p, result: e.target.value }))}>
-              <option value="">Win/Loss</option><option>WIN</option><option>LOSS</option>
+              <option value="">Win/loss</option><option value="WIN">Win</option><option value="LOSS">Loss</option>
             </select>
           </div>
           {!scrims && <Spinner />}

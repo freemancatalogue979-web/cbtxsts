@@ -12,6 +12,7 @@ import { navigate } from "../lib/util";
 import { BattlefieldMap } from "./BattlefieldMap";
 import { HeroImg } from "./HeroImg";
 import { Field, Spinner } from "./ui";
+import { nice } from "../lib/caseText";
 
 type Side = MapToken["side"];
 type DrawPath = { color: string; points: number[][]; mode?: "arrow" | "free" };
@@ -636,7 +637,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
   // directly editable from the marker inspector as well as from the map.
   const attachedZoneControls = attachedZones.length > 0 && (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Attached zones">
-      <span className="text-[10px] font-bold uppercase tracking-wide text-faint">Zones</span>
+      <span className="text-[10px] font-bold tracking-wide text-faint">Zones</span>
       {attachedZones.map((zone, index) => <button key={zone.id} type="button"
         className="btn-ghost !px-2 !py-1 !text-[10px]" aria-label={`Edit zone ${index + 1}, ${Math.round(zone.radius)}% radius`}
         onClick={() => { setTool("move"); setSelected({ kind: "zone", id: zone.id }); }}>
@@ -707,7 +708,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
         <button className="label !text-crim" onClick={() => navigate("maps")}>← Map boards</button>
         <input className="input !w-auto min-w-40 flex-1 max-w-72 !font-extrabold" value={board.name} readOnly={!canManage}
           onChange={(e) => { setBoard({ ...board, name: e.target.value }); setDirty(true); }} placeholder="Board name" />
-        <span className="chip text-faint border-edge-2 uppercase !text-[10px]">{board.kind}</span>
+        <span className="chip text-faint border-edge-2 !text-[10px]">{board.kind}</span>
         {!canManage && <span className="chip text-faint">View only</span>}
         {canManage && <div className="flex items-center gap-2 ml-auto">
           {board.draft_id != null && <button className="btn-ghost !py-1.5 !text-[12px]" onClick={loadDraftLineup}>
@@ -739,7 +740,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
             {canManage && <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />}
             <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
               {(["game", "diagram"] as const).map((m) => (
-                <button key={m} type="button" className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
+                <button key={m} type="button" className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
                   aria-pressed={mapStyle === m} onClick={() => setMapStyle(m)}>{m === "game" ? "Game map" : "Diagram"}</button>
               ))}
             </div>
@@ -761,7 +762,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                 <Trash2 size={13} /> Clear
               </button>
             </>}
-            <span className="map-toolbar-hint ml-auto text-[10px] text-faint uppercase tracking-widest font-semibold">
+            <span className="map-toolbar-hint ml-auto text-[10px] text-faint tracking-widest font-semibold">
               {tool === "move" ? "select or drag · delete selected · pinch to zoom"
                 : tool === "pan" ? "drag to pan · pinch to zoom"
                   : tool === "pen" ? "drag to draw an arrow"
@@ -800,7 +801,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
           {tool === "steps" && (
             <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-leaf/20 bg-leaf/[0.045] ${isFs ? "map-steps-fullscreen" : ""}`}>
               <div className="flex items-center gap-2 text-leaf">
-                <Footprints size={15} /><span className="text-[11px] font-extrabold uppercase tracking-[0.13em]">Steps</span>
+                <Footprints size={15} /><span className="text-[11px] font-extrabold tracking-[0.13em]">Steps</span>
                 {steps.length > 0 && <span className="chip !text-[10px] text-leaf border-leaf/30">{steps.length}</span>}
               </div>
               <div className="flex rounded-md border border-edge bg-ink/50 p-0.5" role="group" aria-label="Step line style">
@@ -925,7 +926,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                 {tool === "move" && selectedHero && (
                   <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 border-b border-edge bg-raised/35">
                     <span className="text-[11px] font-extrabold text-mute">{selectedHero.hero}</span>
-                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-faint">
+                    <label className="flex items-center gap-2 text-[10px] font-bold tracking-wider text-faint">
                       Hero size <input type="range" aria-label="Hero size" min={32} max={112} step={4} value={selectedHero.size ?? HERO_SIZE}
                         onChange={(e) => { snapshot(); setTokens((ts) => ts.map((t) => t.id === selectedHero.id ? { ...t, size: Number(e.target.value) } : t)); setDirty(true); }} />
                       <span className="text-mute">{selectedHero.size ?? HERO_SIZE}px</span>
@@ -958,7 +959,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                         : selectedZone.chipId ? `Follows ${chips.find((c) => c.id === selectedZone.chipId)?.name ?? "chip"}` : "Free zone"}
                       {" · drag the edge handle or use the slider"}
                     </span>
-                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-faint">
+                    <label className="flex items-center gap-2 text-[10px] font-bold tracking-wider text-faint">
                       Radius <input type="range" aria-label="Zone radius" min={MIN_ZONE_RADIUS} max={MAX_ZONE_RADIUS} step={1} value={selectedZone.radius}
                         onChange={(e) => updateZone(selectedZone.id, { radius: Number(e.target.value) })} />
                       <span className="text-mute">{Math.round(selectedZone.radius)}%</span>
@@ -996,14 +997,14 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
           <div className="section-pill mb-2.5">Place a hero</div>
           <div className="flex gap-1.5 mb-3">
             {(["ours", "theirs", "neutral"] as Side[]).map((s) => <button key={s}
-              className={`chip !cursor-pointer uppercase !text-[9.5px] ${newSide === s ? (s === "ours" ? "text-leaf border-leaf/50 bg-leaf/10" : s === "theirs" ? "text-crim border-crim/50 bg-crim/10" : "text-amber border-amber/50 bg-amber/10") : "text-faint border-edge"}`}
-              onClick={() => setNewSide(s)}>{s === "ours" ? "9 CLOVER" : s === "theirs" ? "ENEMY" : "NEUTRAL"}</button>)}
+              className={`chip !cursor-pointer !text-[9.5px] ${newSide === s ? (s === "ours" ? "text-leaf border-leaf/50 bg-leaf/10" : s === "theirs" ? "text-crim border-crim/50 bg-crim/10" : "text-amber border-amber/50 bg-amber/10") : "text-faint border-edge"}`}
+              onClick={() => setNewSide(s)}>{s === "ours" ? "9 Clover" : s === "theirs" ? "Enemy" : "Neutral"}</button>)}
           </div>
           <input className="input mb-3 !py-2" placeholder="Search 135 heroes…" value={heroQ} onChange={(e) => setHeroQ(e.target.value)} />
           <div className="grid grid-cols-5 gap-2 max-h-[26rem] overflow-y-auto pr-1">
             {filteredHeroes.map((h) => <button key={h.id} onClick={() => addToken(h.name)}
               className="flex flex-col items-center gap-1 p-1 rounded-md hover:bg-raised transition-colors"
-              title={`${h.name} · ${h.meta_status} · WR ${h.win_rate}% — add as ${newSide}`}>
+              title={`${h.name} · ${nice(h.meta_status)} · WR ${h.win_rate}% — add as ${newSide}`}>
               <span className="relative"><HeroImg name={h.name} size={36} className="rounded-md" />
                 {(h.meta_status === "META" || h.meta_status === "STRONG") && <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-ink ${h.meta_status === "META" ? "bg-crim" : "bg-leaf"}`} />}
               </span><span className="text-[8.5px] font-semibold leading-tight text-center w-full truncate">{h.name}</span>

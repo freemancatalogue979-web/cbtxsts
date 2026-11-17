@@ -143,7 +143,7 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
     )
 
     return {
-        "team": {"name": "9 CLOVER", "tagline": "PLAY. REVIEW. ADAPT. DOMINATE."},
+        "team": {"name": "9 Clover", "tagline": "Play. Review. Adapt. Dominate."},
         "current_week": week_out(week) if week else None,
         "next_activity": activity_out(next_activity) if next_activity else None,
         "next_scrim": scrim_out(next_scrim, with_games=False) if next_scrim else None,

@@ -28,8 +28,8 @@ function StandingCard({ row }: { row: RoneStanding }) {
     <div className="flex items-center gap-3"><span className="text-sm text-mute font-black tabular-nums w-6">{row.rank === null ? "—" : `#${row.rank}`}</span>
       <RoneTeamLogo team={row.team} size={58} /><div className="min-w-0 flex-1"><div className="font-black text-sm break-words">{row.team.name}</div>
         {row.team.fullName && row.team.fullName.toLowerCase() !== row.team.name.toLowerCase() && <div className="text-[10px] text-mute leading-snug break-words mt-1">{row.team.fullName}</div>}</div>
-      <div className="text-right shrink-0"><div className="text-xl font-black tabular-nums">{esportsNumber(row.points)}</div><div className="text-[9px] font-bold uppercase text-mute">points</div></div></div>
-    <div className="grid grid-cols-3 gap-2 border-t border-edge mt-4 pt-3">{fields.map(([label, value]) => <div key={label}><div className="text-[9px] text-mute font-bold uppercase tracking-wide">{label}</div><div className="text-xs font-black tabular-nums mt-1">{value}</div></div>)}</div>
+      <div className="text-right shrink-0"><div className="text-xl font-black tabular-nums">{esportsNumber(row.points)}</div><div className="text-[9px] font-bold text-mute">points</div></div></div>
+    <div className="grid grid-cols-3 gap-2 border-t border-edge mt-4 pt-3">{fields.map(([label, value]) => <div key={label}><div className="text-[9px] text-mute font-bold tracking-wide">{label}</div><div className="text-xs font-black tabular-nums mt-1">{value}</div></div>)}</div>
   </article>;
 }
 

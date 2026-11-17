@@ -33,7 +33,7 @@ test("form labels stay as labels rather than becoming decorative heading pills",
 test("the private chat eyebrow uses a pill and the read-only draft board keeps its own skin", async () => {
   const chat = await readFile(new URL("../src/pages/CloverAI.tsx", import.meta.url), "utf8");
   const draftBoard = await readFile(new URL("../src/components/DraftBoard.tsx", import.meta.url), "utf8");
-  assert.match(chat, /className="section-pill">PRIVATE CONVERSATION/);
+  assert.match(chat, /className="section-pill">Private conversation/);
   assert.doesNotMatch(draftBoard, /section-pill/);
 });
 

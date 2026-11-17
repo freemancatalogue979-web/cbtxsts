@@ -35,7 +35,7 @@ export function AIKnowledge({ canModerate = false }: { canModerate?: boolean }) 
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="section-pill section-pill--leaf">THE KNOWLEDGE BASE</div>
+          <div className="section-pill section-pill--leaf">The knowledge base</div>
           <h2 className="text-xl font-extrabold mt-1">A library that grows with the squad.</h2>
           <p className="text-[12px] text-mute mt-1.5 leading-relaxed max-w-2xl">Search hero records and human-reviewed community notes. Your own taught memories are private and managed separately in chat.</p>
         </div>

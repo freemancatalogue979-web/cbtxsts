@@ -22,6 +22,7 @@ import type { ArchiveCommentT, ArchiveFolderT, ArchiveItemT, ArchiveLocker, Memb
 import { fmtStamp, navigate } from "../lib/util";
 import { AvatarImg } from "../components/Avatar";
 import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner } from "../components/ui";
+import { nice } from "../lib/caseText";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -45,13 +46,13 @@ function VisibilityChip({ item }: { item: ArchiveItemT }) {
   if (item.visibility === "private") {
     return (
       <span className="chip text-crim border-crim/50 bg-crim-dim/40 inline-flex items-center gap-1">
-        <Lock size={10} /> PRIVATE
+        <Lock size={10} /> Private
       </span>
     );
   }
   return (
     <span className="chip text-sky border-sky/40 bg-sky/10 inline-flex items-center gap-1">
-      <Globe2 size={10} /> PUBLIC
+      <Globe2 size={10} /> Public
     </span>
   );
 }
@@ -113,11 +114,11 @@ function LockerGrid({ me }: { me: User }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-[14px] truncate">{f.name}</span>
-                    {f.mine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">YOU</span>}
+                    {f.mine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">You</span>}
                   </div>
                   <div className="text-[11.5px] text-mute truncate">
                     {f.owner?.ign || f.owner?.name || "Unknown"}
-                    {f.owner?.main_role ? ` · ${f.owner.main_role}` : ""}
+                    {f.owner?.main_role ? ` · ${nice(f.owner.main_role)}` : ""}
                   </div>
                 </div>
                 {f.tag && <span className="chip text-amber border-amber/40 bg-amber/10 shrink-0">{f.tag}</span>}
@@ -182,8 +183,8 @@ function LockerForm({ me, initial, onClose, onSaved }: {
         <Field label="Locker name">
           <input className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} required autoFocus />
         </Field>
-        <Field label="Tag (optional)" hint="e.g. THEORY, SECRETS, VODS — shows as a chip on your locker card.">
-          <input className="input" value={tag} maxLength={40} onChange={(e) => setTag(e.target.value.toUpperCase())} placeholder="THEORY" />
+        <Field label="Tag (optional)" hint="e.g. Theory, Secrets, VODs — shows as a chip on your locker card.">
+          <input className="input" value={tag} maxLength={40} onChange={(e) => setTag(e.target.value)} placeholder="Theory" />
         </Field>
         <p className="text-[11.5px] text-faint leading-snug">
           One locker per player. Items inside can be public (whole squad) or private
@@ -270,7 +271,7 @@ function LockerView({ me, folderId }: { me: User; folderId: number }) {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base font-extrabold tracking-wide">{locker.name}</h1>
               {locker.tag && <span className="chip text-amber border-amber/40 bg-amber/10">{locker.tag}</span>}
-              {isMine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">YOURS</span>}
+              {isMine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">Yours</span>}
             </div>
             <div className="text-[12px] text-mute mt-0.5">
               {locker.owner?.ign || locker.owner?.name} · {locker.item_count} {locker.item_count === 1 ? "drop" : "drops"}
@@ -334,7 +335,7 @@ function LockerView({ me, folderId }: { me: User; folderId: number }) {
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-raised border border-edge">
                     <Icon size={12.5} className="text-crim" />
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-faint">{KIND_LABEL[it.kind]}</span>
+                  <span className="text-[10px] font-bold tracking-[0.14em] text-faint">{KIND_LABEL[it.kind]}</span>
                   <span className="ml-auto"><VisibilityChip item={it} /></span>
                 </div>
                 {it.file?.kind === "image" && (
@@ -659,7 +660,7 @@ function ItemEditor({ me, folderId, initial, onClose, onSaved }: {
                   }`}
                 >
                   <Icon size={15} className={active ? "text-crim" : "text-faint"} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{k.label}</span>
+                  <span className="text-[10px] font-bold tracking-wider">{k.label}</span>
                 </button>
               );
             })}
