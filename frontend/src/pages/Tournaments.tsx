@@ -1,13 +1,16 @@
 import { ClipboardList, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { Draft, Hero, Meta, Tournament, TournamentGameDraft, TournamentMatchT, User } from "../lib/types";
+import type { Draft, Hero, Meta, Tournament, TournamentGameDraft, TournamentMatchT, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { FilePick } from "../components/FilePick";
 import { FileText, Film, ImageIcon, Link2 } from "lucide-react";
 import { nice } from "../lib/caseText";
+import { TournamentStats } from "../components/TournamentStats";
+
+const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
 // --------------------------------------------------------------------------- //
 // forms
@@ -234,11 +237,40 @@ function impliedResult(m: TournamentMatchT): "WIN" | "LOSS" | "" {
   return "";
 }
 
-function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
-  tournament: Tournament; match: TournamentMatchT; gameNo: number; heroes: Hero[]; onSaved: () => void; onClose: () => void;
+/** Starting lineup for a game: saved → previous game of this series → the latest
+ *  lineup used anywhere in the tournament → roster by main role. */
+function startingLineup(match: TournamentMatchT, gameNo: number, tournament: Tournament, roster: User[]): Record<string, number | ""> {
+  const games = seriesGames(match);
+  const own = games.find((g) => g.game_no === gameNo)?.lineup;
+  const prev = [...games].reverse().find((g) => g.game_no < gameNo && g.lineup && Object.keys(g.lineup).length)?.lineup;
+  const earlier = [...(tournament.matches ?? [])].filter((m) => m.id !== match.id && m.match_no < match.match_no)
+    .sort((a, b) => b.match_no - a.match_no)
+    .flatMap((m) => [...seriesGames(m)].reverse())
+    .find((g) => g.lineup && Object.keys(g.lineup).length)?.lineup;
+  const from = own && Object.keys(own).length ? own : prev ?? earlier;
+  const out: Record<string, number | ""> = {};
+  for (const lane of LANES) {
+    if (from) { out[lane] = from[lane] ?? ""; continue; }
+    const pick = roster.find((u) => u.main_role === lane && u.role === "captain") ?? roster.find((u) => u.main_role === lane);
+    out[lane] = pick?.id ?? "";
+  }
+  return out;
+}
+
+function DraftForm({ tournament, match, gameNo, heroes, roster, onSaved, onClose }: {
+  tournament: Tournament; match: TournamentMatchT; gameNo: number; heroes: Hero[]; roster: User[];
+  onSaved: () => void; onClose: () => void;
 }) {
   const existing = seriesGames(match).find((g) => g.game_no === gameNo);
   const [draft, setDraft] = useState(() => ({ ...blankTDraft(), ...(existing?.draft ?? {}) }));
+  const [lineup, setLineup] = useState<Record<string, number | "">>(() => startingLineup(match, gameNo, tournament, roster));
+  useEffect(() => {
+    // roster arrives after the modal opens on a fresh page load
+    if (!existing?.lineup || !Object.keys(existing.lineup).length) setLineup(startingLineup(match, gameNo, tournament, roster));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster]);
+  const chosen = Object.values(lineup).filter((v): v is number => v !== "");
+  const dupes = new Set(chosen.filter((v, i) => chosen.indexOf(v) !== i));
   const [result, setResult] = useState<"WIN" | "LOSS" | "">(existing?.result || impliedResult(match));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -248,7 +280,9 @@ function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
-      await api.put(`/tournaments/matches/${match.id}/games/${gameNo}`, { draft, result });
+      if (dupes.size) throw new Error("A player can only play one lane in a game");
+      const cleanLineup = Object.fromEntries(Object.entries(lineup).filter(([, v]) => v !== ""));
+      await api.put(`/tournaments/matches/${match.id}/games/${gameNo}`, { draft, result, lineup: cleanLineup });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
@@ -256,7 +290,7 @@ function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
   }
 
   async function clear() {
-    if (!confirm(`Clear the game ${gameNo} draft vs ${match.opponent}?`)) return;
+    if (!confirm(`Clear game ${gameNo} vs ${match.opponent} (who played and the draft)?`)) return;
     setBusy(true); setErr(null);
     try {
       await api.del(`/tournaments/matches/${match.id}/games/${gameNo}`);
@@ -267,7 +301,7 @@ function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
   }
 
   return (
-    <Modal title={`Game ${gameNo}${total > 1 ? ` of ${total}` : ""} draft — vs ${match.opponent} (${tournament.name})`} onClose={onClose} wide>
+    <Modal title={`Game ${gameNo}${total > 1 ? ` of ${total}` : ""} — vs ${match.opponent} (${tournament.name})`} onClose={onClose} wide>
       <form onSubmit={save} className="space-y-5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="label">Game {gameNo} result</span>
@@ -280,6 +314,28 @@ function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
             </button>
           ))}
         </div>
+        <fieldset className="card p-4">
+          <legend className="sr-only">Who played game {gameNo}</legend>
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
+            <div className="section-pill">Who played</div>
+            <span className="text-[11px] text-faint">Counts toward match stats and each player's page</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {LANES.map((lane) => (
+              <label key={lane} className="block">
+                <span className="label block mb-1">{nice(lane)}</span>
+                <select className={`input !px-2 ${lineup[lane] !== "" && dupes.has(lineup[lane] as number) ? "!border-danger" : ""}`}
+                  aria-label={`${nice(lane)} player, game ${gameNo}`} value={String(lineup[lane] ?? "")}
+                  onChange={(e) => setLineup((l) => ({ ...l, [lane]: e.target.value === "" ? "" : Number(e.target.value) }))}>
+                  <option value="">—</option>
+                  {roster.map((u) => <option key={u.id} value={u.id}>{u.ign || u.name}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          {dupes.size > 0 && <p className="text-[11px] text-danger mt-2">Same player picked for two lanes.</p>}
+          {roster.length === 0 && <p className="text-[11px] text-faint mt-2">Loading the roster…</p>}
+        </fieldset>
         <div className="card p-5">
           <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)}
             theirsLabel={(match.opponent || "Enemy")} />
@@ -288,7 +344,7 @@ function DraftForm({ tournament, match, gameNo, heroes, onSaved, onClose }: {
         <div className="flex justify-end gap-2">
           {existing && <button type="button" className="btn-ghost !text-danger mr-auto" disabled={busy} onClick={clear}><Trash2 size={13} /> Clear game {gameNo}</button>}
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy}>Save game {gameNo} draft</button>
+          <button className="btn-primary" disabled={busy}>Save game {gameNo}</button>
         </div>
       </form>
     </Modal>
@@ -317,7 +373,19 @@ function SeriesDrafts({ match }: { match: TournamentMatchT }) {
       <div className="text-[11px] text-faint">
         Game {game.game_no}{game.result ? ` · ${game.result === "WIN" ? "Win" : "Loss"}` : ""}
       </div>
-      <DraftBoard draft={game.draft} theirsLabel={(match.opponent || "Enemy")} />
+      {game.players && Object.keys(game.players).length > 0 && (
+        <div className="flex flex-wrap gap-1.5" aria-label={`Who played game ${game.game_no}`}>
+          {LANES.filter((lane) => game.players?.[lane]).map((lane) => (
+            <span key={lane} className="chip !py-0.5 text-text border-edge-2">
+              <span className="text-faint">{nice(lane)}</span> {game.players![lane]}
+              {game.draft.our_picks?.[lane] && <span className="text-mute">· {game.draft.our_picks[lane]}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {hasDraft(game.draft)
+        ? <DraftBoard draft={game.draft} theirsLabel={(match.opponent || "Enemy")} players={game.players} />
+        : <p className="text-[11px] text-faint">No draft saved for this game.</p>}
     </div>
   );
 }
@@ -381,6 +449,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
   const [showDraft, setShowDraft] = useState<null | { match: TournamentMatchT; game: number }>(null);
   const [showEvidence, setShowEvidence] = useState<null | TournamentMatchT>(null);
   const [draftOpen, setDraftOpen] = useState<number | null>(null);
+  const [roster, setRoster] = useState<User[]>([]);
+  const [overall, setOverall] = useState<TournamentStatsT | null>(null);
 
   const id = parts[0] ? Number(parts[0]) : null;
 
@@ -388,10 +458,12 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
     api.get<Tournament[]>("/tournaments").then(setList).catch(() => setList([]));
     api.get<TournamentMatchT[]>("/tournaments/review-queue").then(setQueue).catch(() => setQueue([]));
     if (id) api.get<Tournament>(`/tournaments/${id}`).then(setDetail).catch(() => setDetail(null));
+    else api.get<TournamentStatsT>("/tournaments/stats").then(setOverall).catch(() => setOverall(null));
   }, [id]);
   useEffect(load, [load]);
   useEffect(() => {
     if (id && canManage) api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
+    if (id && canManage) api.get<User[]>("/players").then(setRoster).catch(() => setRoster([]));
   }, [id, canManage]);
 
   async function toggleReviewT(t: Tournament) {
@@ -431,9 +503,13 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
           )} />
 
         {/* stats strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           <StatTile label="Matches" value={`${t.played_count}/${t.match_count}`} hint="played" />
           <StatTile label="Series W–L" value={`${t.wins}–${t.losses}`} tone={t.wins > t.losses ? "good" : t.losses > t.wins ? "bad" : undefined} />
+          {t.stats && <StatTile label="Games W–L" value={`${t.stats.games.wins}–${t.stats.games.losses}`} hint={`${t.stats.games.played} played`}
+            tone={t.stats.games.wins > t.stats.games.losses ? "good" : t.stats.games.losses > t.stats.games.wins ? "bad" : undefined} />}
+          {t.stats && <StatTile label="Game win" value={t.stats.games.win_rate == null ? "—" : `${Math.round(t.stats.games.win_rate)}%`}
+            tone={t.stats.games.win_rate == null ? undefined : t.stats.games.win_rate >= 50 ? "good" : "bad"} />}
           <StatTile label="Stages" value={String(t.stages.length || (matches.length ? 1 : 0))} hint={t.stages[0] ?? "—"} />
           <StatTile label="Reviews" value={String(t.review_pending)} hint="pending"
             tone={t.review_pending > 0 ? "accent" : "good"} />
@@ -456,6 +532,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
         </div>
 
         {t.notes && <p className="text-[13px] text-text/80 leading-relaxed max-w-3xl">{t.notes}</p>}
+
+        {t.stats && t.stats.series.played > 0 && <TournamentStats stats={t.stats} title="Match stats" tiles={false} />}
 
         {/* schedule by stage */}
         {stageOrder.length === 0 && (
@@ -533,8 +611,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                           return (
                             <button key={no} className={`btn-ghost !py-1 !px-2.5 !text-[11px] ${saved ? "!text-sky" : ""}`}
                               onClick={() => setShowDraft({ match: m, game: no })}
-                              title={saved ? `Edit the game ${no} draft` : `Add the game ${no} draft`}>
-                              {saved ? `Edit ${many ? `G${no} ` : ""}draft` : many ? `+ G${no} draft` : "+ Draft"}
+                              title={saved ? `Edit game ${no}: who played and the draft` : `Add game ${no}: who played and the draft`}>
+                              {saved ? `Edit ${many ? `game ${no}` : "game"}` : many ? `+ Game ${no}` : "+ Game"}
                             </button>
                           );
                         })}
@@ -558,7 +636,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
                         <button className="label !text-sky" onClick={() => setDraftOpen(draftOpen === m.id ? null : m.id)}>
                           {(() => {
                             const n = seriesGames(m).length;
-                            const what = n > 1 ? `${n} drafts` : "draft";
+                            const what = n > 1 ? `${n} games` : "game";
                             return draftOpen === m.id ? `Hide ${what} ▲` : `Show ${what} ▼`;
                           })()}
                         </button>
@@ -585,7 +663,7 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
         {showMatch && <AddMatchForm tournament={t} onClose={() => setShowMatch(false)} onSaved={() => { setShowMatch(false); load(); }} />}
         {editMatch && <AddMatchForm tournament={t} initial={editMatch} onClose={() => setEditMatch(null)} onSaved={() => { setEditMatch(null); load(); }} />}
         {showResult && <ResultForm match={showResult} onClose={() => setShowResult(null)} onSaved={() => { setShowResult(null); load(); }} />}
-        {showDraft && <DraftForm key={`${showDraft.match.id}-${showDraft.game}`} tournament={t} match={showDraft.match} gameNo={showDraft.game} heroes={heroes}
+        {showDraft && <DraftForm key={`${showDraft.match.id}-${showDraft.game}`} tournament={t} match={showDraft.match} gameNo={showDraft.game} heroes={heroes} roster={roster}
           onClose={() => setShowDraft(null)} onSaved={() => { setDraftOpen(showDraft.match.id); setShowDraft(null); load(); }} />}
         {showEvidence && <EvidenceForm match={showEvidence} onClose={() => setShowEvidence(null)} onSaved={() => { setShowEvidence(null); load(); }} />}
       </div>
@@ -647,6 +725,8 @@ export function TournamentsPage({ me, parts }: { me: User; meta: Meta; parts: st
       {list && list.length === 0 && (
         <Empty title="No tournaments yet" hint={canManage ? "Create the first one and schedule its matches" : "Staff will add competitions here"} />
       )}
+
+      {overall && overall.series.played > 0 && <TournamentStats stats={overall} title="Overall match stats" overall />}
 
       {showT && <TournamentForm initial={showT} onClose={() => setShowT(null)} onSaved={() => { setShowT(null); load(); }} />}
     </div>

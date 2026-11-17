@@ -11,6 +11,7 @@ from ..deps import ROLE_CAPTAIN, ROLE_PLAYER, can, get_current_user, get_db, req
 from ..models import DevelopmentEntry, Hero, HeroPoolEntry, Scrim, User, dumps, loads
 from ..schemas import DevIn, OptionalDate, PoolIn, PoolPatch
 from ..serializers import dev_out, pool_out, user_out
+from .tournaments import player_tournament_stats
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -80,6 +81,7 @@ def player_detail(user_id: int, db: Session = Depends(get_db), user=Depends(get_
     row = user_out(player)
     row.update({
         "scrim_stats": _scrim_form(db, player.id),
+        "tournament_stats": player_tournament_stats(db, player.id),
         "pool": pool_by_cat,
         "development": [dev_out(e, names) for e in entries],
         "avg_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,

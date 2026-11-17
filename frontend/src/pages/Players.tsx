@@ -211,6 +211,43 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           </div>
         </div>
 
+        {p.tournament_stats && p.tournament_stats.games > 0 && (() => {
+          const ts = p.tournament_stats;
+          return (
+            <section aria-label="Tournament games" className="space-y-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <StatTile label="Tournament games" value={ts.games} hint={`${ts.wins}W – ${ts.losses}L · ${ts.series} series`} />
+                <StatTile label="Tournament game win" value={pct(ts.win_rate)} tone={ts.win_rate == null ? "default" : ts.win_rate >= 50 ? "good" : "bad"} />
+                <StatTile label="Tournaments" value={ts.tournaments} hint={ts.main_lane ? `mostly ${nice(ts.main_lane)}` : undefined} />
+                <div className="card px-3.5 py-3">
+                  <div className="section-pill mb-1.5">Tournament form</div>
+                  <div className="flex gap-1 mt-1">
+                    {ts.form.filter(Boolean).length === 0 && <span className="text-faint text-sm">—</span>}
+                    {ts.form.filter(Boolean).map((r, i) => <ResultBadge key={i} result={r} />)}
+                  </div>
+                </div>
+              </div>
+              <div className="card p-3.5">
+                <div className="section-pill mb-2">Recent tournament games</div>
+                <ul className="divide-y divide-edge/60">
+                  {ts.recent.map((r) => (
+                    <li key={`${r.match_id}-${r.game_no}`}>
+                      <button className="w-full flex items-center gap-2.5 py-1.5 text-left hover:text-sky" onClick={() => navigate("tournaments", r.tournament_id)}>
+                        {r.hero ? <HeroImg name={r.hero} size={22} className="rounded" /> : <span className="w-[22px]" />}
+                        <span className="flex-1 min-w-0 truncate text-[12px]">
+                          <span className="font-bold">{r.tournament}</span> · vs {r.opponent} · game {r.game_no}
+                          <span className="text-faint"> · {nice(r.lane)}{r.hero ? ` · ${r.hero}` : ""}</span>
+                        </span>
+                        {r.result ? <ResultBadge result={r.result} /> : <span className="text-faint text-[11px]">—</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          );
+        })()}
+
         <ProgressPanel userId={p.id} ign={p.ign} />
 
         {/* Hero pool */}

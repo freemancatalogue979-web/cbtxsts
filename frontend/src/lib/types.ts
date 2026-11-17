@@ -60,6 +60,47 @@ export interface TournamentGameDraft {
   game_no: number;
   result: "WIN" | "LOSS" | "";
   draft: Draft;
+  /** Who played this game: {LANE: user_id}. */
+  lineup?: Record<string, number>;
+  /** Same lineup as display names: {LANE: ign}. */
+  players?: Record<string, string>;
+}
+
+export interface TournamentPlayerStat {
+  user_id: number;
+  name: string;
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  series: number;
+  tournaments: number;
+  main_lane: string;
+  lanes: Record<string, number>;
+  heroes: { hero: string; games: number; wins: number }[];
+}
+
+export interface TournamentStatsT {
+  series: { played: number; wins: number; losses: number; draws: number; win_rate: number | null };
+  games: { played: number; wins: number; losses: number; win_rate: number | null; with_lineup: number };
+  players: TournamentPlayerStat[];
+  heroes: { hero: string; games: number; wins: number; losses: number; win_rate: number | null }[];
+  tournaments?: number;
+}
+
+export interface PlayerTournamentStats {
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  series: number;
+  tournaments: number;
+  main_lane: string;
+  lanes: Record<string, number>;
+  heroes: { hero: string; games: number; wins: number }[];
+  form: string[];
+  recent: { tournament_id: number; tournament: string; match_id: number; opponent: string; game_no: number;
+    lane: string; hero: string; result: string; date: string | null }[];
 }
 
 export interface TournamentMatchT {
@@ -105,6 +146,7 @@ export interface Tournament {
   review_pending: number;
   stages: string[];
   matches?: TournamentMatchT[];
+  stats?: TournamentStatsT;
   created_at: string | null;
 }
 
@@ -285,6 +327,7 @@ export interface PlayerDetail extends User {
     form: string[];
     recent: { scrim_id: number; number: number; opponent: string; result: string; score_us: number; score_them: number; date: string | null }[];
   };
+  tournament_stats?: PlayerTournamentStats;
   pool: Record<string, PoolEntry[]>;
   development: DevEntry[];
   avg_rating: number | null;
