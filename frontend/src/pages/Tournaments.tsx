@@ -1,7 +1,7 @@
-import { ClipboardList, Pencil, Plus, Trash2, Trophy } from "lucide-react";
+import { ClipboardList, Crown, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { Draft, Hero, Meta, Tournament, TournamentGameDraft, TournamentMatchT, TournamentStatsT, User } from "../lib/types";
+import type { Draft, Hero, Meta, ScoreboardRead, Tournament, TournamentGameDraft, TournamentMatchT, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
@@ -9,6 +9,7 @@ import { FilePick } from "../components/FilePick";
 import { FileText, Film, ImageIcon, Link2 } from "lucide-react";
 import { nice } from "../lib/caseText";
 import { TournamentStats } from "../components/TournamentStats";
+import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, ScoreboardReader, type LineForm } from "../components/Scoreboard";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
@@ -272,9 +273,31 @@ function DraftForm({ tournament, match, gameNo, heroes, roster, onSaved, onClose
   const chosen = Object.values(lineup).filter((v): v is number => v !== "");
   const dupes = new Set(chosen.filter((v, i) => chosen.indexOf(v) !== i));
   const [result, setResult] = useState<"WIN" | "LOSS" | "">(existing?.result || impliedResult(match));
+  const [lines, setLines] = useState<LineForm>(() => linesToForm(existing?.player_stats));
+  const [enemyLines, setEnemyLines] = useState<LineForm>(() => linesToForm(existing?.enemy_stats));
+  const [enemyKey, setEnemyKey] = useState(0);
+  const [evidence, setEvidence] = useState(match.attachments);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const total = slotNumbers(match).length;
+
+  /** The AI's read fills the form; the person checks it and saves. */
+  function applyRead(r: ScoreboardRead) {
+    if (r.result) setResult(r.result);
+    if (Object.keys(r.lineup).length) setLineup((l) => ({ ...l, ...r.lineup }));
+    setDraft((d) => ({ ...d, ...r.draft }));
+    setLines((cur) => ({ ...cur, ...linesToForm(r.player_stats) }));
+    if (Object.keys(r.enemy_stats).length) {
+      setEnemyLines(linesToForm(r.enemy_stats));
+      setEnemyKey((k) => k + 1);
+    }
+  }
+
+  async function keepEvidence(att: { kind: string; label: string; url: string }) {
+    const next = [...evidence, { ...att, label: `Game ${gameNo} · ${att.label}` }];
+    setEvidence(next);
+    try { await api.patch(`/tournaments/matches/${match.id}`, { attachments: next }); } catch { /* reading still works */ }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -282,7 +305,10 @@ function DraftForm({ tournament, match, gameNo, heroes, roster, onSaved, onClose
     try {
       if (dupes.size) throw new Error("A player can only play one lane in a game");
       const cleanLineup = Object.fromEntries(Object.entries(lineup).filter(([, v]) => v !== ""));
-      await api.put(`/tournaments/matches/${match.id}/games/${gameNo}`, { draft, result, lineup: cleanLineup });
+      await api.put(`/tournaments/matches/${match.id}/games/${gameNo}`, {
+        draft, result, lineup: cleanLineup,
+        player_stats: formToLines(lines), enemy_stats: formToLines(enemyLines, draft.enemy_picks ?? {}, true),
+      });
       onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Save failed");
@@ -314,28 +340,28 @@ function DraftForm({ tournament, match, gameNo, heroes, roster, onSaved, onClose
             </button>
           ))}
         </div>
+        <ScoreboardReader evidence={evidence} onRead={applyRead} onUploaded={(a) => void keepEvidence(a)}
+          context={{ opponent: match.opponent, result, lineup, draft }} />
         <fieldset className="card p-4">
-          <legend className="sr-only">Who played game {gameNo}</legend>
+          <legend className="sr-only">Who played game {gameNo} and their scoreboard</legend>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
-            <div className="section-pill">Who played</div>
-            <span className="text-[11px] text-faint">Counts toward match stats and each player's page</span>
+            <div className="section-pill section-pill--leaf">Who played · scoreboard</div>
+            <span className="text-[11px] text-faint">Counts toward match stats, each player's page and their hero alerts</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {LANES.map((lane) => (
-              <label key={lane} className="block">
-                <span className="label block mb-1">{nice(lane)}</span>
-                <select className={`input !px-2 ${lineup[lane] !== "" && dupes.has(lineup[lane] as number) ? "!border-danger" : ""}`}
-                  aria-label={`${nice(lane)} player, game ${gameNo}`} value={String(lineup[lane] ?? "")}
-                  onChange={(e) => setLineup((l) => ({ ...l, [lane]: e.target.value === "" ? "" : Number(e.target.value) }))}>
-                  <option value="">—</option>
-                  {roster.map((u) => <option key={u.id} value={u.id}>{u.ign || u.name}</option>)}
-                </select>
-              </label>
-            ))}
-          </div>
+          <ScoreboardFields form={lines} onChange={setLines} heroes={draft.our_picks ?? {}} side="ours" gameLabel={`game ${gameNo}`}
+            player={(lane) => (
+              <select className={`input !px-2 ${lineup[lane] !== "" && dupes.has(lineup[lane] as number) ? "!border-danger" : ""}`}
+                aria-label={`${nice(lane)} player, game ${gameNo}`} value={String(lineup[lane] ?? "")}
+                onChange={(e) => setLineup((l) => ({ ...l, [lane]: e.target.value === "" ? "" : Number(e.target.value) }))}>
+                <option value="">—</option>
+                {roster.map((u) => <option key={u.id} value={u.id}>{u.ign || u.name}</option>)}
+              </select>
+            )} />
           {dupes.size > 0 && <p className="text-[11px] text-danger mt-2">Same player picked for two lanes.</p>}
           {roster.length === 0 && <p className="text-[11px] text-faint mt-2">Loading the roster…</p>}
         </fieldset>
+        <EnemyScoreboard key={enemyKey} form={enemyLines} onChange={setEnemyLines} heroes={draft.enemy_picks ?? {}}
+          opponent={match.opponent} gameLabel={`game ${gameNo}`} />
         <div className="card p-5">
           <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)}
             theirsLabel={(match.opponent || "Enemy")} />
@@ -379,6 +405,11 @@ function SeriesDrafts({ match }: { match: TournamentMatchT }) {
             <span key={lane} className="chip !py-0.5 text-text border-edge-2">
               <span className="text-faint">{nice(lane)}</span> {game.players![lane]}
               {game.draft.our_picks?.[lane] && <span className="text-mute">· {game.draft.our_picks[lane]}</span>}
+              {game.player_stats?.[lane] && (game.player_stats[lane].kills != null || game.player_stats[lane].deaths != null || game.player_stats[lane].assists != null) && (
+                <span className="tabular-nums text-mute">· {game.player_stats[lane].kills ?? 0}/{game.player_stats[lane].deaths ?? 0}/{game.player_stats[lane].assists ?? 0}</span>
+              )}
+              {game.player_stats?.[lane]?.rating != null && <span className="tabular-nums text-text/70">{game.player_stats[lane].rating!.toFixed(1)}</span>}
+              {game.player_stats?.[lane]?.mvp && <Crown size={10} className="text-amber" aria-label="MVP" />}
             </span>
           ))}
         </div>

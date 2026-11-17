@@ -281,8 +281,10 @@ class ScrimGame(Base):
     draft: Mapped[str] = mapped_column(Text, default="{}")  # JSON bans/picks
     # Who played this game ({LANE: user_id}); empty = the scrim's booked lineup.
     lineup: Mapped[str] = mapped_column(Text, default="{}")
-    # Each player's line ({LANE: {kills, deaths, assists}}).
+    # Each player's line ({LANE: {kills, deaths, assists, rating, gold, damage, mvp…}}).
     player_stats: Mapped[str] = mapped_column(Text, default="{}")
+    # The other team's scoreboard ({LANE: {hero, name, kills, deaths, assists, rating…}}).
+    enemy_stats: Mapped[str] = mapped_column(Text, default="{}")
 
     scrim: Mapped[Scrim] = relationship(back_populates="games")
 

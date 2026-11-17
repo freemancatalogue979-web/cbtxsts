@@ -1,12 +1,13 @@
-import { AlertTriangle, FileText, Film, ImageIcon, Link2, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, Crown, FileText, Film, ImageIcon, Link2, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, qs } from "../lib/api";
-import type { Hero, Meta, PlayerLine, Scrim, ScrimSummary, TournamentStatsT, User } from "../lib/types";
+import type { Hero, Meta, Scrim, ScoreboardRead, ScrimSummary, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Tabs } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { HeroImg } from "../components/HeroImg";
 import { TournamentStats } from "../components/TournamentStats";
+import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, ScoreboardReader, sumLines, type LineForm } from "../components/Scoreboard";
 import { nice } from "../lib/caseText";
 
 function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
@@ -177,7 +178,6 @@ function NewScrimForm({ meta, users, initial, onSaved, onClose }: {
 }
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
-const KDA_KEYS = ["kills", "deaths", "assists"] as const;
 const blankDraft = () => ({
   our_bans: ["", "", "", "", ""], enemy_bans: ["", "", "", "", ""],
   our_picks: {} as Record<string, string>, enemy_picks: {} as Record<string, string>,
@@ -202,16 +202,17 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
     api.get<User[]>("/players").then(setRoster).catch(() => setRoster([]));
   }, []);
   const [lineup, setLineup] = useState<Lineup>(() => startingLineup(scrim, initial));
-  const [lines, setLines] = useState<Record<string, Record<string, string>>>(() => Object.fromEntries(LANES.map((lane) => {
-    const line = initial?.player_stats?.[lane] ?? {};
-    return [lane, Object.fromEntries(KDA_KEYS.map((k) => [k, line[k] != null ? String(line[k]) : ""]))];
-  })));
+  const [lines, setLines] = useState<LineForm>(() => linesToForm(initial?.player_stats));
+  const [enemyLines, setEnemyLines] = useState<LineForm>(() => linesToForm(initial?.enemy_stats));
+  const [enemyKey, setEnemyKey] = useState(0); // remount the enemy table after an AI read so it opens
   const [draft, setDraft] = useState(() => ({ ...blankDraft(), ...(initial?.draft ?? {}) }));
+  const [evidence, setEvidence] = useState(scrim.attachments);
+  const [extraStats, setExtraStats] = useState<Record<string, number>>({});
   const chosen = Object.values(lineup).filter((v): v is number => v !== "");
   const dupes = new Set(chosen.filter((v, i) => chosen.indexOf(v) !== i));
   const nameOf = (uid: number) => roster.find((u) => u.id === uid)?.ign || roster.find((u) => u.id === uid)?.name || `Player ${uid}`;
-  const sumLines = (k: string) => LANES.reduce((t, lane) => t + (Number(lines[lane]?.[k]) || 0), 0);
-  const anyLines = (k: string) => LANES.some((lane) => (lines[lane]?.[k] ?? "") !== "");
+  const teamKills = sumLines(lines, "kills");
+  const teamDeaths = sumLines(lines, "deaths");
   const st = initial?.stats ?? {};
   const numKeys = ["kills", "deaths", "gold", "turrets", "turtles", "lords", "teamfights_won", "teamfights_total",
     "gold_diff_10", "kills_10", "deaths_10", "enemy_kills", "enemy_deaths", "enemy_turrets", "enemy_turtles", "enemy_lords"];
@@ -224,33 +225,55 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
   const [err, setErr] = useState<string | null>(null);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
+  /** The AI's read → straight into the form; nothing is saved until the person saves. */
+  function applyRead(r: ScoreboardRead) {
+    setF((p) => {
+      const next = { ...p };
+      if (r.result) next.result = r.result;
+      if (r.duration_min) next.duration_min = String(r.duration_min);
+      for (const [k, v] of Object.entries(r.stats)) if (k in next) next[k] = String(v);
+      return next;
+    });
+    setExtraStats(Object.fromEntries(Object.entries(r.stats).filter(([k]) => !numKeys.includes(k))));
+    if (Object.keys(r.lineup).length) setLineup((l) => ({ ...l, ...r.lineup }));
+    setDraft((d) => ({ ...d, ...r.draft }));
+    setLines((cur) => ({ ...cur, ...linesToForm(r.player_stats) }));
+    if (Object.keys(r.enemy_stats).length) {
+      setEnemyLines(linesToForm(r.enemy_stats));
+      setEnemyKey((k) => k + 1);
+    }
+  }
+
+  /** A screenshot uploaded for reading also goes into this scrim's evidence. */
+  async function keepEvidence(att: { kind: string; label: string; url: string }) {
+    const next = [...evidence, { ...att, label: `Game ${f.game_no} · ${att.label}` }];
+    setEvidence(next);
+    try { await api.patch(`/scrims/${scrim.id}`, { attachments: next }); } catch { /* reading still works */ }
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    const stats: Record<string, number> = {};
+    const stats: Record<string, number> = { ...extraStats };
     for (const [k, v] of Object.entries(f)) {
       if (["game_no", "result", "duration_min"].includes(k)) continue;
       if (v !== "") stats[k] = Number(v);
     }
     // Team kills/deaths left blank → the players' lines added up.
-    if (f.kills === "" && anyLines("kills")) stats.kills = sumLines("kills");
-    if (f.deaths === "" && anyLines("deaths")) stats.deaths = sumLines("deaths");
+    if (f.kills === "" && teamKills != null) stats.kills = teamKills;
+    if (f.deaths === "" && teamDeaths != null) stats.deaths = teamDeaths;
     const cleanLineup = Object.fromEntries(Object.entries(lineup).filter(([, v]) => v !== ""));
     const booked = Object.fromEntries(Object.entries(scrim.lineup ?? {}).filter(([, v]) => v != null));
     const sameAsScrim = JSON.stringify(Object.entries(cleanLineup).sort()) === JSON.stringify(Object.entries(booked).sort());
-    const player_stats: Record<string, PlayerLine> = {};
-    for (const lane of LANES) {
-      const line: PlayerLine = {};
-      for (const k of KDA_KEYS) if ((lines[lane]?.[k] ?? "") !== "") line[k] = Number(lines[lane][k]);
-      if (Object.keys(line).length) player_stats[lane] = line;
-    }
+    const player_stats = formToLines(lines);
+    const enemy_stats = formToLines(enemyLines, draft.enemy_picks ?? {}, true);
     try {
       if (dupes.size) throw new Error("A player can only play one lane in a game");
       const body = {
         game_no: Number(f.game_no), result: f.result, duration_min: Number(f.duration_min) || 0, stats, draft,
         // Same as the booked lineup → follow the scrim (so fixing the scrim's lineup fixes this game too).
         lineup: sameAsScrim ? {} : cleanLineup,
-        player_stats,
+        player_stats, enemy_stats,
       };
       if (edit) await api.patch(`/scrims/${scrim.id}/games/${initial!.id}`, body);
       else await api.post(`/scrims/${scrim.id}/games`, body);
@@ -279,49 +302,34 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
           </Field>
           <Field label="Duration (min)"><input className="input" value={f.duration_min} onChange={(e) => set("duration_min", e.target.value)} /></Field>
         </div>
+        <ScoreboardReader evidence={evidence} onRead={applyRead} onUploaded={(a) => void keepEvidence(a)}
+          context={{ opponent: scrim.opponent, result: f.result, lineup, draft }} />
         <fieldset className="card p-4">
-          <legend className="sr-only">Who played game {f.game_no} and their K/D/A</legend>
+          <legend className="sr-only">Who played game {f.game_no} and their scoreboard</legend>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
-            <div className="section-pill">Who played · K/D/A</div>
+            <div className="section-pill section-pill--leaf">9 Clover scoreboard</div>
             <span className="text-[11px] text-faint">Counts toward scrim stats, each player's page and their hero alerts</span>
           </div>
-          <div className="grid gap-2">
-            {LANES.map((lane) => {
+          <ScoreboardFields form={lines} onChange={setLines} heroes={draft.our_picks ?? {}} side="ours" gameLabel={`game ${f.game_no}`}
+            player={(lane) => {
               const uid = lineup[lane];
-              const hero = draft.our_picks?.[lane];
               return (
-                <div key={lane} className="grid grid-cols-[minmax(0,1fr)_repeat(3,3.25rem)] sm:grid-cols-[4.5rem_minmax(0,1fr)_repeat(3,3.75rem)] items-end gap-2">
-                  <div className="hidden sm:flex items-center gap-1.5 pb-2 min-w-0">
-                    {hero ? <HeroImg name={hero} size={22} className="rounded shrink-0" /> : null}
-                    <span className="label truncate">{nice(lane)}</span>
-                  </div>
-                  <label className="block min-w-0">
-                    <span className="label block mb-1 sm:hidden">{nice(lane)}{hero ? ` · ${hero}` : ""}</span>
-                    <select className={`input !px-2 ${uid !== "" && dupes.has(uid as number) ? "!border-danger" : ""}`}
-                      aria-label={`${nice(lane)} player, game ${f.game_no}`} value={String(uid ?? "")}
-                      onChange={(e) => setLineup((l) => ({ ...l, [lane]: e.target.value === "" ? "" : Number(e.target.value) }))}>
-                      <option value="">—</option>
-                      {uid !== "" && !roster.some((u) => u.id === uid) && <option value={uid}>{nameOf(uid as number)}</option>}
-                      {roster.map((u) => <option key={u.id} value={u.id}>{u.ign || u.name}</option>)}
-                    </select>
-                  </label>
-                  {KDA_KEYS.map((k) => (
-                    <label key={k} className="block">
-                      <span className="label block mb-1 text-center">{k[0].toUpperCase()}</span>
-                      <input className="input !px-1.5 text-center tabular-nums" inputMode="numeric" aria-label={`${nice(lane)} ${k}`}
-                        value={lines[lane]?.[k] ?? ""}
-                        onChange={(e) => setLines((all) => ({ ...all, [lane]: { ...all[lane], [k]: e.target.value.replace(/[^0-9]/g, "") } }))} />
-                    </label>
-                  ))}
-                </div>
+                <select className={`input !px-2 ${uid !== "" && dupes.has(uid as number) ? "!border-danger" : ""}`}
+                  aria-label={`${nice(lane)} player, game ${f.game_no}`} value={String(uid ?? "")}
+                  onChange={(e) => setLineup((l) => ({ ...l, [lane]: e.target.value === "" ? "" : Number(e.target.value) }))}>
+                  <option value="">—</option>
+                  {uid !== "" && uid != null && !roster.some((u) => u.id === uid) && <option value={uid}>{nameOf(uid as number)}</option>}
+                  {roster.map((u) => <option key={u.id} value={u.id}>{u.ign || u.name}</option>)}
+                </select>
               );
-            })}
-          </div>
+            }} />
           {dupes.size > 0 && <p className="text-[11px] text-danger mt-2">Same player picked for two lanes.</p>}
-          {(anyLines("kills") || anyLines("deaths")) && (
-            <p className="text-[11px] text-faint mt-2">Players total {sumLines("kills")} kills / {sumLines("deaths")} deaths{f.kills === "" ? " — used as the team line below if left blank" : ""}.</p>
+          {(teamKills != null || teamDeaths != null) && (
+            <p className="text-[11px] text-faint mt-2">Players total {teamKills ?? 0} kills / {teamDeaths ?? 0} deaths{f.kills === "" ? " — used as the team line below if left blank" : ""}.</p>
           )}
         </fieldset>
+        <EnemyScoreboard key={enemyKey} form={enemyLines} onChange={setEnemyLines} heroes={draft.enemy_picks ?? {}}
+          opponent={scrim.opponent} gameLabel={`game ${f.game_no}`} />
         <div className="card p-4 sm:p-5">
           <DraftBoardEditor heroes={heroes} value={draft} onChange={(next) => setDraft(next as typeof draft)} theirsLabel={scrim.opponent || "Enemy"} />
         </div>
@@ -359,7 +367,7 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
 /** One game's players: lane, hero and K/D/A (sub-ins marked). */
 function GamePlayers({ g }: { g: Scrim["games"][number] }) {
   const lanes = LANES.filter((lane) => g.players?.[lane] || g.draft?.our_picks?.[lane]);
-  if (!lanes.length) return null;
+  if (!lanes.length && !Object.keys(g.enemy_stats ?? {}).length) return null;
   return (
     <div className="mt-3">
       <div className="flex items-center gap-2 mb-1.5">
@@ -376,12 +384,35 @@ function GamePlayers({ g }: { g: Scrim["games"][number] }) {
               <span className="min-w-0 leading-tight">
                 <span className="block text-[11.5px] font-bold truncate">{g.players?.[lane] || "—"}</span>
                 <span className="block text-[10px] text-faint truncate">{nice(lane)}{hero ? ` · ${hero}` : ""}</span>
-                {line && <span className="block text-[10.5px] tabular-nums text-mute">{line.kills ?? 0}/{line.deaths ?? 0}/{line.assists ?? 0}</span>}
+                {line && (line.kills != null || line.deaths != null || line.assists != null || line.rating != null) && (
+                  <span className="block text-[10.5px] tabular-nums text-mute">
+                    {line.kills != null || line.deaths != null || line.assists != null ? `${line.kills ?? 0}/${line.deaths ?? 0}/${line.assists ?? 0}` : ""}
+                    {line.rating != null && <span className="text-text/80"> · {line.rating.toFixed(1)}</span>}
+                    {line.mvp && <Crown size={10} className="inline ml-1 -mt-0.5 text-amber" aria-label="MVP" />}
+                  </span>
+                )}
               </span>
             </li>
           );
         })}
       </ul>
+      {g.enemy_stats && Object.keys(g.enemy_stats).length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Enemy scoreboard">
+          <span className="label mr-1">Enemy</span>
+          {LANES.filter((lane) => g.enemy_stats?.[lane]).map((lane) => {
+            const line = g.enemy_stats![lane];
+            const hero = line.hero || g.draft?.enemy_picks?.[lane];
+            return (
+              <span key={lane} className="chip !py-0.5 text-mute border-edge" title={line.name || undefined}>
+                {hero ? <HeroImg name={hero} size={16} className="rounded" /> : <span className="text-faint">{nice(lane)}</span>}
+                <span className="tabular-nums">{line.kills ?? 0}/{line.deaths ?? 0}/{line.assists ?? 0}</span>
+                {line.rating != null && <span className="tabular-nums text-text/70">{line.rating.toFixed(1)}</span>}
+                {line.mvp && <Crown size={10} className="text-amber" aria-label="MVP" />}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

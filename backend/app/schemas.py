@@ -150,8 +150,10 @@ class GameIn(BaseModel):
     draft: dict[str, Any] = Field(default_factory=dict)
     # Who played ({LANE: user_id}); omitted/empty = the scrim's lineup.
     lineup: dict[str, int | None] | None = None
-    # Each player's kills/deaths/assists by lane.
+    # Each player's scoreboard line by lane (K/D/A, rating, gold, damage, MVP).
     player_stats: dict[str, dict[str, Any]] | None = None
+    # The other team's scoreboard by lane.
+    enemy_stats: dict[str, dict[str, Any]] | None = None
 
 
 class ReviewIn(BaseModel):

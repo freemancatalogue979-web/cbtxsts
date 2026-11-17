@@ -64,6 +64,9 @@ export interface TournamentGameDraft {
   lineup?: Record<string, number>;
   /** Same lineup as display names: {LANE: ign}. */
   players?: Record<string, string>;
+  /** Scoreboard lines by lane. */
+  player_stats?: Record<string, PlayerLine>;
+  enemy_stats?: Record<string, EnemyLine>;
 }
 
 export interface TournamentPlayerStat {
@@ -78,8 +81,11 @@ export interface TournamentPlayerStat {
   main_lane: string;
   lanes: Record<string, number>;
   heroes: { hero: string; games: number; wins: number }[];
-  /** Scrims only, when K/D/A was recorded: (kills + assists) / deaths. */
+  /** When K/D/A was recorded: (kills + assists) / deaths. */
   kda?: number | null;
+  /** Average in-game rating, when recorded. */
+  rating?: number | null;
+  mvps?: number;
 }
 
 export interface TournamentStatsT {
@@ -196,9 +202,33 @@ export interface ScrimGame {
   lineup_from_scrim: boolean;
   players: Record<string, string>;
   player_stats: Record<string, PlayerLine>;
+  enemy_stats?: Record<string, EnemyLine>;
 }
 
-export interface PlayerLine { kills?: number; deaths?: number; assists?: number }
+/** One player's scoreboard line. */
+export interface PlayerLine {
+  kills?: number; deaths?: number; assists?: number;
+  rating?: number; gold?: number; damage?: number; damage_taken?: number; turret_damage?: number; mvp?: boolean;
+}
+export interface EnemyLine extends PlayerLine { hero?: string; name?: string }
+
+/** What the AI read from a match screenshot, ready to fill the game form. */
+export interface ScoreboardRead {
+  screen: "scoreboard" | "result" | "draft" | "other";
+  result: "WIN" | "LOSS" | "";
+  duration_min: number | null;
+  lineup: Record<string, number>;
+  draft: Draft;
+  player_stats: Record<string, PlayerLine>;
+  enemy_stats: Record<string, EnemyLine>;
+  stats: Record<string, number>;
+  rows: {
+    ours: { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; user_id: number | null; player: string | null }[];
+    enemy: { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string }[];
+  };
+  checks: { tone: "ok" | "warn" | "info"; text: string }[];
+  image_url: string;
+}
 
 export interface Draft {
   our_bans?: (string | null)[];
@@ -325,9 +355,12 @@ export interface PoolPlayed {
   scrim_games: number;
   tournament_games: number;
   kda: number | null;
+  rating?: number | null;
   last_played: string | null;
   form: string[];
 }
+
+export interface RatingLine { games: number; avg: number | null; mvps: number }
 
 export interface KdaLine { games: number; kills: number; deaths: number; assists: number; ratio: number }
 
@@ -340,6 +373,7 @@ export interface PerfSummary {
   main_lane: string;
   lanes: Record<string, number>;
   kda: KdaLine | null;
+  rating?: RatingLine | null;
   form: string[];
 }
 
@@ -354,6 +388,7 @@ export interface HeroPerf {
   scrim_games: number;
   tournament_games: number;
   kda: KdaLine | null;
+  rating?: RatingLine | null;
   form: string[];
   loss_streak: number;
   last_played: string | null;
@@ -361,7 +396,7 @@ export interface HeroPerf {
 }
 
 export interface FocusAlert {
-  kind: "struggling" | "low_kda" | "cold_streak" | "no_reps" | "strength";
+  kind: "struggling" | "low_kda" | "low_rating" | "cold_streak" | "no_reps" | "strength";
   tone: "bad" | "warn" | "good";
   hero: string;
   title: string;
@@ -389,6 +424,9 @@ export interface GamePlayed {
   kills: number | null;
   deaths: number | null;
   assists: number | null;
+  rating?: number | null;
+  mvp?: boolean;
+  gold?: number | null;
 }
 
 export interface PlayerPerformance {

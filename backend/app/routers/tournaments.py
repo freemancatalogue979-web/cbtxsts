@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, object_session
 from ..deps import can, get_current_user, get_db, require
 from ..trash import send_to_trash
 from ..models import MatchReview, Tournament, TournamentMatch, User, dumps, loads, utcnow
+from ..performance import clean_enemy_stats, clean_player_stats
 from ..security import LANES
 from ..schemas import OptionalDate
 from ..serializers import review_out
@@ -85,10 +86,13 @@ def match_games(m: TournamentMatch) -> list[dict]:
         if no >= 1 and (draft_has_content(g.get("draft")) or lineup):
             result = str(g.get("result") or "").upper()
             games[no] = {"game_no": no, "result": result if result in {"WIN", "LOSS"} else "",
-                         "draft": clean_draft(g.get("draft")), "lineup": lineup}
+                         "draft": clean_draft(g.get("draft")), "lineup": lineup,
+                         "player_stats": clean_player_stats(g.get("player_stats")),
+                         "enemy_stats": clean_enemy_stats(g.get("enemy_stats"))}
     legacy = loads(m.draft or "{}", {})
     if 1 not in games and draft_has_content(legacy):
-        games[1] = {"game_no": 1, "result": "", "draft": clean_draft(legacy), "lineup": {}}
+        games[1] = {"game_no": 1, "result": "", "draft": clean_draft(legacy), "lineup": {},
+                    "player_stats": {}, "enemy_stats": {}}
     return [games[k] for k in sorted(games)]
 
 
@@ -291,6 +295,9 @@ class GameDraftIn(BaseModel):
     result: str = ""
     # {LANE: user_id} — who played this game. Omit to keep the saved lineup.
     lineup: dict[str, int | str | None] | None = None
+    # Scoreboard lines by lane (ours / theirs). Omit to keep what's saved.
+    player_stats: dict[str, dict] | None = None
+    enemy_stats: dict[str, dict] | None = None
 
 
 class MatchPatch(BaseModel):
@@ -464,8 +471,8 @@ def update_match(match_id: int, payload: MatchPatch, db: Session = Depends(get_d
 
 
 def _store_game(m: TournamentMatch, game_no: int, draft: dict | None, result: str | None,
-                lineup: dict | None) -> None:
-    """Write one game. draft=None clears the game; lineup=None keeps the saved lineup."""
+                lineup: dict | None, player_stats: dict | None = None, enemy_stats: dict | None = None) -> None:
+    """Write one game. draft=None clears the game; lineup/stats=None keep what's saved."""
     games = {g["game_no"]: g for g in match_games(m)}
     previous = games.get(game_no, {})
     line = clean_lineup(lineup) if lineup is not None else previous.get("lineup", {})
@@ -474,7 +481,11 @@ def _store_game(m: TournamentMatch, game_no: int, draft: dict | None, result: st
     else:
         res = (result if result is not None else previous.get("result", "")) or ""
         res = res.upper() if res.upper() in {"WIN", "LOSS"} else ""
-        games[game_no] = {"game_no": game_no, "result": res, "draft": clean_draft(draft), "lineup": line}
+        games[game_no] = {
+            "game_no": game_no, "result": res, "draft": clean_draft(draft), "lineup": line,
+            "player_stats": clean_player_stats(player_stats) if player_stats is not None else previous.get("player_stats", {}),
+            "enemy_stats": clean_enemy_stats(enemy_stats) if enemy_stats is not None else previous.get("enemy_stats", {}),
+        }
     m.game_drafts = dumps([games[k] for k in sorted(games)])
     m.draft = dumps(games[1]["draft"]) if 1 in games else "{}"
 
@@ -507,7 +518,7 @@ def save_game_draft(match_id: int, game_no: int, payload: GameDraftIn, db: Sessi
     saved_lineup = next((g["lineup"] for g in match_games(m) if g["game_no"] == game_no), {})
     if not draft_has_content(payload.draft) and not (lineup if lineup is not None else saved_lineup):
         raise HTTPException(status_code=422, detail="Add who played or pick/ban at least one hero to save this game")
-    _store_game(m, game_no, payload.draft, payload.result, lineup)
+    _store_game(m, game_no, payload.draft, payload.result, lineup, payload.player_stats, payload.enemy_stats)
     db.commit()
     db.refresh(m)
     return tournament_out(m.tournament)
@@ -554,7 +565,8 @@ def _restore_game_sheet(db: Session, item) -> list[str]:
     if any(g["game_no"] == no for g in match_games(m)):
         from ..trash import RestoreConflict
         raise RestoreConflict(f"Can't restore: game {no} already has a new sheet. Clear it first, then restore.")
-    _store_game(m, no, game.get("draft") or {}, game.get("result") or "", game.get("lineup") or {})
+    _store_game(m, no, game.get("draft") or {}, game.get("result") or "", game.get("lineup") or {},
+                game.get("player_stats") or {}, game.get("enemy_stats") or {})
     return []
 
 

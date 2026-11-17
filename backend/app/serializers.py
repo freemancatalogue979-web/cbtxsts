@@ -148,7 +148,7 @@ def activity_out(a: TrainingActivity) -> dict:
 
 
 def game_out(g: ScrimGame, names: dict[int, str] | None = None) -> dict:
-    from .performance import clean_player_stats, scrim_game_lineup
+    from .performance import clean_enemy_stats, clean_player_stats, scrim_game_lineup
 
     if names is None:
         db = object_session(g)
@@ -166,6 +166,7 @@ def game_out(g: ScrimGame, names: dict[int, str] | None = None) -> dict:
         "lineup_from_scrim": from_scrim,
         "players": {lane: names.get(uid, f"Player {uid}") for lane, uid in lineup.items()},
         "player_stats": clean_player_stats(loads(g.player_stats or "{}", {})),
+        "enemy_stats": clean_enemy_stats(loads(g.enemy_stats or "{}", {})),
     }
 
 

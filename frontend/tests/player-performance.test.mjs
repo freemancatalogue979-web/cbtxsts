@@ -38,12 +38,13 @@ test("alerts keep fixed colours: losses red, warnings amber, strengths green —
   assert.doesNotMatch(tones, /crim/);
 });
 
-test("scrim games record who played, each player's K/D/A and the draft", () => {
+test("scrim games record who played, each player's scoreboard line and the draft", () => {
   assert.match(scrims, /aria-label=\{`\$\{nice\(lane\)\} player, game \$\{f\.game_no\}`\}/);
-  assert.match(scrims, /aria-label=\{`\$\{nice\(lane\)\} \$\{k\}`\}/);
+  assert.match(scrims, /<ScoreboardFields form=\{lines\} onChange=\{setLines\} heroes=\{draft\.our_picks \?\? \{\}\} side="ours"/);
   assert.match(scrims, /<DraftBoardEditor heroes=\{heroes\} value=\{draft\}/);
   assert.match(scrims, /lineup: sameAsScrim \? \{\} : cleanLineup,/, "a game matching the booked lineup keeps following the scrim");
   assert.match(scrims, /\{ id: "players", label: "Player stats" \}/);
   assert.match(scrims, /<TournamentStats stats=\{stats\} kind="scrim"/);
   assert.match(stats, /\{hasKda && <th/);
+  assert.match(stats, /\{hasRating && <th/);
 });

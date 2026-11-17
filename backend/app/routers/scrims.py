@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from ..deps import can, get_current_user, get_db, require
 from ..trash import send_to_trash
 from ..models import Scrim, ScrimGame, User, dumps, loads
-from ..performance import appearances, clean_lineup, clean_player_stats, team_stats
+from ..performance import appearances, clean_enemy_stats, clean_lineup, clean_player_stats, team_stats
 from ..security import LANES
 from ..schemas import GameIn, ScrimIn, ScrimPatch
 from ..serializers import game_out, scrim_out
@@ -264,7 +264,8 @@ def add_game(scrim_id: int, payload: GameIn, db: Session = Depends(get_db),
     game = ScrimGame(scrim_id=scrim.id, game_no=payload.game_no, result=result,
                      duration_min=payload.duration_min,
                      stats=dumps(payload.stats), draft=dumps(payload.draft),
-                     lineup=dumps(lineup or {}), player_stats=dumps(clean_player_stats(payload.player_stats)))
+                     lineup=dumps(lineup or {}), player_stats=dumps(clean_player_stats(payload.player_stats)),
+                     enemy_stats=dumps(clean_enemy_stats(payload.enemy_stats)))
     db.add(game)
     us = sum(1 for g in scrim.games if g.result == "WIN") + (1 if result == "WIN" else 0)
     them = sum(1 for g in scrim.games if g.result == "LOSS") + (1 if result == "LOSS" else 0)
@@ -309,6 +310,7 @@ class GamePatch(BaseModel):
     draft: dict | None = None
     lineup: dict[str, int | None] | None = None
     player_stats: dict[str, dict] | None = None
+    enemy_stats: dict[str, dict] | None = None
 
 
 @router.patch("/{scrim_id}/games/{game_id}")
@@ -333,6 +335,8 @@ def update_game(scrim_id: int, game_id: int, payload: GamePatch, db: Session = D
         game.lineup = dumps(_game_lineup(db, data.pop("lineup")) or {})
     if "player_stats" in data:
         game.player_stats = dumps(clean_player_stats(data.pop("player_stats")))
+    if "enemy_stats" in data:
+        game.enemy_stats = dumps(clean_enemy_stats(data.pop("enemy_stats")))
     for k, v in data.items():
         setattr(game, k, v)
     db.flush()

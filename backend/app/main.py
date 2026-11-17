@@ -10,6 +10,7 @@ from .config import CORS_ALLOW_ORIGIN_REGEX, EXTRA_CORS_ORIGINS, TEAM_NAME, TEAM
 from .db import Base, SessionLocal, engine
 from .routers import (
     admin,
+    ai_tools,
     archive,
     clover_ai,
     auth,
@@ -84,7 +85,7 @@ app.add_middleware(TrashReceipt)
 api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
-               programs, files, tournaments, intel, items, archive, esports, clover_ai, trash):
+               programs, files, tournaments, intel, items, archive, esports, clover_ai, trash, ai_tools):
     api.include_router(module.router)
 app.include_router(api)
 
@@ -105,6 +106,7 @@ def startup() -> None:
             "ALTER TABLE tournament_matches ADD COLUMN game_drafts TEXT DEFAULT '[]'",
             "ALTER TABLE scrim_games ADD COLUMN lineup TEXT DEFAULT '{}'",
             "ALTER TABLE scrim_games ADD COLUMN player_stats TEXT DEFAULT '{}'",
+            "ALTER TABLE scrim_games ADD COLUMN enemy_stats TEXT DEFAULT '{}'",
         ):
             try:
                 conn.exec_driver_sql(stmt)

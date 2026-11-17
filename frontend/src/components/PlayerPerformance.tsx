@@ -1,4 +1,4 @@
-import { Flame, Skull, Sparkles, Swords, Target, TrendingDown, Trophy } from "lucide-react";
+import { Crown, Flame, Gauge, Skull, Sparkles, Swords, Target, TrendingDown, Trophy } from "lucide-react";
 import type { FocusAlert, GamePlayed, HeroPerf, PerfSummary, PlayerPerformance } from "../lib/types";
 import { nice } from "../lib/caseText";
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
@@ -6,10 +6,10 @@ import { HeroImg } from "./HeroImg";
 import { Empty, SectionTitle, StatTile } from "./ui";
 
 const ALERT_ICON: Record<FocusAlert["kind"], typeof Flame> = {
-  struggling: TrendingDown, low_kda: Skull, cold_streak: Flame, no_reps: Swords, strength: Sparkles,
+  struggling: TrendingDown, low_kda: Skull, low_rating: Gauge, cold_streak: Flame, no_reps: Swords, strength: Sparkles,
 };
 const ALERT_LABEL: Record<FocusAlert["kind"], string> = {
-  struggling: "Work on it", low_kda: "Dying a lot", cold_streak: "Cold streak", no_reps: "No reps yet", strength: "Strength",
+  struggling: "Work on it", low_kda: "Dying a lot", low_rating: "Low rating", cold_streak: "Cold streak", no_reps: "No reps yet", strength: "Strength",
 };
 const TONE: Record<FocusAlert["tone"], { card: string; chip: string; bar: string }> = {
   bad: { card: "border-danger/45", chip: "text-danger border-danger/45 bg-danger/10", bar: "bg-danger" },
@@ -76,6 +76,7 @@ export function FocusAlerts({ alerts, compact = false, empty }: { alerts: FocusA
 export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
   if (!heroes.length) return <Empty title="No team games yet" hint="Scrim and tournament games with a lineup show up here." />;
   const hasKda = heroes.some((h) => h.kda);
+  const hasRating = heroes.some((h) => h.rating?.avg != null);
   return (
     <div className="overflow-x-auto -mx-1">
       <table className="w-full text-[12px] min-w-[520px]">
@@ -86,6 +87,7 @@ export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
             <th className="label font-normal px-1 pb-2 text-right">W–L</th>
             <th className="label font-normal px-1 pb-2 text-right">Win</th>
             {hasKda && <th className="label font-normal px-1 pb-2 text-right">KDA</th>}
+            {hasRating && <th className="label font-normal px-1 pb-2 text-right" title="Average in-game rating">Rating</th>}
             <th className="label font-normal px-1 pb-2 pl-4">Form</th>
           </tr>
         </thead>
@@ -115,6 +117,13 @@ export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
                 <td className={`px-1 py-1.5 text-right tabular-nums ${!h.kda ? "text-faint" : h.kda.ratio >= 3 ? "text-leaf" : h.kda.ratio < 2 ? "text-danger" : ""}`}
                   title={h.kda ? `${h.kda.kills}/${h.kda.deaths}/${h.kda.assists} a game over ${h.kda.games}` : undefined}>
                   {kdaText(h.kda?.ratio)}
+                </td>
+              )}
+              {hasRating && (
+                <td className={`px-1 py-1.5 text-right tabular-nums ${h.rating?.avg == null ? "text-faint" : h.rating.avg >= 8 ? "text-leaf" : h.rating.avg < 6 ? "text-danger" : ""}`}
+                  title={h.rating ? `${h.rating.games} rated ${h.rating.games === 1 ? "game" : "games"}${h.rating.mvps ? ` · ${h.rating.mvps} MVP` : ""}` : undefined}>
+                  {h.rating?.avg != null ? h.rating.avg.toFixed(1) : "—"}
+                  {h.rating?.mvps ? <Crown size={10} className="inline ml-1 -mt-0.5 text-amber" aria-label={`${h.rating.mvps} MVP`} /> : null}
                 </td>
               )}
               <td className="px-1 py-1.5 pl-4"><FormDots form={h.form} label={`${h.hero} form`} /></td>
@@ -147,6 +156,8 @@ export function RecentGames({ games }: { games: GamePlayed[] }) {
             {g.kills != null || g.deaths != null || g.assists != null
               ? <span className="text-[11px] tabular-nums text-mute shrink-0">{g.kills ?? 0}/{g.deaths ?? 0}/{g.assists ?? 0}</span>
               : null}
+            {g.rating != null && <span className="text-[11px] tabular-nums text-mute shrink-0" title="Match rating">{g.rating.toFixed(1)}</span>}
+            {g.mvp && <span className="chip !py-0 !text-[9px] text-amber border-amber/45 shrink-0"><Crown size={9} aria-hidden="true" />MVP</span>}
             {g.result ? <ResultBadge result={g.result} /> : <span className="text-faint text-[11px] w-10 text-center">—</span>}
           </button>
         </li>
@@ -166,7 +177,7 @@ export function PerformancePanel({ perf, ign, isSelf }: { perf: PlayerPerformanc
   return (
     <section aria-label="Team games and heroes" className="space-y-3">
       <SectionTitle right={<span className="text-[11px] text-faint">scrims + tournaments</span>}>Team games · {ign}</SectionTitle>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
         <StatTile icon={<Target size={14} />} label="Team games" value={overall.games}
           hint={overall.games ? `${overall.wins}W – ${overall.losses}L${overall.main_lane ? ` · mostly ${nice(overall.main_lane)}` : ""}` : "none yet"} />
         <StatTile label="Game win" value={pct(overall.win_rate)}
@@ -174,8 +185,11 @@ export function PerformancePanel({ perf, ign, isSelf }: { perf: PlayerPerformanc
         <StatTile icon={<Swords size={14} />} label="Scrim games" value={scrims.games} hint={recordHint(scrims)} />
         <StatTile icon={<Trophy size={14} />} label="Tournament games" value={tournaments.games} hint={recordHint(tournaments)} />
         <StatTile label="KDA" value={kdaText(kda?.ratio)}
-          hint={kda ? `${kda.kills}/${kda.deaths}/${kda.assists} a game · ${kda.games} scrim ${kda.games === 1 ? "game" : "games"}` : "add K/D/A to scrim games"}
+          hint={kda ? `${kda.kills}/${kda.deaths}/${kda.assists} a game · ${kda.games} ${kda.games === 1 ? "game" : "games"}` : "add K/D/A to games"}
           tone={!kda ? "default" : kda.ratio >= 3 ? "good" : kda.ratio < 2 ? "bad" : "default"} />
+        <StatTile icon={<Gauge size={14} />} label="Match rating" value={overall.rating?.avg != null ? overall.rating.avg.toFixed(1) : "—"}
+          hint={overall.rating ? `${overall.rating.mvps} MVP · ${overall.rating.games} rated` : "from scoreboards"}
+          tone={overall.rating?.avg == null ? "default" : overall.rating.avg >= 8 ? "good" : overall.rating.avg < 6 ? "bad" : "default"} />
       </div>
 
       <div className="card p-4 space-y-3">

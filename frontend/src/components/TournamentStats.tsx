@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { Crown, Users } from "lucide-react";
 import type { TournamentStatsT } from "../lib/types";
 import { nice } from "../lib/caseText";
 import { navigate, pct } from "../lib/util";
@@ -12,6 +12,7 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
 }) {
   const { series, games, players, heroes } = stats;
   const hasKda = players.some((p) => p.kda != null);
+  const hasRating = players.some((p) => p.rating != null);
   const missing = Math.max(0, games.played - games.with_lineup);
   const tone = (w: number, l: number) => (w > l ? "good" : l > w ? "bad" : undefined);
   return (
@@ -54,6 +55,7 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
                   <th className="label font-normal px-1 pb-2 text-right">Win</th>
                   {overall && <th className="label font-normal px-1 pb-2 text-right">Series</th>}
                   {hasKda && <th className="label font-normal px-1 pb-2 text-right" title="(kills + assists) / deaths, games with K/D/A recorded">KDA</th>}
+                  {hasRating && <th className="label font-normal px-1 pb-2 text-right" title="Average in-game match rating, games with a rating recorded">Rating</th>}
                   <th className="label font-normal px-1 pb-2 pl-4">Heroes</th>
                 </tr>
               </thead>
@@ -76,6 +78,12 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
                     {hasKda && (
                       <td className={`px-1 py-2 text-right tabular-nums ${p.kda == null ? "text-faint" : p.kda >= 3 ? "text-leaf" : p.kda < 2 ? "text-danger" : ""}`}>
                         {p.kda == null ? "—" : p.kda.toFixed(2)}
+                      </td>
+                    )}
+                    {hasRating && (
+                      <td className={`px-1 py-2 text-right tabular-nums whitespace-nowrap ${p.rating == null ? "text-faint" : p.rating >= 8 ? "text-leaf" : p.rating < 6 ? "text-danger" : ""}`}>
+                        {p.rating == null ? "—" : p.rating.toFixed(1)}
+                        {p.mvps ? <span className="ml-1 text-amber" title={`${p.mvps} MVP`}><Crown size={10} className="inline -mt-0.5" aria-hidden="true" />{p.mvps}</span> : null}
                       </td>
                     )}
                     <td className="px-1 py-2 pl-4">

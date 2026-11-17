@@ -31,6 +31,7 @@ STRUGGLE_WIN_RATE = 45.0   # below this over MIN_GAMES+ → work on it
 STRONG_WIN_RATE = 65.0     # at/above this over MIN_GAMES+ and not in the pool → add it
 LOW_KDA = 2.0              # (kills + assists) / deaths below this → dying too much
 COLD_STREAK = 3            # this many losses in a row on one hero
+LOW_RATING = 6.0           # average in-game rating below this → below par on that hero
 KDA_KEYS = ("kills", "deaths", "assists")
 FOCUS_POOL = {"comfort", "meta"}  # pool categories a player is expected to have reps on
 
@@ -54,23 +55,59 @@ def clean_lineup(lineup: dict | None) -> dict[str, int]:
     return {lane: out[lane] for lane in LANES if lane in out}
 
 
-def clean_player_stats(stats: dict | None) -> dict[str, dict[str, int]]:
-    """{LANE: {kills, deaths, assists}} with whole, non-negative numbers; empty lanes dropped."""
-    out: dict[str, dict[str, int]] = {}
+# One player's scoreboard line: whole numbers (with a ceiling), the in-game
+# rating (0–20, one decimal) and the MVP badge.
+LINE_INTS = {"kills": 199, "deaths": 199, "assists": 199, "gold": 100_000,
+             "damage": 2_000_000, "damage_taken": 2_000_000, "turret_damage": 2_000_000}
+LINE_KEYS = (*LINE_INTS, "rating", "mvp")
+
+
+def clean_line(row: dict | None) -> dict:
+    """One scoreboard line, typed and clamped; unknown keys and blanks dropped."""
+    clean: dict = {}
+    if not isinstance(row, dict):
+        return clean
+    for key, ceiling in LINE_INTS.items():
+        value = row.get(key)
+        if value is None or value == "" or isinstance(value, bool):
+            continue
+        try:
+            clean[key] = max(0, min(int(float(value)), ceiling))
+        except (TypeError, ValueError):
+            continue
+    rating = row.get("rating")
+    if rating not in (None, "") and not isinstance(rating, bool):
+        try:
+            clean["rating"] = round(max(0.0, min(float(rating), 20.0)), 1)
+        except (TypeError, ValueError):
+            pass
+    if row.get("mvp") is True or str(row.get("mvp")).lower() in {"true", "1", "yes"}:
+        clean["mvp"] = True
+    return clean
+
+
+def clean_player_stats(stats: dict | None) -> dict[str, dict]:
+    """{LANE: line} for our players; empty lanes dropped, lane order kept."""
+    out: dict[str, dict] = {}
+    for lane, row in (stats or {}).items() if isinstance(stats, dict) else []:
+        lane = str(lane).upper()
+        if lane in LANES and (clean := clean_line(row)):
+            out[lane] = clean
+    return {lane: out[lane] for lane in LANES if lane in out}
+
+
+def clean_enemy_stats(stats: dict | None) -> dict[str, dict]:
+    """{LANE: line + hero + name} for the other team's scoreboard."""
+    out: dict[str, dict] = {}
     for lane, row in (stats or {}).items() if isinstance(stats, dict) else []:
         lane = str(lane).upper()
         if lane not in LANES or not isinstance(row, dict):
             continue
-        clean: dict[str, int] = {}
-        for key in KDA_KEYS:
-            value = row.get(key)
-            if value is None or value == "":
-                continue
-            try:
-                number = int(float(value))
-            except (TypeError, ValueError):
-                continue
-            clean[key] = max(0, min(number, 199))
+        clean = clean_line(row)
+        for key in ("hero", "name"):
+            text = str(row.get(key) or "").strip()[:60]
+            if text:
+                clean[key] = text
         if clean:
             out[lane] = clean
     return {lane: out[lane] for lane in LANES if lane in out}
@@ -106,6 +143,7 @@ class Appearance:
             "date": self.day.isoformat() if self.day else None, "game_no": self.game_no,
             "lane": self.lane, "hero": self.hero, "result": self.result,
             "kills": self.kda.get("kills"), "deaths": self.kda.get("deaths"), "assists": self.kda.get("assists"),
+            "rating": self.kda.get("rating"), "mvp": bool(self.kda.get("mvp")), "gold": self.kda.get("gold"),
         }
 
 
@@ -139,13 +177,14 @@ def tournament_appearances(db: Session, user_id: int | None = None) -> list[Appe
     for m in matches:
         for g in match_games(m):
             picks = g["draft"].get("our_picks") or {}
+            lines = clean_player_stats(g.get("player_stats"))
             result = implied_result(m, g)
             for lane, uid in g["lineup"].items():
                 if user_id is not None and uid != user_id:
                     continue
                 out.append(Appearance("tournament", m.tournament_id, m.id, names.get(m.tournament_id, "Tournament"),
                                       m.opponent, m.scheduled_date, g["game_no"], lane, uid,
-                                      str(picks.get(lane) or ""), result))
+                                      str(picks.get(lane) or ""), result, lines.get(lane, {})))
     return out
 
 
@@ -169,7 +208,7 @@ def _pct(won: int, total: int) -> float | None:
 
 def _kda(apps: list[Appearance]) -> dict | None:
     """Average K/D/A and the (K+A)/D ratio over games where they were recorded."""
-    rows = [a.kda for a in apps if a.kda]
+    rows = [a.kda for a in apps if any(k in a.kda for k in KDA_KEYS)]
     if not rows:
         return None
     k = sum(r.get("kills", 0) for r in rows)
@@ -178,6 +217,15 @@ def _kda(apps: list[Appearance]) -> dict | None:
     n = len(rows)
     return {"games": n, "kills": round(k / n, 1), "deaths": round(d / n, 1), "assists": round(a / n, 1),
             "ratio": round((k + a) / max(d, 1), 2)}
+
+
+def _rating(apps: list[Appearance]) -> dict | None:
+    """Average in-game rating and MVP count over games where the rating was recorded."""
+    rated = [a.kda["rating"] for a in apps if "rating" in a.kda]
+    mvps = sum(1 for a in apps if a.kda.get("mvp"))
+    if not rated and not mvps:
+        return None
+    return {"games": len(rated), "avg": round(sum(rated) / len(rated), 1) if rated else None, "mvps": mvps}
 
 
 def summary(apps: list[Appearance]) -> dict:
@@ -191,6 +239,7 @@ def summary(apps: list[Appearance]) -> dict:
         "series": len({(a.source, a.match_id) for a in apps}),
         "main_lane": max(lanes, key=lambda k: lanes[k]) if lanes else "", "lanes": lanes,
         "kda": _kda(apps),
+        "rating": _rating(apps),
         "form": [a.result for a in apps[:5]],
     }
 
@@ -220,7 +269,7 @@ def hero_rows(apps: list[Appearance]) -> list[dict]:
             "win_rate": _pct(wins, wins + losses), "decided": wins + losses,
             "scrim_games": sum(a.source == "scrim" for a in items),
             "tournament_games": sum(a.source == "tournament" for a in items),
-            "kda": _kda(items), "form": [a.result for a in items[:5]], "loss_streak": streak,
+            "kda": _kda(items), "rating": _rating(items), "form": [a.result for a in items[:5]], "loss_streak": streak,
             "last_played": max((a.day for a in items if a.day), default=None),
             "lanes": sorted({a.lane for a in items}, key=LANES.index),
         })
@@ -243,6 +292,8 @@ def team_stats(apps: list[Appearance], names: dict[int, str], *, series: dict, g
             "losses": s["losses"], "win_rate": s["win_rate"], "series": s["series"], "tournaments": 0,
             "main_lane": s["main_lane"], "lanes": s["lanes"],
             "kda": s["kda"]["ratio"] if s["kda"] else None,
+            "rating": s["rating"]["avg"] if s["rating"] else None,
+            "mvps": s["rating"]["mvps"] if s["rating"] else 0,
             "heroes": [{"hero": h["hero"], "games": h["games"], "wins": h["wins"]} for h in hero_rows(items)[:5]],
         })
     rows.sort(key=lambda r: (-r["games"], -r["wins"], r["name"].lower()))
@@ -302,9 +353,18 @@ def focus_alerts(heroes: list[dict], pool: list[HeroPoolEntry], limit: int = 6) 
         if h["key"] in flagged or not k or k["games"] < MIN_GAMES or k["ratio"] >= LOW_KDA:
             continue
         add("low_kda", "bad", h, h["hero"], f"Dying a lot on {h['hero']}",
-            f"KDA {k['ratio']:g} ({k['kills']:g}/{k['deaths']:g}/{k['assists']:g} a game) over {k['games']} scrim games",
+            f"KDA {k['ratio']:g} ({k['kills']:g}/{k['deaths']:g}/{k['assists']:g} a game) over {k['games']} games with K/D/A",
             "Play safer around objectives and track the enemy's burst before committing.",
             80 + (LOW_KDA - k["ratio"]) * 10)
+
+    for h in heroes:  # 2b) the in-game rating says they're below par on it
+        r = h.get("rating")
+        if h["key"] in flagged or not r or r["avg"] is None or r["games"] < MIN_GAMES or r["avg"] >= LOW_RATING:
+            continue
+        add("low_rating", "warn", h, h["hero"], f"Low match rating on {h['hero']}",
+            f"Average rating {r['avg']:g} over {r['games']} rated games · {_record(h)}",
+            "Rating tracks damage, gold share and teamfight presence: find where you go quiet in those games.",
+            70 + (LOW_RATING - r["avg"]) * 10)
 
     for h in heroes:  # 3) cold streak
         if h["key"] in flagged or h["loss_streak"] < COLD_STREAK:
@@ -331,7 +391,7 @@ def focus_alerts(heroes: list[dict], pool: list[HeroPoolEntry], limit: int = 6) 
                 f"{_record(h)} across {_where(h)}", "It's working: make it an official pick.",
                 20 + (h["win_rate"] or 0) / 10)
 
-    order = {"struggling": 0, "low_kda": 1, "cold_streak": 2, "no_reps": 3, "strength": 4}
+    order = {"struggling": 0, "low_kda": 1, "low_rating": 2, "cold_streak": 3, "no_reps": 4, "strength": 5}
     alerts.sort(key=lambda a: (order[a["kind"]], -a["score"]))
     for a in alerts:
         a.pop("score")
@@ -346,9 +406,10 @@ def pool_played(entry: HeroPoolEntry, heroes_by_key: dict[str, dict]) -> dict:
     h = heroes_by_key.get(hero_key(entry.hero.name if entry.hero else ""))
     if not h:
         return {"games": 0, "wins": 0, "losses": 0, "win_rate": None, "scrim_games": 0,
-                "tournament_games": 0, "kda": None, "last_played": None, "form": []}
+                "tournament_games": 0, "kda": None, "rating": None, "last_played": None, "form": []}
     return {k: h[k] for k in ("games", "wins", "losses", "win_rate", "scrim_games", "tournament_games",
-                              "last_played", "form")} | {"kda": h["kda"]["ratio"] if h["kda"] else None}
+                              "last_played", "form")} | {"kda": h["kda"]["ratio"] if h["kda"] else None,
+                                                        "rating": h["rating"]["avg"] if h["rating"] else None}
 
 
 def player_performance(db: Session, user_id: int, pool: list[HeroPoolEntry] | None = None) -> dict:
