@@ -8,6 +8,10 @@ kept as-is. The script crops it tight, then composes:
   - favicon-16/32.png    small dark rounded tiles (browser tabs)
   - favicon.ico          multi-res 16/32/48
   - apple-touch-icon.png 180px solid dark tile (iOS)
+  - icon-192/512.png     installed-app icons (rounded tile with a soft accent glow)
+  - icon-maskable-192/512.png  full-bleed Android adaptive icons; the emblem sits
+                         inside the 80% safe circle so no launcher mask clips it
+  - icon-monochrome.png  white silhouette for themed (monochrome) launcher icons
 
 Run with the backend venv (needs Pillow):  ../backend/.venv/bin/python scripts/make-brand.py
 """
@@ -60,6 +64,49 @@ def on_tile(mark: Image.Image, size: int, inset: float, radius: float = 0.22) ->
     return tile
 
 
+def glow_tile(mark: Image.Image, size: int, inset: float, radius: float) -> Image.Image:
+    """App icon: ink tile with a soft crimson glow behind the emblem and a thin
+    top highlight, drawn at 4x and downsampled so every edge stays crisp."""
+    big = size * 4
+    tile = Image.new("RGBA", (big, big), (*INK, 255))
+    glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    steps = 48
+    for i in range(steps):  # radial falloff, brightest in the centre
+        t = i / steps
+        r = round(big * (0.62 - 0.5 * t))
+        alpha = round(70 * t * t)
+        gd.ellipse((big // 2 - r, big // 2 - r, big // 2 + r, big // 2 + r), fill=(190, 18, 60, alpha))
+    tile = Image.alpha_composite(tile, glow)
+    edge = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(edge).rounded_rectangle(
+        (big * 0.012, big * 0.012, big * 0.988, big * 0.988), radius=round(big * max(radius - 0.012, 0)),
+        outline=(255, 255, 255, 34), width=max(2, big // 128))
+    tile = Image.alpha_composite(tile, edge if radius else Image.new("RGBA", (big, big), (0, 0, 0, 0)))
+    inner = round(big * (1 - inset * 2))
+    m = ImageOps.contain(square(mark), (inner, inner), Image.LANCZOS)
+    tile.paste(m, ((big - m.width) // 2, (big - m.height) // 2), m)
+    if radius:
+        mask = Image.new("L", (big, big), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, big - 1, big - 1), radius=round(big * radius), fill=255)
+        tile.putalpha(mask)
+    return tile.resize((size, size), Image.LANCZOS)
+
+
+def monochrome(mark: Image.Image, size: int, inset: float) -> Image.Image:
+    """White line-art on transparency (Android themed icons tint it). Only the
+    emblem's bright strokes are kept, so the "9" and leaf cut-outs survive."""
+    inner = round(size * (1 - inset * 2))
+    m = ImageOps.contain(square(mark), (inner, inner), Image.LANCZOS)
+    lum = m.convert("L").point(lambda v: max(0, min(255, (v - 70) * 3)))
+    alpha = Image.composite(lum, Image.new("L", m.size, 0), m.getchannel("A").point(lambda v: 255 if v > 96 else 0))
+    sil = Image.new("RGBA", m.size, (255, 255, 255, 0))
+    sil.putalpha(alpha)
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    out.paste(sil, ((size - m.width) // 2, (size - m.height) // 2), sil)
+    return out
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     mark = square(load_alpha_mark())
@@ -78,8 +125,14 @@ def main() -> None:
         OUT / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32), (48, 48)]
     )
 
-    # iOS home screen — solid tile, no alpha
-    on_tile(mark, 180, inset=0.18, radius=0).convert("RGB").save(OUT / "apple-touch-icon.png", optimize=True)
+    # iOS home screen — solid tile, no alpha (iOS rounds the corners itself)
+    glow_tile(mark, 180, inset=0.16, radius=0).convert("RGB").save(OUT / "apple-touch-icon.png", optimize=True)
+
+    # Installed app (PWA) icons
+    for size in (192, 512):
+        glow_tile(mark, size, inset=0.13, radius=0.22).save(OUT / f"icon-{size}.png", optimize=True)
+        glow_tile(mark, size, inset=0.22, radius=0).convert("RGB").save(OUT / f"icon-maskable-{size}.png", optimize=True)
+    monochrome(mark, 512, inset=0.22).save(OUT / "icon-monochrome.png", optimize=True)
 
     for f in sorted(OUT.iterdir()):
         print(f.name, f.stat().st_size, "bytes")

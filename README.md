@@ -552,6 +552,22 @@ saved per browser and applied before the first paint. Hero art is bundled in
 `frontend/public/heroes`, and the wallpaper respects `prefers-reduced-motion`.
 See [theme and appearance](docs/reference/theme.md).
 
+## Install as an app
+
+The hub is an installable app (PWA). It gets its own home-screen or desktop icon, opens full screen without browser bars, starts instantly and still opens with no signal.
+
+- **Android / Chrome / Edge (desktop too):** tap the download icon next to your name in the sidebar (or **Install the app** on the sign-in screen) and confirm. Long-press the icon for shortcuts to the Dashboard, AI, Draft Lab and Scrims.
+- **iPhone / iPad:** open the hub in Safari, tap **Share → Add to Home Screen**. The same button shows these steps.
+
+How it works:
+
+- `vite build` emits `dist/sw.js` from `frontend/pwa/sw-template.js`, precaching this build's hashed JS, CSS, fonts and icons. A new deploy shows a **"A new version of the hub is ready · Reload"** bar; nothing reloads by itself mid-draft.
+- **Member data is never cached:** `/api`, `/live` and `/ws` always go to the server. Hero art, maps and brand images are cached and refreshed in the background.
+- Opening the app with no connection keeps you signed in and shows a "Can't reach the hub" screen that reconnects by itself. Only a real expired session (401) signs you out.
+- Icons are generated from `public/brand/logo-source.png` by `frontend/scripts/make-brand.py`: 192/512 tiles, Android maskable and monochrome icons, and the 180px iOS icon. Each is rendered at its exact size, so the launcher never scales them.
+- `deploy/setup-server.sh` serves `sw.js`, `manifest.webmanifest` and `index.html` with `Cache-Control: no-cache`, so installed apps pick up every deploy.
+- Service workers need HTTPS (or `localhost`). The setup script's certbot step covers this for a real domain.
+
 ## Fonts
 
 The interface uses **Courier Std Bold** in heavy italic everywhere (11px, weight 900, italic, 0.1em tracking). Nothing is shown in all caps. Courier Std is an Adobe font that cannot be bundled, so it is used wherever it is installed; elsewhere the app ships Courier Prime Bold Italic under the SIL Open Font License. There is no font menu. See [docs/reference/fonts.md](docs/reference/fonts.md) for credits.

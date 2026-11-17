@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { api, getToken, setToken } from "./lib/api";
+import { api, ApiError, getToken, setToken } from "./lib/api";
 import { ensureArtIndex } from "./lib/mlbb";
 import { readAIWorkspaceLayout, saveAIWorkspaceLayout, type AIWorkspaceLayout } from "./lib/cloverAI";
 import { applyTheme, parseSection, readThemePrefs, saveThemePrefs, type ThemePrefs } from "./lib/theme";
@@ -7,6 +7,8 @@ import type { Meta, User } from "./lib/types";
 import { hashRoute } from "./lib/util";
 import { Layout } from "./components/Layout";
 import { Spinner } from "./components/ui";
+import { BrandImg } from "./components/Logo";
+import { WifiOff } from "lucide-react";
 import { Login } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 
@@ -49,6 +51,10 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [booting, setBooting] = useState(true);
+  // The hub could not be reached (no signal, server restarting). The session is
+  // kept — only a real 401 signs a member out — and the app retries by itself.
+  const [unreachable, setUnreachable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [aiLayout, setAILayout] = useState(() => readAIWorkspaceLayout(deviceStorage()));
   const [theme, setTheme] = useState<ThemePrefs>(() => readThemePrefs(deviceStorage()));
   const route = useRoute();
@@ -65,18 +71,33 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function boot() {
       if (getToken()) {
         try {
           const me = await api.get<User>("/auth/me");
-          setUser(me);
-        } catch {
-          setToken(null);
+          if (!cancelled) { setUser(me); setUnreachable(false); }
+        } catch (error) {
+          // A 401 already cleared the token in the API client: show sign-in.
+          // Anything else must not sign the member out of an installed app.
+          if (!cancelled && getToken() && !(error instanceof ApiError && error.status === 401)) setUnreachable(true);
         }
       }
-      setBooting(false);
+      if (!cancelled) setBooting(false);
     }
     boot();
+    return () => { cancelled = true; };
+  }, [attempt]);
+
+  useEffect(() => {
+    if (!unreachable) return;
+    const retry = () => setAttempt((n) => n + 1);
+    const timer = window.setInterval(retry, 10_000);
+    window.addEventListener("online", retry);
+    return () => { window.clearInterval(timer); window.removeEventListener("online", retry); };
+  }, [unreachable]);
+
+  useEffect(() => {
     const onUnauthorized = () => setUser(null);
     window.addEventListener("clover:unauthorized", onUnauthorized);
     return () => window.removeEventListener("clover:unauthorized", onUnauthorized);
@@ -84,13 +105,18 @@ export default function App() {
 
   useEffect(() => {
     if (user && !meta) {
-      api.get<Meta>("/meta").then(setMeta).catch(() => setMeta(null));
+      api.get<Meta>("/meta").then((value) => { setMeta(value); setUnreachable(false); })
+        .catch((error) => { if (!(error instanceof ApiError && error.status === 401)) setUnreachable(true); });
       ensureArtIndex(); // warm the official CDN artwork cache (fire-and-forget)
     }
-  }, [user, meta]);
+  }, [user, meta, attempt]);
 
   if (booting) {
     return <div className="min-h-screen flex items-center justify-center"><Spinner label="Waking up the hub" /></div>;
+  }
+
+  if (unreachable && (!user || !meta)) {
+    return <Unreachable onRetry={() => setAttempt((n) => n + 1)} />;
   }
 
   if (!user) {
@@ -171,5 +197,19 @@ export default function App() {
       onLogout={() => { api.post("/auth/logout").catch(() => undefined); setToken(null); setUser(null); window.location.hash = "/login"; }}>
       <Suspense fallback={<Spinner label="Opening" />}>{page}</Suspense>
     </Layout>
+  );
+}
+
+/** Shown when the hub can't be reached at start-up. The member stays signed in. */
+function Unreachable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="min-h-screen bg-ink flex items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))]">
+      <div className="card w-full max-w-sm p-6 text-center" role="alert">
+        <div className="flex justify-center"><BrandImg size={64} /></div>
+        <div className="mt-4 inline-flex items-center gap-2 text-amber text-[12px] font-bold"><WifiOff size={15} /> Can't reach the hub</div>
+        <p className="mt-2 text-[12.5px] text-mute leading-relaxed">No connection right now. You're still signed in, and the hub reconnects by itself as soon as the signal is back.</p>
+        <button type="button" className="btn-primary w-full justify-center mt-5" onClick={onRetry}>Try again</button>
+      </div>
+    </div>
   );
 }

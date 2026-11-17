@@ -71,6 +71,18 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
   *, *::before, *::after, ::placeholder {
     text-transform: none !important;
   }
+  /* Installed-app feel: no grey tap flash, no font inflation on rotate, no
+     rubber-band reload of the whole app, and the shell's own controls don't
+     pop the long-press callout. Text in content stays selectable. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  @media (display-mode: standalone) {
+    html, body { overscroll-behavior-y: none; }
+    nav, aside, header, button, [role="tab"] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  }
   ::selection {
     background: color-mix(in srgb, var(--color-crim) 55%, transparent);
   }
@@ -871,3 +883,8 @@ html[data-effects="calm"] .ambient__spotlight { transform: none; transition: non
 .ai-markdown th, .ai-markdown td { border: 1px solid var(--color-edge-2); text-align: left; padding: .45rem .6rem; min-width: 90px; }
 .ai-markdown th { background: var(--color-panel); }
 .ai-markdown blockquote { border-left: 2px solid var(--color-leaf); padding-left: .75rem; color: var(--color-mute); margin-block: .65rem; }
+
+/* App status toasts (new version / offline): above the mobile quick bar and the
+   iPhone home indicator, near the bottom edge on desktop. */
+.app-status { bottom: calc(env(safe-area-inset-bottom) + 76px); }
+@media (min-width: 768px) { .app-status { bottom: 20px; } }

@@ -112,7 +112,11 @@ server {
         proxy_set_header Host \$host;
         proxy_read_timeout 3600s;
     }
-    location = /sw.js { add_header Cache-Control "no-cache"; try_files \$uri =404; }
+    # Installable app: the worker, manifest and shell must always revalidate so a
+    # deploy reaches installed apps; hashed /assets/ files never change.
+    location = /sw.js { add_header Cache-Control "no-cache"; add_header Service-Worker-Allowed "/"; try_files \$uri =404; }
+    location = /manifest.webmanifest { default_type application/manifest+json; add_header Cache-Control "no-cache"; try_files \$uri =404; }
+    location = /index.html { add_header Cache-Control "no-cache"; try_files \$uri =404; }
     location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files \$uri =404; }
     location / { try_files \$uri \$uri/ /index.html; }
 }

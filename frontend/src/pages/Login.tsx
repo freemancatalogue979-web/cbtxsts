@@ -4,6 +4,7 @@ import type { User } from "../lib/types";
 import { AmbientBackdrop } from "../components/AmbientBackdrop";
 import { ErrorNote, Field } from "../components/ui";
 import { HeroMark } from "../components/Logo";
+import { InstallAppButton } from "../components/AppControls";
 
 export function Login({ onLogin }: { onLogin: (u: User) => void }) {
   const [email, setEmail] = useState("");
@@ -27,7 +28,7 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-ink flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-ink flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] relative overflow-hidden">
       <AmbientBackdrop section="login" motion />
       <div className="w-full max-w-sm relative z-10">
         <div className="flex flex-col items-center mb-8">
@@ -54,6 +55,8 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
             {busy ? "Signing in…" : "Enter the hub"}
           </button>
         </form>
+
+        <div className="mt-3"><InstallAppButton variant="full" /></div>
 
         <div className="text-center text-[11px] text-faint mt-5 leading-relaxed">
           Invite-only. Staff accounts are issued by the team admin.

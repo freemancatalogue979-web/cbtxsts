@@ -12,6 +12,7 @@ import {
 } from "../lib/nav";
 import { AmbientBackdrop } from "./AmbientBackdrop";
 import { CommandPalette } from "./CommandPalette";
+import { InstallAppButton } from "./AppControls";
 import { Wordmark, BrandImg } from "./Logo";
 import { AvatarImg } from "./Avatar";
 import { ErrorNote, Field, PageChrome, CaseSafe } from "./ui";
@@ -289,6 +290,7 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
         <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme" aria-label="Appearance settings">
           <Palette size={15} />
         </button>
+        <InstallAppButton />
         <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
           <LogOut size={15} />
         </button>
@@ -313,6 +315,7 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
       <button onClick={() => setEditing(true)} className="text-faint hover:text-crim transition-colors p-1" title="Colour theme" aria-label="Appearance settings">
         <Palette size={16} />
       </button>
+      <InstallAppButton />
       <button onClick={onLogout} className="text-faint hover:text-crim transition-colors p-1" title="Sign out" aria-label="Sign out">
         <LogOut size={16} />
       </button>
@@ -387,7 +390,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
       <AmbientBackdrop section={section} motion={theme.motion} />
       {/* Desktop sidebar */}
       <aside id="site-desktop-navigation" aria-label="Site navigation"
-        className={`${hideDesktopNav ? "hidden" : "hidden md:flex"} ${navWidth} fixed inset-y-0 left-0 flex-col border-r border-edge bg-panel/80 backdrop-blur-xl z-40 transition-[width] duration-200 motion-reduce:transition-none`}>
+        className={`${hideDesktopNav ? "hidden" : "hidden md:flex"} ${navWidth} fixed inset-y-0 left-0 flex-col border-r border-edge bg-panel/80 backdrop-blur-xl z-40 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] transition-[width] duration-200 motion-reduce:transition-none`}>
         <div className={`flex items-center gap-2 border-b border-edge ${collapsed ? "flex-col px-2 py-3" : "px-4 pt-4 pb-3"}`}>
           {collapsed ? <BrandImg size={32} /> : <div className="min-w-0 flex-1"><Wordmark /></div>}
           <button type="button" onClick={() => setCollapsed((value) => !value)}
@@ -403,7 +406,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
       </aside>
 
       {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-40 bg-panel/80 backdrop-blur-xl border-b border-edge">
+      <header className="md:hidden sticky top-0 z-40 bg-panel/80 backdrop-blur-xl border-b border-edge pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="flex items-center justify-between gap-3 px-4 h-14">
           <span className="shrink-0"><Wordmark compact /></span>
           <div className="flex min-w-0 items-center gap-2">
@@ -425,7 +428,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
       {mobileNav && (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="absolute inset-0 bg-black/70" onClick={() => setMobileNav(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[86vw] bg-panel/95 backdrop-blur-xl border-r border-edge flex flex-col">
+          <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[86vw] bg-panel/95 backdrop-blur-xl border-r border-edge flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
             <div className="flex items-center justify-between px-4 h-14 border-b border-edge">
               <Wordmark compact />
               <button ref={drawerClose} className="text-faint p-1" onClick={() => setMobileNav(false)} aria-label="Close">

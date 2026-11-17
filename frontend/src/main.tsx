@@ -11,9 +11,15 @@ import "./index.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AppStatus } from "./components/AppControls";
+import { registerServiceWorker } from "./lib/pwa";
+
+// Installable app: offline shell, install prompt and "new version" reload (production builds only).
+registerServiceWorker();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
+    <AppStatus />
   </React.StrictMode>,
 );
