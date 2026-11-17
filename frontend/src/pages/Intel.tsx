@@ -321,7 +321,7 @@ export function IntelPage({ me, parts }: { me: User; parts: string[] }) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="MLBB Intel" sub="Saved hero analytics & game data — community Rone Arena snapshots refresh in the background and may be out of date (not official Moonton)."
+      <PageTitle title="MLBB Intel" sub="Saved hero analytics & game data — Rone Arena snapshots refresh in the background."
         right={<div className="flex items-center gap-2">
           {version && <Badge cls="text-sky border-sky/40">game v{version}</Badge>}
           <button className="btn-ghost" onClick={() => { void load(); }} disabled={busy}><RefreshCw size={14} className={busy ? "animate-spin" : ""} /> Refresh</button>

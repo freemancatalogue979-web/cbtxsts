@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Activity, ArrowUpRight, CircleSlash2, Clock3, Loader2, Sparkles, Swords, X } from "lucide-react";
 import { HeroImg } from "./HeroImg";
+import { DraftBreakdown } from "./DraftBreakdown";
 import { ErrorNote, Spinner } from "./ui";
 import { api } from "../lib/api";
 import { esportsDate, esportsNumber, gameDuration, teamCode, type EsportsAnalysis, type EsportsDetail, type EsportsGame, type EsportsMatch, type EsportsSceneAnalysis, type EsportsTeam } from "../lib/esports";
@@ -39,7 +40,7 @@ function Comparison({ game }: { game: EsportsGame }) {
 }
 
 function MatchAnalysis({ matchId, configured, onAnalyzed }: { matchId: string; configured: boolean; onAnalyzed: () => void }) {
-  const [question, setQuestion] = useState("What stands out in this match, and what can we actually infer?");
+  const [question, setQuestion] = useState("Break down every draft: the win condition, how to execute it, and any hero swaps.");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EsportsAnalysis | null>(null);
@@ -55,14 +56,14 @@ function MatchAnalysis({ matchId, configured, onAnalyzed }: { matchId: string; c
     finally { setBusy(false); }
   }
   return <section className="rounded-xl border border-leaf/20 bg-gradient-to-br from-leaf/[0.07] via-panel to-panel p-4 sm:p-5">
-    <div className="flex items-start gap-3 mb-3"><div className="rounded-lg bg-leaf/10 p-2 text-leaf"><Sparkles size={16} /></div><div><h3 className="font-extrabold text-sm">Ask 9 Clover AI</h3><p className="text-[11px] text-mute mt-1">Analyzes the whole match series, including every available game—not just the tab above.</p></div></div>
+    <div className="flex items-start gap-3 mb-3"><div className="rounded-lg bg-leaf/10 p-2 text-leaf"><Sparkles size={16} /></div><div><h3 className="font-extrabold text-sm">Ask 9 Clover AI</h3><p className="text-[11px] text-mute mt-1">Every game of the series: each draft’s win condition, how to execute it, whether it worked, and the hero swaps that fix it.</p></div></div>
     <form onSubmit={submit} className="space-y-2.5"><label className="sr-only" htmlFor="match-question">Your match question</label><textarea id="match-question" className="input min-h-[72px] resize-y !text-xs" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={500} />
       <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[10px] text-mute leading-relaxed max-w-[520px]">{configured ? "Missing public game details may be loaded first. Your question and available match facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured. You can still generate a facts-only summary; no question is sent externally."}</span>
         <button type="submit" className="btn-leaf shrink-0 !text-[11px]" disabled={busy || !question.trim()}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {configured ? "Analyze match" : "Show facts"}</button></div>
     </form>
     <ErrorNote error={error} />
-    {result && <div className="mt-4 rounded-lg bg-ink/50 border border-edge p-3.5"><div className="section-pill section-pill--leaf mb-2">{result.mode === "ai" ? "Grounded analysis" : "Facts only"}</div><div className="text-xs text-text/90 leading-relaxed whitespace-pre-wrap">{result.answer}</div>
-      <div className="mt-3 pt-3 border-t border-edge text-[10px] text-mute leading-relaxed">{result.note} <a href={result.source_url} target="_blank" rel="noreferrer" className="text-mute hover:text-leaf underline">Source: Aerena <ArrowUpRight size={10} className="inline" /></a>{result.fetched_at ? ` · saved ${esportsDate(result.fetched_at)}` : ""}</div></div>}
+    {result && <DraftBreakdown mode={result.mode} answer={result.answer} note={result.note} breakdown={result.breakdown}
+      sources={[{ match_id: matchId, source_url: result.source_url, fetched_at: result.fetched_at }]} />}
   </section>;
 }
 
@@ -140,7 +141,7 @@ export function EsportsMatchModal({ matchId, aiConfigured, onClose }: { matchId:
 
 /** Analyze an explicit small sample from the currently displayed public results. */
 export function SceneAnalysisPanel({ matches, configured }: { matches: EsportsMatch[]; configured: boolean }) {
-  const [question, setQuestion] = useState("What can we learn from these matches? Separate observations from unknowns.");
+  const [question, setQuestion] = useState("Compare these drafts: each win condition, how to execute it, and the hero swaps that would fix them.");
   const [result, setResult] = useState<EsportsSceneAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -169,10 +170,10 @@ export function SceneAnalysisPanel({ matches, configured }: { matches: EsportsMa
   return <details className="group rounded-xl border border-leaf/20 bg-gradient-to-r from-leaf/[0.06] to-panel overflow-hidden">
     <summary className="cursor-pointer list-none flex items-center gap-3 p-3.5"><span className="rounded-lg bg-leaf/10 text-leaf p-2"><Sparkles size={15} /></span><span className="flex-1 min-w-0"><span className="block text-xs font-extrabold">Ask 9 Clover AI</span><span className="block text-[10px] text-mute mt-1">Analyze a small sample of the matches shown below</span></span><span className="text-[10px] font-bold text-mute group-open:hidden">OPEN +</span><span className="text-[10px] font-bold text-mute hidden group-open:block">CLOSE −</span></summary>
     <div className="border-t border-edge/80 p-3.5 sm:p-4"><form onSubmit={submit} className="space-y-2.5"><label htmlFor="scene-question" className="sr-only">Question about the visible matches</label><textarea id="scene-question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={500} className="input min-h-[68px] resize-y !text-xs" />
-      <p className="text-[10px] text-mute leading-relaxed">Uses up to the first 8 matches in the current filter ({ids.length} selected), including all available games in each series—not a complete season. Large samples may have compacted detail. {configured ? "Your question and their public Aerena facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured; only a facts-only summary is available and no question is sent externally."}</p>
+      <p className="text-[10px] text-mute leading-relaxed">Breaks down the first 8 matches in the current filter ({ids.length} selected), every game in each series. {configured ? "Your question and their public Aerena facts are sent to the external AI provider; private Archive and team data are not included automatically." : "The AI provider is not configured; only a facts-only summary is available and no question is sent externally."}</p>
       <button className="btn-leaf !text-[11px]" type="submit" disabled={busy || !ids.length || !question.trim()}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}{configured ? "Analyze selected matches" : "Show saved facts"}</button></form>
       <ErrorNote error={error} />
-      {result && <div className="mt-4 rounded-lg border border-edge bg-ink/50 p-3.5"><div className="section-pill section-pill--leaf mb-2">{result.mode === "ai" ? "Grounded sample analysis" : "Facts only"}</div><div className="text-xs leading-relaxed text-text/90 whitespace-pre-wrap">{result.answer}</div><p className="mt-3 pt-3 border-t border-edge text-[10px] leading-relaxed text-mute">{result.note}</p><div className="flex flex-wrap gap-2 mt-2">{result.sources.map((source) => <a key={source.match_id} href={source.source_url} target="_blank" rel="noreferrer" className="text-[10px] text-mute underline hover:text-leaf">{source.match_id} <ArrowUpRight size={10} className="inline" /></a>)}</div></div>}
+      {result && <DraftBreakdown mode={result.mode} answer={result.answer} note={result.note} breakdown={result.breakdown} sources={result.sources} />}
     </div>
   </details>;
 }

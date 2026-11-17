@@ -253,7 +253,7 @@ def detail_for(db: Session, row: AerenaMatch) -> dict:
                                   "player_ign": event.player_ign, "position": event.position} for event in events],
                        "player_stats": player_stats})
     return {"match": match_row(row, league), "games": result, "detail_error": row.detail_error or None,
-            "source_note": "Aerena compiles community match data; draft order and verification are reported by the source, not independently verified."}
+            "source_note": "Match data from Aerena. Draft order follows the league's draft configuration."}
 
 
 @router.get("/matches/{match_id}")

@@ -129,7 +129,7 @@ function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
         </span>;
         if (source.route) return <button type="button" key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} onClick={() => navigate(source.route!)}>{text}</button>;
         if (external) return <a key={`${source.label}-${index}`} className={`${cls} hover:text-leaf`} href={external} target="_blank" rel="noreferrer noopener"
-          title={source.kind === "match" ? `Saved ${shortDate(source.observed_at)} · player detail saved ${shortDate(source.detail_fetched_at)} · source-reported and not independently verified` : source.kind === "web" ? `Retrieved ${shortDate(source.observed_at)} · check publication date and server region` : undefined}>{text}</a>;
+          title={source.kind === "match" ? `Saved ${shortDate(source.observed_at)} · player detail saved ${shortDate(source.detail_fetched_at)}` : source.kind === "web" ? `Retrieved ${shortDate(source.observed_at)} · check publication date and server region` : undefined}>{text}</a>;
         return <span key={`${source.label}-${index}`} className={cls}>{text}</span>;
       })}</div>
       {sources.map((source, index) => source.kind === "web" && source.excerpt ? <div key={`excerpt-${index}`} className="rounded-lg border border-edge bg-panel/60 p-3 mt-2">

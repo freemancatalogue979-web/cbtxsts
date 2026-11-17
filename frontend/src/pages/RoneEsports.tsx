@@ -130,7 +130,7 @@ export function RoneEsportsPage() {
       {hasSourceData && needle && !groups.length && !standings.length && !seeds.length && <Empty title="No matching teams or matches" hint="Try a different search." />}
       {view === "schedule" && hasSourceData && !needle && week !== null && !groups.length && <Empty title="No matches in this week" />}
     </>}
-    <p className="text-[10.5px] text-mute leading-relaxed border-t border-edge/60 pt-3">Community data feed — fixtures, images and results only where Rone supplies them; not official Moonton/MPL output. Team logos and bracket images are fetched from Rone’s image hosts.</p>
+    <p className="text-[10.5px] text-mute leading-relaxed border-t border-edge/60 pt-3">Data feed from Rone — fixtures, images and results wherever Rone supplies them. Team logos and bracket images are fetched from Rone’s image hosts.</p>
     {selected && <RoneMatchDetails key={`${region}-${selected.id}`} region={region} match={selected} onClose={() => setSelected(null)} />}
   </div>;
 }

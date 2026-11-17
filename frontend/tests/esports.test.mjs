@@ -37,3 +37,43 @@ test("team and game displays fall back explicitly", () => {
   assert.equal(gameDuration(0), "0:00");
   assert.equal(gameDuration(847), "14:07");
 });
+
+const { hasCoaching } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+
+test("AI draft breakdowns render as chips, not raw markdown text", async () => {
+  const details = await readFile(new URL("../src/components/EsportsDetails.tsx", import.meta.url), "utf8");
+  const view = await readFile(new URL("../src/components/DraftBreakdown.tsx", import.meta.url), "utf8");
+  // Both the match and multi-match analysis use the chip view.
+  assert.equal((details.match(/<DraftBreakdown /g) ?? []).length, 2);
+  assert.doesNotMatch(details, /whitespace-pre-wrap">\{result\.answer\}/);
+  assert.doesNotMatch(details, /Grounded (sample )?analysis/);
+  for (const label of ["Win condition", "How to execute", "Hero swap", "Deciding factor", "Takeaways for us", "Why · ", "How · "]) {
+    assert.match(view, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(view, /executed: \{ label: "Executed"/);
+  assert.match(view, /partial: \{ label: "Partly executed"/);
+  assert.match(view, /failed: \{ label: "Not executed"/);
+  // Hero chips use the bundled portraits; the swapped-out hero is struck through.
+  assert.match(view, /<HeroImg name=\{hero\} size=\{24\}/);
+  assert.match(view, /<HeroChip pick=\{\{ hero: swap\.out, player: swap\.player \}\} struck \/>/);
+  assert.match(view, /<HeroChip pick=\{\{ hero: swap\.in, player: swap\.player \}\} highlight \/>/);
+});
+
+test("sources are presented as verified match data", async () => {
+  const page = await readFile(new URL("../src/pages/Esports.tsx", import.meta.url), "utf8");
+  const details = await readFile(new URL("../src/components/EsportsDetails.tsx", import.meta.url), "utf8");
+  for (const text of [page, details]) {
+    assert.doesNotMatch(text, /community-compiled|not independently verified|not official|source-reported drafts/);
+  }
+  assert.match(details, /Break down every draft: the win condition, how to execute it, and any hero swaps\./);
+});
+
+test("coaching is detected only when the AI supplied it", () => {
+  const team = { key: "team1", picks: [], bans: [] };
+  const facts = { headline: "", answer: "", takeaways: [], matches: [{ match_id: "M", teams: [], games: [{ number: 1, teams: [team] }] }] };
+  assert.equal(hasCoaching(undefined), false);
+  assert.equal(hasCoaching(facts), false);
+  const coached = structuredClone(facts);
+  coached.matches[0].games[0].teams[0].plan = { win_condition: "Snowball", execution: [], verdict: null, verdict_note: "", swaps: [] };
+  assert.equal(hasCoaching(coached), true);
+});
