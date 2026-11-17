@@ -5,7 +5,7 @@ import test from "node:test";
 const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
 const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
 
-test("Montserrat Bold is the only text style: 11px, 700 upright, 0.1em, all caps", async () => {
+test("Montserrat Regular Italic is the only text style: 11px, 400 italic, 0.1em, all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
@@ -15,8 +15,9 @@ test("Montserrat Bold is the only text style: 11px, 700 upright, 0.1em, all caps
   }
   const body = css.match(/\n  body\s*\{([^}]+)\}/)?.[1] ?? "";
   assert.match(body, /font-size:\s*11px/);
-  assert.match(body, /font-weight:\s*700/);
-  assert.doesNotMatch(body, /font-style/, "Montserrat Bold is upright");
+  assert.match(body, /font-weight:\s*400/);
+  assert.match(body, /font-style:\s*italic/);
+  assert.doesNotMatch(body, /oblique/, "a real italic face, not a synthetic slant");
   assert.match(body, /letter-spacing:\s*0\.1em/);
   assert.match(body, /text-transform:\s*uppercase/);
   assert.match(css, /--tracking-tight:\s*0\.01em/);
@@ -27,6 +28,11 @@ test("Montserrat Bold is the only text style: 11px, 700 upright, 0.1em, all caps
   const face = await readFile(new URL("../node_modules/@fontsource-variable/montserrat/index.css", import.meta.url), "utf8");
   assert.match(face, /font-family: 'Montserrat Variable'/);
   assert.match(face, /font-weight: 100 900/);
+  // The real italic face ships too, covering the 400 weight.
+  assert.match(main, /import "@fontsource-variable\/montserrat\/wght-italic\.css";/);
+  const italic = await readFile(new URL("../node_modules/@fontsource-variable/montserrat/wght-italic.css", import.meta.url), "utf8");
+  assert.match(italic, /font-style: italic/);
+  assert.match(italic, /font-weight: 100 900/);
 });
 
 test("the other fonts and the font menu are gone", async () => {

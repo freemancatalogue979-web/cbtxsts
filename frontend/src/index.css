@@ -52,12 +52,14 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
   html {
     color-scheme: dark;
   }
-  /* Default text style, everywhere: Montserrat Bold (700, upright), 11px,
-     0.1em, all caps. Elements with their own size or weight class keep it. */
+  /* Default text style, everywhere: Montserrat Regular Italic (400, real
+     italic face), 11px, 0.1em, all caps. Elements with their own size or
+     weight class keep it. */
   body {
     @apply bg-ink text-text font-sans;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 400;
+    font-style: italic;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     line-height: 1.6;

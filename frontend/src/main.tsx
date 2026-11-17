@@ -1,5 +1,6 @@
-// Montserrat (Julieta Ulanovsky, SIL OFL): the only typeface. One variable
-// font covers weights 100–900, so bold is a real face.
+// Montserrat (Julieta Ulanovsky, SIL OFL): the only typeface. Variable fonts
+// cover weights 100–900 in upright and italic, so the default Regular Italic
+// is a real face (no browser-slanted fake).
 import "@fontsource-variable/montserrat";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";

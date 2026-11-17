@@ -543,7 +543,7 @@ See [theme and appearance](docs/reference/theme.md).
 
 ## Fonts
 
-The interface uses **Montserrat Bold** everywhere (11px, weight 700, 0.1em tracking, all caps), bundled under the SIL Open Font License. There is no font menu. See [docs/reference/fonts.md](docs/reference/fonts.md) for credits.
+The interface uses **Montserrat Regular Italic** everywhere (11px, weight 400, italic, 0.1em tracking, all caps), bundled under the SIL Open Font License. There is no font menu. See [docs/reference/fonts.md](docs/reference/fonts.md) for credits.
 
 ## Tests
 

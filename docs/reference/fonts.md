@@ -4,7 +4,7 @@
 
 The whole interface uses one typeface, **Montserrat**, with no font menu:
 
-`font-family: "Montserrat Variable", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;`
+`font-family: "Montserrat Variable", sans-serif; font-size: 11px; font-weight: 400; font-style: italic; letter-spacing: 0.1em; text-transform: uppercase;`
 
 This applies to the whole app, including inputs (display only; typed values are stored as typed). Elements with their own size or weight class (titles, stats) keep that size or weight.
 
@@ -12,7 +12,7 @@ Earlier versions let each browser pick Space Grotesk, Montserrat or the Corptic 
 
 ## Montserrat
 
-**Montserrat** by Julieta Ulanovsky is bundled through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. One variable font covers weights 100–900, so the default bold (700, upright) is a real face and every device shows the same font. `@fontsource-variable/montserrat/wght-italic.css` supplies real italics where text is emphasised.
+**Montserrat** by Julieta Ulanovsky is bundled through `@fontsource-variable/montserrat` under the SIL Open Font License 1.1. Variable fonts cover weights 100–900 in both upright and italic. The default Regular Italic (400) uses the real italic face from `@fontsource-variable/montserrat/wght-italic.css`, not a browser-slanted upright, and every device shows the same font. The upright face is still used wherever an element explicitly sets a normal style.
 
 ## Symbol fallback
 
