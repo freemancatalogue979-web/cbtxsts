@@ -101,6 +101,10 @@ def health():
 
 @app.on_event("startup")
 def startup() -> None:
+    from .config import SECRET_KEY
+    if SECRET_KEY == "clover-dev-secret-change-me-in-production":
+        logger.warning("CLOVER_SECRET_KEY is not set: sessions are signed with the public development "
+                       "secret. Set CLOVER_SECRET_KEY in backend/.env before anyone else can reach this server.")
     Base.metadata.create_all(engine)
     # SQLite is not migrated by create_all for existing tables; add newer columns by hand.
     with engine.begin() as conn:

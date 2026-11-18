@@ -88,6 +88,29 @@ port conflicts and prints service logs if startup fails.
 public use, change the bootstrap credentials and signing secret, restrict access
 to both ports, and provide HTTPS. Do not run the app as root in production.
 
+### Production (Ubuntu server)
+
+Production runs as **built static files + one API process**: `vite build` turns the
+React app into plain files in `frontend/dist`, nginx serves those files and forwards
+`/api` to uvicorn (no `--reload`), and systemd keeps uvicorn running. There is no
+Node.js server in production; Node is only needed to build.
+
+```bash
+# On a fresh Ubuntu server, as a normal user with sudo (not root):
+curl -fsSL https://raw.githubusercontent.com/freemancatalogue979-web/cbtxsts/main/deploy/setup-server.sh -o setup-server.sh
+BRANCH=main DOMAIN=hub.example.com bash setup-server.sh   # DOMAIN optional: adds HTTPS via certbot
+```
+
+- Re-run the same command to update (pull, rebuild, restart). Data in `backend/data` is kept.
+- `backend/.env` gets a generated `CLOVER_SECRET_KEY`; a brand-new database also gets a random
+  admin password, printed once at the end. Older servers set up with `CBT_*` names are fixed
+  automatically on the next run (everyone signs in again once).
+- Logs: `sudo journalctl -u clover -f` · config change: edit `backend/.env`, then `sudo systemctl restart clover`.
+- `BRANCH` must be a branch that contains the code you want to deploy.
+
+Quick local check of the production build (no nginx): `cd frontend && npm run build && npm run preview`
+serves `dist` on :9009 and proxies `/api` to the backend on :9000. Fine for a test; use nginx for real traffic.
+
 ```bat
 start-arena.bat             :: Windows — opens two terminals and your browser
 ```
