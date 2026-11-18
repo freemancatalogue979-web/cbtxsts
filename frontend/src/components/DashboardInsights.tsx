@@ -2,8 +2,6 @@
  * Dashboard → big animated charts from GET /dashboard/insights: team games and win rate by
  * week, form (KDA / rating) next to your own, who's active (daily line + heatmap), top
  * heroes, the scrim/tournament/solo split, and (staff) every player's trend.
- * The whole section is a light Google-style board (.gl-light in index.css): soft blue and
- * light red on white, with Google's blue / red / yellow / green painting the charts.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, Flame, Users } from "lucide-react";
@@ -24,10 +22,10 @@ type Tint = "blue" | "red" | "green" | "yellow";
 
 function Big({ label, value, hint, tone, tint = "blue" }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "good" | "bad"; tint?: Tint }) {
   return (
-    <div className={`card chart-card gl-tile-${tint} p-3.5 min-w-0`}>
+    <div className={`card chart-card u-stat--${tint} p-3.5 min-w-0`}>
       <div className="text-[10.5px] text-faint">{label}</div>
       <div className={`text-[28px] sm:text-[32px] font-extrabold tabular-nums leading-tight ${tone === "good" ? "text-leaf" : tone === "bad" ? "text-danger" : ""}`}>{value}</div>
-      {hint && <div className="text-[10.5px] text-faint truncate">{hint}</div>}
+      {hint && <div className="text-[10.5px] text-faint leading-snug">{hint}</div>}
     </div>
   );
 }
@@ -54,12 +52,12 @@ export function DashboardInsights() {
   const titleWeek = (i: number) => `Week of ${labels[i]}`;
 
   return (
-    <section className="gl-light space-y-4 p-3 sm:p-5" aria-label="Progress charts">
+    <section className="space-y-4" aria-label="Progress charts">
       <SectionTitle right={
         <span className="flex items-center gap-1" role="group" aria-label="Chart range">
           {RANGES.map((r) => (
             <button key={r} type="button" aria-pressed={weeks === r} onClick={() => setWeeks(r)}
-              className={`gl-range px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${weeks === r ? "border-crim/60 bg-crim/10 text-crim" : "border-edge bg-panel text-faint hover:text-mute"}`}>{r} weeks</button>
+              className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${weeks === r ? "border-crim/60 bg-crim/10 text-crim" : "border-edge bg-panel text-faint hover:text-mute"}`}>{r} weeks</button>
           ))}
         </span>
       }>
@@ -124,11 +122,18 @@ export function DashboardInsights() {
               rows={people.slice(0, staff ? 24 : 1).map((p) => ({ label: p.name, cells: p.days, hint: `${p.active_days} days` }))} />
           </div>
           {staff && (
-            <ul className="mt-3 flex flex-wrap gap-1.5">
-              {people.filter((p) => p.active_7 === 0).slice(0, 10).map((p) => (
-                <li key={p.user_id} className="chip border-amber/45 text-amber !text-[10px]">{p.name} · {p.last_seen ? `last seen ${fmtDate(p.last_seen)}` : "not seen yet"}</li>
-              ))}
-            </ul>
+            people.some((p) => p.active_7 === 0) && (
+              <div className="mt-3">
+                <div className="text-[10.5px] text-faint mb-1.5">Not in the app this week</div>
+                <ul className="flex flex-wrap gap-1.5">
+                  {people.filter((p) => p.active_7 === 0).slice(0, 12).map((p) => (
+                    <li key={p.user_id} className="chip border-amber/40 text-amber !text-[10px] !py-0.5 max-w-full truncate" title={p.last_seen ? `last seen ${fmtDate(p.last_seen)}` : "not seen yet"}>
+                      {p.name}{p.last_seen ? <span className="text-faint"> · {fmtDate(p.last_seen)}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
           )}
         </div>
         <div className="card chart-card p-4 sm:p-5 min-w-0 space-y-4">
@@ -166,7 +171,29 @@ export function DashboardInsights() {
             <div><h3 className="text-[14px] font-extrabold inline-flex items-center gap-2"><Users size={15} className="text-crim" aria-hidden="true" /> Every player's trend</h3><p className="text-[10.5px] text-faint">Games per week (team + solo), rating trend and activity</p></div>
             <button type="button" className="label !text-crim" onClick={() => navigate("players")}>Roster →</button>
           </div>
-          <div className="overflow-x-auto min-w-0">
+          {/* phones: one compact row per player instead of a table that needs sideways scrolling */}
+          <ul className="sm:hidden divide-y divide-edge/60" aria-label="Player trends">
+            {players.map((p) => {
+              const games = p.weeks.reduce((n, w) => n + w.games, 0);
+              const decided = p.weeks.filter((w) => w.win_rate != null);
+              const wr = decided.length ? Math.round(decided.reduce((n, w) => n + (w.win_rate ?? 0) * w.games, 0) / Math.max(1, decided.reduce((n, w) => n + w.games, 0))) : null;
+              return (
+                <li key={p.user_id}>
+                  <button type="button" className="w-full flex items-center gap-3 py-2.5 text-left" onClick={() => navigate("players", p.user_id)}>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-bold text-[12px] truncate">{p.name}<span className="text-faint font-normal">{p.lane ? ` · ${p.lane === "EXP" ? "EXP" : p.lane[0] + p.lane.slice(1).toLowerCase()}` : ""}</span></span>
+                      <span className="block text-[10.5px] text-faint tabular-nums">
+                        {games} games · <span className={wr == null ? "" : wr >= 50 ? "text-leaf" : "text-danger"}>{wr == null ? "no results" : `${wr}% won`}</span>
+                        {p.act ? <> · <span className={p.act.active_7 ? "text-leaf" : "text-amber"}>{p.act.active_7}/7 days</span></> : null}
+                      </span>
+                    </span>
+                    <Sparkline values={p.weeks.map((w) => w.games)} label={`${p.name} games per week`} color={CHART_COLORS.sky} width={72} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden sm:block overflow-x-auto min-w-0">
             <table className="w-full text-[11.5px]">
               <thead className="text-faint text-left">
                 <tr><th className="th">Player</th><th className="th">Games / week</th><th className="th">Win %</th><th className="th hidden md:table-cell">Rating</th><th className="th">Active</th><th className="th hidden sm:table-cell">Last seen</th></tr>

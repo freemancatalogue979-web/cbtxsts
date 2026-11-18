@@ -242,7 +242,7 @@ function SquadFocus({ rows }: { rows: NonNullable<Dashboard["squad_focus"]> }) {
                   <span className={`chip !py-0 !text-[9px] ${tone[r.alert.tone]}`}>{r.alert.tone === "good" ? "strength" : r.alert.tone === "bad" ? "work on" : "watch"}</span>
                 </span>
                 <span className="block text-[12px] font-bold truncate">{r.alert.title}</span>
-                <span className="block text-[11px] text-faint truncate">{r.alert.detail}{r.more ? ` · +${r.more} more` : ""}</span>
+                <span className="block text-[11px] text-faint line-clamp-2 sm:truncate">{r.alert.detail}{r.more ? ` · +${r.more} more` : ""}</span>
               </span>
               <ArrowRight size={14} className="text-faint shrink-0" aria-hidden="true" />
             </button>

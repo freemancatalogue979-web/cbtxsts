@@ -79,16 +79,16 @@ export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
   const hasRating = heroes.some((h) => h.rating?.avg != null);
   return (
     <div className="overflow-x-auto -mx-1">
-      <table className="w-full text-[12px] min-w-[520px]">
+      <table className="w-full text-[12px] sm:min-w-[520px]">
         <thead>
           <tr className="text-left text-faint">
             <th className="label font-normal px-1 pb-2">Hero</th>
             <th className="label font-normal px-1 pb-2 text-right">Games</th>
-            <th className="label font-normal px-1 pb-2 text-right">W–L</th>
+            <th className="label font-normal px-1 pb-2 text-right hidden sm:table-cell">W–L</th>
             <th className="label font-normal px-1 pb-2 text-right">Win</th>
             {hasKda && <th className="label font-normal px-1 pb-2 text-right">KDA</th>}
             {hasRating && <th className="label font-normal px-1 pb-2 text-right" title="Average in-game rating">Rating</th>}
-            <th className="label font-normal px-1 pb-2 pl-4">Form</th>
+            <th className="label font-normal px-1 pb-2 pl-4 hidden sm:table-cell">Form</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-edge/60">
@@ -109,7 +109,7 @@ export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
                   {[h.scrim_games ? `${h.scrim_games} scrim` : "", h.tournament_games ? `${h.tournament_games} tourn` : ""].filter(Boolean).join(" · ")}
                 </span>
               </td>
-              <td className="px-1 py-1.5 text-right tabular-nums">
+              <td className="px-1 py-1.5 text-right tabular-nums hidden sm:table-cell">
                 <span className={h.wins ? "text-leaf" : "text-faint"}>{h.wins}</span>–<span className={h.losses ? "text-danger" : "text-faint"}>{h.losses}</span>
               </td>
               <td className={`px-1 py-1.5 text-right tabular-nums ${h.win_rate == null ? "text-faint" : h.win_rate >= 50 ? "text-leaf" : "text-danger"}`}>{pct(h.win_rate)}</td>
@@ -126,7 +126,7 @@ export function HeroPerformance({ heroes }: { heroes: HeroPerf[] }) {
                   {h.rating?.mvps ? <Crown size={10} className="inline ml-1 -mt-0.5 text-amber" aria-label={`${h.rating.mvps} MVP`} /> : null}
                 </td>
               )}
-              <td className="px-1 py-1.5 pl-4"><FormDots form={h.form} label={`${h.hero} form`} /></td>
+              <td className="px-1 py-1.5 pl-4 hidden sm:table-cell"><FormDots form={h.form} label={`${h.hero} form`} /></td>
             </tr>
           ))}
         </tbody>

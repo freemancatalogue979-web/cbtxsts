@@ -343,6 +343,27 @@ export function Tabs({ tabs, value, onChange, label = "Sections" }: {
   tabs: { id: string; label: string; count?: number }[]; value: string; onChange: (v: string) => void; label?: string;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const strip = useRef<HTMLDivElement | null>(null);
+  const [more, setMore] = useState("");
+  // On a phone the strip scrolls sideways: fade the edge that has more tabs behind it,
+  // and keep the chosen tab in view (scrolling only the strip, never the page).
+  const measure = () => {
+    const el = strip.current;
+    if (!el) return;
+    const start = el.scrollLeft > 4, end = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setMore(start && end ? "both" : start ? "start" : end ? "end" : "");
+  };
+  useEffect(() => {
+    const el = strip.current, tab = refs.current[tabs.findIndex((t) => t.id === value)];
+    if (el && tab && el.scrollWidth > el.clientWidth) {
+      const left = tab.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft, right = left + tab.offsetWidth;
+      if (left < el.scrollLeft + 8) el.scrollLeft = Math.max(0, left - 24);
+      else if (right > el.scrollLeft + el.clientWidth - 8) el.scrollLeft = right - el.clientWidth + 24;
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [value, tabs.length]);
   // Arrow keys move between tabs, as screen-reader users expect from a tablist.
   const onKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const last = tabs.length - 1;
@@ -355,7 +376,7 @@ export function Tabs({ tabs, value, onChange, label = "Sections" }: {
     refs.current[next]?.focus();
   };
   return (
-    <div className="tabs mb-4" role="tablist" aria-label={label}>
+    <div ref={strip} className="tabs mb-4" role="tablist" aria-label={label} data-more={more || undefined} onScroll={measure}>
       {tabs.map((t, index) => {
         const active = value === t.id;
         return (

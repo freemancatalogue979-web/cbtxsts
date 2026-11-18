@@ -82,43 +82,30 @@ test("the dashboard carries the big insight charts", () => {
   assert.match(insights, /Who's active/);
 });
 
-test("progress & activity is a light Google-style board with readable text", async () => {
+test("dashboard charts and the Utility tab stay on the dark app theme (no light board)", async () => {
   const css = await read("../src/index.css");
-  assert.match(insights, /<section className="gl-light [^"]*" aria-label="Progress charts">/);
-  const block = css.slice(css.indexOf(".gl-light {"), css.indexOf("}", css.indexOf(".gl-light {")));
-  const v = (name) => block.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
-  // Google's blue / red / yellow / green paint the charts; soft blue and light red tint the board
-  assert.deepEqual([v("chart-sky"), v("chart-accent"), v("chart-amber"), v("chart-win")], ["#4285f4", "#ea4335", "#fbbc05", "#34a853"]);
-  assert.equal(v("chart-soft-blue"), "#8ab4f8");
-  assert.equal(v("chart-violet"), "#f28b82");
-  assert.match(block, /color-scheme: light/);
-  assert.match(charts.CHART_COLORS.sky, /^var\(--chart-sky, var\(--color-sky\)\)$/);
-  // every text colour passes WCAG AA on white, the grey chips and the tinted tiles
-  const lum = (hex) => {
-    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  };
-  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-  for (const text of ["color-text", "color-mute", "color-faint", "color-crim", "color-danger", "color-leaf", "color-amber"]) {
-    for (const bg of ["#ffffff", v("color-raised"), "#e8f0fe", "#fce8e6", "#e6f4ea", "#fef7e0"]) {
-      assert.ok(ratio(v(text), bg) >= 4.5, `${text} ${v(text)} on ${bg}: ${ratio(v(text), bg).toFixed(2)}`);
-    }
-  }
-});
-
-test("the Utility tab is a light Google-style workspace", async () => {
-  const css = await read("../src/index.css");
-  assert.match(page, /<div className="gl-light utility-light space-y-5">/);
-  // profile card with four Google-coloured tiles, and panels with tinted icons
+  for (const src of [insights, page, solo]) assert.doesNotMatch(src, /gl-light|utility-light|color-scheme/);
+  assert.doesNotMatch(css, /\.gl-light|\.utility-light|color-scheme: light/);
+  assert.match(insights, /<section className="space-y-4" aria-label="Progress charts">/);
+  assert.match(page, /<div className="utility-page space-y-5">/);
+  // profile card with four tinted tiles, and panels with tinted icons
   for (const tint of ["blue", "red", "yellow", "green"]) assert.match(page, new RegExp(`<Metric tint="${tint}"`));
   assert.match(page, /title=\{<SectionTitle>Heroes to fill in<\/SectionTitle>\}/);
   assert.match(solo, /className=\{`card u-lift u-gap u-gap--\$\{g\.tone\} p-3 flex items-center gap-3`\}/);
   assert.match(solo, /utility-drop u-drop/);
-  // shared pieces restyled only inside the tab
-  for (const rule of [".utility-light .tabs__tab[aria-selected=\"true\"]", ".utility-light .btn-primary", ".utility-light .page-hero", ".utility-light .input:focus"]) {
-    assert.ok(css.includes(rule), rule);
-  }
-  assert.match(css, /\.u-icon--blue \{ background: #e8f0fe; color: #1967d2; \}/);
+  // the tints come from the theme tokens, never hard-coded light colours
+  assert.match(css, /\.u-icon--blue \{ background: color-mix\(in srgb, var\(--color-sky\) 16%, transparent\); color: var\(--color-sky\); \}/);
+  const block = css.slice(css.indexOf("/* ---- Utility tab pieces"), css.indexOf("/* ---- Utility page ----"));
+  assert.doesNotMatch(block, /(?:background|border-color):[^;]*#(?:fff|ffffff|e8f0fe|f8fbff|dadce0)\b/i);
+});
+
+test("phones never get a page wider than the screen", async () => {
+  const css = await read("../src/index.css");
+  assert.match(css, /html, body \{\s*max-width: 100%;\s*overflow-x: clip;\s*\}/);
+  assert.match(css, /\.grid > \* \{\s*min-width: 0;\s*\}/);
+  // the squad trend table becomes a list on phones, and long tab strips fade at the cut edge
+  assert.match(insights, /<ul className="sm:hidden divide-y divide-edge\/60" aria-label="Player trends">/);
+  assert.match(css, /\.tabs\[data-more="end"\]/);
 });
 
 test("line charts draw animated paths and ship a screen-reader table", () => {

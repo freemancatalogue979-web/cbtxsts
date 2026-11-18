@@ -100,21 +100,22 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
         <SectionTitle>Accounts</SectionTitle>
         {!users && <Spinner />}
         <div className="card overflow-x-auto">
-          <table className="w-full min-w-[640px]">
+          <table className="w-full sm:min-w-[640px]">
             <thead>
-              <tr><th className="th">Member</th><th className="th">Username · email</th><th className="th">Role</th><th className="th">Lane</th><th className="th">Roster</th><th className="th">Status</th><th className="th"></th></tr>
+              <tr><th className="th">Member</th><th className="th hidden sm:table-cell">Username · email</th><th className="th">Role</th><th className="th hidden md:table-cell">Lane</th><th className="th hidden md:table-cell">Roster</th><th className="th hidden sm:table-cell">Status</th><th className="th"><span className="sr-only">Edit</span></th></tr>
             </thead>
             <tbody>
               {(users ?? []).map((u) => (
                 <tr key={u.id} className="hover:bg-raised/60">
-                  <td className="td"><span className="font-bold">{u.ign || u.name}</span> <span className="text-faint text-[11px]">{u.name}</span></td>
-                  <td className="td text-mute text-[12.5px]"><b className="text-text">{u.email.split("@")[0]}</b><span className="text-faint">@{u.email.split("@")[1] ?? ""}</span></td>
+                  <td className="td"><span className="font-bold">{u.ign || u.name}</span> <span className="text-faint text-[11px]">{u.name}</span>
+                    <span className="sm:hidden block text-[11px] text-mute">signs in as <b className="text-text">{u.email.split("@")[0]}</b>{u.active ? "" : <span className="text-crim"> · disabled</span>}</span></td>
+                  <td className="td hidden sm:table-cell text-mute text-[12.5px]"><b className="text-text">{u.email.split("@")[0]}</b><span className="text-faint">@{u.email.split("@")[1] ?? ""}</span></td>
                   <td className="td"><Badge cls={u.role === "admin" ? "text-crim border-crim/40" : "text-mute"}>{u.role_label}</Badge></td>
-                  <td className="td text-[12.5px]">{u.main_role || "—"}</td>
-                  <td className="td text-[12.5px]">{u.roster ? "yes" : "—"}</td>
-                  <td className="td">{u.active ? <span className="text-leaf text-[12px] font-bold">active</span> : <span className="text-crim text-[12px] font-bold">disabled</span>}</td>
+                  <td className="td hidden md:table-cell text-[12.5px]">{u.main_role || "—"}</td>
+                  <td className="td hidden md:table-cell text-[12.5px]">{u.roster ? "yes" : "—"}</td>
+                  <td className="td hidden sm:table-cell">{u.active ? <span className="text-leaf text-[12px] font-bold">active</span> : <span className="text-crim text-[12px] font-bold">disabled</span>}</td>
                   <td className="td text-right">
-                    <button className="text-faint hover:text-text" onClick={() => setForm(u)}><UserCog size={15} /></button>
+                    <button className="text-faint hover:text-text p-1.5 -m-1.5" onClick={() => setForm(u)} aria-label={`Edit ${u.ign || u.name}`}><UserCog size={15} /></button>
                   </td>
                 </tr>
               ))}

@@ -24,7 +24,23 @@ const FILLERS = new Set(["admin", "captain"]);
 const WRITERS = new Set(["admin", "captain", "coach"]);
 const VIEWERS = new Set(["admin", "captain", "coach", "analyst"]);
 
+/** True on phone-width screens (kept in sync on rotate/resize). */
+function useNarrow(px = 640) {
+  const query = `(max-width: ${px - 1}px)`;
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia?.(query).matches === true);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return narrow;
+}
+
 export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; parts?: string[] }) {
+  const narrow = useNarrow();
   const canFill = FILLERS.has(me.role);
   const canWrite = WRITERS.has(me.role);
   const tabs = useMemo(() => [
@@ -57,15 +73,15 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
   const latest = data?.games.slice(0, 6) ?? [];
 
   return (
-    <div className="gl-light utility-light space-y-5">
+    <div className="utility-page space-y-5">
       <PageTitle title="Utility" sub="Your games, your progress, and what to work on next." slides={slides} />
 
       <section className="card u-hero p-4 sm:p-6" aria-label="Your numbers">
         {own.loading && !data ? <Spinner label="Loading your record" /> : (
           <>
-            <div className="flex flex-wrap items-center gap-5">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-5">
               <div className="u-ring shrink-0">
-                <Ring value={s?.overall.win_rate ?? null} size={128} label="Win rate" sub="win rate" color={s?.overall.win_rate != null && s.overall.win_rate < 45 ? CHART_COLORS.loss : CHART_COLORS.sky} />
+                <Ring value={s?.overall.win_rate ?? null} size={narrow ? 92 : 128} label="Win rate" sub="win rate" color={s?.overall.win_rate != null && s.overall.win_rate < 45 ? CHART_COLORS.loss : CHART_COLORS.sky} />
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-[11px] font-bold text-faint">Your record</p>
@@ -87,7 +103,7 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
                 <button type="button" className="btn-ghost flex-1 sm:flex-none" onClick={() => addFor()}><Plus size={14} /> By hand</button>
               </div>
             </div>
-            <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="mt-4 sm:mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
               <Metric tint="blue" icon={<Gamepad2 size={17} />} label="Games" value={<CountUp value={s?.overall.games ?? 0} />} hint={s ? `${s.overall.wins}W · ${s.overall.losses}L` : undefined} />
               <Metric tint="red" icon={<Swords size={17} />} label="KDA" value={s?.overall.kda?.ratio != null ? <CountUp value={s.overall.kda.ratio} digits={2} /> : "—"} hint={s?.overall.kda ? `${s.overall.kda.kills}/${s.overall.kda.deaths}/${s.overall.kda.assists} a game` : "Add K/D/A"} />
               <Metric tint="yellow" icon={<Star size={17} />} label="Rating" value={s?.overall.rating?.avg != null ? <CountUp value={s.overall.rating.avg} digits={1} /> : "—"} hint={s?.overall.rating ? `${s.overall.rating.games} rated` : "Add ratings"} />
@@ -165,8 +181,8 @@ function Metric({ label, value, hint, icon, tint }: { label: string; value: Reac
       <span className={`u-icon u-icon--${tint}`} aria-hidden="true">{icon}</span>
       <div className="min-w-0">
         <div className="text-[10.5px] font-bold text-faint">{label}</div>
-        <div className="text-[24px] font-extrabold tabular-nums leading-tight">{value}</div>
-        {hint && <div className="text-[10px] text-faint truncate">{hint}</div>}
+        <div className="text-[20px] sm:text-[24px] font-extrabold tabular-nums leading-tight">{value}</div>
+        {hint && <div className="text-[10px] text-faint leading-snug">{hint}</div>}
       </div>
     </div>
   );

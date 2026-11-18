@@ -197,6 +197,8 @@ export function LineChart({ labels, series, height = 260, yMax, rightMax, yForma
   const every = labelEvery(labels.length, plotW);
   const { index, onMove, onLeave } = usePointerIndex(labels.length, padL, step);
   const signature = useMemo(() => JSON.stringify(series.map((s) => s.values)), [series]);
+  // on a phone a month of daily points turns into a row of beads: draw only the latest one
+  const dense = labels.length > 14 && step < 18;
 
   return (
     <div ref={ref} className="relative w-full select-none">
@@ -234,7 +236,7 @@ export function LineChart({ labels, series, height = 260, yMax, rightMax, yForma
                   stroke={s.color} strokeWidth={s.dashed ? 2 : 2.75} strokeLinecap="round" strokeLinejoin="round"
                   strokeDasharray={s.dashed ? "5 6" : undefined} />
               ))}
-              {parts.flat().map((p, pi) => (
+              {(dense ? parts.map((pts) => pts[pts.length - 1]).filter(Boolean) : parts.flat()).map((p, pi) => (
                 <circle key={pi} className="chart-pop" style={{ animationDelay: `${700 + pi * 25}ms` }} cx={p.x} cy={p.y} r={labels.length > 20 ? 2 : 3}
                   fill="var(--color-panel)" stroke={s.color} strokeWidth={1.75} />
               ))}
@@ -402,28 +404,35 @@ export function Heatmap({ rows, columns, caption, color = CHART_COLORS.accent, c
   rows: { label: string; cells: number[]; hint?: string }[]; columns: string[]; caption: string; color?: string; cell?: number;
 }) {
   const [ref, width] = useWidth();
-  const labelW = Math.min(110, Math.max(70, width * 0.2));
+  const labelW = Math.round(Math.min(120, Math.max(78, width * 0.24)));
   const gap = 3;
-  const size = Math.max(6, Math.min(cell + 6, Math.floor((width - labelW - 8) / Math.max(columns.length, 1)) - gap));
+  // phones can't fit 28 readable squares: keep cells at least 11px and show the latest days that fit
+  const fit = width > 0 ? Math.max(1, Math.floor((width - labelW - 8) / (11 + gap))) : columns.length;
+  const from = Math.max(0, columns.length - fit);
+  const cols = columns.slice(from);
+  const size = Math.max(11, Math.min(cell + 6, Math.floor((width - labelW - 8) / Math.max(cols.length, 1)) - gap));
+  const pitch = Math.max(size + gap, 18);
   const max = Math.max(1, ...rows.flatMap((r) => r.cells));
-  const height = rows.length * (size + gap) + 18;
-  const every = labelEvery(columns.length, columns.length * (size + gap), 44);
+  const height = rows.length * pitch + 20;
+  const every = labelEvery(cols.length, cols.length * (size + gap), 52);
+  const chars = Math.max(4, Math.floor((labelW - 10) / 7.2));
   return (
     <div ref={ref} className="w-full overflow-hidden">
+      {from > 0 && <div className="text-[10px] text-faint mb-1.5">Last {cols.length} days</div>}
       <svg width={width} height={height} role="img" aria-label={caption} className="block">
         {rows.map((r, ri) => (
           <g key={`${r.label}-${ri}`}>
-            <text x={labelW - 8} y={ri * (size + gap) + size * 0.72} textAnchor="end" className="fill-mute text-[10px]">{r.label.length > 13 ? `${r.label.slice(0, 12)}…` : r.label}</text>
-            {r.cells.map((v, ci) => (
+            <text x={labelW - 8} y={ri * pitch + pitch / 2 + 3.5} textAnchor="end" className="fill-mute text-[10px]">{r.label.length > chars ? `${r.label.slice(0, chars - 1)}…` : r.label}</text>
+            {r.cells.slice(from).map((v, ci) => (
               <rect key={ci} className="chart-pop" style={{ animationDelay: `${ci * 18 + ri * 10}ms` }}
-                x={labelW + ci * (size + gap)} y={ri * (size + gap)} width={size} height={size} rx={Math.min(4, size / 3)}
+                x={labelW + ci * (size + gap)} y={ri * pitch + (pitch - size) / 2} width={size} height={size} rx={Math.min(4, size / 3)}
                 fill={v ? color : "var(--color-raised)"} fillOpacity={v ? 0.25 + 0.75 * (v / max) : 1} stroke="var(--color-edge)" strokeOpacity={v ? 0 : 0.6}>
-                <title>{`${r.label} · ${columns[ci]}: ${v ? `${v} visit${v === 1 ? "" : "s"}` : "not active"}`}</title>
+                <title>{`${r.label} · ${cols[ci]}: ${v ? `${v} visit${v === 1 ? "" : "s"}` : "not active"}`}</title>
               </rect>
             ))}
           </g>
         ))}
-        {columns.map((c, ci) => (ci % every === 0 ? (
+        {cols.map((c, ci) => (ci % every === 0 && labelW + ci * (size + gap) + 46 <= width ? (
           <text key={`${c}-${ci}`} x={labelW + ci * (size + gap)} y={height - 3} className="fill-faint text-[9px]">{c}</text>
         ) : null))}
       </svg>

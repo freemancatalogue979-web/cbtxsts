@@ -392,7 +392,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
       <SectionTitle>Progress · {ign}</SectionTitle>
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="card p-4 col-span-1 sm:col-span-2">
-          <div className="flex items-baseline justify-between mb-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-2.5">
             <span className="section-pill">Scrim win rate · last 12 weeks</span>
             <span className="text-[10px] text-faint">{weeks.reduce((a, w) => a + w.games, 0)} games</span>
           </div>
