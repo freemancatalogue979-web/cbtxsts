@@ -32,3 +32,12 @@ test("errors show what MLBB actually said, plus reconnect and a connection check
   assert.match(page, /Refresh your MLBB sign-in/);
   assert.doesNotMatch(page, /try Refresh in a bit/);
 });
+
+test("retired battle report: one honest card pointing to Utility, no repeated errors", () => {
+  assert.match(page, /export function HistoryRetired/);
+  assert.match(page, /30 June 2026/);
+  assert.match(page, /offline === true/);
+  assert.match(page, /navigate\("utility"\)/);
+  assert.match(page, /battle_report/);
+  assert.doesNotMatch(page, /No further fields/);
+});
