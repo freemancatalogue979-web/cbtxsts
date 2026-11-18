@@ -106,6 +106,21 @@ test("progress & activity is a light Google-style board with readable text", asy
   }
 });
 
+test("the Utility tab is a light Google-style workspace", async () => {
+  const css = await read("../src/index.css");
+  assert.match(page, /<div className="gl-light utility-light space-y-5">/);
+  // profile card with four Google-coloured tiles, and panels with tinted icons
+  for (const tint of ["blue", "red", "yellow", "green"]) assert.match(page, new RegExp(`<Metric tint="${tint}"`));
+  assert.match(page, /title=\{<SectionTitle>Heroes to fill in<\/SectionTitle>\}/);
+  assert.match(solo, /className=\{`card u-lift u-gap u-gap--\$\{g\.tone\} p-3 flex items-center gap-3`\}/);
+  assert.match(solo, /utility-drop u-drop/);
+  // shared pieces restyled only inside the tab
+  for (const rule of [".utility-light .tabs__tab[aria-selected=\"true\"]", ".utility-light .btn-primary", ".utility-light .page-hero", ".utility-light .input:focus"]) {
+    assert.ok(css.includes(rule), rule);
+  }
+  assert.match(css, /\.u-icon--blue \{ background: #e8f0fe; color: #1967d2; \}/);
+});
+
 test("line charts draw animated paths and ship a screen-reader table", () => {
   const html = renderToStaticMarkup(React.createElement(charts.LineChart, {
     caption: "Form", labels: ["a", "b", "c"], series: [{ name: "KDA", color: "red", values: [1, null, 3], area: true }, { name: "Win", color: "green", values: [40, 60, 80], right: true, dashed: true }],

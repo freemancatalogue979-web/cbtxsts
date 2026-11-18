@@ -5,10 +5,11 @@
  * the sheet, and generate strategy notes for the playbook.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardCheck, Crown, Flame, Plus, Upload } from "lucide-react";
+import { ClipboardCheck, Crown, Flame, Gamepad2, History, LayoutGrid, Plus, Star, Swords, Target, Upload, Users } from "lucide-react";
 import { api } from "../lib/api";
 import type { Meta, SoloGame, User } from "../lib/types";
 import { fmtDate, navigate, pct } from "../lib/util";
+import { HeroImg } from "../components/HeroImg";
 import { CHART_COLORS, CountUp, Ring, Sparkline } from "../components/Charts";
 import { MatchEvidence } from "../components/MatchEvidence";
 import {
@@ -52,36 +53,47 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
   ];
   if (canFill || canWrite) slides.push({ eyebrow: "Staff", title: "Match data and strategy", sub: "Fill scrim and tournament games from a scoreboard, then generate a playbook note.", steps: ["Choose the match", "Check the sheet", "Confirm"] });
 
-  return (
-    <div className="space-y-5">
-      <PageTitle title="Utility" sub="Your games, your progress, and what to work on next." slides={slides}
-        right={<button type="button" className="btn-primary" onClick={() => go("add")}><Upload size={14} /> Add games</button>} />
+  const name = data?.user?.name ?? me.ign ?? me.name;
+  const latest = data?.games.slice(0, 6) ?? [];
 
-      <section className="card utility-band chart-card p-4 sm:p-5" aria-label="Your numbers">
+  return (
+    <div className="gl-light utility-light space-y-5">
+      <PageTitle title="Utility" sub="Your games, your progress, and what to work on next." slides={slides} />
+
+      <section className="card u-hero p-4 sm:p-6" aria-label="Your numbers">
         {own.loading && !data ? <Spinner label="Loading your record" /> : (
-          <div className="flex flex-wrap items-center gap-5">
-            <Ring value={s?.overall.win_rate ?? null} size={132} label="Win rate" sub="win rate" color={s?.overall.win_rate != null && s.overall.win_rate < 45 ? CHART_COLORS.loss : CHART_COLORS.win} />
-            <div className="min-w-0 flex-1 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[17px] font-extrabold truncate">{data?.user?.name ?? me.ign ?? me.name}</h2>
-                {lane && <span className="chip border-crim/50 text-crim">{lane === "EXP" ? "EXP" : lane[0] + lane.slice(1).toLowerCase()}</span>}
-                {s && s.streak.count >= 2 && (
-                  <span className={`chip ${s.streak.result === "WIN" ? "border-leaf/50 text-leaf" : "border-danger/50 text-danger"}`}><Flame size={11} aria-hidden="true" /> {s.streak.count} {s.streak.result === "WIN" ? "wins" : "losses"} in a row</span>
-                )}
-                {s?.last_played && <span className="text-[10.5px] text-faint">Last game {fmtDate(s.last_played)}</span>}
+          <>
+            <div className="flex flex-wrap items-center gap-5">
+              <div className="u-ring shrink-0">
+                <Ring value={s?.overall.win_rate ?? null} size={128} label="Win rate" sub="win rate" color={s?.overall.win_rate != null && s.overall.win_rate < 45 ? CHART_COLORS.loss : CHART_COLORS.sky} />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <Metric label="Games" value={<CountUp value={s?.overall.games ?? 0} />} hint={s ? `${s.overall.wins}W · ${s.overall.losses}L` : undefined} />
-                <Metric label="KDA" value={s?.overall.kda?.ratio != null ? <CountUp value={s.overall.kda.ratio} digits={2} /> : "—"} hint={s?.overall.kda ? `${s.overall.kda.kills}/${s.overall.kda.deaths}/${s.overall.kda.assists} a game` : "Add K/D/A"} />
-                <Metric label="Rating" value={s?.overall.rating?.avg != null ? <CountUp value={s.overall.rating.avg} digits={1} /> : "—"} hint={s?.overall.rating ? `${s.overall.rating.games} rated` : "Add ratings"} />
-                <Metric label="MVPs" value={<span className="inline-flex items-center gap-1"><Crown size={15} className="text-amber" aria-hidden="true" /><CountUp value={s?.overall.mvps ?? 0} /></span>} hint={s?.overall.gold_per_min ? `${s.overall.gold_per_min} gold/min` : undefined} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-[11px] font-bold text-faint">Your record</p>
+                <h2 className="text-[22px] sm:text-[26px] font-extrabold leading-tight truncate">{name}</h2>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {lane && <span className="u-pill u-pill--blue">{lane === "EXP" ? "EXP" : lane[0] + lane.slice(1).toLowerCase()} lane</span>}
+                  {s && s.streak.count >= 2 && (
+                    <span className={`u-pill ${s.streak.result === "WIN" ? "u-pill--green" : "u-pill--red"}`}><Flame size={11} aria-hidden="true" /> {s.streak.count} {s.streak.result === "WIN" ? "wins" : "losses"} in a row</span>
+                  )}
+                  {s?.last_played && <span className="u-pill">Last game {fmtDate(s.last_played)}</span>}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
+                  {s && s.form.length > 0 && <span className="inline-flex items-center gap-2 text-[10.5px] text-faint">Last 10 <FormDots form={s.form} label="Last 10 games" /></span>}
+                  {roll.length >= 3 && <span className="inline-flex items-center gap-2 text-[10.5px] text-faint">KDA trend <Sparkline values={roll.map((r) => r.kda)} label="KDA over your recent games" color={CHART_COLORS.sky} /></span>}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                {s && s.form.length > 0 && <span className="inline-flex items-center gap-2 text-[10.5px] text-faint">Last 10 <FormDots form={s.form} label="Last 10 games" /></span>}
-                {roll.length >= 3 && <span className="inline-flex items-center gap-2 text-[10.5px] text-faint">KDA trend <Sparkline values={roll.map((r) => r.kda)} label="KDA over your recent games" /></span>}
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <button type="button" className="btn-primary flex-1 sm:flex-none" onClick={() => go("add")}><Upload size={14} /> Add games</button>
+                <button type="button" className="btn-ghost flex-1 sm:flex-none" onClick={() => addFor()}><Plus size={14} /> By hand</button>
               </div>
             </div>
-          </div>
+            <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Metric tint="blue" icon={<Gamepad2 size={17} />} label="Games" value={<CountUp value={s?.overall.games ?? 0} />} hint={s ? `${s.overall.wins}W · ${s.overall.losses}L` : undefined} />
+              <Metric tint="red" icon={<Swords size={17} />} label="KDA" value={s?.overall.kda?.ratio != null ? <CountUp value={s.overall.kda.ratio} digits={2} /> : "—"} hint={s?.overall.kda ? `${s.overall.kda.kills}/${s.overall.kda.deaths}/${s.overall.kda.assists} a game` : "Add K/D/A"} />
+              <Metric tint="yellow" icon={<Star size={17} />} label="Rating" value={s?.overall.rating?.avg != null ? <CountUp value={s.overall.rating.avg} digits={1} /> : "—"} hint={s?.overall.rating ? `${s.overall.rating.games} rated` : "Add ratings"} />
+              <Metric tint="green" icon={<Crown size={17} />} label="MVPs" value={<CountUp value={s?.overall.mvps ?? 0} />} hint={s?.overall.gold_per_min ? `${s.overall.gold_per_min} gold/min` : "Best-player badges"} />
+            </div>
+          </>
         )}
         <ErrorNote error={own.error} />
       </section>
@@ -89,34 +101,35 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
       <Tabs tabs={tabs} value={view} onChange={go} label="Utility sections" />
 
       {view === "overview" && (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
           <div className="space-y-5 min-w-0">
-            <section>
-              <SectionTitle>What to work on</SectionTitle>
+            <Panel tint="red" icon={<Target size={16} />} title={<SectionTitle>What to work on</SectionTitle>} sub="Where you're slipping and where you're strong, from your own games.">
               {s ? <WorkOn alerts={s.alerts} /> : null}
-            </section>
-            <section>
-              <SectionTitle>Heroes to fill in</SectionTitle>
+            </Panel>
+            <Panel tint="blue" icon={<LayoutGrid size={16} />} title={<SectionTitle>Heroes to fill in</SectionTitle>} sub="Tap + on a hero to log a game with it.">
               <HeroGaps gaps={data?.gaps} lane={lane} onAdd={addFor} />
-            </section>
+            </Panel>
           </div>
-          <div className="space-y-4 min-w-0">
+          <div className="space-y-5 min-w-0">
             <RecordUploader onChanged={() => void own.reload()} onAddByHand={() => addFor()} />
-            {data && data.games.length > 0 && (
-              <section className="card p-3">
-                <div className="flex items-center justify-between mb-2"><span className="label">Latest games</span><button type="button" className="text-[10.5px] text-crim" onClick={() => go("add")}>See all</button></div>
-                <ul className="space-y-1.5">
-                  {data.games.slice(0, 6).map((g) => (
-                    <li key={g.id} className="flex items-center gap-2 text-[11.5px]">
-                      <span className={`h-2 w-2 rounded-full shrink-0 ${g.result === "WIN" ? "bg-leaf" : g.result === "LOSS" ? "bg-danger" : "bg-edge-2"}`} aria-label={g.result || "No result"} />
-                      <b className="truncate">{g.hero || "—"}</b>
-                      <span className="text-mute tabular-nums">{g.kills ?? "–"}/{g.deaths ?? "–"}/{g.assists ?? "–"}</span>
-                      <span className="ml-auto text-faint">{g.played_on ? fmtDate(g.played_on) : ""}</span>
+            <Panel tint="green" icon={<History size={16} />} title={<h3 className="text-[14px] font-extrabold">Latest games</h3>}
+              right={latest.length > 0 ? <button type="button" className="u-link" onClick={() => go("add")}>See all</button> : undefined}>
+              {latest.length ? (
+                <ul className="divide-y divide-edge">
+                  {latest.map((g) => (
+                    <li key={g.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <HeroImg name={g.hero} size={36} className="rounded-xl shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12.5px] font-extrabold truncate">{g.hero || "—"}</div>
+                        <div className="text-[10.5px] text-faint truncate">{[g.mode, g.played_on ? fmtDate(g.played_on) : ""].filter(Boolean).join(" · ") || "No date"}</div>
+                      </div>
+                      <span className="text-[11.5px] tabular-nums text-mute">{g.kills ?? "–"}/{g.deaths ?? "–"}/{g.assists ?? "–"}</span>
+                      <span className={`u-pill ${g.result === "WIN" ? "u-pill--green" : g.result === "LOSS" ? "u-pill--red" : ""}`}>{g.result === "WIN" ? "Win" : g.result === "LOSS" ? "Loss" : "—"}</span>
                     </li>
                   ))}
                 </ul>
-              </section>
-            )}
+              ) : <p className="text-[12px] text-faint">Your games show up here as soon as you add them.</p>}
+            </Panel>
           </div>
         </div>
       )}
@@ -124,7 +137,9 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
       {view === "add" && (
         <div className="space-y-5">
           <RecordUploader onChanged={() => void own.reload()} onAddByHand={() => addFor()} />
-          <GamesTable data={data} loading={own.loading} error={null} onEdit={(g) => setEditing({ game: g })} onAdd={() => addFor()} onChanged={() => void own.reload()} />
+          <div className="card p-4 sm:p-5">
+            <GamesTable data={data} loading={own.loading} error={null} onEdit={(g) => setEditing({ game: g })} onAdd={() => addFor()} onChanged={() => void own.reload()} />
+          </div>
         </div>
       )}
 
@@ -142,13 +157,35 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+type Tint = "blue" | "red" | "yellow" | "green";
+
+function Metric({ label, value, hint, icon, tint }: { label: string; value: React.ReactNode; hint?: string; icon: React.ReactNode; tint: Tint }) {
   return (
-    <div className="rounded-xl border border-edge/70 bg-ink/35 px-3 py-2">
-      <div className="text-[10px] text-faint">{label}</div>
-      <div className="text-[20px] font-extrabold tabular-nums leading-tight">{value}</div>
-      {hint && <div className="text-[10px] text-faint truncate">{hint}</div>}
+    <div className={`u-stat u-stat--${tint}`}>
+      <span className={`u-icon u-icon--${tint}`} aria-hidden="true">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-[10.5px] font-bold text-faint">{label}</div>
+        <div className="text-[24px] font-extrabold tabular-nums leading-tight">{value}</div>
+        {hint && <div className="text-[10px] text-faint truncate">{hint}</div>}
+      </div>
     </div>
+  );
+}
+
+/** A white panel with a tinted icon, a heading and optional actions. */
+function Panel({ icon, tint, title, sub, right, children }: { icon: React.ReactNode; tint: Tint; title: React.ReactNode; sub?: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="card u-panel p-4 sm:p-5 min-w-0">
+      <div className="u-panel-head flex items-start gap-3 mb-3.5">
+        <span className={`u-icon u-icon--${tint}`} aria-hidden="true">{icon}</span>
+        <div className="min-w-0 flex-1">
+          {title}
+          {sub && <p className="text-[11px] text-faint -mt-1">{sub}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -171,8 +208,9 @@ function Progress({ me, ownData }: { me: User; ownData: ReturnType<typeof useSol
   return (
     <div className="space-y-5">
       {staff && players.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-faint">Player</span>
+        <div className="card u-panel flex flex-wrap items-center gap-2.5 p-3">
+          <span className="u-icon u-icon--blue" aria-hidden="true"><Users size={16} /></span>
+          <span className="text-[11.5px] font-bold text-mute">Player</span>
           <select className="input !py-1.5 !w-48" aria-label="Whose progress" value={viewing ?? me.id}
             onChange={(e) => { const id = Number(e.target.value); setViewing(id === me.id ? undefined : id); }}>
             <option value={me.id}>Me</option>
@@ -183,8 +221,8 @@ function Progress({ me, ownData }: { me: User; ownData: ReturnType<typeof useSol
       )}
       <ErrorNote error={src.error} />
       {src.loading && !data ? <Spinner label="Loading progress" /> : !data || !s || s.overall.games === 0 ? (
-        <div className="card border-dashed p-8 text-center">
-          <ClipboardCheck size={26} className="mx-auto mb-2 text-crim" aria-hidden="true" />
+        <div className="card u-empty p-8 sm:p-10 text-center">
+          <span className="u-icon u-icon--blue u-icon--lg mx-auto mb-3" aria-hidden="true"><ClipboardCheck size={24} /></span>
           <p className="text-[13px] font-bold text-mute">{mine ? "No games yet" : `${data?.user?.name ?? "This player"} hasn't added any games yet`}</p>
           {mine && <p className="text-[11.5px] text-faint mt-1">Add a few games and your charts fill in by themselves.</p>}
           {mine && <button type="button" className="btn-primary mt-3" onClick={() => navigate("utility", "add")}><Plus size={14} /> Add my games</button>}
@@ -194,13 +232,13 @@ function Progress({ me, ownData }: { me: User; ownData: ReturnType<typeof useSol
           <ProgressCharts data={data} />
           {!mine && (
             <>
-              <section><SectionTitle>What to work on</SectionTitle><WorkOn alerts={s.alerts} /></section>
-              <section><SectionTitle>Hero gaps</SectionTitle><HeroGaps gaps={data.gaps} lane={data.user?.lane} /></section>
+              <Panel tint="red" icon={<Target size={16} />} title={<SectionTitle>What to work on</SectionTitle>}><WorkOn alerts={s.alerts} /></Panel>
+              <Panel tint="blue" icon={<LayoutGrid size={16} />} title={<SectionTitle>Hero gaps</SectionTitle>}><HeroGaps gaps={data.gaps} lane={data.user?.lane} /></Panel>
             </>
           )}
-          <section className="min-w-0"><SectionTitle>{mine ? "My heroes" : "Heroes"}</SectionTitle><HeroTable stats={s} /></section>
-          {mine && <PlanPanel games={s.overall.games} />}
-          {!mine && <GamesTable data={data} loading={false} error={null} onEdit={() => undefined} onAdd={() => undefined} onChanged={() => void other.reload()} readOnly />}
+          <Panel tint="yellow" icon={<Star size={16} />} title={<SectionTitle>{mine ? "My heroes" : "Heroes"}</SectionTitle>} sub="Win rate, KDA and form on every hero you've logged."><HeroTable stats={s} /></Panel>
+          {mine && <div className="card u-panel p-4 sm:p-5"><PlanPanel games={s.overall.games} /></div>}
+          {!mine && <div className="card u-panel p-4 sm:p-5"><GamesTable data={data} loading={false} error={null} onEdit={() => undefined} onAdd={() => undefined} onChanged={() => void other.reload()} readOnly /></div>}
         </>
       )}
     </div>

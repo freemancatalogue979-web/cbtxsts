@@ -249,21 +249,21 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
   return (
     <div className="space-y-3">
       <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
-        className={`utility-drop relative overflow-hidden rounded-2xl border-2 border-dashed p-5 sm:p-7 text-center transition ${drag ? "border-crim bg-crim/10" : "border-edge-2 bg-ink/40 hover:border-crim/50"}`}>
+        className={`utility-drop u-drop relative overflow-hidden rounded-2xl border-2 border-dashed p-5 sm:p-7 text-center transition ${drag ? "u-drop--over" : ""}`}>
         <input ref={fileRef} id="solo-upload" type="file" className="sr-only" multiple accept={SOLO_ACCEPT} onChange={(e) => void handle(e.target.files)} />
-        <div className="relative mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-crim/40 bg-crim/10 text-crim mb-3">
-          {busy ? <Loader2 size={22} className="animate-spin" /> : <Upload size={22} />}
+        <div className="u-drop__icon relative mx-auto grid h-16 w-16 place-items-center rounded-full mb-3">
+          {busy ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
         </div>
-        <p className="text-[14px] font-extrabold">Drop your games here</p>
+        <p className="text-[15px] font-extrabold">Drop your games here</p>
         <p className="text-[11.5px] text-mute mt-1 max-w-md mx-auto">A match-history screen, a post-match scoreboard, a PDF or Word file, or a sheet with lots of games. Your games go straight onto your record.</p>
         <div className="mt-3.5 flex flex-wrap justify-center gap-2">
           <label htmlFor="solo-upload" className="btn-primary cursor-pointer inline-flex"><Upload size={14} /> Pick files</label>
           {onAddByHand && <button type="button" className="btn-ghost" onClick={onAddByHand}><Plus size={14} /> Add one by hand</button>}
         </div>
         <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-[10px]">
-          <span className="chip border-edge text-mute"><ImageIcon size={11} /> Screenshots</span>
-          <span className="chip border-edge text-mute"><FileText size={11} /> PDF · Word · text</span>
-          <span className="chip border-edge text-mute"><FileSpreadsheet size={11} /> Excel · CSV</span>
+          <span className="u-pill u-pill--blue"><ImageIcon size={11} /> Screenshots</span>
+          <span className="u-pill u-pill--red"><FileText size={11} /> PDF · Word · text</span>
+          <span className="u-pill u-pill--green"><FileSpreadsheet size={11} /> Excel · CSV</span>
         </div>
         <p className="text-[10.5px] text-faint mt-3">Up to 10 at once. Sheets with hero / result / K / D / A columns work best. <button type="button" className="text-crim underline" onClick={downloadTemplate}>Get the CSV template</button></p>
       </div>
@@ -400,7 +400,7 @@ const ALERT_ICON: Record<string, typeof Flame> = {
   low_rating: Gauge, cold_streak: Flame, strength: Sparkles, form_up: TrendingUp,
 };
 const TONE: Record<SoloAlert["tone"], string> = {
-  bad: "border-danger/45", warn: "border-amber/45", good: "border-leaf/45",
+  bad: "border-danger/30 u-tint-red", warn: "border-amber/30 u-tint-yellow", good: "border-leaf/30 u-tint-green",
 };
 const BAR: Record<SoloAlert["tone"], string> = { bad: "bg-danger", warn: "bg-amber", good: "bg-leaf" };
 const CHIP: Record<SoloAlert["tone"], string> = {
@@ -414,10 +414,10 @@ export function WorkOn({ alerts }: { alerts: SoloAlert[] }) {
       {alerts.map((a, i) => {
         const Icon = ALERT_ICON[a.kind] ?? Info;
         return (
-          <li key={`${a.kind}-${a.hero ?? i}`} className={`card relative overflow-hidden p-3 flex gap-3 ${TONE[a.tone]}`}>
+          <li key={`${a.kind}-${a.hero ?? i}`} className={`card u-lift relative overflow-hidden p-3.5 flex gap-3 ${TONE[a.tone]}`}>
             <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${BAR[a.tone]}`} />
             <span className="relative shrink-0">
-              {a.hero ? <HeroImg name={a.hero} size={42} className="rounded-lg" /> : <span className={`grid h-[42px] w-[42px] place-items-center rounded-lg border ${CHIP[a.tone]}`}><Icon size={18} /></span>}
+              {a.hero ? <HeroImg name={a.hero} size={44} className="rounded-xl" /> : <span className={`grid h-[44px] w-[44px] place-items-center rounded-xl border ${CHIP[a.tone]}`}><Icon size={18} /></span>}
               {a.hero && <span className={`absolute -bottom-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full border bg-panel ${CHIP[a.tone]}`}><Icon size={11} aria-hidden="true" /></span>}
             </span>
             <div className="min-w-0"><div className="text-[12px] font-extrabold">{a.title}</div><p className="text-[11px] text-mute mt-0.5">{a.detail}</p></div>
@@ -434,24 +434,27 @@ const nice_lane = (v: string) => (v ? v[0] + v.slice(1).toLowerCase() : "");
 export function HeroGaps({ gaps, lane, onAdd }: { gaps?: SoloGaps; lane?: string; onAdd?: (hero: string, lane?: string) => void }) {
   if (!gaps) return null;
   const groups: { key: keyof SoloGaps; title: string; hint: string; tone: string; icon: typeof Flame }[] = [
-    { key: "no_data", title: "Heroes with no data", hint: `Heroes in your pool${lane ? ` and your ${nice_lane(lane)} lane` : ""} with no games on your record`, tone: "border-sky/40", icon: CircleDashed },
-    { key: "not_playing", title: "Heroes you've stopped playing", hint: "You used to play these. Get a few games in so they stay sharp", tone: "border-amber/40", icon: Hourglass },
-    { key: "lane_meta", title: "Strong in your lane right now", hint: "Worth adding to your pool", tone: "border-leaf/40", icon: Sparkles },
+    { key: "no_data", title: "Heroes with no data", hint: `Heroes in your pool${lane ? ` and your ${nice_lane(lane)} lane` : ""} with no games on your record`, tone: "blue", icon: CircleDashed },
+    { key: "not_playing", title: "Heroes you've stopped playing", hint: "You used to play these. Get a few games in so they stay sharp", tone: "yellow", icon: Hourglass },
+    { key: "lane_meta", title: "Strong in your lane right now", hint: "Worth adding to your pool", tone: "green", icon: Sparkles },
   ];
   const any = groups.some((g) => gaps[g.key].length);
   if (!any) return <p className="text-[12px] text-faint">No gaps. Every hero in your pool has games on your record.</p>;
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {groups.map((g) => gaps[g.key].length ? (
         <div key={g.key}>
-          <div className="mb-2">
-            <h3 className="text-[12.5px] font-extrabold flex items-center gap-1.5"><g.icon size={14} className="text-crim shrink-0" aria-hidden="true" /> {g.title}</h3>
-            <p className="text-[10.5px] text-faint mt-0.5">{g.hint}</p>
+          <div className="mb-2.5 flex items-start gap-2">
+            <span className={`u-dot u-dot--${g.tone}`} aria-hidden="true"><g.icon size={12} /></span>
+            <div className="min-w-0">
+              <h3 className="text-[12.5px] font-extrabold">{g.title} <span className="text-faint font-bold tabular-nums">· {gaps[g.key].length}</span></h3>
+              <p className="text-[10.5px] text-faint mt-0.5">{g.hint}</p>
+            </div>
           </div>
-          <ul className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(15.5rem,1fr))]">
+          <ul className="grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(15.5rem,1fr))]">
             {gaps[g.key].map((h) => (
-              <li key={h.hero} className={`card p-2.5 flex items-center gap-2.5 ${g.tone}`}>
-                <HeroImg name={h.hero} size={44} className="rounded-lg shrink-0" />
+              <li key={h.hero} className={`card u-lift u-gap u-gap--${g.tone} p-3 flex items-center gap-3`}>
+                <HeroImg name={h.hero} size={50} className="rounded-xl shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[12px] font-extrabold">{h.hero}</span>
@@ -460,7 +463,7 @@ export function HeroGaps({ gaps, lane, onAdd }: { gaps?: SoloGaps; lane?: string
                   <p className="text-[10.5px] text-mute leading-snug line-clamp-3">{h.why}</p>
                 </div>
                 {onAdd && (
-                  <button type="button" className="btn-ghost !p-1.5 shrink-0" title={`Add a ${h.hero} game`} aria-label={`Add a ${h.hero} game`}
+                  <button type="button" className="u-add shrink-0" title={`Add a ${h.hero} game`} aria-label={`Add a ${h.hero} game`}
                     onClick={() => onAdd(h.hero, h.role && LANES.includes(h.role) ? h.role : undefined)}><Plus size={14} /></button>
                 )}
               </li>
