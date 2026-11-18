@@ -14,6 +14,7 @@ from ..schemas import DevIn, OptionalDate, PoolIn, PoolPatch
 from ..serializers import dev_out, pool_out, user_out
 from ..performance import hero_key, player_performance, pool_played
 from ..solo_games import grouped, user_games
+from ..leaderboard import PERIODS, build as build_leaderboard, utility_profile
 from .tournaments import player_tournament_stats
 
 SOLO_STAFF = {"admin", "captain", "coach", "analyst"}
@@ -62,6 +63,23 @@ def roster(db: Session = Depends(get_db), user=Depends(get_current_user)):
     return out
 
 
+@router.get("/leaderboard")
+def leaderboard(period: str = Query(default="30"), db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """How every roster member is doing: team games + the games they add in Utility."""
+    if period not in PERIODS:
+        raise HTTPException(status_code=422, detail="period must be 30, 90 or all")
+    return build_leaderboard(db, user, period)
+
+
+@router.get("/{user_id}/utility")
+def player_utility(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """A member's Utility games (charts, heroes, latest games). Teammates can see each other's."""
+    player = db.get(User, user_id)
+    if player is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return utility_profile(db, user, player)
+
+
 @router.get("/{user_id}")
 def player_detail(user_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     player = db.get(User, user_id)
@@ -75,10 +93,8 @@ def player_detail(user_id: int, db: Session = Depends(get_db), user=Depends(get_
     performance = player_performance(db, player.id, pool)
     heroes_by_key = performance.pop("_heroes_by_key")
     pool_by_cat: dict[str, list] = {"comfort": [], "meta": [], "pocket": [], "emergency": []}
-    # Solo games are private to the player and team staff; team numbers stay team-only.
-    solo_by_key: dict[str, dict] = {}
-    if user.id == player.id or user.role in SOLO_STAFF:
-        solo_by_key = {hero_key(h["name"]): h for h in grouped(user_games(db, player.id), lambda g: g.hero)}
+    # Games added in Utility are visible to the whole team (the Players tab shows how everyone is doing).
+    solo_by_key = {hero_key(h["name"]): h for h in grouped(user_games(db, player.id), lambda g: g.hero)}
     for e in pool:
         row = pool_out(e)
         row["played"] = pool_played(e, heroes_by_key)  # team games: scrims + tournaments

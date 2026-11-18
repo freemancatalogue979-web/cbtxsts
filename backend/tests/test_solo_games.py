@@ -302,7 +302,7 @@ class SoloGamesTests(unittest.TestCase):
         self.assertEqual(err.exception.status_code, 422)
 
     # -- the rest of the app ------------------------------------------------------------
-    def test_pool_and_dashboard_show_solo_privately(self) -> None:
+    def test_pool_shows_solo_to_the_team_and_dashboard_stays_personal(self) -> None:
         ling = self.db.query(Hero).filter_by(name="Ling").one()
         self.db.add(HeroPoolEntry(user_id=self.me.id, hero_id=ling.id, category="comfort"))
         self.db.commit()
@@ -311,8 +311,9 @@ class SoloGamesTests(unittest.TestCase):
         mine = player_detail(self.me.id, db=self.db, user=self.me)["pool"]["comfort"][0]["played"]
         self.assertEqual(mine["solo"], {"games": 2, "wins": 1, "losses": 1, "win_rate": 50.0})
         self.assertEqual(mine["games"], 0)  # team numbers are untouched
+        # Teammates see each other's Utility games (Players tab); the AI still needs consent (below).
         theirs = player_detail(self.me.id, db=self.db, user=self.other)["pool"]["comfort"][0]["played"]
-        self.assertNotIn("solo", theirs)
+        self.assertEqual(theirs["solo"], mine["solo"])
         form = my_form(self.db, self.me)
         self.assertEqual(form["solo"]["games"], 2)
         self.assertEqual(form["overall"]["games"], 0)
