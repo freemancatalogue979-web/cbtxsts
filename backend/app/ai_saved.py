@@ -59,6 +59,13 @@ _ACCOUNT_NUMBER_FIELDS = {
     "season_id",
     "hero_id",
     "heroid",
+    "best_streak",
+    "avg_score",
+    "avg_game_minutes",
+    "most_kills",
+    "most_assists",
+    "current_season",
+    "best_score",
 }
 _ACCOUNT_TEXT_FIELDS = {"hero_name", "result", "mode", "game_mode"}
 _RESULTS = {"win", "won", "victory", "loss", "lost", "lose", "defeat", "draw"}

@@ -110,7 +110,7 @@ class IntelSnapshotTests(unittest.TestCase):
                 "data": {"name": name, "wins": 12, "nested": {"access_token": "NO_STORE_SECRET", "echo": jwt}},
             }
 
-        with patch("app.routers.intel._rone_request", side_effect=source) as upstream:
+        with patch("app.routers.intel._account_request", side_effect=source) as upstream:
             status, owner, headers = self.get("account/matches?index=1&size=10")
             self.assertEqual(status, 200)
             self.assertEqual(headers[b"cache-control"], b"no-store")
@@ -132,7 +132,7 @@ class IntelSnapshotTests(unittest.TestCase):
             key, generation = owner_rows[0].key, owner_rows[0].generation_id
             self.assertNotIn("NO_STORE_SECRET", owner_rows[0].payload_json)
             self.assertTrue(claim_refresh(db, key, "old-worker"))
-        with patch("app.routers.intel._rone_request", side_effect=source):
+        with patch("app.routers.intel._account_request", side_effect=source):
             status, _, _ = fixture.request("POST", "/api/intel/account/disconnect", self.tokens["owner"], {})
             self.assertEqual(status, 200)
         with self.factory() as db:
@@ -154,7 +154,7 @@ class IntelSnapshotTests(unittest.TestCase):
                 return {"code": 0, "data": {"jwt": "NEW_JWT", "token": "NEW_REFRESH"}}
             return {"code": 0, "data": {"name": "New Account" if jwt == "NEW_JWT" else "Old Account", "level": 7}}
 
-        with patch("app.routers.intel._rone_request", side_effect=source), patch("app.routers.intel._adopt_avatar"):
+        with patch("app.routers.intel._account_request", side_effect=source), patch("app.routers.intel._adopt_avatar"):
             self.get("account/heroes")
             self.assertEqual(
                 fixture.request("PATCH", "/api/ai/settings", self.tokens["owner"], {"share_account_stats": True})[0],

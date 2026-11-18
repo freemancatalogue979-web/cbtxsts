@@ -1,4 +1,9 @@
-"""MLBB public-data proxy + account linking — fronts the community Rone Arena API server-side.
+"""MLBB public-data proxy + account linking.
+
+Player accounts (link code, profile, career stats, recent games, most-played heroes) come straight
+from Moonton's own servers via ``app.mlbb_moonton`` — the same calls mahsikit/mlbb-api-own makes.
+The community Rone Arena API stays as the automatic backup for player data and remains the source
+for the public hero/academy/esports reference data below.
 
 Why a proxy: the browser never talks to the third-party host (our auth cookies
 apply to every intel call, no CORS surprises, single retry/cache layer), and
@@ -66,7 +71,7 @@ def _fetch(url: str) -> tuple[int, bytes]:
 
 
 # ---------------------------------------------------------------------------
-# MLBB account linking (verified flow: send-vc → login → Bearer jwt per user)
+# MLBB account linking (send-vc → login → per-user session token, straight from Moonton)
 # ---------------------------------------------------------------------------
 
 def account_user(response: Response, authorization: str | None = Header(default=None),
@@ -125,6 +130,84 @@ def _rone_request(method: str, path: str, *, payload: dict | None = None,
         raise HTTPException(502, "MLBB data service returned bad JSON") from exc
     except (urllib.error.URLError, TimeoutError, OSError):
         raise HTTPException(502, "MLBB data service is unreachable.") from None
+
+
+PLAYER_SOURCE = os.getenv("MLBB_PLAYER_SOURCE", "moonton").strip().lower()  # moonton | rone
+RONE_BACKUP = os.getenv("MLBB_RONE_BACKUP", "1").strip().lower() not in {"0", "false", "no", "off"}
+_FRIENDLY = {"user/matches": "matches", "user/heroes/frequent": "heroes", "user/stats": "stats", "user/season": "season"}
+
+
+def _moonton_call(method: str, path: str, *, payload: dict | None, params: dict | None, jwt: str | None) -> dict:
+    from .. import mlbb_moonton as mt
+
+    payload, params = payload or {}, params or {}
+    lang = str(params.get("lang") or "en")
+    role, zone = mt.token_ids(jwt) if jwt else (None, None)
+    if path == "user/auth/send-vc":
+        return mt.send_code(payload["role_id"], payload["zone_id"])
+    if path == "user/auth/login":
+        return mt.login(payload["role_id"], payload["zone_id"], payload["vc"])
+    if not jwt:
+        return {"code": 401, "msg": "Sign in to your MLBB account first"}
+    if path == "user/auth/logout":
+        return mt.logout(jwt, role, zone)
+    if path == "user/info":
+        return mt.profile(jwt, role, zone, lang)
+    if path == "user/stats":
+        return mt.career(jwt, lang)
+    if path == "user/season":
+        return mt.seasons(jwt, lang)
+    if path == "user/heroes/frequent":
+        return mt.frequent_heroes(jwt, limit=20, lang=lang)
+    if path == "user/matches":
+        return mt.recent_matches(jwt, limit=int(params.get("size", 20)), page=int(params.get("index", 1)), lang=lang)
+    raise HTTPException(404, "Unknown account data")
+
+
+def _rone_call(method: str, path: str, *, payload: dict | None, params: dict | None, jwt: str | None) -> dict:
+    """Backup relay. It forwards the same Moonton answers, but paginates by season + cursor."""
+    from .. import mlbb_moonton as mt
+
+    params = dict(params or {})
+    if path in {"user/matches", "user/heroes/frequent"}:
+        season = _rone_request("GET", "user/season", params={"lang": params.get("lang", "en")}, jwt=jwt)
+        sids = mt.season_ids(season) if not _envelope_error(season) else []
+        if not sids:
+            return season if _envelope_error(season) else {"code": 0, "msg": "ok", "data": {"result": []}}
+        size = int(params.pop("size", 20))
+        index = int(params.pop("index", 1))
+        params.update(sid=sids[0], limit=size)
+        env: dict = {}
+        for _ in range(max(1, index)):
+            env = _rone_request("GET", path, params=params, jwt=jwt)
+            data = env.get("data") if isinstance(env.get("data"), dict) else {}
+            cursor = (data.get("pageInfo") or {}).get("nextCursor") if isinstance(data.get("pageInfo"), dict) else None
+            if _envelope_error(env) or not cursor:
+                break
+            params["last_cursor"] = cursor
+        if isinstance(env.get("data"), dict):
+            env["data"].setdefault("sid", sids[0])
+        return env
+    return _rone_request(method, path, payload=payload, params=params, jwt=jwt)
+
+
+def _account_request(method: str, path: str, *, payload: dict | None = None,
+                     params: dict | None = None, jwt: str | None = None) -> dict:
+    """Player-account call: Moonton direct first, Rone relay only if Moonton can't be reached."""
+    from .. import mlbb_moonton as mt
+
+    env = None
+    if PLAYER_SOURCE != "rone":
+        try:
+            env = _moonton_call(method, path, payload=payload, params=params, jwt=jwt)
+        except mt.SourceDown as exc:
+            logger.info("Moonton unreachable for %s (%s)%s", path, exc, "; trying backup" if RONE_BACKUP else "")
+            if not RONE_BACKUP:
+                raise HTTPException(502, "MLBB servers are unreachable right now.") from None
+    if env is None:
+        env = _rone_call(method, path, payload=payload, params=params, jwt=jwt)
+    kind = _FRIENDLY.get(path)
+    return mt.friendly(kind, env) if kind else env
 
 
 def _envelope_error(env: dict) -> str | None:
@@ -189,16 +272,16 @@ def _get_link(user: User, db: Session) -> IntelLink:
 
 @router.post("/account/send-code")
 def account_send_code(body: SendCodeIn, user: User = Depends(account_user)) -> dict:
-    env = _rone_request("POST", "user/auth/send-vc", payload={"role_id": body.role_id, "zone_id": body.zone_id})
+    env = _account_request("POST", "user/auth/send-vc", payload={"role_id": body.role_id, "zone_id": body.zone_id})
     err = _envelope_error(env)
     if err:
-        raise HTTPException(400, f"Upstream refused: {err}")
+        raise HTTPException(400, f"MLBB said no: {err}")
     return {"sent": True, "hint": "Check your in-game mail — the code expires in 5 minutes"}
 
 
 @router.post("/account/connect")
 def account_connect(body: ConnectIn, user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
-    env = _rone_request("POST", "user/auth/login",
+    env = _account_request("POST", "user/auth/login",
                         payload={"role_id": body.role_id, "zone_id": body.zone_id, "vc": body.vc})
     err = _envelope_error(env)
     if err:
@@ -210,7 +293,7 @@ def account_connect(body: ConnectIn, user: User = Depends(account_user), db: Ses
     link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none() or IntelLink(user_id=user.id)
     # Capture the new profile before replacing the existing link. Old account
     # snapshots and AI consent must never carry across a relink.
-    info = _rone_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
+    info = _account_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
     _purge_account_data(db, user.id)
     link.role_id = body.role_id
     link.zone_id = body.zone_id
@@ -347,7 +430,7 @@ def _refresh_account_snapshot(bind, key: str, user_id: int, generation_id: str, 
             jwt = link.jwt  # Never place credentials in the task queue, snapshots or logs.
             secrets = (jwt, link.token)
             params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
-            payload = _account_safe(_rone_request("GET", path, params=params, jwt=jwt), secrets=secrets)
+            payload = _account_safe(_account_request("GET", path, params=params, jwt=jwt), secrets=secrets)
             if _envelope_error(payload):
                 raise ValueError("Source returned an error.")
             cache_payload(payload)
@@ -385,7 +468,7 @@ def _account_cached(db: Session, user: User, link: IntelLink, path: str, params:
             return _account_meta(payload, observed_at, "stale" if stale else "fresh", refreshing, had_error)
 
     jwt = link.jwt
-    payload = _account_safe(_rone_request("GET", path, params=params, jwt=jwt), secrets=(jwt, link.token))
+    payload = _account_safe(_account_request("GET", path, params=params, jwt=jwt), secrets=(jwt, link.token))
     if _envelope_error(payload):
         return payload
     db.expire_all()
@@ -458,7 +541,7 @@ def account_disconnect(user: User = Depends(account_user), db: Session = Depends
     db.delete(link)
     db.commit()  # Local access and saved data are removed even if logout fails.
     try:
-        _rone_request("POST", "user/auth/logout", payload={}, jwt=jwt)
+        _account_request("POST", "user/auth/logout", payload={}, jwt=jwt)
     except HTTPException:
         pass
     logger.info("MLBB account unlinked for user %s", user.id)

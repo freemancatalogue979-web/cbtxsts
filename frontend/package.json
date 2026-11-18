@@ -17,7 +17,7 @@
     "test:focus": "node --test tests/team-focus.test.mjs",
     "test:ui": "node --test tests/section-pill.test.mjs tests/font.test.mjs tests/theme.test.mjs tests/layout-revamp.test.mjs tests/api-errors.test.mjs tests/trash.test.mjs tests/player-performance.test.mjs tests/ai-scoreboard.test.mjs tests/solo-games.test.mjs tests/utility.test.mjs tests/player-bits.test.mjs tests/players-board.test.mjs",
     "test:pwa": "node --test tests/pwa.test.mjs",
-    "test:intel": "node --test tests/intel-builds.test.mjs"
+    "test:intel": "node --test tests/intel-builds.test.mjs tests/mlbb-account.test.mjs"
   },
   "dependencies": {
     "@fontsource/courier-prime": "^5.3.0",

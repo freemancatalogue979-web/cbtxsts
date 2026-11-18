@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Gamepad2, KeyRound, Link2, LogOut, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import { Badge, Empty, ErrorNote, Field, KV, PageTitle, SectionTitle, Spinner } from "../components/ui";
+import { HeroImg } from "../components/HeroImg";
 import { accountHeroes, accountMatches, accountProfile, connectLink, disconnectLink, linkStatus, sendLinkCode } from "../lib/mlbb";
 import type { AnyRec, LinkStatus } from "../lib/mlbb";
 import { recData, stripTags, pickNum, pickStr } from "../lib/mlbb";
@@ -38,8 +39,8 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
     <div className="card p-5 max-w-md space-y-4">
       <div className="flex items-center gap-2 text-leaf"><Link2 size={15} /><span className="section-pill section-pill--leaf">Connect MLBB account</span></div>
       <p className="text-[12px] text-mute leading-relaxed">
-        Uses the official in-game mail verification — <b>we never ask for your game password</b>. You need access to
-        the account's in-game mailbox. Codes expire in 5 minutes.
+        Straight from Moonton's own servers, same as the official MLBB site. You get a code in your in-game mail —
+        <b>we never ask for your game password</b>. Codes expire in 5 minutes.
       </p>
       {step === 1 ? (
         <form onSubmit={sendCode} className="space-y-3">
@@ -57,7 +58,7 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
           <div className="rounded-lg border border-leaf/40 bg-leaf-dim/30 p-3 text-[12px] text-leaf flex items-start gap-2">
             <KeyRound size={14} className="mt-0.5 shrink-0" /> {hint ?? "Code sent."}
           </div>
-          <Field label="6-digit code">
+          <Field label="Code from your in-game mail">
             <input className="input tracking-[0.5em] text-center text-lg font-black" inputMode="numeric" required maxLength={8}
               value={vc} onChange={(e) => setVc(e.target.value.replace(/\D/g, ""))} placeholder="••••••" autoFocus />
           </Field>
@@ -92,7 +93,7 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
     return (
       <div className="card p-4">
         <div className="section-pill mb-1.5">{title}</div>
-        <div className="text-[11.5px] text-faint">Unavailable right now (upstream endpoint deprecated or offline).</div>
+        <div className="text-[11.5px] text-faint">{typeof env.msg === "string" && env.msg ? env.msg : "Couldn't reach MLBB right now"} · try Refresh in a bit.</div>
       </div>
     );
   }
@@ -180,27 +181,100 @@ function ProfileHeroCard({ status, info }: { status: LinkStatus; info: unknown }
         </div>
         <Badge cls="text-leaf border-leaf/40">connected</Badge>
       </div>
-      <div className="relative px-5 pb-3 text-[9.5px] text-faint">Tier values are the ladder index as reported upstream.<SnapshotNote payload={info} /></div>
+      <div className="relative px-5 pb-3 text-[9.5px] text-faint">Tier values are the ladder index Moonton reports.<SnapshotNote payload={info} /></div>
     </div>
   );
 }
 
-function ListSection({ title, payload, heroNames }: { title: string; payload: unknown; heroNames: (d: AnyRec) => string | undefined }) {
-  const rows = recData<AnyRec>(payload);
+function rowsOf(payload: unknown): AnyRec[] {
+  const env = payload as AnyRec | undefined;
+  const data = env && typeof env.data === "object" && env.data ? env.data as AnyRec : null;
+  return data && Array.isArray(data.records) ? (data.records as AnyRec[]).filter((r) => r && typeof r === "object") : recData<AnyRec>(payload);
+}
+function failed(payload: unknown): string | null {
+  const env = payload as AnyRec | undefined;
+  if (!env) return null;
+  const inner = env.data as AnyRec | undefined;
+  if (inner && typeof inner.error === "string") return "Couldn't reach MLBB right now";
+  if (typeof env.code === "number" && env.code !== 0) return typeof env.msg === "string" && env.msg ? env.msg : "Couldn't reach MLBB right now";
+  return null;
+}
+
+function HeroFace({ row, size = 40 }: { row: AnyRec; size?: number }) {
+  const name = pickStr(row, "hero_name") ?? "";
+  const icon = pickStr(row, "hero_icon");
+  if (name) return <HeroImg name={name} size={size} />;
+  return icon
+    ? <img src={icon} alt="" width={size} height={size} referrerPolicy="no-referrer" className="rounded-lg border border-edge object-cover" />
+    : <span className="rounded-lg border border-edge bg-raised" style={{ width: size, height: size }} />;
+}
+
+export function MatchList({ payload }: { payload: unknown }) {
+  const rows = rowsOf(payload);
+  const err = failed(payload);
+  const meta = ((payload as AnyRec | undefined)?.data ?? {}) as AnyRec;
+  const wins = rows.filter((r) => r.result === "win").length;
   return (
-    <div>
-      <SectionTitle>{title}</SectionTitle>
+    <div className="mlbb-list">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <SectionTitle>Recent games</SectionTitle>
+        {rows.length > 0 && <span className="text-[11px] text-mute">{wins}W {rows.length - wins}L · {Math.round((100 * wins) / rows.length)}% won{typeof meta.season_id === "number" ? ` · season ${meta.season_id}` : ""}</span>}
+      </div>
       <SnapshotNote payload={payload} />
-      {rows.length === 0 ? <Empty title="Nothing returned" hint="Upstream may not expose this yet" /> : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-          {rows.slice(0, 12).map((r, i) => {
-            const label = heroNames(r) ?? pickStr(r, "name", "title", "mode") ?? `Entry ${i + 1}`;
-            const stats = Object.entries(r).filter(([k, v]) => ["number"].includes(typeof v) && !k.startsWith("_")).slice(0, 3);
+      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint">{err} · try Refresh in a bit.</div>
+        : rows.length === 0 ? <Empty title="No games this season yet" hint="Play a few and hit Refresh" /> : (
+        <ul className="grid gap-2 mt-2">
+          {rows.slice(0, 20).map((r, i) => {
+            const win = r.result === "win";
+            const when = pickNum(r, "match_time");
             return (
-              <div key={i} className="card p-3.5">
-                <div className="text-[13px] font-bold truncate mb-1.5">{label}</div>
-                <div className="space-y-0.5">
-                  {stats.map(([k, v]) => <KV key={k} k={k.replace(/_/g, " ")} v={String(v)} />)}
+              <li key={String(r.match_id ?? i)} className={`mlbb-game card p-2.5 flex items-center gap-3 min-w-0 border-l-4 ${win ? "border-l-leaf" : "border-l-danger"}`}>
+                <HeroFace row={r} size={40} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[13px] font-bold truncate">{pickStr(r, "hero_name") ?? "Unknown hero"}</span>
+                    {r.mvp === 1 && <Badge cls="text-amber border-amber/50">MVP</Badge>}
+                  </div>
+                  <div className="text-[11px] text-mute truncate">
+                    {[pickStr(r, "lane"), when ? new Date(when * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : null].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[13px] font-black tabular-nums">{pickNum(r, "kills") ?? 0}/{pickNum(r, "deaths") ?? 0}/{pickNum(r, "assists") ?? 0}</div>
+                  <div className={`text-[10.5px] font-bold ${win ? "text-leaf" : "text-danger"}`}>{win ? "Victory" : "Defeat"}{typeof r.score === "number" ? ` · ${r.score.toFixed(1)}` : ""}</div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function HeroList({ payload }: { payload: unknown }) {
+  const rows = rowsOf(payload);
+  const err = failed(payload);
+  const top = Math.max(1, ...rows.map((r) => Number(r.matches) || 0));
+  return (
+    <div className="mlbb-list">
+      <SectionTitle>Most played heroes</SectionTitle>
+      <SnapshotNote payload={payload} />
+      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint">{err} · try Refresh in a bit.</div>
+        : rows.length === 0 ? <Empty title="No heroes this season yet" hint="Play a few and hit Refresh" /> : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-2">
+          {rows.slice(0, 12).map((r, i) => {
+            const games = Number(r.matches) || 0;
+            const rate = typeof r.win_rate === "number" ? r.win_rate : null;
+            return (
+              <div key={String(r.hero_id ?? i)} className="mlbb-hero card p-3 flex items-center gap-3 min-w-0">
+                <HeroFace row={r} size={44} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold truncate">{pickStr(r, "hero_name") ?? `Hero ${r.hero_id ?? ""}`}</div>
+                  <div className="text-[11px] text-mute">{games} games{rate != null ? ` · ${rate}% won` : ""}</div>
+                  <div className="h-1.5 rounded-full bg-raised mt-1.5 overflow-hidden">
+                    <div className={`h-full rounded-full ${rate != null && rate < 50 ? "bg-danger" : "bg-leaf"}`} style={{ width: `${Math.max(6, (100 * games) / top)}%` }} />
+                  </div>
                 </div>
               </div>
             );
@@ -227,7 +301,7 @@ export function AccountMLBBPage() {
       if (st.linked) {
         const [p, m, h] = await Promise.all([
           accountProfile().catch((e) => ({ data: { error: String(e) } })),
-          accountMatches(1, 10).catch((e) => ({ data: { error: String(e) } })),
+          accountMatches(1, 20).catch((e) => ({ data: { error: String(e) } })),
           accountHeroes().catch((e) => ({ data: { error: String(e) } })),
         ]);
         setProfile(p); setMatches(m); setHeroes(h);
@@ -256,7 +330,7 @@ export function AccountMLBBPage() {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="My MLBB" sub="Your saved account snapshots load first and refresh in the background; tokens stay server-side."
+      <PageTitle title="My MLBB" sub="Straight from Moonton. Saved copies load first and refresh in the background; your sign-in stays on our server."
         right={status?.linked && (
           <div className="flex gap-2">
             <button className="btn-ghost" onClick={() => void load()}><RefreshCw size={14} /> Refresh</button>
@@ -270,7 +344,7 @@ export function AccountMLBBPage() {
           <Wizard onLinked={() => void load()} />
           <div className="card p-4 max-w-md text-[12px] text-mute leading-relaxed flex items-start gap-2.5">
             <ShieldCheck size={15} className="text-leaf mt-0.5 shrink-0" />
-            Verification goes through the official in-game mail flow upstream. Your session token lives only on our
+            The code comes from Moonton's own in-game mail. Your MLBB sign-in lives only on our
             server, tied to your 9 Clover login — never in the browser, never in logs.
           </div>
         </>
@@ -287,11 +361,9 @@ export function AccountMLBBPage() {
             </div>
           )}
 
-          {heroes && <ListSection title="Most played heroes" payload={heroes}
-            heroNames={(d) => pickStr(d, "hero_name", "name") ?? (pickNum(d, "hero_id", "heroid") ? `Hero #${pickNum(d, "hero_id", "heroid")}` : undefined)} />}
+          {heroes && <HeroList payload={heroes} />}
 
-          {matches && <ListSection title="Recent matches" payload={matches}
-            heroNames={(d) => pickStr(d, "hero_name", "result") ?? (pickNum(d, "match_time", "time") ? new Date(Number(pickNum(d, "match_time", "time")) * 1000).toLocaleDateString() : undefined)} />}
+          {matches && <MatchList payload={matches} />}
 
           <div className="text-[11px] text-faint flex items-center gap-1.5">
             <LogOut size={11} /> Disconnect removes your saved account snapshots, AI-sharing consent and stored token. Upstream logout is attempted.
