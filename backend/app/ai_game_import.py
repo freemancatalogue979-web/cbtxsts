@@ -295,7 +295,15 @@ def extract(db: Session, user: User, url: str) -> dict:
             if isinstance(note, str) and note.strip():
                 checks.append({"tone": "info", "text": note.strip()[:200]})
 
-    games = [g for g in (clean_game(r, heroes) for r in raw_games[:MAX_GAMES]) if g]
+    games = []
+    for r in raw_games[:MAX_GAMES]:
+        g = clean_game(r, heroes)
+        if g:
+            # how the hero was checked at its portrait — shown on the review step, never stored
+            look = {k: r[k] for k in ("hero_check", "portrait", "hero_was") if r.get(k) not in (None, "", [])}
+            if look:
+                g["look"] = look
+            games.append(g)
     skipped = len(raw_games[:MAX_GAMES]) - len(games)
     if len(raw_games) > MAX_GAMES:
         checks.append({"tone": "warn", "text": f"Only the first {MAX_GAMES} games were read from this file."})

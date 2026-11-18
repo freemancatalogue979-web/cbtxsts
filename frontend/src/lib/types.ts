@@ -212,6 +212,16 @@ export interface PlayerLine {
 }
 export interface EnemyLine extends PlayerLine { hero?: string; name?: string }
 
+/** How a row's hero was checked against its portrait: matched, fixed from the portrait, probably right, needs a look, or not checked. */
+export type HeroCheck = "portrait" | "corrected" | "likely" | "unsure" | "unchecked";
+export interface SheetRowHero {
+  hero_check?: HeroCheck;
+  /** where the portrait is on the screenshot: [x0, y0, x1, y1] as shares of width/height */
+  portrait?: number[];
+  /** what the reader said before the portrait check replaced it */
+  hero_was?: string;
+}
+
 /** What the AI read from a match screenshot, ready to fill the game form. */
 export interface ScoreboardRead {
   screen: "scoreboard" | "result" | "draft" | "other";
@@ -223,8 +233,8 @@ export interface ScoreboardRead {
   enemy_stats: Record<string, EnemyLine>;
   stats: Record<string, number>;
   rows: {
-    ours: { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; user_id: number | null; player: string | null }[];
-    enemy: { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string }[];
+    ours: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; user_id: number | null; player: string | null })[];
+    enemy: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string })[];
   };
   checks: { tone: "ok" | "warn" | "info"; text: string }[];
   image_url: string;

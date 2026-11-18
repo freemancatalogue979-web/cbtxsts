@@ -8,9 +8,10 @@ import {
   ArrowLeft, CheckCircle2, ChevronRight, Clock, Crown, ExternalLink, Image as ImageIcon, Loader2, ScanLine, Search, Swords, Trophy, Upload,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Draft, ScoreboardRead, UtilityMatch, UtilityRead } from "../lib/types";
+import type { Draft, Hero, HeroCheck, ScoreboardRead, SheetRowHero, UtilityMatch, UtilityRead } from "../lib/types";
 import { fmtDate, navigate } from "../lib/util";
 import { HeroImg } from "./HeroImg";
+import { HeroPickerModal } from "./HeroPicker";
 import { EnemyScoreboard, SCORE_LANES, ScoreboardFields, formToLines, linesToForm, sumLines, type LineForm } from "./Scoreboard";
 import { CountUp } from "./Charts";
 import { Empty, ErrorNote, Spinner } from "./ui";
@@ -166,7 +167,7 @@ export function MatchEvidence() {
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [review, setReview] = useState<Review | null>(null);
-  const [done, setDone] = useState<{ title: string; game_no: number; link: (string | number)[] } | null>(null);
+  const [done, setDone] = useState<{ title: string; game_no: number; link: (string | number)[]; learned: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -209,8 +210,8 @@ export function MatchEvidence() {
   }
 
   if (review) {
-    return <ReviewSheet review={review} onBack={() => setReview(null)} onDone={(m) => {
-      setReview(null); setDone({ title: m.title, game_no: review.game_no, link: m.link }); setPicked(m); void load();
+    return <ReviewSheet review={review} onBack={() => setReview(null)} onDone={(m, learned) => {
+      setReview(null); setDone({ title: m.title, game_no: review.game_no, link: m.link, learned }); setPicked(m); void load();
     }} />;
   }
 
@@ -245,7 +246,7 @@ export function MatchEvidence() {
         {done && (
           <div className="card border-leaf/50 bg-leaf/5 p-3 flex flex-wrap items-center gap-2" role="status">
             <CheckCircle2 size={16} className="text-leaf" aria-hidden="true" />
-            <span className="text-[12px] font-bold">Game {done.game_no} added to {done.title}.</span>
+            <span className="text-[12px] font-bold">Game {done.game_no} added to {done.title}.{done.learned > 0 && <span className="text-leaf"> Learned {done.learned} hero {done.learned === 1 ? "portrait" : "portraits"} for next time.</span>}</span>
             <button type="button" className="btn-ghost !py-1 !text-[11px] ml-auto" onClick={() => navigate(...done.link)}><ExternalLink size={12} /> Open the match</button>
           </div>
         )}
@@ -304,29 +305,108 @@ export function MatchEvidence() {
   );
 }
 
-function ReviewSheet({ review, onBack, onDone }: { review: Review; onBack: () => void; onDone: (m: UtilityMatch) => void }) {
+type Side = "ours" | "enemy";
+type RowHero = SheetRowHero & { lane: string; hero: string };
+
+const CHECK_CHIP: Record<HeroCheck | "edited" | "confirmed", { label: string; cls: string; tip: string } | null> = {
+  portrait: { label: "Matched", cls: "border-leaf/40 bg-leaf/10 text-leaf", tip: "The portrait matches this hero." },
+  corrected: { label: "Fixed", cls: "border-amber/50 bg-amber/10 text-amber", tip: "The portrait clearly showed another hero, so it was changed." },
+  likely: { label: "Likely", cls: "border-sky/40 bg-sky/10 text-sky", tip: "Probably right; the portrait is a close match." },
+  unsure: { label: "Check · tap if right", cls: "border-danger/50 bg-danger/10 text-danger", tip: "Couldn't confirm this hero from the portrait." },
+  edited: { label: "Changed", cls: "border-leaf/40 bg-leaf/10 text-leaf", tip: "You picked this hero; it will be learned for next time." },
+  confirmed: { label: "Looks right", cls: "border-leaf/40 bg-leaf/10 text-leaf", tip: "You confirmed this hero; it will be learned for next time." },
+  unchecked: null,
+};
+
+function useHeroList() {
+  const [heroes, setHeroes] = useState<Hero[]>([]);
+  useEffect(() => { api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([])); }, []);
+  return heroes;
+}
+
+/** One row's hero: tap to pick another, with how sure the reading was. */
+function HeroFix({ heroes, lane, side, name, row, confirmed, onPick, onConfirm }: {
+  heroes: Hero[]; lane: string; side: Side; name: string; row?: RowHero; confirmed: boolean;
+  onPick: (hero: string) => void; onConfirm: () => void;
+}) {
+  const id = heroes.find((h) => h.name.toLowerCase() === name.toLowerCase())?.id ?? "";
+  const edited = !!row && name !== row.hero;
+  const state: HeroCheck | "edited" | "confirmed" = edited ? "edited" : confirmed ? "confirmed" : row?.hero_check ?? "unchecked";
+  const chip = CHECK_CHIP[state];
+  const who = side === "ours" ? "" : "Enemy ";
+  return (
+    <div className={`space-y-1 rounded-xl ${state === "unsure" ? "ring-1 ring-danger/50 p-1" : ""}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="min-w-0 flex-1">
+          <HeroPickerModal heroes={heroes} value={id} placeholder={name ? `Read as ${name} — pick the ${who.toLowerCase()}${laneName(lane)} hero` : `Pick the ${who.toLowerCase()}${laneName(lane)} hero`}
+            onChange={(next) => onPick(heroes.find((h) => h.id === next)?.name ?? "")} />
+        </div>
+        {chip && (state === "unsure"
+          ? <button type="button" className={`chip shrink-0 !text-[9.5px] ${chip.cls}`} title={chip.tip} onClick={onConfirm}
+              aria-label={`${who}${laneName(lane)} hero ${name || "blank"} looks right`}>{chip.label}</button>
+          : <span className={`chip shrink-0 !text-[9.5px] ${chip.cls}`} title={chip.tip}>{chip.label}</span>)}
+      </div>
+      {state === "corrected" && row?.hero_was && <p className="text-[10px] text-faint pl-1">Read as {row.hero_was}; the portrait shows {name}.</p>}
+    </div>
+  );
+}
+
+function ReviewSheet({ review, onBack, onDone }: { review: Review; onBack: () => void; onDone: (m: UtilityMatch, learned: number) => void }) {
   const { match, game_no, sheet } = review;
+  const heroList = useHeroList();
   const [ours, setOurs] = useState<LineForm>(() => linesToForm(sheet.player_stats));
   const [enemy, setEnemy] = useState<LineForm>(() => linesToForm(sheet.enemy_stats));
   const [result, setResult] = useState<string>(sheet.result || "");
   const [duration, setDuration] = useState<string>(sheet.duration_min != null ? String(sheet.duration_min) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const draft = sheet.draft ?? {};
+  const rowsBy = useMemo(() => ({
+    ours: Object.fromEntries(sheet.rows.ours.map((r) => [r.lane, r])) as Record<string, RowHero>,
+    enemy: Object.fromEntries(sheet.rows.enemy.map((r) => [r.lane, r])) as Record<string, RowHero>,
+  }), [sheet]);
+  const [picks, setPicks] = useState<Record<Side, Record<string, string>>>(() => ({
+    ours: Object.fromEntries(SCORE_LANES.map((l) => [l, sheet.draft?.our_picks?.[l] || rowsBy.ours[l]?.hero || ""])),
+    enemy: Object.fromEntries(SCORE_LANES.map((l) => [l, sheet.draft?.enemy_picks?.[l] || rowsBy.enemy[l]?.hero || ""])),
+  }));
+  const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set());
+  const filled = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).filter(([, h]) => h));
+  const draft: Draft = useMemo(() => ({ ...(sheet.draft ?? {}), our_picks: filled(picks.ours), enemy_picks: filled(picks.enemy) }), [sheet, picks]);
   const players = useMemo(() => Object.fromEntries(sheet.rows.ours.map((r) => [r.lane, r.player || r.name || ""])), [sheet]);
   const existing = match.games.find((g) => g.game_no === game_no);
   const enemyHeroes = draft.enemy_picks ?? {};
+  const needLook = (["ours", "enemy"] as Side[]).flatMap((side) => SCORE_LANES.filter((l) => {
+    const r = rowsBy[side][l];
+    return r?.hero_check === "unsure" && picks[side][l] === r.hero && !confirmed.has(`${side}:${l}`);
+  }).map((l) => `${side}:${l}`));
+  const enemyNeedsLook = needLook.some((k) => k.startsWith("enemy:"));
+
+  const heroControl = (side: Side) => (lane: string) => (
+    <HeroFix heroes={heroList} lane={lane} side={side} name={picks[side][lane] ?? ""} row={rowsBy[side][lane]}
+      confirmed={confirmed.has(`${side}:${lane}`)}
+      onPick={(hero) => setPicks((p) => ({ ...p, [side]: { ...p[side], [lane]: hero } }))}
+      onConfirm={() => setConfirmed((c) => new Set(c).add(`${side}:${lane}`))} />
+  );
+
+  /** Heroes a person changed or OK'd, at their portrait spot — the matcher learns them. */
+  function portraits() {
+    return (["ours", "enemy"] as Side[]).flatMap((side) => SCORE_LANES.flatMap((lane) => {
+      const r = rowsBy[side][lane];
+      const hero = picks[side][lane];
+      if (!r?.portrait || r.portrait.length !== 4 || !hero) return [];
+      return hero !== r.hero || confirmed.has(`${side}:${lane}`) ? [{ hero, box: r.portrait }] : [];
+    })).slice(0, 10);
+  }
 
   async function confirm() {
     if (!result) { setError(new Error("Set the result (win or loss) first.")); return; }
     setBusy(true); setError(null);
     try {
-      const r = await api.post<{ ok: boolean; target: UtilityMatch }>("/utility/apply", {
+      const r = await api.post<{ ok: boolean; target: UtilityMatch; learned?: number }>("/utility/apply", {
         kind: match.kind, id: match.id, game_no, result, duration_min: duration ? Number(duration) : null,
-        lineup: sheet.lineup, draft, player_stats: formToLines(ours), enemy_stats: formToLines(enemy, enemyHeroes, true),
-        evidence_url: review.image_url,
+        lineup: sheet.lineup, draft, player_stats: formToLines(ours, draft.our_picks ?? {}), enemy_stats: formToLines(enemy, enemyHeroes, true),
+        evidence_url: review.image_url, portraits: portraits(),
       });
-      onDone(r.target);
+      onDone(r.target, r.learned ?? 0);
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
 
@@ -373,11 +453,18 @@ function ReviewSheet({ review, onBack, onDone }: { review: Review; onBack: () =>
             </div>
             <div>
               <div className="section-pill mb-2">9 Clover scoreboard</div>
+              {needLook.length > 0 && (
+                <p role="status" className="mb-2 rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-[11px] text-danger">
+                  {needLook.length} {needLook.length === 1 ? "hero needs" : "heroes need"} a look. Tap a hero to change it, or tap “Check” if it&apos;s right.
+                </p>
+              )}
               <ScoreboardFields form={ours} onChange={setOurs} heroes={draft.our_picks ?? {}} side="ours" gameLabel={`game ${game_no}`}
+                heroControl={heroControl("ours")}
                 player={(lane) => <span className="input !px-2 flex items-center text-mute truncate">{players[lane] || "—"}</span>} />
             </div>
           </div>
-          <EnemyScoreboard form={enemy} onChange={setEnemy} heroes={enemyHeroes} opponent={match.opponent} gameLabel={`game ${game_no}`} />
+          <EnemyScoreboard form={enemy} onChange={setEnemy} heroes={enemyHeroes} opponent={match.opponent} gameLabel={`game ${game_no}`}
+            heroControl={heroControl("enemy")} startOpen={enemyNeedsLook} />
           <ErrorNote error={error} />
           <div className="flex flex-wrap justify-end gap-2 sticky bottom-2 z-10 rounded-xl border border-edge bg-panel/95 p-2 shadow-xl backdrop-blur">
             <button type="button" className="btn-ghost" onClick={onBack}>Cancel</button>

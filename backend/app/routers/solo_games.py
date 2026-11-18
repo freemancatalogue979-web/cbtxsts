@@ -5,6 +5,8 @@
 * PATCH  /solo-games/{id}       — fix a game (owner or admin)
 * DELETE /solo-games/{id}       — to Trash (owner or admin)
 * POST   /solo-games/import     — the AI reads an uploaded file and adds your games
+                                  (preview=true: read only, so heroes can be fixed first)
+* POST   /solo-games/import/confirm — save the reviewed games (+ learn fixed hero portraits)
 * POST   /solo-games/undo       — take back one import (to Trash)
 * POST   /solo-games/coach      — AI coaching from your games
 
@@ -21,13 +23,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..ai_game_import import extract
+from ..ai_game_import import extract, resolve
 from ..ai_scoreboard import ReadError
 from ..ai_solo_coach import coach as ai_coach
 from ..deps import get_current_user, get_db
 from ..models import SoloGame, User
 from ..solo_games import clean_game, fingerprint, game_out, hero_gaps, hero_names, solo_stats, user_games
 from ..trash import send_to_trash
+from .utility import PortraitIn, learn_portraits
 
 router = APIRouter(prefix="/solo-games", tags=["solo-games"])
 STAFF = {"admin", "captain", "coach", "analyst"}
@@ -55,6 +58,15 @@ class SoloGameIn(BaseModel):
 
 class ImportIn(BaseModel):
     file_url: str = Field(min_length=1, max_length=300)
+    # read only: hand back the games to check (heroes can be changed), save with /import/confirm
+    preview: bool = False
+
+
+class ConfirmIn(BaseModel):
+    file_url: str = Field(min_length=1, max_length=300)
+    source: str = Field(default="screenshot", pattern="^(screenshot|document|sheet)$")
+    games: list[SoloGameIn] = Field(default_factory=list, max_length=300)
+    portraits: list[PortraitIn] = Field(default_factory=list, max_length=20)
 
 
 class UndoIn(BaseModel):
@@ -142,36 +154,63 @@ def delete_game(game_id: int, db: Session = Depends(get_db), user: User = Depend
     db.commit()
 
 
+def _save(db: Session, user: User, games: list[dict], source: str, file: str) -> dict:
+    known = {fp for (fp,) in db.query(SoloGame.fingerprint).filter(SoloGame.user_id == user.id).all()}
+    batch = uuid4().hex
+    added: list[SoloGame] = []
+    duplicates = 0
+    for game in games:
+        game = {k: v for k, v in game.items() if k != "look"}
+        fp = fingerprint(game)
+        if fp in known:
+            duplicates += 1
+            continue
+        known.add(fp)
+        row = SoloGame(user_id=user.id, **game, source=source, source_file=f"/api/files/{file}",
+                       batch=batch, fingerprint=fp)
+        db.add(row)
+        added.append(row)
+    db.commit()
+    checks: list[dict[str, Any]] = []
+    if added:
+        checks.append({"tone": "ok", "text": f"Added {len(added)} {'game' if len(added) == 1 else 'games'} to your record."})
+    if duplicates:
+        checks.append({"tone": "info", "text": f"{duplicates} {'game was' if duplicates == 1 else 'games were'} already "
+                                               "in your record and skipped."})
+    return {"batch": batch if added else None, "added": [game_out(r) for r in added], "duplicates": duplicates,
+            "checks": checks}
+
+
 @router.post("/import")
 def import_file(payload: ImportIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     try:
         read = extract(db, user, payload.file_url)
     except ReadError as exc:
         raise _ai_error(exc) from exc
-    known = {fp for (fp,) in db.query(SoloGame.fingerprint).filter(SoloGame.user_id == user.id).all()}
-    batch = uuid4().hex
-    added: list[SoloGame] = []
-    duplicates = 0
-    for game in read["games"]:
-        fp = fingerprint(game)
-        if fp in known:
-            duplicates += 1
-            continue
-        known.add(fp)
-        row = SoloGame(user_id=user.id, **game, source=read["source"], source_file=f"/api/files/{read['file']}",
-                       batch=batch, fingerprint=fp)
-        db.add(row)
-        added.append(row)
-    db.commit()
-    checks: list[dict[str, Any]] = list(read["checks"])
-    if added:
-        checks.insert(0, {"tone": "ok", "text": f"Added {len(added)} {'game' if len(added) == 1 else 'games'} to your record."})
-    if duplicates:
-        checks.append({"tone": "info", "text": f"{duplicates} {'game was' if duplicates == 1 else 'games were'} already "
-                                               "in your record and skipped."})
-    return {"batch": batch if added else None, "file": read["file"], "source": read["source"],
-            "read_directly": read["read_directly"],
-            "added": [game_out(r) for r in added], "duplicates": duplicates, "checks": checks}
+    base = {"file": read["file"], "source": read["source"], "read_directly": read["read_directly"]}
+    # Anything that was read (not typed straight in a sheet) waits for the person to check it.
+    if payload.preview and not read["read_directly"] and read["games"]:
+        games = [{**g, "played_on": g["played_on"].isoformat() if g.get("played_on") else None} for g in read["games"]]
+        return {**base, "preview": True, "games": games, "checks": read["checks"], "batch": None, "added": [],
+                "duplicates": 0}
+    saved = _save(db, user, read["games"], read["source"], read["file"])
+    return {**base, "preview": False, **saved, "checks": saved["checks"][:1] + list(read["checks"]) + saved["checks"][1:]
+            if saved["added"] else list(read["checks"]) + saved["checks"]}
+
+
+@router.post("/import/confirm")
+def confirm_import(payload: ConfirmIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        _, name, _ = resolve(payload.file_url)
+    except ReadError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    heroes = hero_names(db)
+    games = [g for g in (clean_game(item.model_dump(), heroes) for item in payload.games) if g]
+    if not games:
+        raise HTTPException(status_code=422, detail="Nothing to add — every game needs a hero and a result (or the K/D/A).")
+    saved = _save(db, user, games, payload.source, name)
+    learned = learn_portraits(db, f"/api/files/{name}", payload.portraits) if payload.source == "screenshot" else 0
+    return {"file": name, "source": payload.source, "read_directly": False, "preview": False, **saved, "learned": learned}
 
 
 @router.post("/undo")

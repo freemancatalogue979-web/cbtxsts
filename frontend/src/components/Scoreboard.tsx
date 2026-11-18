@@ -69,9 +69,11 @@ const clean = (key: string, v: string) => key === "rating"
 
 /** The scoreboard of one side, typed by hand (or filled by the AI reader).
  *  `player(lane)` renders who played that lane on our side. */
-export function ScoreboardFields({ form, onChange, heroes, side, gameLabel, player }: {
+export function ScoreboardFields({ form, onChange, heroes, side, gameLabel, player, heroControl }: {
   form: LineForm; onChange: (next: LineForm) => void; heroes: Record<string, string>;
   side: "ours" | "enemy"; gameLabel: string; player?: (lane: string) => ReactNode;
+  /** an editable hero for each row (shown above its numbers) */
+  heroControl?: (lane: string) => ReactNode;
 }) {
   const hasMore = SCORE_LANES.some((lane) => MORE.some((m) => (form[lane]?.[m.key] ?? "") !== ""));
   const [more, setMore] = useState(hasMore);
@@ -86,6 +88,7 @@ export function ScoreboardFields({ form, onChange, heroes, side, gameLabel, play
         const row = form[lane] ?? {};
         return (
           <div key={lane} className="space-y-1.5">
+            {heroControl && <div className="min-w-0">{heroControl(lane)}</div>}
             <div className="grid grid-cols-[repeat(4,minmax(0,1fr))_2.5rem] sm:grid-cols-[5.5rem_minmax(0,1fr)_repeat(4,3.5rem)_2.25rem] items-end gap-1.5 sm:gap-2">
               <div className="hidden sm:flex items-center gap-1.5 pb-2 min-w-0">
                 {hero ? <HeroImg name={hero} size={22} className="rounded shrink-0" /> : null}
@@ -135,11 +138,12 @@ export function ScoreboardFields({ form, onChange, heroes, side, gameLabel, play
 }
 
 /** Collapsible enemy scoreboard (opens by itself once it has numbers). */
-export function EnemyScoreboard({ form, onChange, heroes, opponent, gameLabel }: {
+export function EnemyScoreboard({ form, onChange, heroes, opponent, gameLabel, heroControl, startOpen = false }: {
   form: LineForm; onChange: (next: LineForm) => void; heroes: Record<string, string>; opponent: string; gameLabel: string;
+  heroControl?: (lane: string) => ReactNode; startOpen?: boolean;
 }) {
   const filled = SCORE_LANES.some((lane) => NUM_KEYS.some((k) => (form[lane]?.[k] ?? "") !== ""));
-  const [open, setOpen] = useState(filled);
+  const [open, setOpen] = useState(filled || startOpen);
   const shown = open || filled;
   return (
     <div className="card p-4">
@@ -149,7 +153,7 @@ export function EnemyScoreboard({ form, onChange, heroes, opponent, gameLabel }:
           {filled ? "filled" : "optional"} <ChevronDown size={12} className={`transition ${shown ? "rotate-180" : ""}`} aria-hidden="true" />
         </span>
       </button>
-      {shown && <div className="mt-3"><ScoreboardFields form={form} onChange={onChange} heroes={heroes} side="enemy" gameLabel={gameLabel} /></div>}
+      {shown && <div className="mt-3"><ScoreboardFields form={form} onChange={onChange} heroes={heroes} side="enemy" gameLabel={gameLabel} heroControl={heroControl} /></div>}
     </div>
   );
 }

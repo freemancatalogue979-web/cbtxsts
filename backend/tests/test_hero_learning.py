@@ -243,5 +243,70 @@ class ReadAndConfirm(LearnDir):
         self.assertEqual(hv.learned_counts(), {})
 
 
+
+@unittest.skipUnless(HAVE_ART, "hero art or numpy not available")
+class SoloReviewBeforeSaving(LearnDir):
+    """My own games from a screenshot: shown first, heroes fixable, saved only on confirm."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(self.engine)
+        self.db = Session(self.engine)
+        self.me = User(email="t@9clover.gg", password_hash="x", name="Tobi", ign="TOBI", role="player", roster=True)
+        self.db.add(self.me)
+        self.db.add_all([Hero(name=n, role="EXP") for n in sorted(self.heads)])
+        self.db.commit()
+        self.path = UPLOAD_DIR / "test0solo-review.png"
+
+    def tearDown(self) -> None:
+        self.path.unlink(missing_ok=True)
+        self.db.close()
+        self.engine.dispose()
+        super().tearDown()
+
+    def test_preview_fix_then_confirm(self) -> None:
+        from app import ai_game_import
+        from app.models import SoloGame
+        from app.routers import solo_games as solo
+        names = list(OURS.values()) + THEIRS[:4]
+        raw, boxes = board([self.heads[n] for n in names] + [skin_of("Paquito")])
+        self.path.write_bytes(raw)
+        url = "/api/files/test0solo-review.png"
+        reply = {"games": [{"hero": "Chip", "result": "WIN", "kills": 4, "deaths": 1, "assists": 9, "portrait": boxes[9]},
+                           {"hero": "Arlott", "result": "LOSS", "kills": 2, "deaths": 5, "assists": 3, "portrait": boxes[0]}]}
+        with patch.dict(os.environ, KEY), patch.object(ai_game_import, "call_vision", return_value=reply):
+            out = solo.import_file(solo.ImportIn(file_url=url, preview=True), db=self.db, user=self.me)
+        self.assertTrue(out["preview"])
+        self.assertEqual(self.db.query(SoloGame).count(), 0)          # nothing saved yet
+        first, second = out["games"]
+        self.assertEqual(second["look"]["hero_check"], "portrait")
+        self.assertEqual(len(first["look"]["portrait"]), 4)                # where to learn from, as sent back by the page
+        # the person fixes the first hero to Paquito and confirms
+        games = [{**{k: v for k, v in g.items() if k != "look"}, "hero": h} for g, h in ((first, "Paquito"), (second, "Arlott"))]
+        done = solo.confirm_import(solo.ConfirmIn(file_url=url, source="screenshot", games=games,
+                                                  portraits=[utility.PortraitIn(hero="Paquito", box=first["look"]["portrait"])]),
+                                   db=self.db, user=self.me)
+        self.assertEqual([g["hero"] for g in done["added"]], ["Paquito", "Arlott"])
+        self.assertEqual(done["learned"], 1)
+        self.assertEqual(hv.learned_counts().get("paquito"), 1)
+        self.assertEqual(hv.check_box(raw, boxes[9]).hero, "Paquito")
+        # the same games again are skipped, never doubled
+        again = solo.confirm_import(solo.ConfirmIn(file_url=url, games=games), db=self.db, user=self.me)
+        self.assertEqual((again["duplicates"], len(again["added"])), (2, 0))
+
+    def test_sheets_typed_by_people_still_save_straight_away(self) -> None:
+        from app.routers import solo_games as solo
+        path = UPLOAD_DIR / "test0solo-review.csv"
+        path.write_text("hero,result,kills,deaths,assists\nLing,WIN,5,1,7\n")
+        try:
+            out = solo.import_file(solo.ImportIn(file_url="/api/files/test0solo-review.csv", preview=True),
+                                   db=self.db, user=self.me)
+        finally:
+            path.unlink(missing_ok=True)
+        self.assertFalse(out["preview"])
+        self.assertEqual(len(out["added"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
