@@ -97,8 +97,9 @@ Node.js server in production; Node is only needed to build.
 
 ```bash
 # On a fresh Ubuntu server, as a normal user with sudo (not root):
-curl -fsSL https://raw.githubusercontent.com/freemancatalogue979-web/cbtxsts/main/deploy/setup-server.sh -o setup-server.sh
-BRANCH=main DOMAIN=hub.example.com bash setup-server.sh   # DOMAIN optional: adds HTTPS via certbot
+B=arena/ef137255-cbtxsts   # the branch that holds the app (main is not the app yet)
+curl -fsSL "https://raw.githubusercontent.com/freemancatalogue979-web/cbtxsts/$B/deploy/setup-server.sh" -o setup-server.sh
+BRANCH="$B" DOMAIN=hub.example.com bash setup-server.sh   # DOMAIN optional: adds HTTPS via certbot
 ```
 
 - Re-run the same command to update (pull, rebuild, restart). Data in `backend/data` is kept.
@@ -106,7 +107,7 @@ BRANCH=main DOMAIN=hub.example.com bash setup-server.sh   # DOMAIN optional: add
   admin password, printed once at the end. Older servers set up with `CBT_*` names are fixed
   automatically on the next run (everyone signs in again once).
 - Logs: `sudo journalctl -u clover -f` · config change: edit `backend/.env`, then `sudo systemctl restart clover`.
-- `BRANCH` must be a branch that contains the code you want to deploy.
+- `BRANCH` must be a branch that contains the app. Without it the script uses `main`, which currently doesn't.
 
 Quick local check of the production build (no nginx): `cd frontend && npm run build && npm run preview`
 serves `dist` on :9009 and proxies `/api` to the backend on :9000. Fine for a test; use nginx for real traffic.
