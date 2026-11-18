@@ -885,3 +885,37 @@ export interface Insights {
   };
   players: { user_id: number; name: string; lane: string; weeks: InsightPersonWeek[] }[];
 }
+
+/* ---- Players tab: leaderboard + each member's Utility games (/players/leaderboard, /players/{id}/utility) ---- */
+export interface BoardRow {
+  user_id: number; ign: string; name: string; avatar: string | null; main_role: string; role: string;
+  games: number; wins: number; losses: number; win_rate: number | null; mvps: number;
+  team_games: number; solo_games: number; form: string[];
+  kda: KdaLine | null; rating: number | null;
+  score: { value: number; parts: Partial<Record<"win" | "kda" | "rating" | "volume", number>> } | null;
+  heroes: { hero: string; games: number; wins: number; win_rate: number | null }[];
+  games_7d: number; last_game: string | null; last_added: string | null; solo_total: number;
+  nudge: string; rank: number | null;
+}
+export interface Leaderboard {
+  period: "30" | "90" | "all"; days: number; min_games: number;
+  weights: Record<"win" | "kda" | "rating" | "volume", number>;
+  rows: BoardRow[]; best: number | null; least: number | null;
+  awards: Partial<Record<"win_rate" | "kda" | "rating" | "grinder", { user_id: number; ign: string; label: string; value: string }>>;
+  needs_data: number[];
+  me: { user_id: number; rank: number | null; nudge: string; of: number; games_7d: number } | null;
+}
+export interface UtilityWeek {
+  start: string; games: number; win_rate: number | null; team_games: number; solo_games: number;
+  solo_win_rate: number | null; solo_rating: number | null; rating: number | null;
+}
+export interface UtilityGame {
+  id: number; played_on: string | null; mode: string; hero: string; lane: string; result: string;
+  kills: number | null; deaths: number | null; assists: number | null; rating: number | null; mvp: boolean; duration_min: number | null;
+}
+export interface UtilityProfile {
+  user_id: number; ign: string; is_self: boolean;
+  overall: SoloBlock; form: string[]; streak: { result: string; count: number }; trend: SoloStats["trend"];
+  heroes: SoloGroup[]; lanes: SoloGroup[]; modes: SoloGroup[]; alerts: SoloAlert[];
+  weeks: UtilityWeek[]; recent: UtilityGame[]; last_played: string | null; last_added: string | null;
+}

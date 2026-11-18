@@ -12,6 +12,7 @@ import type { LinkSummary } from "../lib/mlbb";
 import { nice } from "../lib/caseText";
 import { LaneTag, laneKey, Meter, WinRing } from "../components/PlayerBits";
 import { FormDots, kdaText, PerformancePanel } from "../components/PlayerPerformance";
+import { LinkedAccountCard, PlayersLeaderboard, UtilityPanel } from "../components/PlayersBoard";
 import type { FocusAlert, PoolPlayed } from "../lib/types";
 
 const POOL_LABEL: Record<string, string> = { comfort: "Comfort picks", meta: "Meta picks", pocket: "Pocket picks", emergency: "Emergency picks" };
@@ -36,7 +37,7 @@ function PoolPlayedLine({ played, alert }: { played: PoolPlayed; alert?: FocusAl
         <div className="text-[9.5px] text-faint mt-0.5">{where}{played.kda != null ? `${where ? " · " : ""}KDA ${kdaText(played.kda)}` : ""}</div>
       )}
       {played.solo && played.solo.games > 0 && (
-        <div className="text-[9.5px] text-mute mt-0.5 tabular-nums" title="Your own ranked/classic games (only you and staff see these)">
+        <div className="text-[9.5px] text-mute mt-0.5 tabular-nums" title="Games added in Utility (ranked, classic…): the whole team can see these">
           + {played.solo.games} solo {played.solo.games === 1 ? "game" : "games"} · <span className="text-leaf">{played.solo.wins}W</span>–<span className="text-danger">{played.solo.losses}L</span>{played.solo.win_rate != null ? ` · ${played.solo.win_rate}%` : ""}
         </div>
       )}
@@ -202,25 +203,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
               <div className="text-[13px] text-mute">{p.name} · {nice(p.main_role) || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
               {(() => {
                 const l = links.get(p.id);
-                if (!l?.linked) return null;
-                return (
-                  <div className="flex items-center gap-2.5 mt-2 bg-raised border border-leaf/30 rounded-lg px-3 py-2 w-fit">
-                    <span className="w-8 h-8 rounded-md border border-edge-2 overflow-hidden bg-overlay grid place-items-center shrink-0">
-                      {l.avatar
-                        ? <img src={l.avatar} alt="" width={32} height={32} loading="lazy" referrerPolicy="no-referrer" className="object-cover w-full h-full" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                        : <Gamepad2 size={14} className="text-leaf" />}
-                    </span>
-                    <div>
-                      <div className="text-[11.5px] font-extrabold text-leaf flex items-center gap-1.5">
-                        {l.name || "MLBB account"} <span className="text-[8.5px] font-bold text-faint">· linked</span>
-                      </div>
-                      <div className="text-[10px] text-faint">
-                        in-game: {l.name}{l.level != null ? ` · Lv ${l.level}` : ""}{l.rank_level != null ? ` · rank tier ${l.rank_level}` : ""}
-                        {l.role_id != null ? ` · ID ${l.role_id} (${l.zone_id})` : ""}
-                      </div>
-                    </div>
-                  </div>
-                );
+                return l?.linked ? <LinkedAccountCard link={l} /> : null;
               })()}
             </div>
           </div>
@@ -245,6 +228,8 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         </div>
 
         {p.performance && <PerformancePanel perf={p.performance} ign={p.ign} isSelf={p.is_self} />}
+
+        <UtilityPanel userId={p.id} ign={p.ign} />
 
         <ProgressPanel userId={p.id} ign={p.ign} />
 
@@ -341,7 +326,9 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
 
   return (
     <div className="space-y-5">
-      <PageTitle title="Players" sub="Roster, hero pools, form and individual development." />
+      <PageTitle title="Players" sub="Roster, leaderboard, hero pools, form and individual development." />
+      <PlayersLeaderboard meId={me.id} />
+      <SectionTitle>Roster</SectionTitle>
       {!roster && <Spinner />}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {(roster ?? []).map((p) => (

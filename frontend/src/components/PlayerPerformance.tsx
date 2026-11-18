@@ -1,4 +1,4 @@
-import { Crown, Flame, Gauge, Skull, Sparkles, Swords, Target, TrendingDown, Trophy } from "lucide-react";
+import { ArrowRight, Crown, Flame, Gauge, Skull, Sparkles, Swords, Target, TrendingDown, Trophy } from "lucide-react";
 import type { FocusAlert, GamePlayed, HeroPerf, PerfSummary, PlayerPerformance } from "../lib/types";
 import { nice } from "../lib/caseText";
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
@@ -37,6 +37,36 @@ export function FormDots({ form, label = "Recent form" }: { form: string[]; labe
   );
 }
 
+/** One alert, the same card everywhere (player page, dashboard, Utility games): the hero big
+ *  on the left in the alert's colour, what's wrong, why, and the next step. */
+export function AlertCard({ tone, label, icon: Icon, hero, pool, title, detail, tip, compact = false }: {
+  tone: FocusAlert["tone"]; label: string; icon: typeof Flame; hero?: string; pool?: string;
+  title: string; detail: string; tip?: string; compact?: boolean;
+}) {
+  const t = TONE[tone];
+  return (
+    <li className={`card focus-card ${t.card}`} data-tone={tone} data-compact={compact || undefined}>
+      <span className="focus-card__art">
+        {hero
+          ? <HeroImg name={hero} size={compact ? 46 : 58} className="focus-card__hero" />
+          : <span className="focus-card__hero focus-card__hero--icon" style={{ width: compact ? 46 : 58, height: compact ? 46 : 58 }}><Icon size={compact ? 18 : 22} aria-hidden="true" /></span>}
+        <span className={`focus-card__badge ${t.chip}`}><Icon size={11} aria-hidden="true" /></span>
+      </span>
+      <div className="focus-card__body">
+        <div className="focus-card__tags">
+          <span className={`focus-card__kind ${t.chip}`}><span className={`focus-card__dot ${t.bar}`} aria-hidden="true" />{label}</span>
+          {pool && <span className="focus-card__pool">{nice(pool)} pool</span>}
+        </div>
+        <div className="focus-card__title">{title}</div>
+        <div className="focus-card__detail">{detail}</div>
+        {!compact && tip && (
+          <div className="focus-card__tip"><ArrowRight size={12} aria-hidden="true" /><span>{tip}</span></div>
+        )}
+      </div>
+    </li>
+  );
+}
+
 /** "Heroes to work on": one card per alert, worst first. */
 export function FocusAlerts({ alerts, compact = false, empty }: { alerts: FocusAlert[]; compact?: boolean; empty?: string }) {
   if (!alerts.length) {
@@ -44,30 +74,10 @@ export function FocusAlerts({ alerts, compact = false, empty }: { alerts: FocusA
   }
   return (
     <ul className={`grid gap-2.5 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
-      {alerts.map((a) => {
-        const Icon = ALERT_ICON[a.kind];
-        const tone = TONE[a.tone];
-        return (
-          <li key={`${a.kind}-${a.hero}`} className={`card relative overflow-hidden p-3.5 flex gap-3 ${tone.card}`}>
-            <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${tone.bar}`} />
-            <span className="relative shrink-0">
-              <HeroImg name={a.hero} size={compact ? 44 : 52} className="rounded-lg" />
-              <span className={`absolute -bottom-1.5 -right-1.5 grid h-6 w-6 place-items-center rounded-full border bg-panel ${tone.chip}`}>
-                <Icon size={12} aria-hidden="true" />
-              </span>
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`chip !py-0 !text-[9.5px] ${tone.chip}`}>{ALERT_LABEL[a.kind]}</span>
-                {a.pool && <span className="chip !py-0 !text-[9.5px] text-mute">{a.pool} pool</span>}
-              </div>
-              <div className="mt-1 text-[13px] font-extrabold leading-snug break-words">{a.title}</div>
-              <div className="text-[11.5px] text-mute leading-relaxed break-words">{a.detail}</div>
-              {!compact && a.tip && <div className="mt-1 text-[11px] text-faint leading-relaxed">{a.tip}</div>}
-            </div>
-          </li>
-        );
-      })}
+      {alerts.map((a) => (
+        <AlertCard key={`${a.kind}-${a.hero}`} tone={a.tone} label={ALERT_LABEL[a.kind] ?? "Heads up"} icon={ALERT_ICON[a.kind] ?? Flame}
+          hero={a.hero} pool={a.pool ?? undefined} title={a.title} detail={a.detail} tip={a.tip} compact={compact} />
+      ))}
     </ul>
   );
 }

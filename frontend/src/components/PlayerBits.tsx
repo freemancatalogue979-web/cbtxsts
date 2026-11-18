@@ -45,7 +45,9 @@ export function PlayerChip({ user, lane = true, title, className = "" }: {
 }
 
 /** A compact win-rate ring with the percentage in the middle. */
-export function WinRing({ value, size = 50 }: { value: number | null | undefined; size?: number }) {
+export function WinRing({ value, size = 50, label = "Series win rate", empty = "No series yet" }: {
+  value: number | null | undefined; size?: number; label?: string; empty?: string;
+}) {
   const known = typeof value === "number" && Number.isFinite(value);
   const pctValue = known ? Math.max(0, Math.min(100, value as number)) : 0;
   const tone = !known ? "var(--color-edge-2)" : pctValue >= 55 ? "var(--color-leaf)" : pctValue >= 45 ? "var(--color-amber)" : "var(--color-danger)";
@@ -53,7 +55,7 @@ export function WinRing({ value, size = 50 }: { value: number | null | undefined
   const c = 2 * Math.PI * r;
   return (
     <span className="win-ring" style={{ width: size, height: size, "--ring": tone } as CSSProperties}
-      role="img" aria-label={known ? `Series win rate ${Math.round(pctValue)}%` : "No series yet"}>
+      role="img" aria-label={known ? `${label} ${Math.round(pctValue)}%` : empty}>
       <svg viewBox="0 0 36 36" width={size} height={size} aria-hidden="true">
         <circle cx="18" cy="18" r={r} className="win-ring__track" />
         <circle cx="18" cy="18" r={r} className="win-ring__value" strokeDasharray={`${(pctValue / 100) * c} ${c}`} />
