@@ -444,20 +444,20 @@ export function HeroGaps({ gaps, lane, onAdd }: { gaps?: SoloGaps; lane?: string
     <div className="space-y-4">
       {groups.map((g) => gaps[g.key].length ? (
         <div key={g.key}>
-          <div className="flex items-baseline justify-between gap-2 mb-2">
-            <h3 className="text-[12.5px] font-extrabold flex items-center gap-1.5"><g.icon size={14} className="text-crim" aria-hidden="true" /> {g.title}</h3>
-            <span className="text-[10.5px] text-faint hidden sm:inline">{g.hint}</span>
+          <div className="mb-2">
+            <h3 className="text-[12.5px] font-extrabold flex items-center gap-1.5"><g.icon size={14} className="text-crim shrink-0" aria-hidden="true" /> {g.title}</h3>
+            <p className="text-[10.5px] text-faint mt-0.5">{g.hint}</p>
           </div>
-          <ul className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+          <ul className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(15.5rem,1fr))]">
             {gaps[g.key].map((h) => (
               <li key={h.hero} className={`card p-2.5 flex items-center gap-2.5 ${g.tone}`}>
                 <HeroImg name={h.hero} size={44} className="rounded-lg shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[12px] font-extrabold truncate">{h.hero}</span>
+                    <span className="text-[12px] font-extrabold">{h.hero}</span>
                     {h.status && <span className={`chip !py-0 !text-[9px] ${h.status === "META" ? "border-crim/50 text-crim" : "border-leaf/45 text-leaf"}`}>{h.status === "META" ? "Meta" : "Strong"}</span>}
                   </div>
-                  <p className="text-[10.5px] text-mute leading-snug line-clamp-2">{h.why}</p>
+                  <p className="text-[10.5px] text-mute leading-snug line-clamp-3">{h.why}</p>
                 </div>
                 {onAdd && (
                   <button type="button" className="btn-ghost !p-1.5 shrink-0" title={`Add a ${h.hero} game`} aria-label={`Add a ${h.hero} game`}

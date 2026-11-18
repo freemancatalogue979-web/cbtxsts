@@ -379,7 +379,7 @@ function ReviewSheet({ review, onBack, onDone }: { review: Review; onBack: () =>
           </div>
           <EnemyScoreboard form={enemy} onChange={setEnemy} heroes={enemyHeroes} opponent={match.opponent} gameLabel={`game ${game_no}`} />
           <ErrorNote error={error} />
-          <div className="flex flex-wrap justify-end gap-2 sticky bottom-2">
+          <div className="flex flex-wrap justify-end gap-2 sticky bottom-2 z-10 rounded-xl border border-edge bg-panel/95 p-2 shadow-xl backdrop-blur">
             <button type="button" className="btn-ghost" onClick={onBack}>Cancel</button>
             <button type="button" className="btn-primary" disabled={busy} onClick={() => void confirm()}>
               {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Confirm & add to game {game_no}

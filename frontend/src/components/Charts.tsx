@@ -43,18 +43,22 @@ function useWidth(fallback = 640) {
   return [ref, width] as const;
 }
 
-/** A number that counts up from 0 when it first shows (or changes). */
+/** A number that counts up from 0 when it first shows, then glides to each new value. */
 export function CountUp({ value, digits = 0, suffix = "", ms = 1100 }: { value: number | null | undefined; digits?: number; suffix?: string; ms?: number }) {
   const [shown, setShown] = useState<number>(value ?? 0);
+  const from = useRef(0);
   useEffect(() => {
     if (value == null) return;
-    if (calmMotion() || typeof requestAnimationFrame !== "function") { setShown(value); return; }
+    if (calmMotion() || typeof requestAnimationFrame !== "function") { setShown(value); from.current = value; return; }
     let raf = 0;
     const start = performance.now();
+    const origin = from.current;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / ms);
       const eased = 1 - Math.pow(1 - t, 3);
-      setShown(value * eased);
+      const v = origin + (value - origin) * eased;
+      from.current = v;
+      setShown(v);
       if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
