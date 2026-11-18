@@ -415,7 +415,9 @@ export interface SoloStats {
   last_played: string | null;
 }
 
-export interface SoloGamesPayload { user: { id: number; name: string } | null; games: SoloGame[]; total: number; stats: SoloStats }
+export interface SoloGap { hero: string; role: string; category: string; why: string; days?: number; games?: number; status?: "META" | "STRONG" }
+export interface SoloGaps { no_data: SoloGap[]; not_playing: SoloGap[]; lane_meta: SoloGap[] }
+export interface SoloGamesPayload { user: { id: number; name: string; lane?: string } | null; games: SoloGame[]; total: number; stats: SoloStats; gaps?: SoloGaps }
 
 export interface SoloCheck { tone: "ok" | "info" | "warn"; text: string }
 
@@ -423,7 +425,7 @@ export interface SoloImport {
   batch: string | null;
   file: string;
   source: string;
-  used_ai: boolean;
+  read_directly: boolean;
   added: SoloGame[];
   duplicates: number;
   checks: SoloCheck[];
@@ -839,4 +841,47 @@ export interface ArchiveCommentT {
 
 export interface ArchiveLocker extends ArchiveFolderT {
   items: ArchiveItemT[];
+}
+
+// ---- Utility: staff match evidence -------------------------------------------------------- //
+export interface UtilityGame {
+  game_no: number; game_id: number | null; result: string; players: Record<string, string>;
+  has_stats: boolean; has_enemy: boolean; has_draft: boolean;
+}
+export interface UtilityMatch {
+  key: string; kind: "scrim" | "tournament"; id: number; title: string; event: string; opponent: string;
+  date: string | null; status: string; result: string; score: [number | null, number | null]; format: string;
+  games: UtilityGame[]; slots: number[]; max_games?: number; evidence: { url: string; label: string }[]; link: (string | number)[];
+}
+export interface UtilityRead { target: UtilityMatch; game_no: number; sheet: ScoreboardRead }
+
+// ---- Dashboard insights -------------------------------------------------------------------- //
+export interface InsightTeamWeek {
+  games: number; wins: number; losses: number; win_rate: number | null; scrim_games: number; tournament_games: number;
+  kda: number | null; rating: number | null; solo_games: number; solo_win_rate: number | null;
+}
+export interface InsightPersonWeek {
+  team_games: number; team_win_rate: number | null; team_rating: number | null; solo_games: number;
+  solo_win_rate: number | null; solo_rating: number | null; games: number; win_rate: number | null;
+  kda: number | null; rating: number | null;
+}
+export interface InsightPerson {
+  user_id: number; name: string; role: string; days: number[]; active_days: number; active_7: number;
+  streak: number; solo_games: number; last_seen: string | null;
+}
+export interface Insights {
+  scope: "staff" | "member";
+  weeks: string[];
+  team: InsightTeamWeek[];
+  summary: {
+    games: number; wins: number; losses: number; win_rate: number | null; streak: { result: string; count: number };
+    solo_games: number; scrim_games: number; tournament_games: number; kda: number | null; rating: number | null;
+  };
+  heroes: { name: string; games: number; wins: number; win_rate: number | null }[];
+  me: { user_id: number; name: string; weeks: InsightPersonWeek[] };
+  activity: {
+    days: string[]; daily_active: number[]; people: InsightPerson[];
+    active_today: number; active_7: number; active_28: number; members: number;
+  };
+  players: { user_id: number; name: string; lane: string; weeks: InsightPersonWeek[] }[];
 }

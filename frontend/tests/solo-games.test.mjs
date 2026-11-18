@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
 const [solo, page, app, controls, dashboard, players, types] = await Promise.all([
   read("../src/components/SoloGames.tsx"),
-  read("../src/pages/CloverAI.tsx"),
+  read("../src/pages/Utility.tsx"),
   read("../src/App.tsx"),
   read("../src/components/AIDataControls.tsx"),
   read("../src/pages/Dashboard.tsx"),
@@ -13,14 +13,12 @@ const [solo, page, app, controls, dashboard, players, types] = await Promise.all
   read("../src/lib/types.ts"),
 ]);
 
-test("Utility AI and Learning utility are tabs inside 9 Clover AI", () => {
-  assert.match(page, /\{ id: "utility", label: "Utility AI", icon: Upload \}/);
-  assert.match(page, /\{ id: "learning", label: "Learning utility", icon: GraduationCap \}/);
-  assert.match(page, /tab === "utility" \? <AIUtility me=\{me\}/);
-  assert.match(page, /tab === "learning" \? <AILearning me=\{me\}/);
-  // #/ai/utility and #/ai/learning deep links
-  assert.match(page, /const LINKED_TABS: readonly Tab\[\] = \["utility", "learning"\]/);
-  assert.match(app, /<CloverAIPage [^>]*view=\{rest\[0\]\}/);
+test("the player's games live on the Utility tab, and old AI links redirect there", () => {
+  assert.match(page, /<RecordUploader onChanged=/);
+  assert.match(page, /<GamesTable data=\{data\}/);
+  assert.match(app, /case "utility":\s*page = <UtilityPage me=\{user\} meta=\{meta\} parts=\{rest\} \/>/);
+  assert.match(app, /if \(route\[1\] === "utility"\) return \["utility", "add"\]/);
+  assert.match(app, /if \(route\[1\] === "learning"\) return \["utility", "progress"\]/);
 });
 
 test("players can pick screenshots, documents and spreadsheets — several at once", () => {
@@ -49,10 +47,10 @@ test("every field can be typed by hand, and heroes use the modal picker", () => 
   assert.doesNotMatch(solo, /<select[^>]*hero/i);
 });
 
-test("Learning utility shows form, heroes, alerts and AI coaching", () => {
-  assert.match(solo, /<SectionTitle>What to work on<\/SectionTitle>/);
-  assert.match(solo, /<SectionTitle>My heroes<\/SectionTitle>/);
-  assert.match(solo, /<SectionTitle>AI coach<\/SectionTitle>/);
+test("progress shows what to work on, heroes and a personal plan", () => {
+  assert.match(page, /<SectionTitle>What to work on<\/SectionTitle>/);
+  assert.match(page, /\{mine \? "My heroes" : "Heroes"\}/);
+  assert.match(solo, /<SectionTitle>Your plan<\/SectionTitle>/);
   assert.match(solo, /api\.post<SoloCoaching>\("\/solo-games\/coach", \{ focus \}\)/);
   assert.match(solo, /What's working/);
   assert.match(solo, /Fix next/);
@@ -64,8 +62,8 @@ test("chat only sees solo games after opting in", () => {
 });
 
 test("solo games show on the dashboard and the hero pool, apart from team numbers", () => {
-  assert.match(dashboard, /navigate\("ai", "utility"\)/);
-  assert.match(dashboard, /navigate\("ai", "learning"\)/);
+  assert.match(dashboard, /navigate\("utility", "add"\)/);
+  assert.match(dashboard, /navigate\("utility", "progress"\)/);
   assert.match(dashboard, /My solo games/);
   assert.match(players, /played\.solo && played\.solo\.games > 0/);
   assert.match(players, /team \{played\.games === 1 \? "game" : "games"\}/);

@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import type { Dashboard, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge, useCountdown } from "../lib/util";
 import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide } from "../components/ui";
+import { DashboardInsights } from "../components/DashboardInsights";
 import { nice } from "../lib/caseText";
 import { FocusAlerts, FormDots, kdaText } from "../components/PlayerPerformance";
 import { HeroImg } from "../components/HeroImg";
@@ -167,7 +168,7 @@ function MyForm({ form }: { form: NonNullable<Dashboard["my_form"]> }) {
   return (
     <section className="card p-4 sm:p-5 space-y-4" aria-label="My form">
       <SectionTitle right={<span className="flex flex-wrap gap-1.5">
-        <button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("ai", "utility")}><Upload size={13} aria-hidden="true" /> Add my games</button>
+        <button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("utility", "add")}><Upload size={13} aria-hidden="true" /> Add my games</button>
         <button className="btn-ghost !py-1 !text-[11.5px]" onClick={() => navigate("players", form.user_id)}>My profile <ArrowRight size={13} aria-hidden="true" /></button>
       </span>}>
         My form
@@ -201,7 +202,7 @@ function MyForm({ form }: { form: NonNullable<Dashboard["my_form"]> }) {
             </div>
           )}
           {form.solo && form.solo.games > 0 && (
-            <button type="button" onClick={() => navigate("ai", "learning")} aria-label="My solo games: open Learning utility"
+            <button type="button" onClick={() => navigate("utility", "progress")} aria-label="My solo games: open my progress in Utility"
               className="w-full text-left rounded-lg border border-leaf/30 bg-leaf/5 px-3 py-2 hover:border-leaf/60 transition">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="label">My solo games</span>
@@ -336,6 +337,8 @@ export function DashboardPage({ me }: { me?: User }) {
         <div className="lg:col-span-5"><TrainingBlock dash={dash} /></div>
         <div className="lg:col-span-7"><NextUp dash={dash} /></div>
       </div>
+
+      <DashboardInsights />
 
       {dash.my_form && <MyForm form={dash.my_form} />}
       {dash.squad_focus && dash.squad_focus.length > 0 && <SquadFocus rows={dash.squad_focus} />}

@@ -39,10 +39,25 @@ function deviceStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
 }
 
+/** Old links into the AI page's utility tabs now open the Utility tab. */
+export function movedRoute(route: string[]): string[] | null {
+  if (route[0] !== "ai") return null;
+  if (route[1] === "utility") return ["utility", "add"];
+  if (route[1] === "learning") return ["utility", "progress"];
+  return null;
+}
+
+function currentRoute(): string[] {
+  const route = hashRoute();
+  const moved = movedRoute(route);
+  if (moved) { window.history.replaceState(null, "", `#/${moved.join("/")}`); return moved; }
+  return route;
+}
+
 function useRoute() {
-  const [route, setRoute] = useState<string[]>(hashRoute());
+  const [route, setRoute] = useState<string[]>(currentRoute);
   useEffect(() => {
-    const onHash = () => setRoute(hashRoute());
+    const onHash = () => setRoute(currentRoute());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -145,7 +160,7 @@ export default function App() {
       page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} />;
       break;
     case "utility":
-      page = <UtilityPage me={user} parts={rest} />;
+      page = <UtilityPage me={user} meta={meta} parts={rest} />;
       break;
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;

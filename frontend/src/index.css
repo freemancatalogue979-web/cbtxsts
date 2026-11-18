@@ -888,3 +888,73 @@ html[data-effects="calm"] .ambient__spotlight { transform: none; transition: non
    iPhone home indicator, near the bottom edge on desktop. */
 .app-status { bottom: calc(env(safe-area-inset-bottom) + 76px); }
 @media (min-width: 768px) { .app-status { bottom: 20px; } }
+
+/* ---- Animated charts (components/Charts.tsx) ------------------------------------------- */
+.chart-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: chart-draw 1.5s cubic-bezier(.65, 0, .35, 1) forwards; }
+.chart-fade { opacity: 0; animation: chart-fade .9s ease forwards; }
+.chart-grow { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0); animation: chart-grow .85s cubic-bezier(.2, .9, .25, 1.12) forwards; }
+.chart-pop { transform-box: fill-box; transform-origin: center; opacity: 0; animation: chart-pop .5s cubic-bezier(.2, .9, .3, 1.3) forwards; }
+.chart-bar-x { transform-origin: left center; transform: scaleX(0); animation: chart-bar-x 1.1s cubic-bezier(.2, .9, .25, 1) forwards; }
+.chart-ring { animation: chart-ring 1.4s cubic-bezier(.65, 0, .35, 1) backwards; }
+.chart-glow { filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 55%, transparent)); }
+.chart-live { position: relative; }
+.chart-live::before { content: ""; position: absolute; inset: -4px; border-radius: 9999px; background: currentColor; opacity: .35; animation: chart-live 1.8s ease-out infinite; }
+.chart-card { position: relative; overflow: hidden; isolation: isolate; }
+.chart-card::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--color-crim) 7%, transparent) 50%, transparent 65%);
+  background-size: 250% 100%; animation: chart-sheen 9s linear infinite;
+}
+@keyframes chart-draw { to { stroke-dashoffset: 0; } }
+@keyframes chart-fade { to { opacity: 1; } }
+@keyframes chart-grow { to { transform: scaleY(1); } }
+@keyframes chart-pop { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: scale(1); } }
+@keyframes chart-bar-x { to { transform: scaleX(1); } }
+@keyframes chart-ring { from { stroke-dasharray: 0 100; } }
+@keyframes chart-live { from { transform: scale(.6); opacity: .5; } to { transform: scale(2.2); opacity: 0; } }
+@keyframes chart-sheen { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+html[data-effects="calm"] .chart-draw, html[data-effects="calm"] .chart-fade, html[data-effects="calm"] .chart-grow,
+html[data-effects="calm"] .chart-pop, html[data-effects="calm"] .chart-bar-x, html[data-effects="calm"] .chart-ring,
+html[data-effects="calm"] .chart-live::before, html[data-effects="calm"] .chart-card::after {
+  animation: none !important; stroke-dashoffset: 0; opacity: 1; transform: none;
+}
+html[data-effects="calm"] .chart-live::before, html[data-effects="calm"] .chart-card::after { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-draw, .chart-fade, .chart-grow, .chart-pop, .chart-bar-x, .chart-ring, .chart-live::before, .chart-card::after {
+    animation: none !important; stroke-dashoffset: 0; opacity: 1; transform: none;
+  }
+  .chart-live::before, .chart-card::after { opacity: 0; }
+}
+.chart-bar-x-rev { transform-origin: right center; }
+
+/* ---- Utility page ---------------------------------------------------------------------- */
+.step-dot {
+  display: inline-grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 9999px; flex-shrink: 0;
+  font-size: 10.5px; font-weight: 900; color: var(--color-ink); background: var(--color-crim);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-crim) 22%, transparent);
+}
+.evidence-scan {
+  position: absolute; inset-inline: 0; height: 2px; top: 0;
+  background: linear-gradient(90deg, transparent, var(--color-crim), transparent);
+  box-shadow: 0 0 14px var(--color-crim); animation: evidence-scan 1.4s ease-in-out infinite alternate;
+}
+@keyframes evidence-scan { from { top: 4%; } to { top: 94%; } }
+.utility-drop::before {
+  content: ""; position: absolute; inset: -40%; z-index: 0; pointer-events: none; opacity: .5;
+  background: conic-gradient(from 0deg, transparent 0 70%, color-mix(in srgb, var(--color-crim) 18%, transparent) 85%, transparent);
+  animation: utility-spin 14s linear infinite;
+}
+.utility-drop > * { position: relative; z-index: 1; }
+@keyframes utility-spin { to { transform: rotate(1turn); } }
+.utility-band {
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--color-crim) 16%, transparent), transparent 55%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--color-sky) 12%, transparent), transparent 60%),
+    var(--color-panel);
+}
+html[data-effects="calm"] .evidence-scan, html[data-effects="calm"] .utility-drop::before { animation: none !important; }
+html[data-effects="calm"] .utility-drop::before { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .evidence-scan, .utility-drop::before { animation: none !important; }
+  .utility-drop::before { opacity: 0; }
+}

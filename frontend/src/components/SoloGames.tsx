@@ -1,29 +1,29 @@
 /**
- * 9 Clover AI → Utility AI + Learning utility.
+ * Utility → a player's own (solo) games.
  *
- * Utility AI: a player drops a screenshot, document or spreadsheet at any time and the AI
- * adds their own (solo) games straight to their record — no approval needed, with an undo
- * per file, edit/delete per game, and a manual "add a game" form.
- * Learning utility: what those games say — form, heroes, trend, what to work on — plus
- * AI coaching on request.
+ * Players drop a screenshot, document or spreadsheet at any time and their games are added
+ * straight to their record (undo per file, edit/delete per game, a manual form). From those
+ * games: hero gaps (no data / stopped playing / strong in your lane), what to work on,
+ * animated progress charts and a personal plan. Player-facing copy never talks about how
+ * files are read.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
-  AlertTriangle, BrainCircuit, CheckCircle2, Crown, FileSpreadsheet, FileText, Flame, Gauge, Image as ImageIcon, Info,
+  AlertTriangle, CheckCircle2, CircleDashed, Crown, FileSpreadsheet, FileText, Flame, Gauge, Hourglass, Image as ImageIcon, Info,
   Loader2, Pencil, Plus, RotateCcw, Search, Skull, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Upload, X,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Hero, SoloAlert, SoloCheck, SoloCoaching, SoloGame, SoloGamesPayload, SoloGroup, SoloImport, User } from "../lib/types";
+import type { Hero, SoloAlert, SoloCheck, SoloCoaching, SoloGame, SoloGamesPayload, SoloGaps, SoloGroup, SoloImport } from "../lib/types";
 import { fmtDate, pct } from "../lib/util";
 import { HeroImg } from "./HeroImg";
 import { HeroPickerModal } from "./HeroPicker";
 import { FormDots, kdaText } from "./PlayerPerformance";
-import { Empty, ErrorNote, Field, Modal, SectionTitle, Spinner, StatTile } from "./ui";
+import { BarChart, CHART_COLORS, CountUp, Donut, HBars, Legend, LineChart, weekLabel } from "./Charts";
+import { Empty, ErrorNote, Field, SectionTitle, Spinner } from "./ui";
 
 export const SOLO_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.txt,.md,.csv,.tsv,.xlsx,.json";
 const MODES = ["Ranked", "Classic", "Brawl", "Custom", "Arcade"];
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
-const STAFF = new Set(["admin", "captain", "coach", "analyst"]);
 const TEMPLATE_HEADERS = ["date", "mode", "hero", "lane", "result", "kills", "deaths", "assists", "rating", "gold",
   "damage", "damage_taken", "turret_damage", "duration", "mvp", "notes"];
 
@@ -33,17 +33,18 @@ const kdaLine = (g: Pick<SoloGame, "kills" | "deaths" | "assists">) =>
 const errText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
 
 /** Your games + stats, reloadable. Staff may look at another player's. */
-export function useSoloGames(userId?: number) {
+export function useSoloGames(userId?: number, skip = false) {
   const [data, setData] = useState<SoloGamesPayload | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
+    if (skip) { setLoading(false); return; }
     setLoading(true);
     try {
       setData(await api.get<SoloGamesPayload>(`/solo-games${userId ? `?user_id=${userId}` : ""}`));
       setError(null);
     } catch (e) { setError(e); } finally { setLoading(false); }
-  }, [userId]);
+  }, [userId, skip]);
   useEffect(() => { void load(); }, [load]);
   return { data, error, loading, reload: load };
 }
@@ -102,10 +103,11 @@ function fromForm(f: GameForm) {
   };
 }
 
-export function SoloGameEditor({ game, heroes, lane, onSaved, onCancel }: {
-  game?: SoloGame | null; heroes: Hero[]; lane?: string; onSaved: (g: SoloGame) => void; onCancel: () => void;
+export function SoloGameEditor({ game, heroes, lane, hero, onSaved, onCancel }: {
+  game?: SoloGame | null; heroes: Hero[]; lane?: string; /** Start a new game on this hero. */ hero?: string;
+  onSaved: (g: SoloGame) => void; onCancel: () => void;
 }) {
-  const [f, setF] = useState<GameForm>(() => toForm(game, lane));
+  const [f, setF] = useState<GameForm>(() => ({ ...toForm(game, lane), ...(!game && hero ? { hero } : {}) }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const set = <K extends keyof GameForm>(k: K, v: GameForm[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -189,7 +191,7 @@ export function SoloGameEditor({ game, heroes, lane, onSaved, onCancel }: {
 }
 
 // --------------------------------------------------------------------------- //
-// Utility AI
+// add games: upload files
 // --------------------------------------------------------------------------- //
 type Job = { id: string; name: string; status: "uploading" | "reading" | "done" | "error" | "undone"; result?: SoloImport; error?: string };
 
@@ -202,15 +204,10 @@ function downloadTemplate() {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AIUtility({ me, onOpenLearning }: { me: User; onOpenLearning?: () => void }) {
-  const { data, error, loading, reload } = useSoloGames();
-  const heroes = useHeroes();
+/** Drop screenshots / documents / sheets; your games are picked out and added right away. */
+export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => void; onAddByHand?: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [drag, setDrag] = useState(false);
-  const [editing, setEditing] = useState<SoloGame | "new" | null>(null);
-  const [q, setQ] = useState("");
-  const [result, setResult] = useState<"" | "WIN" | "LOSS">("");
-  const [shown, setShown] = useState(25);
   const [actionError, setActionError] = useState<unknown>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const update = (id: string, patch: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
@@ -234,7 +231,7 @@ export function AIUtility({ me, onOpenLearning }: { me: User; onOpenLearning?: (
       }
     }
     if (fileRef.current) fileRef.current.value = "";
-    void reload();
+    onChanged();
   }
 
   async function undo(job: Job) {
@@ -242,51 +239,35 @@ export function AIUtility({ me, onOpenLearning }: { me: User; onOpenLearning?: (
     try {
       await api.post("/solo-games/undo", { batch: job.result.batch });
       update(job.id, { status: "undone" });
-      void reload();
+      onChanged();
     } catch (e) { setActionError(e); }
   }
 
-  async function remove(g: SoloGame) {
-    if (!window.confirm(`Move this ${g.hero || "game"} game to Trash? You can restore it from Trash.`)) return;
-    try { await api.del(`/solo-games/${g.id}`); void reload(); } catch (e) { setActionError(e); }
-  }
-
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); void handle(e.dataTransfer.files); };
-  const games = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (data?.games ?? []).filter((g) => (!result || g.result === result) && (!needle || g.hero.toLowerCase().includes(needle) || g.mode.toLowerCase().includes(needle)));
-  }, [data, q, result]);
   const busy = jobs.some((j) => j.status === "uploading" || j.status === "reading");
-  const o = data?.stats.overall;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-extrabold flex items-center gap-2"><Sparkles size={16} className="text-leaf" /> Utility AI</h2>
-          <p className="text-[12px] text-mute mt-1 max-w-2xl">Drop your own games in, any time. A match-history screen, a post-match scoreboard, a PDF or Word file, or a spreadsheet with lots of games. The AI picks out <b>your</b> games and adds them to your record straight away. Team scrims and tournaments aren't touched.</p>
-        </div>
-        {o && o.games > 0 && onOpenLearning && (
-          <button type="button" className="btn-ghost" onClick={onOpenLearning}><BrainCircuit size={14} /> See what they say</button>
-        )}
-      </div>
-
+    <div className="space-y-3">
       <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
-        className={`relative rounded-xl border-2 border-dashed p-5 sm:p-7 text-center transition ${drag ? "border-leaf bg-leaf/10" : "border-edge-2 bg-ink/40 hover:border-leaf/50"}`}>
+        className={`utility-drop relative overflow-hidden rounded-2xl border-2 border-dashed p-5 sm:p-7 text-center transition ${drag ? "border-crim bg-crim/10" : "border-edge-2 bg-ink/40 hover:border-crim/50"}`}>
         <input ref={fileRef} id="solo-upload" type="file" className="sr-only" multiple accept={SOLO_ACCEPT} onChange={(e) => void handle(e.target.files)} />
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-leaf/40 bg-leaf/10 text-leaf mb-3">
-          {busy ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
+        <div className="relative mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-crim/40 bg-crim/10 text-crim mb-3">
+          {busy ? <Loader2 size={22} className="animate-spin" /> : <Upload size={22} />}
         </div>
-        <label htmlFor="solo-upload" className="btn-primary cursor-pointer inline-flex"><Upload size={14} /> Pick files</label>
-        <p className="text-[11px] text-faint mt-2.5">or drop them here · up to 10 at once</p>
+        <p className="text-[14px] font-extrabold">Drop your games here</p>
+        <p className="text-[11.5px] text-mute mt-1 max-w-md mx-auto">A match-history screen, a post-match scoreboard, a PDF or Word file, or a sheet with lots of games. Your games go straight onto your record.</p>
+        <div className="mt-3.5 flex flex-wrap justify-center gap-2">
+          <label htmlFor="solo-upload" className="btn-primary cursor-pointer inline-flex"><Upload size={14} /> Pick files</label>
+          {onAddByHand && <button type="button" className="btn-ghost" onClick={onAddByHand}><Plus size={14} /> Add one by hand</button>}
+        </div>
         <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-[10px]">
           <span className="chip border-edge text-mute"><ImageIcon size={11} /> Screenshots</span>
           <span className="chip border-edge text-mute"><FileText size={11} /> PDF · Word · text</span>
           <span className="chip border-edge text-mute"><FileSpreadsheet size={11} /> Excel · CSV</span>
         </div>
-        <p className="text-[10.5px] text-faint mt-3">Spreadsheets with hero / result / K / D / A columns are read directly. <button type="button" className="text-leaf underline" onClick={downloadTemplate}>Get the CSV template</button></p>
+        <p className="text-[10.5px] text-faint mt-3">Up to 10 at once. Sheets with hero / result / K / D / A columns work best. <button type="button" className="text-crim underline" onClick={downloadTemplate}>Get the CSV template</button></p>
       </div>
-
+      <ErrorNote error={actionError} />
       {jobs.length > 0 && (
         <ul className="space-y-2" aria-live="polite">
           {jobs.map((j) => (
@@ -295,9 +276,9 @@ export function AIUtility({ me, onOpenLearning }: { me: User; onOpenLearning?: (
                 <span className="text-[12px] font-bold truncate max-w-[60%]">{j.name}</span>
                 <span className="text-[10.5px] text-faint">
                   {j.status === "uploading" ? "Uploading…" : j.status === "reading" ? "Reading your games…" : j.status === "error" ? "Couldn't read it"
-                    : j.status === "undone" ? "Taken back (in Trash)" : `${j.result?.added.length ?? 0} added${j.result?.duplicates ? ` · ${j.result.duplicates} already there` : ""}${j.result?.used_ai === false ? " · no AI needed" : ""}`}
+                    : j.status === "undone" ? "Taken back (in Trash)" : `${j.result?.added.length ?? 0} added${j.result?.duplicates ? ` · ${j.result.duplicates} already there` : ""}${j.result?.read_directly ? " · read straight from the sheet" : ""}`}
                 </span>
-                {(j.status === "uploading" || j.status === "reading") && <Loader2 size={13} className="animate-spin text-leaf" />}
+                {(j.status === "uploading" || j.status === "reading") && <Loader2 size={13} className="animate-spin text-crim" />}
                 {j.status === "done" && j.result?.batch && (
                   <button type="button" className="btn-ghost !py-1 !px-2 !text-[10px] ml-auto" onClick={() => void undo(j)}><RotateCcw size={12} /> Undo</button>
                 )}
@@ -322,78 +303,97 @@ export function AIUtility({ me, onOpenLearning }: { me: User; onOpenLearning?: (
           ))}
         </ul>
       )}
-
-      <section>
-        <SectionTitle right={<button type="button" className="btn-ghost !py-1.5" onClick={() => setEditing("new")}><Plus size={14} /> Add a game</button>}>
-          My games{data ? ` · ${data.total}` : ""}
-        </SectionTitle>
-        <ErrorNote error={error || actionError} />
-        {loading && !data ? <Spinner label="Loading your games" /> : !data?.games.length ? (
-          <Empty title="No games yet" hint="Upload a screenshot or sheet above, or add a game by hand." />
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2 mb-2.5">
-              <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
-                <input className="input !pl-8 !py-1.5 !w-48" placeholder="Hero or mode…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter games" />
-              </div>
-              {(["", "WIN", "LOSS"] as const).map((r) => (
-                <button key={r || "all"} type="button" aria-pressed={result === r} onClick={() => setResult(r)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${result === r ? "border-leaf/60 bg-leaf/10 text-leaf" : "border-edge text-faint hover:text-mute"}`}>
-                  {r === "" ? "All" : r === "WIN" ? "Wins" : "Losses"}
-                </button>
-              ))}
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-edge min-w-0">
-              <table className="w-full text-[11.5px]">
-                <thead className="bg-raised/60 text-faint text-left">
-                  <tr>
-                    <th className="th">Date</th><th className="th">Hero</th><th className="th">Result</th><th className="th">K/D/A</th>
-                    <th className="th">Rating</th><th className="th hidden sm:table-cell">Gold</th><th className="th hidden md:table-cell">Damage</th>
-                    <th className="th hidden sm:table-cell">Mode</th><th className="th"><span className="sr-only">Actions</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {games.slice(0, shown).map((g) => (
-                    <tr key={g.id} className="border-t border-edge/60">
-                      <td className="td whitespace-nowrap text-mute">{g.played_on ? fmtDate(g.played_on) : "—"}</td>
-                      <td className="td"><span className="flex items-center gap-2 min-w-0"><HeroImg name={g.hero} size={24} className="rounded" /><span className="font-bold truncate">{g.hero || "—"}</span>{g.mvp && <Crown size={12} className="text-amber shrink-0" aria-label="MVP" />}</span></td>
-                      <td className="td"><ResultChip result={g.result} /></td>
-                      <td className="td tabular-nums">{kdaLine(g)}</td>
-                      <td className="td tabular-nums">{g.rating ?? "—"}</td>
-                      <td className="td tabular-nums hidden sm:table-cell">{n(g.gold)}</td>
-                      <td className="td tabular-nums hidden md:table-cell">{n(g.damage)}</td>
-                      <td className="td hidden sm:table-cell text-mute"><span className="inline-flex items-center gap-1.5">{sourceIcon(g.source)} {g.mode || "—"}</span></td>
-                      <td className="td">
-                        <span className="flex justify-end gap-1">
-                          <button type="button" className="btn-ghost !p-1.5" title="Edit game" aria-label={`Edit ${g.hero} game`} onClick={() => setEditing(g)}><Pencil size={12} /></button>
-                          <button type="button" className="btn-ghost !p-1.5 hover:text-danger" title="Move to Trash" aria-label={`Delete ${g.hero} game`} onClick={() => void remove(g)}><Trash2 size={12} /></button>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {games.length > shown && <button type="button" className="btn-ghost mt-2.5 w-full justify-center" onClick={() => setShown((s) => s + 50)}>Show more ({games.length - shown} left)</button>}
-            {!games.length && <p className="text-[12px] text-faint mt-2">No games match that filter.</p>}
-          </>
-        )}
-      </section>
-      <p className="text-[10.5px] text-faint">Only you and team staff can see these games. Deleted games go to Trash. To let the AI chat use them, switch on "My solo games" in Manage memory & context.</p>
-
-      {editing && (
-        <Modal title={editing === "new" ? "Add a game" : "Edit game"} onClose={() => setEditing(null)} wide>
-          <SoloGameEditor game={editing === "new" ? null : editing} heroes={heroes} lane={me.main_role ?? ""}
-            onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); void reload(); }} />
-        </Modal>
-      )}
     </div>
   );
 }
 
 // --------------------------------------------------------------------------- //
-// Learning utility
+// add games: the list
+// --------------------------------------------------------------------------- //
+export function GamesTable({ data, loading, error, onEdit, onAdd, onChanged, readOnly = false }: {
+  data: SoloGamesPayload | null; loading: boolean; error: unknown; onEdit: (g: SoloGame) => void; onAdd: () => void;
+  onChanged: () => void; readOnly?: boolean;
+}) {
+  const [q, setQ] = useState("");
+  const [result, setResult] = useState<"" | "WIN" | "LOSS">("");
+  const [shown, setShown] = useState(25);
+  const [actionError, setActionError] = useState<unknown>(null);
+  const games = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return (data?.games ?? []).filter((g) => (!result || g.result === result) && (!needle || g.hero.toLowerCase().includes(needle) || g.mode.toLowerCase().includes(needle)));
+  }, [data, q, result]);
+
+  async function remove(g: SoloGame) {
+    if (!window.confirm(`Move this ${g.hero || "game"} game to Trash? You can restore it from Trash.`)) return;
+    try { await api.del(`/solo-games/${g.id}`); onChanged(); } catch (e) { setActionError(e); }
+  }
+
+  return (
+    <section>
+      <SectionTitle right={readOnly ? undefined : <button type="button" className="btn-ghost !py-1.5" onClick={onAdd}><Plus size={14} /> Add a game</button>}>
+        {readOnly ? "Games" : "My games"}{data ? ` · ${data.total}` : ""}
+      </SectionTitle>
+      <ErrorNote error={error || actionError} />
+      {loading && !data ? <Spinner label="Loading games" /> : !data?.games.length ? (
+        <Empty title="No games yet" hint={readOnly ? "Nothing added yet." : "Upload a screenshot or sheet, or add a game by hand."} />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
+              <input className="input !pl-8 !py-1.5 !w-48" placeholder="Hero or mode…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter games" />
+            </div>
+            {(["", "WIN", "LOSS"] as const).map((r) => (
+              <button key={r || "all"} type="button" aria-pressed={result === r} onClick={() => setResult(r)}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${result === r ? "border-crim/60 bg-crim/10 text-crim" : "border-edge text-faint hover:text-mute"}`}>
+                {r === "" ? "All" : r === "WIN" ? "Wins" : "Losses"}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-edge min-w-0">
+            <table className="w-full text-[11.5px]">
+              <thead className="bg-raised/60 text-faint text-left">
+                <tr>
+                  <th className="th">Date</th><th className="th">Hero</th><th className="th">Result</th><th className="th">K/D/A</th>
+                  <th className="th">Rating</th><th className="th hidden sm:table-cell">Gold</th><th className="th hidden md:table-cell">Damage</th>
+                  <th className="th hidden sm:table-cell">Mode</th>{!readOnly && <th className="th"><span className="sr-only">Actions</span></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {games.slice(0, shown).map((g) => (
+                  <tr key={g.id} className="border-t border-edge/60">
+                    <td className="td whitespace-nowrap text-mute">{g.played_on ? fmtDate(g.played_on) : "—"}</td>
+                    <td className="td"><span className="flex items-center gap-2 min-w-0"><HeroImg name={g.hero} size={24} className="rounded" /><span className="font-bold truncate">{g.hero || "—"}</span>{g.mvp && <Crown size={12} className="text-amber shrink-0" aria-label="MVP" />}</span></td>
+                    <td className="td"><ResultChip result={g.result} /></td>
+                    <td className="td tabular-nums">{kdaLine(g)}</td>
+                    <td className="td tabular-nums">{g.rating ?? "—"}</td>
+                    <td className="td tabular-nums hidden sm:table-cell">{n(g.gold)}</td>
+                    <td className="td tabular-nums hidden md:table-cell">{n(g.damage)}</td>
+                    <td className="td hidden sm:table-cell text-mute"><span className="inline-flex items-center gap-1.5">{sourceIcon(g.source)} {g.mode || "—"}</span></td>
+                    {!readOnly && (
+                      <td className="td">
+                        <span className="flex justify-end gap-1">
+                          <button type="button" className="btn-ghost !p-1.5" title="Edit game" aria-label={`Edit ${g.hero} game`} onClick={() => onEdit(g)}><Pencil size={12} /></button>
+                          <button type="button" className="btn-ghost !p-1.5 hover:text-danger" title="Move to Trash" aria-label={`Delete ${g.hero} game`} onClick={() => void remove(g)}><Trash2 size={12} /></button>
+                        </span>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {games.length > shown && <button type="button" className="btn-ghost mt-2.5 w-full justify-center" onClick={() => setShown((s) => s + 50)}>Show more ({games.length - shown} left)</button>}
+          {!games.length && <p className="text-[12px] text-faint mt-2">No games match that filter.</p>}
+        </>
+      )}
+      {!readOnly && <p className="text-[10.5px] text-faint mt-2.5">Only you and team staff can see these games. Deleted games go to Trash. They never change team scrim or tournament stats.</p>}
+    </section>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// what to work on
 // --------------------------------------------------------------------------- //
 const ALERT_ICON: Record<string, typeof Flame> = {
   losing_streak: Flame, form_drop: TrendingDown, deaths: Skull, struggling: TrendingDown, low_kda: Skull,
@@ -407,6 +407,74 @@ const CHIP: Record<SoloAlert["tone"], string> = {
   bad: "text-danger border-danger/45 bg-danger/10", warn: "text-amber border-amber/45 bg-amber/10", good: "text-leaf border-leaf/45 bg-leaf/10",
 };
 
+export function WorkOn({ alerts }: { alerts: SoloAlert[] }) {
+  if (!alerts.length) return <p className="text-[12px] text-faint">Nothing flagged yet. This fills in once you have 3+ games on a hero.</p>;
+  return (
+    <ul className="grid gap-2 sm:grid-cols-2">
+      {alerts.map((a, i) => {
+        const Icon = ALERT_ICON[a.kind] ?? Info;
+        return (
+          <li key={`${a.kind}-${a.hero ?? i}`} className={`card relative overflow-hidden p-3 flex gap-3 ${TONE[a.tone]}`}>
+            <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${BAR[a.tone]}`} />
+            <span className="relative shrink-0">
+              {a.hero ? <HeroImg name={a.hero} size={42} className="rounded-lg" /> : <span className={`grid h-[42px] w-[42px] place-items-center rounded-lg border ${CHIP[a.tone]}`}><Icon size={18} /></span>}
+              {a.hero && <span className={`absolute -bottom-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full border bg-panel ${CHIP[a.tone]}`}><Icon size={11} aria-hidden="true" /></span>}
+            </span>
+            <div className="min-w-0"><div className="text-[12px] font-extrabold">{a.title}</div><p className="text-[11px] text-mute mt-0.5">{a.detail}</p></div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+const nice_lane = (v: string) => (v ? v[0] + v.slice(1).toLowerCase() : "");
+
+/** Heroes with no games yet, ones you've stopped playing, and what's strong in your lane — each with an add button. */
+export function HeroGaps({ gaps, lane, onAdd }: { gaps?: SoloGaps; lane?: string; onAdd?: (hero: string, lane?: string) => void }) {
+  if (!gaps) return null;
+  const groups: { key: keyof SoloGaps; title: string; hint: string; tone: string; icon: typeof Flame }[] = [
+    { key: "no_data", title: "Heroes with no data", hint: `Heroes in your pool${lane ? ` and your ${nice_lane(lane)} lane` : ""} with no games on your record`, tone: "border-sky/40", icon: CircleDashed },
+    { key: "not_playing", title: "Heroes you've stopped playing", hint: "You used to play these. Get a few games in so they stay sharp", tone: "border-amber/40", icon: Hourglass },
+    { key: "lane_meta", title: "Strong in your lane right now", hint: "Worth adding to your pool", tone: "border-leaf/40", icon: Sparkles },
+  ];
+  const any = groups.some((g) => gaps[g.key].length);
+  if (!any) return <p className="text-[12px] text-faint">No gaps. Every hero in your pool has games on your record.</p>;
+  return (
+    <div className="space-y-4">
+      {groups.map((g) => gaps[g.key].length ? (
+        <div key={g.key}>
+          <div className="flex items-baseline justify-between gap-2 mb-2">
+            <h3 className="text-[12.5px] font-extrabold flex items-center gap-1.5"><g.icon size={14} className="text-crim" aria-hidden="true" /> {g.title}</h3>
+            <span className="text-[10.5px] text-faint hidden sm:inline">{g.hint}</span>
+          </div>
+          <ul className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            {gaps[g.key].map((h) => (
+              <li key={h.hero} className={`card p-2.5 flex items-center gap-2.5 ${g.tone}`}>
+                <HeroImg name={h.hero} size={44} className="rounded-lg shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[12px] font-extrabold truncate">{h.hero}</span>
+                    {h.status && <span className={`chip !py-0 !text-[9px] ${h.status === "META" ? "border-crim/50 text-crim" : "border-leaf/45 text-leaf"}`}>{h.status === "META" ? "Meta" : "Strong"}</span>}
+                  </div>
+                  <p className="text-[10.5px] text-mute leading-snug line-clamp-2">{h.why}</p>
+                </div>
+                {onAdd && (
+                  <button type="button" className="btn-ghost !p-1.5 shrink-0" title={`Add a ${h.hero} game`} aria-label={`Add a ${h.hero} game`}
+                    onClick={() => onAdd(h.hero, h.role && LANES.includes(h.role) ? h.role : undefined)}><Plus size={14} /></button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null)}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// progress
+// --------------------------------------------------------------------------- //
 function Delta({ value, suffix = "", invert = false }: { value: number | null; suffix?: string; invert?: boolean }) {
   if (value == null) return <span className="text-faint">—</span>;
   const good = invert ? value < 0 : value > 0;
@@ -430,7 +498,7 @@ function GroupChips({ title, rows }: { title: string; rows: SoloGroup[] }) {
       <div className="flex flex-wrap gap-1.5">
         {rows.map((r) => (
           <span key={r.name} className="chip border-edge text-mute tabular-nums">
-            <b className="text-text">{r.name === "JUNGLE" || r.name === "GOLD" || r.name === "ROAM" || r.name === "MID" ? r.name[0] + r.name.slice(1).toLowerCase() : r.name}</b> {r.games} · {pct(r.win_rate)}
+            <b className="text-text">{LANES.includes(r.name) && r.name !== "EXP" ? nice_lane(r.name) : r.name}</b> {r.games} · {pct(r.win_rate)}
           </span>
         ))}
       </div>
@@ -438,7 +506,156 @@ function GroupChips({ title, rows }: { title: string; rows: SoloGroup[] }) {
   );
 }
 
-function Coaching({ coaching }: { coaching: SoloCoaching }) {
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function monday(d: Date) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+const gameKda = (g: SoloGame) => (g.kills == null && g.deaths == null && g.assists == null ? null : ((g.kills ?? 0) + (g.assists ?? 0)) / Math.max(g.deaths ?? 0, 1));
+const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((t, v) => t + v, 0) / xs.length) * 100) / 100 : null);
+
+/** Weekly wins/losses (+ win %), a rolling KDA/rating line, lanes and top heroes — all from the games list. */
+export function weeklyBuckets(games: SoloGame[], weeks = 12, today = new Date()) {
+  const start = monday(today);
+  const keys = Array.from({ length: weeks }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() - 7 * (weeks - 1 - i)); return isoDay(d); });
+  const rows = keys.map((week) => ({ week, wins: 0, losses: 0, other: 0, kda: [] as number[], rating: [] as number[] }));
+  const index = new Map(keys.map((k, i) => [k, i]));
+  for (const g of games) {
+    if (!g.played_on) continue;
+    const i = index.get(isoDay(monday(new Date(`${g.played_on}T00:00:00`))));
+    if (i == null) continue;
+    const r = rows[i];
+    if (g.result === "WIN") r.wins++; else if (g.result === "LOSS") r.losses++; else r.other++;
+    const k = gameKda(g); if (k != null) r.kda.push(k);
+    if (g.rating != null) r.rating.push(g.rating);
+  }
+  return rows.map((r) => ({
+    week: r.week, wins: r.wins, losses: r.losses, other: r.other, games: r.wins + r.losses + r.other,
+    win_rate: r.wins + r.losses ? Math.round((r.wins / (r.wins + r.losses)) * 1000) / 10 : null,
+    kda: avg(r.kda), rating: avg(r.rating),
+  }));
+}
+
+export function rollingForm(games: SoloGame[], last = 40, window = 5) {
+  const ordered = [...games].filter((g) => g.played_on).sort((a, b) => (a.played_on! < b.played_on! ? -1 : a.played_on! > b.played_on! ? 1 : a.id - b.id)).slice(-last);
+  return ordered.map((g, i) => {
+    const slice = ordered.slice(Math.max(0, i - window + 1), i + 1);
+    const kdas = slice.map(gameKda).filter((v): v is number => v != null);
+    const ratings = slice.map((x) => x.rating).filter((v): v is number => v != null);
+    const decided = slice.filter((x) => x.result === "WIN" || x.result === "LOSS");
+    return {
+      game: g, label: g.played_on ? fmtDate(g.played_on) : `#${i + 1}`,
+      kda: avg(kdas), rating: avg(ratings),
+      win_rate: decided.length ? Math.round((decided.filter((x) => x.result === "WIN").length / decided.length) * 100) : null,
+    };
+  });
+}
+
+const LANE_COLOR: Record<string, string> = { EXP: CHART_COLORS.amber, JUNGLE: CHART_COLORS.win, MID: CHART_COLORS.violet, GOLD: "#fde68a", ROAM: CHART_COLORS.sky };
+
+export function ProgressCharts({ data }: { data: SoloGamesPayload }) {
+  const s = data.stats;
+  const weeks = useMemo(() => weeklyBuckets(data.games), [data.games]);
+  const roll = useMemo(() => rollingForm(data.games), [data.games]);
+  const tr = s.trend;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <section className="card chart-card p-4 min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+            <div><h3 className="text-[13px] font-extrabold">Games by week</h3><p className="text-[10.5px] text-faint">Wins and losses each week, with your win rate on top</p></div>
+            <Legend items={[{ name: "Wins", color: CHART_COLORS.win }, { name: "Losses", color: CHART_COLORS.loss }, { name: "Win %", color: CHART_COLORS.accent }]} />
+          </div>
+          <BarChart caption="Your games by week" labels={weeks.map((w) => weekLabel(w.week))} height={250}
+            titleFor={(i) => `Week of ${weekLabel(weeks[i].week)}`}
+            series={[{ name: "Wins", color: CHART_COLORS.win, values: weeks.map((w) => w.wins) }, { name: "Losses", color: CHART_COLORS.loss, values: weeks.map((w) => w.losses) }]}
+            overlay={{ name: "Win %", color: CHART_COLORS.accent, values: weeks.map((w) => w.win_rate), format: (v) => (v == null ? "—" : `${v}%`) }} />
+        </section>
+        <section className="card chart-card p-4 min-w-0">
+          <h3 className="text-[13px] font-extrabold">Lanes</h3>
+          <p className="text-[10.5px] text-faint mb-3">Where your games come from</p>
+          {s.lanes.length ? (
+            <div className="flex flex-wrap items-center gap-4">
+              <Donut caption="Games by lane" parts={s.lanes.map((l) => ({ label: l.name, value: l.games, color: LANE_COLOR[l.name] ?? CHART_COLORS.pink }))}
+                center={<div><div className="text-[22px] font-extrabold tabular-nums"><CountUp value={s.overall.games} /></div><div className="text-[9.5px] text-faint">games</div></div>} />
+              <ul className="space-y-1.5 text-[11px] min-w-0 flex-1">
+                {s.lanes.map((l) => (
+                  <li key={l.name} className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: LANE_COLOR[l.name] ?? CHART_COLORS.pink }} />
+                    <b className="w-14">{l.name === "EXP" ? "EXP" : nice_lane(l.name)}</b>
+                    <span className="text-mute tabular-nums">{l.games} · {pct(l.win_rate)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : <p className="text-[11.5px] text-faint">Add the lane to your games to see this.</p>}
+        </section>
+      </div>
+      <section className="card chart-card p-4 min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div><h3 className="text-[13px] font-extrabold">Form over your last {roll.length} games</h3><p className="text-[10.5px] text-faint">Averaged over 5 games, so one bad game doesn't hide the trend</p></div>
+          <Legend items={[{ name: "KDA", color: CHART_COLORS.accent }, { name: "Rating", color: CHART_COLORS.sky }, { name: "Win % (right)", color: CHART_COLORS.win, dashed: true }]} />
+        </div>
+        {roll.length >= 2 ? (
+          <LineChart caption="Your form over recent games" height={270} labels={roll.map((r) => r.label)}
+            titleFor={(i) => `${roll[i].game.hero || "Game"} · ${roll[i].label}`} rightMax={100} rightFormat={(v) => `${Math.round(v)}%`}
+            series={[
+              { name: "KDA", color: CHART_COLORS.accent, values: roll.map((r) => r.kda), area: true },
+              { name: "Rating", color: CHART_COLORS.sky, values: roll.map((r) => r.rating) },
+              { name: "Win %", color: CHART_COLORS.win, values: roll.map((r) => r.win_rate), right: true, dashed: true, format: (v) => (v == null ? "—" : `${v}%`) },
+            ]} />
+        ) : <p className="text-[11.5px] text-faint">Add a couple of dated games to see your form line.</p>}
+        {tr && (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center border-t border-edge/60 pt-3">
+            <div><div className="text-[10px] text-faint">Win rate</div><Delta value={tr.win_rate} suffix="%" /></div>
+            <div><div className="text-[10px] text-faint">KDA</div><Delta value={tr.kda} /></div>
+            <div><div className="text-[10px] text-faint">Rating</div><Delta value={tr.rating} /></div>
+            <div><div className="text-[10px] text-faint">Deaths</div><Delta value={tr.deaths} invert /></div>
+            <p className="col-span-full text-[10px] text-faint">Last {tr.recent.games} games vs the {tr.before.games} before</p>
+          </div>
+        )}
+      </section>
+      <section className="card chart-card p-4 min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div><h3 className="text-[13px] font-extrabold">Heroes</h3><p className="text-[10.5px] text-faint">Games on each hero, coloured by win rate</p></div>
+          <GroupChips title="" rows={s.modes} />
+        </div>
+        <HBars caption="Games per hero" rows={s.heroes.slice(0, 10).map((h) => ({
+          key: h.name, value: h.games, label: <span className="inline-flex items-center gap-1.5"><HeroImg name={h.name} size={20} className="rounded" />{h.name}</span>,
+          tone: h.win_rate == null ? CHART_COLORS.sky : h.win_rate >= 55 ? CHART_COLORS.win : h.win_rate >= 45 ? CHART_COLORS.amber : CHART_COLORS.loss,
+          extra: `${pct(h.win_rate)} · KDA ${kdaText(h.kda?.ratio)}`,
+        }))} format={(v) => `${v} game${v === 1 ? "" : "s"}`} />
+      </section>
+    </div>
+  );
+}
+
+export function HeroTable({ stats }: { stats: SoloGamesPayload["stats"] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-edge min-w-0">
+      <table className="w-full text-[11.5px]">
+        <thead className="bg-raised/60 text-faint text-left">
+          <tr><th className="th">Hero</th><th className="th">Games</th><th className="th w-[22%]">Win rate</th><th className="th">KDA</th><th className="th hidden sm:table-cell">Rating</th><th className="th hidden sm:table-cell">MVP</th><th className="th">Form</th></tr>
+        </thead>
+        <tbody>
+          {stats.heroes.slice(0, 20).map((h) => (
+            <tr key={h.name} className="border-t border-edge/60">
+              <td className="td"><span className="flex items-center gap-2"><HeroImg name={h.name} size={26} className="rounded" /><span className="font-bold">{h.name}</span></span></td>
+              <td className="td tabular-nums">{h.games} <span className="text-faint">({h.wins}–{h.losses})</span></td>
+              <td className="td"><div className="flex items-center gap-2"><span className="tabular-nums w-11 shrink-0">{pct(h.win_rate)}</span><WinBar rate={h.win_rate} /></div></td>
+              <td className="td tabular-nums">{kdaText(h.kda?.ratio)}</td>
+              <td className="td tabular-nums hidden sm:table-cell">{h.rating?.avg ?? "—"}</td>
+              <td className="td tabular-nums hidden sm:table-cell">{h.mvps || "—"}</td>
+              <td className="td"><FormDots form={h.form.slice(0, 5)} label={`Form on ${h.name}`} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+// your plan
+// --------------------------------------------------------------------------- //
+function Plan({ coaching }: { coaching: SoloCoaching }) {
   const heroGroups: { key: keyof SoloCoaching["heroes"]; label: string; cls: string }[] = [
     { key: "keep", label: "Keep playing", cls: "border-leaf/45 text-leaf" },
     { key: "work_on", label: "Work on", cls: "border-amber/45 text-amber" },
@@ -446,8 +663,8 @@ function Coaching({ coaching }: { coaching: SoloCoaching }) {
   ];
   return (
     <div className="space-y-3.5">
-      <div className="rounded-xl border border-leaf/40 bg-leaf/5 p-4">
-        <div className="flex items-center gap-2 text-leaf text-[10px] font-extrabold mb-1"><BrainCircuit size={13} /> Coach's read · {coaching.games_used} games</div>
+      <div className="rounded-xl border border-crim/40 bg-crim/5 p-4">
+        <div className="flex items-center gap-2 text-crim text-[10px] font-extrabold mb-1"><Target size={13} /> Your plan · from {coaching.games_used} games</div>
         <p className="text-[14px] font-extrabold">{coaching.headline}</p>
         {coaching.summary && <p className="text-[12px] text-mute mt-1.5 leading-relaxed">{coaching.summary}</p>}
       </div>
@@ -495,7 +712,7 @@ function Coaching({ coaching }: { coaching: SoloCoaching }) {
           <div className="label mb-2">Goals for your next games</div>
           <ol className="space-y-1.5">
             {coaching.next_games.map((g, i) => (
-              <li key={i} className="flex gap-2 text-[12px]"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-leaf/50 text-leaf text-[10px] font-extrabold">{i + 1}</span><span>{g}</span></li>
+              <li key={i} className="flex gap-2 text-[12px]"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-crim/50 text-crim text-[10px] font-extrabold">{i + 1}</span><span>{g}</span></li>
             ))}
           </ol>
         </div>
@@ -504,153 +721,33 @@ function Coaching({ coaching }: { coaching: SoloCoaching }) {
   );
 }
 
-export function AILearning({ me, onOpenUtility }: { me: User; onOpenUtility?: () => void }) {
-  const staff = STAFF.has(me.role);
-  const [players, setPlayers] = useState<{ id: number; name: string }[]>([]);
-  const [viewing, setViewing] = useState<number | undefined>(undefined);
-  const { data, error, loading } = useSoloGames(viewing);
+/** "Get my plan": strengths, fixes with drills, heroes to keep / work on / try, goals. */
+export function PlanPanel({ games }: { games: number }) {
   const [focus, setFocus] = useState("");
   const [coaching, setCoaching] = useState<SoloCoaching | null>(null);
-  const [coachBusy, setCoachBusy] = useState(false);
-  const [coachError, setCoachError] = useState<unknown>(null);
-
-  useEffect(() => {
-    if (!staff) return;
-    api.get<{ id: number; name: string; ign?: string }[]>("/players")
-      .then((rows) => setPlayers(rows.map((p) => ({ id: p.id, name: p.ign || p.name }))))
-      .catch(() => setPlayers([]));
-  }, [staff]);
-
-  async function coach(e?: FormEvent) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  async function run(e?: FormEvent) {
     e?.preventDefault();
-    setCoachBusy(true); setCoachError(null);
-    try { setCoaching(await api.post<SoloCoaching>("/solo-games/coach", { focus })); } catch (err) { setCoachError(err); } finally { setCoachBusy(false); }
+    setBusy(true); setError(null);
+    try { setCoaching(await api.post<SoloCoaching>("/solo-games/coach", { focus })); } catch (err) { setError(err); } finally { setBusy(false); }
   }
-
-  const s = data?.stats;
-  const own = !viewing || viewing === me.id;
-  const tr = s?.trend;
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-extrabold flex items-center gap-2"><BrainCircuit size={16} className="text-leaf" /> Learning utility</h2>
-          <p className="text-[12px] text-mute mt-1 max-w-2xl">What your own games say: your form, your heroes, and what to work on next. Ask the coach for a plan.</p>
-        </div>
-        {staff && players.length > 0 && (
-          <label className="flex items-center gap-2 text-[11px] text-faint">Player
-            <select className="input !py-1.5 !w-44" value={viewing ?? me.id} onChange={(e) => { const id = Number(e.target.value); setViewing(id === me.id ? undefined : id); setCoaching(null); }}>
-              <option value={me.id}>Me</option>
-              {players.filter((p) => p.id !== me.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
-        )}
-      </div>
+    <section>
+      <SectionTitle>Your plan</SectionTitle>
+      <form onSubmit={run} className="flex flex-col sm:flex-row gap-2 mb-3">
+        <input className="input flex-1" maxLength={300} value={focus} onChange={(e) => setFocus(e.target.value)}
+          placeholder="Optional focus: climbing to Mythic, my jungle pathing, why I lose on Ling…" aria-label="What should the plan focus on" />
+        <button className="btn-primary justify-center" disabled={busy || games < 3}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Target size={14} />} {coaching ? "New plan" : "Get my plan"}
+        </button>
+      </form>
+      {games < 3 && <p className="text-[11px] text-faint">Add at least 3 games to get a plan.</p>}
       <ErrorNote error={error} />
-      {loading && !data ? <Spinner label="Reading your games" /> : !s || s.overall.games === 0 ? (
-        <div className="card border-dashed p-6 text-center">
-          <p className="text-[13px] font-bold text-mute">{own ? "No games to learn from yet" : `${data?.user?.name ?? "This player"} hasn't added any solo games yet`}</p>
-          {own && <p className="text-[11.5px] text-faint mt-1">Upload a few screenshots or a sheet in Utility AI and this fills in by itself.</p>}
-          {own && onOpenUtility && <button type="button" className="btn-primary mt-3" onClick={onOpenUtility}><Upload size={14} /> Add my games</button>}
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-            <StatTile label="Games" value={s.overall.games} hint={s.last_played ? `Last ${fmtDate(s.last_played)}` : undefined} />
-            <StatTile label="Win rate" value={pct(s.overall.win_rate)} hint={`${s.overall.wins}W–${s.overall.losses}L`}
-              tone={s.overall.win_rate == null ? "default" : s.overall.win_rate >= 50 ? "good" : "bad"} />
-            <StatTile label="KDA" value={kdaText(s.overall.kda?.ratio)} hint={s.overall.kda ? `${s.overall.kda.kills}/${s.overall.kda.deaths}/${s.overall.kda.assists} a game` : "Add K/D/A"} />
-            <StatTile label="Rating" value={s.overall.rating?.avg ?? "—"} hint={s.overall.rating ? `${s.overall.rating.games} rated` : "Add ratings"} />
-            <StatTile label="MVPs" value={s.overall.mvps} icon={<Crown size={13} />} hint={s.overall.gold_per_min ? `${s.overall.gold_per_min} gold/min` : undefined} />
-            <StatTile label="Streak" value={s.streak.count ? `${s.streak.count}${s.streak.result === "WIN" ? "W" : "L"}` : "—"}
-              tone={s.streak.result === "WIN" ? "good" : s.streak.result === "LOSS" && s.streak.count >= 3 ? "bad" : "default"} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <section className="min-w-0">
-              <SectionTitle>What to work on</SectionTitle>
-              {s.alerts.length ? (
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {s.alerts.map((a, i) => {
-                    const Icon = ALERT_ICON[a.kind] ?? Info;
-                    return (
-                      <li key={`${a.kind}-${a.hero ?? i}`} className={`card relative overflow-hidden p-3 flex gap-3 ${TONE[a.tone]}`}>
-                        <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${BAR[a.tone]}`} />
-                        <span className="relative shrink-0">
-                          {a.hero ? <HeroImg name={a.hero} size={42} className="rounded-lg" /> : <span className={`grid h-[42px] w-[42px] place-items-center rounded-lg border ${CHIP[a.tone]}`}><Icon size={18} /></span>}
-                          {a.hero && <span className={`absolute -bottom-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full border bg-panel ${CHIP[a.tone]}`}><Icon size={11} aria-hidden="true" /></span>}
-                        </span>
-                        <div className="min-w-0"><div className="text-[12px] font-extrabold">{a.title}</div><p className="text-[11px] text-mute mt-0.5">{a.detail}</p></div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : <p className="text-[12px] text-faint">Nothing flagged yet. Alerts need at least 3 games on a hero.</p>}
-            </section>
-            <section className="min-w-0 space-y-3">
-              <SectionTitle>Form</SectionTitle>
-              <div className="card p-3 space-y-3">
-                <div className="flex items-center justify-between gap-2"><span className="label">Last 10</span><FormDots form={s.form} label="Last 10 games" /></div>
-                {tr ? (
-                  <div>
-                    <div className="label mb-1.5">Last {tr.recent.games} vs the {tr.before.games} before</div>
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <div><div className="text-[10px] text-faint">Win rate</div><Delta value={tr.win_rate} suffix="%" /></div>
-                      <div><div className="text-[10px] text-faint">KDA</div><Delta value={tr.kda} /></div>
-                      <div><div className="text-[10px] text-faint">Rating</div><Delta value={tr.rating} /></div>
-                      <div><div className="text-[10px] text-faint">Deaths</div><Delta value={tr.deaths} invert /></div>
-                    </div>
-                  </div>
-                ) : <p className="text-[11px] text-faint">The trend shows once you have 15+ games.</p>}
-                <GroupChips title="Lanes" rows={s.lanes} />
-                <GroupChips title="Modes" rows={s.modes} />
-              </div>
-            </section>
-          </div>
-
-          <section className="min-w-0">
-            <SectionTitle>My heroes</SectionTitle>
-            <div className="overflow-x-auto rounded-lg border border-edge min-w-0">
-              <table className="w-full text-[11.5px]">
-                <thead className="bg-raised/60 text-faint text-left">
-                  <tr><th className="th">Hero</th><th className="th">Games</th><th className="th w-[22%]">Win rate</th><th className="th">KDA</th><th className="th hidden sm:table-cell">Rating</th><th className="th hidden sm:table-cell">MVP</th><th className="th">Form</th></tr>
-                </thead>
-                <tbody>
-                  {s.heroes.slice(0, 20).map((h) => (
-                    <tr key={h.name} className="border-t border-edge/60">
-                      <td className="td"><span className="flex items-center gap-2"><HeroImg name={h.name} size={26} className="rounded" /><span className="font-bold">{h.name}</span></span></td>
-                      <td className="td tabular-nums">{h.games} <span className="text-faint">({h.wins}–{h.losses})</span></td>
-                      <td className="td"><div className="flex items-center gap-2"><span className="tabular-nums w-11 shrink-0">{pct(h.win_rate)}</span><WinBar rate={h.win_rate} /></div></td>
-                      <td className="td tabular-nums">{kdaText(h.kda?.ratio)}</td>
-                      <td className="td tabular-nums hidden sm:table-cell">{h.rating?.avg ?? "—"}</td>
-                      <td className="td tabular-nums hidden sm:table-cell">{h.mvps || "—"}</td>
-                      <td className="td"><FormDots form={h.form.slice(0, 5)} label={`Form on ${h.name}`} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {own && (
-            <section>
-              <SectionTitle>AI coach</SectionTitle>
-              <form onSubmit={coach} className="flex flex-col sm:flex-row gap-2 mb-3">
-                <input className="input flex-1" maxLength={300} value={focus} onChange={(e) => setFocus(e.target.value)}
-                  placeholder="Optional focus: climbing to Mythic, my jungle pathing, why I lose on Ling…" aria-label="Coaching focus" />
-                <button className="btn-primary justify-center" disabled={coachBusy || s.overall.games < 3}>
-                  {coachBusy ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14} />} {coaching ? "Coach me again" : "Coach me"}
-                </button>
-              </form>
-              {s.overall.games < 3 && <p className="text-[11px] text-faint">Add at least 3 games to get coaching.</p>}
-              <ErrorNote error={coachError} />
-              {coachBusy && !coaching && <Spinner label="The coach is going through your games" />}
-              {coaching && <Coaching coaching={coaching} />}
-            </section>
-          )}
-        </>
-      )}
-    </div>
+      {busy && !coaching && <Spinner label="Going through your games" />}
+      {coaching && <Plan coaching={coaching} />}
+    </section>
   );
 }
+
+export { FormDots, GroupChips, Delta, useHeroes };
