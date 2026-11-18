@@ -178,7 +178,13 @@ export const linkOf = (userId: number): Promise<LinkSummary> =>
 
 /* ---------------- account link (per-user, backend-held tokens) ---------------- */
 
-export interface LinkStatus { linked: boolean; name?: string; avatar?: string; role_id?: number; zone_id?: number; linked_at?: string | null }
+export interface LinkStatus {
+  linked: boolean; name?: string; avatar?: string; role_id?: number; zone_id?: number; linked_at?: string | null;
+  session_expired?: boolean; session_expires_at?: number | null;
+}
+export interface CheckPart { ok: boolean | null; detail: string; ms?: number; relink?: boolean }
+export interface AccountCheck { source: string; backup_enabled: boolean; moonton: CheckPart; session: CheckPart; backup?: CheckPart }
+export const accountCheck = () => api.get<AccountCheck>("/intel/account/check");
 
 export const linkStatus = () => api.get<LinkStatus>("/intel/account/status");
 export const sendLinkCode = (role_id: number, zone_id: number) =>

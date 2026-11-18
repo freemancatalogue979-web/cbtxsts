@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Gamepad2, KeyRound, Link2, LogOut, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, CircleHelp, Gamepad2, KeyRound, Link2, LogOut, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import { Badge, Empty, ErrorNote, Field, KV, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { HeroImg } from "../components/HeroImg";
-import { accountHeroes, accountMatches, accountProfile, connectLink, disconnectLink, linkStatus, sendLinkCode } from "../lib/mlbb";
-import type { AnyRec, LinkStatus } from "../lib/mlbb";
+import { accountCheck, accountHeroes, accountMatches, accountProfile, connectLink, disconnectLink, linkStatus, sendLinkCode } from "../lib/mlbb";
+import type { AccountCheck, AnyRec, LinkStatus } from "../lib/mlbb";
 import { recData, stripTags, pickNum, pickStr } from "../lib/mlbb";
 
-function Wizard({ onLinked }: { onLinked: () => void }) {
-  const [roleId, setRoleId] = useState("");
-  const [zoneId, setZoneId] = useState("");
+function Wizard({ onLinked, roleId0, zoneId0, refresh }: { onLinked: () => void; roleId0?: number; zoneId0?: number; refresh?: boolean }) {
+  const [roleId, setRoleId] = useState(roleId0 ? String(roleId0) : "");
+  const [zoneId, setZoneId] = useState(zoneId0 ? String(zoneId0) : "");
   const [vc, setVc] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [busy, setBusy] = useState(false);
@@ -37,7 +37,7 @@ function Wizard({ onLinked }: { onLinked: () => void }) {
 
   return (
     <div className="card p-5 max-w-md space-y-4">
-      <div className="flex items-center gap-2 text-leaf"><Link2 size={15} /><span className="section-pill section-pill--leaf">Connect MLBB account</span></div>
+      <div className="flex items-center gap-2 text-leaf"><Link2 size={15} /><span className="section-pill section-pill--leaf">{refresh ? "Refresh your MLBB sign-in" : "Connect MLBB account"}</span></div>
       <p className="text-[12px] text-mute leading-relaxed">
         Straight from Moonton's own servers, same as the official MLBB site. You get a code in your in-game mail —
         <b>we never ask for your game password</b>. Codes expire in 5 minutes.
@@ -86,14 +86,24 @@ function SnapshotNote({ payload }: { payload: unknown }) {
   </p>;
 }
 
+/** Whatever MLBB actually said, never a generic "couldn't reach". */
+function reason(env: AnyRec): string {
+  for (const k of ["msg", "message", "detail", "error"]) {
+    const v = env[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return `MLBB answered with code ${String(env.code)}`;
+}
+
 function Section({ title, payload, hide }: { title: string; payload: unknown; hide?: string[] }) {
   const env = payload as AnyRec | undefined;
   if (!env) return null;
-  if (typeof env.error === "string" || (typeof env.code === "number" && env.code !== 0)) {
+  const why = failed(env);
+  if (why) {
     return (
       <div className="card p-4">
         <div className="section-pill mb-1.5">{title}</div>
-        <div className="text-[11.5px] text-faint">{typeof env.msg === "string" && env.msg ? env.msg : "Couldn't reach MLBB right now"} · try Refresh in a bit.</div>
+        <div className="text-[11.5px] text-faint break-words">{why}</div>
       </div>
     );
   }
@@ -195,8 +205,9 @@ function failed(payload: unknown): string | null {
   const env = payload as AnyRec | undefined;
   if (!env) return null;
   const inner = env.data as AnyRec | undefined;
-  if (inner && typeof inner.error === "string") return "Couldn't reach MLBB right now";
-  if (typeof env.code === "number" && env.code !== 0) return typeof env.msg === "string" && env.msg ? env.msg : "Couldn't reach MLBB right now";
+  if (inner && typeof inner.error === "string") return inner.error.replace(/^Error:\s*/, "");
+  if (typeof env.error === "string") return env.error.replace(/^Error:\s*/, "");
+  if (env.code != null && env.code !== 0) return reason(env);
   return null;
 }
 
@@ -221,7 +232,7 @@ export function MatchList({ payload }: { payload: unknown }) {
         {rows.length > 0 && <span className="text-[11px] text-mute">{wins}W {rows.length - wins}L · {Math.round((100 * wins) / rows.length)}% won{typeof meta.season_id === "number" ? ` · season ${meta.season_id}` : ""}</span>}
       </div>
       <SnapshotNote payload={payload} />
-      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint">{err} · try Refresh in a bit.</div>
+      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint break-words">{err}</div>
         : rows.length === 0 ? <Empty title="No games this season yet" hint="Play a few and hit Refresh" /> : (
         <ul className="grid gap-2 mt-2">
           {rows.slice(0, 20).map((r, i) => {
@@ -260,7 +271,7 @@ export function HeroList({ payload }: { payload: unknown }) {
     <div className="mlbb-list">
       <SectionTitle>Most played heroes</SectionTitle>
       <SnapshotNote payload={payload} />
-      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint">{err} · try Refresh in a bit.</div>
+      {err ? <div className="card p-4 mt-2 text-[11.5px] text-faint break-words">{err}</div>
         : rows.length === 0 ? <Empty title="No heroes this season yet" hint="Play a few and hit Refresh" /> : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-2">
           {rows.slice(0, 12).map((r, i) => {
@@ -280,6 +291,48 @@ export function HeroList({ payload }: { payload: unknown }) {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+function CheckRow({ label, part }: { label: string; part?: { ok: boolean | null; detail: string; ms?: number } }) {
+  if (!part) return null;
+  const Icon = part.ok ? CheckCircle2 : part.ok === null ? CircleHelp : CircleAlert;
+  return (
+    <li className="flex items-start gap-2.5 min-w-0">
+      <Icon size={15} className={`mt-0.5 shrink-0 ${part.ok ? "text-leaf" : part.ok === null ? "text-mute" : "text-danger"}`} />
+      <div className="min-w-0">
+        <div className="text-[12px] font-bold">{label}{part.ms != null ? <span className="text-faint font-normal"> · {part.ms} ms</span> : null}</div>
+        <div className="text-[11.5px] text-mute break-words">{part.detail}</div>
+      </div>
+    </li>
+  );
+}
+
+export function ConnectionCheck() {
+  const [res, setRes] = useState<AccountCheck | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true); setErr(null);
+    try { setRes(await accountCheck()); } catch (e) { setErr(e instanceof Error ? e.message : "Check failed"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="mlbb-check card p-4 max-w-xl">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="section-pill">Connection check</div>
+        <button className="btn-ghost" onClick={() => void run()} disabled={busy}><Activity size={14} /> {busy ? "Checking…" : "Check connection"}</button>
+      </div>
+      {!res && !err && <p className="text-[11.5px] text-mute mt-2">Tests whether this server can talk to Moonton, whether your sign-in still works, and whether the backup answers.</p>}
+      <ErrorNote error={err} />
+      {res && (
+        <ul className="grid gap-2.5 mt-3">
+          <CheckRow label="Moonton servers" part={res.moonton} />
+          <CheckRow label="Your MLBB sign-in" part={res.session} />
+          <CheckRow label="Backup relay" part={res.backup} />
+        </ul>
       )}
     </div>
   );
@@ -310,6 +363,8 @@ export function AccountMLBBPage() {
     finally { setBusy(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  const needsRelink = Boolean(status?.linked && (status.session_expired
+    || [profile?.info, profile?.season, profile?.stats, matches, heroes].some((p) => (p as AnyRec | undefined)?.relink === true)));
   const refreshing = [profile?.info, profile?.season, profile?.stats, matches, heroes].some((item) => accountCache(item)?.refreshing);
   useEffect(() => {
     if (!refreshing) return;
@@ -342,6 +397,7 @@ export function AccountMLBBPage() {
       {!status?.linked ? (
         <>
           <Wizard onLinked={() => void load()} />
+          <ConnectionCheck />
           <div className="card p-4 max-w-md text-[12px] text-mute leading-relaxed flex items-start gap-2.5">
             <ShieldCheck size={15} className="text-leaf mt-0.5 shrink-0" />
             The code comes from Moonton's own in-game mail. Your MLBB sign-in lives only on our
@@ -351,6 +407,16 @@ export function AccountMLBBPage() {
       ) : (
         <>
           <ProfileHeroCard status={status} info={profile?.info} />
+
+          {needsRelink && (
+            <div className="mlbb-relink grid gap-3">
+              <div className="card p-4 border-amber/50 text-[12px] text-amber flex items-start gap-2.5">
+                <KeyRound size={15} className="mt-0.5 shrink-0" />
+                <span>Your MLBB sign-in expired — Moonton only keeps it for about a day. Send a new code to refresh it; your saved games, heroes and sharing choice stay.</span>
+              </div>
+              <Wizard refresh roleId0={status.role_id} zoneId0={status.zone_id} onLinked={() => void load()} />
+            </div>
+          )}
 
           {profile && (
             <div className="grid lg:grid-cols-3 gap-4">
@@ -364,6 +430,8 @@ export function AccountMLBBPage() {
           {heroes && <HeroList payload={heroes} />}
 
           {matches && <MatchList payload={matches} />}
+
+          <ConnectionCheck />
 
           <div className="text-[11px] text-faint flex items-center gap-1.5">
             <LogOut size={11} /> Disconnect removes your saved account snapshots, AI-sharing consent and stored token. Upstream logout is attempted.

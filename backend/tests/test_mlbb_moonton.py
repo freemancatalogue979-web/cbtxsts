@@ -17,7 +17,7 @@ from app.routers import intel
 def _jwt(role=742039794, zone=10382) -> str:
     def b64(obj):
         return base64.urlsafe_b64encode(json.dumps(obj).encode()).decode().rstrip("=")
-    return f"{b64({'alg': 'HS256'})}.{b64({'exp': 1, 'Ext': {'roleId': role, 'zoneId': zone}})}.sig"
+    return f"{b64({'alg': 'HS256'})}.{b64({'exp': 4102444800, 'Ext': {'roleId': role, 'zoneId': zone}})}.sig"
 
 
 JWT = _jwt()
@@ -192,6 +192,64 @@ class AccountRoutingTests(unittest.TestCase):
         with patch.object(mt.urllib.request, "build_opener", return_value=Boom()):
             with self.assertRaises(mt.SourceDown):
                 mt.send_code(1, 2)
+
+
+class SessionHealthTests(unittest.TestCase):
+    def setUp(self):
+        mt._season_cache.clear()
+
+    def test_expired_token_is_caught_before_asking_anyone(self):
+        import time as _t
+
+        old = _jwt()
+        head, _, sig = old.split(".")
+        body = base64.urlsafe_b64encode(json.dumps({"exp": int(_t.time()) - 5, "Ext": {"roleId": 1, "zoneId": 2}}).encode()).decode().rstrip("=")
+        expired = f"{head}.{body}.{sig}"
+        self.assertTrue(mt.token_expired(expired))
+        self.assertFalse(mt.token_expired(JWT.replace(JWT.split(".")[1], base64.urlsafe_b64encode(
+            json.dumps({"exp": int(_t.time()) + 3600}).encode()).decode().rstrip("="))))
+        self.assertFalse(mt.token_expired("opaque-token-without-exp"))
+        with patch.object(mt, "_send") as moonton, patch.object(intel, "_rone_request") as rone:
+            env = intel._account_request("GET", "user/stats", params={"lang": "en"}, jwt=expired)
+        moonton.assert_not_called()
+        rone.assert_not_called()
+        self.assertTrue(env["relink"])
+        self.assertIn("expired", env["msg"])
+
+    def test_actgateway_auth_refusal_becomes_a_clear_relink_message(self):
+        # actgateway says "message", not "msg" — this used to show up as "couldn't reach MLBB"
+        with patch.object(mt, "_send", return_value={"code": 1002, "message": "auth is empty"}):
+            env = intel._account_request("GET", "user/stats", params={"lang": "en"}, jwt=JWT)
+        self.assertTrue(env["relink"])
+        self.assertEqual(intel._envelope_error(env), mt.EXPIRED_MSG)
+
+    def test_wrong_code_at_login_is_not_called_expired(self):
+        with patch.object(mt, "_send", return_value={"code": 10027, "msg": "token verify failed"}):
+            env = intel._account_request("POST", "user/auth/login", payload={"role_id": 1, "zone_id": 2, "vc": "1"})
+        self.assertNotIn("relink", env)
+
+    def test_both_down_explains_why(self):
+        with patch.object(mt, "_send", side_effect=mt.SourceDown("timed out waiting for MLBB")), \
+                patch.object(intel, "_rone_request", side_effect=HTTPException(502, "MLBB data service is unreachable.")):
+            with self.assertRaises(HTTPException) as caught:
+                intel._account_request("POST", "user/auth/send-vc", payload={"role_id": 1, "zone_id": 2})
+        self.assertIn("timed out waiting for MLBB", caught.exception.detail)
+        self.assertIn("backup", caught.exception.detail)
+
+    def test_reasons_are_plain(self):
+        import socket
+        import urllib.error
+
+        self.assertIn("DNS", mt._why(urllib.error.URLError(socket.gaierror(11001, "getaddrinfo failed"))))
+        self.assertIn("timed out", mt._why(urllib.error.URLError(TimeoutError("timed out"))))
+        self.assertIn("secure connection", mt._why(urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED]")))
+
+    def test_server_check(self):
+        with patch.object(mt, "_send", return_value={"code": 0, "data": {"time": 1}}):
+            self.assertTrue(mt.server_check()["ok"])
+        with patch.object(mt, "_send", side_effect=mt.SourceDown("connection refused")):
+            res = mt.server_check()
+        self.assertEqual((res["ok"], res["detail"]), (False, "connection refused"))
 
 
 if __name__ == "__main__":

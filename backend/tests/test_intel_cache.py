@@ -176,6 +176,38 @@ class IntelSnapshotTests(unittest.TestCase):
             self.assertNotIn("Old Account", json.dumps([row.payload_json for row in rows]))
             self.assertNotIn("NEW_JWT", json.dumps([row.payload_json for row in rows]))
 
+    def test_same_account_relink_keeps_saved_data_and_consent(self):
+        def source(method, path, *, params=None, jwt=None, payload=None):
+            if path == "user/auth/login":
+                return {"code": 0, "data": {"jwt": "FRESH_JWT", "token": "T2"}}
+            return {"code": 0, "data": {"name": "Same Account", "level": 9}}
+
+        with patch("app.routers.intel._account_request", side_effect=source), patch("app.routers.intel._adopt_avatar"):
+            self.get("account/heroes")
+            fixture.request("PATCH", "/api/ai/settings", self.tokens["owner"], {"share_account_stats": True})
+            status, body, _ = fixture.request(
+                "POST", "/api/intel/account/connect", self.tokens["owner"], {"role_id": 111222333, "zone_id": 4444, "vc": "1234"}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(body["refreshed"])
+        self.assertTrue(fixture.request("GET", "/api/ai/settings", self.tokens["owner"])[1]["share_account_stats"])
+        with self.factory() as db:
+            owner_id = db.query(User.id).filter_by(email="owner@test.invalid").scalar()
+            self.assertEqual(db.query(IntelLink).filter_by(user_id=owner_id).one().jwt, "FRESH_JWT")
+            self.assertTrue(db.query(IntelSnapshot).filter_by(owner_id=owner_id, scope="account").count())
+
+    def test_connection_check_reports_each_part(self):
+        with patch("app.mlbb_moonton._send", side_effect=__import__("app.mlbb_moonton", fromlist=["x"]).SourceDown("connection refused")), \
+                patch("app.routers.intel._fetch", return_value=(200, b"{}")):
+            status, body, _ = self.get("account/check")
+        self.assertEqual(status, 200)
+        self.assertFalse(body["moonton"]["ok"])
+        self.assertEqual(body["moonton"]["detail"], "connection refused")
+        self.assertIsNone(body["session"]["ok"])
+        self.assertTrue(body["backup"]["ok"])
+        status, linked, _ = self.get("account/status")
+        self.assertIn("session_expired", linked)
+
     def test_size_and_scope_guards(self):
         with self.factory() as db:
             with self.assertRaises(ValueError):

@@ -22,3 +22,13 @@ test("linking copy: Moonton direct, in-game mail code, no fixed digit count", ()
 test("hero faces come from the local pack first", () => {
   assert.match(page, /import \{ HeroImg \} from "\.\.\/components\/HeroImg"/);
 });
+
+test("errors show what MLBB actually said, plus reconnect and a connection check", () => {
+  assert.match(page, /function reason\(/);
+  assert.match(page, /"message"/);
+  assert.match(page, /relink === true/);
+  assert.match(page, /session_expired/);
+  assert.match(page, /export function ConnectionCheck/);
+  assert.match(page, /Refresh your MLBB sign-in/);
+  assert.doesNotMatch(page, /try Refresh in a bit/);
+});
