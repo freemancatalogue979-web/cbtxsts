@@ -607,8 +607,18 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
   .btn-leaf {
     @apply border border-leaf/40 text-leaf hover:bg-leaf-dim;
   }
+  /* Chips tint themselves from their own text colour: a "text-leaf" chip gets a soft green
+     fill and edge with no extra classes, so every status reads at a glance. Explicit
+     border-/bg- utilities still win when a chip needs something specific. */
   .chip {
-    @apply inline-flex items-center gap-1 rounded border border-edge bg-raised px-2 py-0.5 text-[11px] font-semibold;
+    @apply inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold;
+    line-height: 1.35;
+    white-space: nowrap;
+    border-color: color-mix(in srgb, currentColor 32%, var(--color-edge));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, currentColor 15%, transparent), color-mix(in srgb, currentColor 6%, transparent)),
+      color-mix(in srgb, var(--color-raised) 88%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
   }
   .th {
     @apply text-[11px] font-semibold tracking-[0.16em] text-faint text-left px-3 py-2 border-b border-edge;
@@ -1220,3 +1230,116 @@ html[data-effects="calm"] .utility-drop::before { opacity: 0; }
   .me-pill__name { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .me-pill { transition: none; } .me-pill:active { transform: none; } }
+
+/* ---- Lanes: one colour per lane, everywhere (components/PlayerBits.tsx) ----------------
+   "html " lifts these above each component's own default --lane. */
+[data-lane] { --lane: var(--color-mute); }
+html [data-lane="EXP"] { --lane: #fb923c; }
+html [data-lane="JUNGLE"] { --lane: #34d399; }
+html [data-lane="MID"] { --lane: #a78bfa; }
+html [data-lane="GOLD"] { --lane: #facc15; }
+html [data-lane="ROAM"] { --lane: #7db5f5; }
+
+.lane-tag {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 9999px;
+  font-size: 10px; font-weight: 800; line-height: 1.35; white-space: nowrap;
+  color: color-mix(in srgb, var(--lane, var(--color-mute)) 85%, white);
+  border: 1px solid color-mix(in srgb, var(--lane, var(--color-mute)) 40%, transparent);
+  background: color-mix(in srgb, var(--lane, var(--color-mute)) 13%, transparent);
+}
+.lane-tag__dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--lane, var(--color-mute)); box-shadow: 0 0 6px var(--lane, transparent); }
+
+/* A member as a chip: face · IGN · lane. */
+.player-chip {
+  --lane: var(--color-edge-2);
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 26px; padding: 2px 3px 2px 2px;
+  border-radius: 9999px; border: 1px solid var(--color-edge);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.01)), var(--color-raised);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  vertical-align: middle;
+}
+.player-chip__face {
+  flex: 0 0 auto; display: grid; place-items: center; width: 20px; height: 20px; overflow: hidden; border-radius: 9999px;
+  background: color-mix(in srgb, var(--lane) 22%, var(--color-ink)); color: color-mix(in srgb, var(--lane) 70%, white);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--lane) 75%, transparent);
+  font-size: 10px; line-height: 1;
+}
+.player-chip__face img { width: 100%; height: 100%; object-fit: cover; }
+.player-chip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1.2; color: var(--color-text); }
+.player-chip__name:last-child { padding-right: 7px; }
+.player-chip__lane {
+  flex: 0 0 auto; padding: 2px 7px; border-radius: 9999px; font-size: 9px; font-weight: 800; line-height: 1.35;
+  color: color-mix(in srgb, var(--lane) 80%, white); background: color-mix(in srgb, var(--lane) 15%, transparent);
+}
+
+/* ---- Win-rate ring and 0–10 meter ---------------------------------------------------- */
+.win-ring { position: relative; flex: 0 0 auto; display: grid; place-items: center; }
+.win-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.win-ring__track { fill: none; stroke: var(--color-edge); stroke-width: 3.2; }
+.win-ring__value { fill: none; stroke: var(--ring); stroke-width: 3.2; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring) 55%, transparent)); transition: stroke-dasharray 700ms ease; }
+.win-ring__text { position: relative; font-size: 12.5px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--color-text); }
+.win-ring__text small { font-size: 8px; margin-left: 1px; color: var(--color-faint); }
+
+.meter { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.meter__bar { position: relative; flex: 1 1 auto; min-width: 28px; max-width: 64px; height: 5px; border-radius: 9999px; background: var(--color-edge); overflow: hidden; }
+.meter__bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, var(--color-crim-deep), var(--color-crim)); }
+.meter__value { font-size: 12px; font-weight: 900; }
+
+/* ---- Roster cards (pages/Players.tsx) ------------------------------------------------ */
+.roster-card {
+  --lane: var(--color-crim);
+  position: relative; overflow: hidden; padding: 0; border-radius: 12px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--lane) 13%, transparent), transparent 55%),
+    color-mix(in srgb, var(--color-panel) 90%, transparent);
+}
+.roster-card::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  background: linear-gradient(90deg, var(--lane), color-mix(in srgb, var(--lane) 10%, transparent) 70%);
+}
+.roster-card__face { position: relative; flex: 0 0 auto; border-radius: 10px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane) 55%, transparent), 0 8px 18px -10px var(--lane); }
+.roster-card__face > * { border-radius: 10px !important; border: 0 !important; }
+.roster-card__stats {
+  display: grid; grid-template-columns: 1fr 1.25fr 1.2fr; border-top: 1px solid var(--color-edge);
+  background: rgb(0 0 0 / 0.16);
+}
+.roster-card__stats > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; }
+.roster-card__stats > div + div { border-left: 1px solid color-mix(in srgb, var(--color-edge) 70%, transparent); }
+.roster-card__stats .label { font-size: 9px; }
+.roster-card__stats b { font-size: 14px; font-weight: 900; line-height: 1; }
+.roster-card__stats b small { font-size: 9px; color: var(--color-faint); margin: 0 2px 0 1px; }
+
+/* ---- Scrim list rows (pages/Scrims.tsx) ---------------------------------------------- */
+.scrim-row {
+  --tone: var(--color-edge-2);
+  position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 16px; overflow: hidden; border-radius: 12px;
+}
+.scrim-row[data-tone="win"] { --tone: var(--color-leaf); }
+.scrim-row[data-tone="loss"] { --tone: var(--color-danger); }
+.scrim-row[data-tone="draw"] { --tone: var(--color-amber); }
+.scrim-row[data-tone="scheduled"] { --tone: var(--color-sky); }
+.scrim-row::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--tone); }
+.scrim-row::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(70% 140% at 100% 50%, color-mix(in srgb, var(--tone) 10%, transparent), transparent 60%);
+}
+.scrim-row > * { position: relative; z-index: 1; }
+.scrim-row__no {
+  flex: 0 0 auto; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 10px;
+  border: 1px solid var(--color-edge); background: rgb(0 0 0 / 0.22);
+  font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1;
+}
+.scrim-row__no small { font-size: 8px; color: var(--color-faint); display: block; margin-bottom: -6px; }
+.scrim-row__score { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.scrim-row__nums { display: inline-flex; align-items: baseline; gap: 4px; font-size: 22px; font-weight: 900; line-height: 1; }
+.scrim-row__nums b:first-child { color: color-mix(in srgb, var(--tone) 75%, white); }
+.scrim-row__nums b:last-child { color: var(--color-mute); }
+.scrim-row__nums i { font-size: 14px; color: var(--color-faint); font-style: normal; }
+
+/* ---- Stat tiles: a little more presence ---------------------------------------------- */
+.stat-tile { border-radius: 12px; }
+.stat-tile .label { font-size: 9.5px; }
+.roster-card__face > div {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--lane) 30%, var(--color-ink)), color-mix(in srgb, var(--lane) 10%, var(--color-ink)));
+  color: color-mix(in srgb, var(--lane) 70%, white);
+}

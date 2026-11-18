@@ -11,26 +11,31 @@ import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, Scoreboard
 import { nice } from "../lib/caseText";
 
 function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
+  const played = s.status === "played";
+  const tone = played ? (s.result === "WIN" ? "win" : s.result === "LOSS" ? "loss" : "draw") : s.status === "scheduled" ? "scheduled" : "other";
   return (
-    <button onClick={onOpen} className="w-full text-left card card-hover p-3.5 flex items-center gap-3">
-      <div className="w-12 text-center">
-        <div className="label !text-faint">#</div>
-        <div className="font-extrabold tabular-nums">{s.number}</div>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-bold truncate">
-          {s.status === "scheduled" ? <>vs {s.opponent}</> : <>9 Clover {s.score_us} - {s.score_them} {s.opponent}</>}
-          <span className="text-faint font-semibold"> · {s.format}</span>
-        </div>
-        <div className="text-[11px] text-faint mt-0.5">
+    <button type="button" onClick={onOpen} data-tone={tone} className="w-full text-left card card-hover scrim-row"
+      aria-label={`Scrim ${s.number} ${played ? `${s.score_us}–${s.score_them} vs ${s.opponent}` : `vs ${s.opponent}, ${s.status}`}`}>
+      <span className="scrim-row__no"><small>#</small>{s.number}</span>
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[13.5px] font-bold truncate">vs {s.opponent}</span>
+          {s.format && <span className="chip !px-1.5 !py-0 !text-[9px] text-mute shrink-0">{s.format}</span>}
+        </span>
+        <span className="block text-[10.5px] text-faint mt-1 truncate">
           {dayLabel(s.date)} {fmtTime(s.time)}
           {s.tournament_prep ? " · tournament prep" : ""}
           {s.server ? ` · ${s.server}` : ""}
-        </div>
-      </div>
-      {s.status === "scheduled" && <Badge cls="text-sky border-sky/40 bg-sky/10">scheduled</Badge>}
-      {s.status === "played" && <ResultBadge result={s.result} />}
-      {s.needs_review && <Badge cls="text-amber border-amber/40 bg-amber/10 !text-[9px]">review due</Badge>}
+        </span>
+        {(s.needs_review || s.status === "scheduled") && <span className="flex flex-wrap gap-1 mt-1.5">
+          {s.status === "scheduled" && <Badge cls="text-sky !text-[9px]">Scheduled</Badge>}
+          {s.needs_review && <Badge cls="text-amber !text-[9px]">Review due</Badge>}
+        </span>}
+      </span>
+      {played && <span className="scrim-row__score" aria-hidden="true">
+        <span className="scrim-row__nums tabular-nums"><b>{s.score_us}</b><i>–</i><b>{s.score_them}</b></span>
+        <ResultBadge result={s.result} />
+      </span>}
     </button>
   );
 }

@@ -1,4 +1,4 @@
-import { Gamepad2, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Crown, Gamepad2, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgress } from "../lib/types";
@@ -10,6 +10,7 @@ import { HeroImg } from "../components/HeroImg";
 import { linkedRoster } from "../lib/mlbb";
 import type { LinkSummary } from "../lib/mlbb";
 import { nice } from "../lib/caseText";
+import { LaneTag, laneKey, Meter, WinRing } from "../components/PlayerBits";
 import { FormDots, kdaText, PerformancePanel } from "../components/PlayerPerformance";
 import type { FocusAlert, PoolPlayed } from "../lib/types";
 
@@ -344,31 +345,47 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
       {!roster && <Spinner />}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {(roster ?? []).map((p) => (
-          <button key={p.id} onClick={() => navigate("players", p.id)} className="card card-hover p-4 text-left">
-            <div className="flex items-center gap-3">
-              <AvatarImg user={p} size={44} />
-              <div className="flex-1 min-w-0">
-                <div className="font-extrabold truncate"><Ign text={p.ign} />
-                  {p.role === "captain" && <span className="text-amber text-[10px] font-bold"> · C</span>}
-                </div>
-                <div className="text-[11px] text-faint flex items-center gap-1.5">{nice(p.main_role) || p.role_label}
-                  {links.get(p.id)?.linked && (
-                    <span className="chip !text-[8.5px] text-leaf border-leaf/40 inline-flex items-center gap-1">
-                      <Gamepad2 size={9} /> MLBB ✓
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-3.5 text-[11.5px] text-mute">
-              <span className="tabular-nums">{(p as unknown as { scrim_stats: { series_won: number; series_lost: number } }).scrim_stats.series_won}W – {(p as unknown as { scrim_stats: { series_lost: number } }).scrim_stats.series_lost}L series</span>
-              <span>Avg confidence {(p as unknown as { avg_confidence: number | null }).avg_confidence ?? "—"}</span>
-            </div>
-          </button>
+          <RosterCard key={p.id} p={p as unknown as RosterEntry} linked={Boolean(links.get(p.id)?.linked)} />
         ))}
         {roster && roster.length === 0 && <Empty title="No roster members yet" />}
       </div>
     </div>
+  );
+}
+
+type RosterEntry = User & {
+  scrim_stats?: { series_played: number; series_won: number; series_lost: number; win_rate: number | null; form: string[] };
+  avg_confidence?: number | null;
+};
+
+/** A roster member at a glance: lane colour, series win rate, last five results and confidence. */
+function RosterCard({ p, linked }: { p: RosterEntry; linked: boolean }) {
+  const stats = p.scrim_stats;
+  const played = stats?.series_played ?? 0;
+  return (
+    <button type="button" onClick={() => navigate("players", p.id)} data-lane={laneKey(p.main_role) || undefined}
+      className="card card-hover roster-card text-left" aria-label={`Open ${p.ign || p.name}`}>
+      <div className="flex items-center gap-3 p-4 pb-3.5">
+        <span className="roster-card__face"><AvatarImg user={p} size={52} /></span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[16px] leading-tight truncate"><Ign text={p.ign || p.name} /></span>
+            {p.role === "captain" && <span className="chip !px-1.5 !py-0 !text-[9px] text-amber shrink-0" title="Captain"><Crown size={10} /> Captain</span>}
+          </div>
+          <div className="text-[10.5px] text-faint truncate mt-0.5">{p.name}</div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {p.main_role ? <LaneTag lane={p.main_role} /> : <span className="chip !text-[9.5px] text-mute">{p.role_label}</span>}
+            {linked && <span className="chip !text-[9px] text-leaf inline-flex items-center gap-1"><Gamepad2 size={10} /> MLBB linked</span>}
+          </div>
+        </div>
+        <WinRing value={played ? stats?.win_rate : null} />
+      </div>
+      <div className="roster-card__stats">
+        <div><span className="label">Series</span><b className="tabular-nums">{played ? <>{stats?.series_won}<small>W</small> {stats?.series_lost}<small>L</small></> : "—"}</b></div>
+        <div><span className="label">Form</span><FormDots form={(stats?.form ?? []).slice(0, 5)} label="Last five series" /></div>
+        <div><span className="label">Confidence</span><Meter value={p.avg_confidence} label="Average confidence" /></div>
+      </div>
+    </button>
   );
 }
 

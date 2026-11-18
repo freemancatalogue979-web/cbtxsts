@@ -4,6 +4,7 @@ import { api, qs } from "../lib/api";
 import type { Activity, Meta, Program, ProgressCell, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner, Tabs, Ign } from "../components/ui";
+import { PlayerChip } from "../components/PlayerBits";
 import { AvatarImg } from "../components/Avatar";
 import { FilePick } from "../components/FilePick";
 import { nice } from "../lib/caseText";
@@ -48,9 +49,7 @@ function ActivityRow({ a, me, onOpen }: { a: Activity; me: User; onOpen: () => v
         {(a.assigned ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {(a.assigned ?? []).map((u) => (
-              <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-                <Ign text={u.ign} />{u.main_role ? ` · ${nice(u.main_role)}` : ""}
-              </span>
+              <PlayerChip key={u.id} user={u} />
             ))}
           </div>
         )}
@@ -492,9 +491,7 @@ function ProgramCard({ p, me, onOpen }: { p: Program; me: User; onOpen: () => vo
       </div>
       <div className="flex flex-wrap gap-1 mt-2.5">
         {p.enrolled.map((u) => (
-          <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-            <Ign text={u.ign} />{u.main_role ? ` · ${nice(u.main_role)}` : ""}
-          </span>
+          <PlayerChip key={u.id} user={u} />
         ))}
         {p.enrolled.length === 0 && <span className="text-[11px] text-faint">No players enrolled yet</span>}
       </div>

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import type { Hero, Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, navigate, REVIEW_STATUS_STYLE } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs, Ign } from "../components/ui";
+import { PlayerChip } from "../components/PlayerBits";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { nice } from "../lib/caseText";
 
@@ -206,7 +207,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
           {review.player_ids.length > 0 && (
             <div className="mt-4">
               <div className="section-pill mb-1.5">Players</div>
-              <div className="flex flex-wrap gap-1.5">{review.player_ids.map((id) => <Badge key={id}><Ign text={userName(id)} /></Badge>)}</div>
+              <div className="flex flex-wrap gap-1.5">{review.player_ids.map((id) => <PlayerChip key={id} user={users.find((u) => u.id === id) ?? { ign: userName(id) }} />)}</div>
             </div>
           )}
         </div>
