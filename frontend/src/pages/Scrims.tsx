@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, qs } from "../lib/api";
 import type { Hero, Meta, Scrim, ScoreboardRead, ScrimSummary, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge } from "../lib/util";
-import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Tabs } from "../components/ui";
+import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Tabs, Ign } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { HeroImg } from "../components/HeroImg";
 import { TournamentStats } from "../components/TournamentStats";
@@ -155,7 +155,7 @@ function NewScrimForm({ meta, users, initial, onSaved, onClose }: {
                 <button type="button" key={u.id}
                   onClick={() => set("substitutes", on ? subs.filter((i) => i !== u.id) : [...subs, u.id])}
                   className={`chip ${on ? "border-crim/60 text-crim bg-crim-dim/40" : "text-mute"}`}>
-                  {u.ign}
+                  <Ign text={u.ign} />
                 </button>
               );
             })}
@@ -622,7 +622,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
               {meta.lanes.map((lane) => (
                 <div key={lane} className="flex justify-between text-[13px]">
                   <span className="text-faint font-bold w-14">{nice(lane)}</span>
-                  <span className="font-semibold">{userName(s.lineup?.[lane])}</span>
+                  <span className="font-semibold"><Ign text={userName(s.lineup?.[lane])} /></span>
                 </div>
               ))}
             </div>

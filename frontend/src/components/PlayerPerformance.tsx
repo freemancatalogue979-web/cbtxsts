@@ -3,7 +3,7 @@ import type { FocusAlert, GamePlayed, HeroPerf, PerfSummary, PlayerPerformance }
 import { nice } from "../lib/caseText";
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
 import { HeroImg } from "./HeroImg";
-import { Empty, SectionTitle, StatTile } from "./ui";
+import { Empty, Ign, SectionTitle, StatTile } from "./ui";
 
 const ALERT_ICON: Record<FocusAlert["kind"], typeof Flame> = {
   struggling: TrendingDown, low_kda: Skull, low_rating: Gauge, cold_streak: Flame, no_reps: Swords, strength: Sparkles,
@@ -176,7 +176,7 @@ export function PerformancePanel({ perf, ign, isSelf }: { perf: PlayerPerformanc
   const kda = overall.kda;
   return (
     <section aria-label="Team games and heroes" className="space-y-3">
-      <SectionTitle right={<span className="text-[11px] text-faint">scrims + tournaments</span>}>Team games · {ign}</SectionTitle>
+      <SectionTitle right={<span className="text-[11px] text-faint">scrims + tournaments</span>}>Team games · <Ign text={ign} /></SectionTitle>
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
         <StatTile icon={<Target size={14} />} label="Team games" value={overall.games}
           hint={overall.games ? `${overall.wins}W – ${overall.losses}L${overall.main_lane ? ` · mostly ${nice(overall.main_lane)}` : ""}` : "none yet"} />
@@ -194,7 +194,7 @@ export function PerformancePanel({ perf, ign, isSelf }: { perf: PlayerPerformanc
 
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="section-pill">{isSelf ? "Heroes to work on" : `Heroes ${ign} should work on`}</div>
+          <div className="section-pill">{isSelf ? "Heroes to work on" : <>Heroes <Ign text={ign} /> should work on</>}</div>
           <span className="text-[11px] text-faint">from {overall.games} team {overall.games === 1 ? "game" : "games"} · needs 3+ games on a hero</span>
         </div>
         <FocusAlerts alerts={perf.focus}

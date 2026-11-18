@@ -10,7 +10,7 @@ import type { Insights } from "../lib/types";
 import { fmtDate, navigate, pct } from "../lib/util";
 import { BarChart, CHART_COLORS, CountUp, Donut, HBars, Heatmap, Legend, LineChart, Sparkline, weekLabel } from "./Charts";
 import { HeroImg } from "./HeroImg";
-import { ErrorNote, SectionTitle, Spinner } from "./ui";
+import { ErrorNote, Ign, SectionTitle, Spinner } from "./ui";
 
 const RANGES = [8, 12, 26] as const;
 const dayShort = (iso: string) => {
@@ -128,7 +128,7 @@ export function DashboardInsights() {
                 <ul className="flex flex-wrap gap-1.5">
                   {people.filter((p) => p.active_7 === 0).slice(0, 12).map((p) => (
                     <li key={p.user_id} className="chip border-amber/40 text-amber !text-[10px] !py-0.5 max-w-full truncate" title={p.last_seen ? `last seen ${fmtDate(p.last_seen)}` : "not seen yet"}>
-                      {p.name}{p.last_seen ? <span className="text-faint"> · {fmtDate(p.last_seen)}</span> : null}
+                      <Ign text={p.name} />{p.last_seen ? <span className="text-faint"> · {fmtDate(p.last_seen)}</span> : null}
                     </li>
                   ))}
                 </ul>
@@ -181,7 +181,7 @@ export function DashboardInsights() {
                 <li key={p.user_id}>
                   <button type="button" className="w-full flex items-center gap-3 py-2.5 text-left" onClick={() => navigate("players", p.user_id)}>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-bold text-[12px] truncate">{p.name}<span className="text-faint font-normal">{p.lane ? ` · ${p.lane === "EXP" ? "EXP" : p.lane[0] + p.lane.slice(1).toLowerCase()}` : ""}</span></span>
+                      <span className="block font-bold text-[12px] truncate"><Ign text={p.name} /><span className="text-faint font-normal">{p.lane ? ` · ${p.lane === "EXP" ? "EXP" : p.lane[0] + p.lane.slice(1).toLowerCase()}` : ""}</span></span>
                       <span className="block text-[10.5px] text-faint tabular-nums">
                         {games} games · <span className={wr == null ? "" : wr >= 50 ? "text-leaf" : "text-danger"}>{wr == null ? "no results" : `${wr}% won`}</span>
                         {p.act ? <> · <span className={p.act.active_7 ? "text-leaf" : "text-amber"}>{p.act.active_7}/7 days</span></> : null}
@@ -205,7 +205,7 @@ export function DashboardInsights() {
                   const wr = decided.length ? Math.round(decided.reduce((n, w) => n + (w.win_rate ?? 0) * w.games, 0) / Math.max(1, decided.reduce((n, w) => n + w.games, 0))) : null;
                   return (
                     <tr key={p.user_id} className="border-t border-edge/60">
-                      <td className="td"><button type="button" className="font-bold hover:text-crim" onClick={() => navigate("players", p.user_id)}>{p.name}</button> <span className="text-faint">{p.lane ? `· ${p.lane === "EXP" ? "EXP" : p.lane[0] + p.lane.slice(1).toLowerCase()}` : ""}</span></td>
+                      <td className="td"><button type="button" className="font-bold hover:text-crim" onClick={() => navigate("players", p.user_id)}><Ign text={p.name} /></button> <span className="text-faint">{p.lane ? `· ${p.lane === "EXP" ? "EXP" : p.lane[0] + p.lane.slice(1).toLowerCase()}` : ""}</span></td>
                       <td className="td"><span className="inline-flex items-center gap-2"><Sparkline values={p.weeks.map((w) => w.games)} label={`${p.name} games per week`} color={CHART_COLORS.sky} /><b className="tabular-nums">{games}</b></span></td>
                       <td className={`td tabular-nums ${wr == null ? "text-faint" : wr >= 50 ? "text-leaf" : "text-danger"}`}>{wr == null ? "—" : `${wr}%`}</td>
                       <td className="td hidden md:table-cell"><Sparkline values={p.weeks.map((w) => w.rating)} label={`${p.name} rating trend`} color={CHART_COLORS.amber} /></td>

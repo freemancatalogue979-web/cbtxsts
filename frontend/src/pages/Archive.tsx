@@ -21,7 +21,7 @@ import { api } from "../lib/api";
 import type { ArchiveCommentT, ArchiveFolderT, ArchiveItemT, ArchiveLocker, MemberBrief, User } from "../lib/types";
 import { fmtStamp, navigate } from "../lib/util";
 import { AvatarImg } from "../components/Avatar";
-import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner } from "../components/ui";
+import { Empty, ErrorNote, Field, Modal, PageTitle, Spinner, Ign } from "../components/ui";
 import { nice } from "../lib/caseText";
 
 // ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ function LockerGrid({ me }: { me: User }) {
                     {f.mine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">You</span>}
                   </div>
                   <div className="text-[11.5px] text-mute truncate">
-                    {f.owner?.ign || f.owner?.name || "Unknown"}
+                    <Ign text={f.owner?.ign || f.owner?.name || "Unknown"} />
                     {f.owner?.main_role ? ` · ${nice(f.owner.main_role)}` : ""}
                   </div>
                 </div>
@@ -274,7 +274,7 @@ function LockerView({ me, folderId }: { me: User; folderId: number }) {
               {isMine && <span className="chip text-leaf border-leaf/40 bg-leaf-dim/50">Yours</span>}
             </div>
             <div className="text-[12px] text-mute mt-0.5">
-              {locker.owner?.ign || locker.owner?.name} · {locker.item_count} {locker.item_count === 1 ? "drop" : "drops"}
+              <Ign text={locker.owner?.ign || locker.owner?.name} /> · {locker.item_count} {locker.item_count === 1 ? "drop" : "drops"}
               {locker.private_count ? ` · ${locker.private_count} private` : ""}
             </div>
             <div className="text-[10.5px] text-faint mt-0.5 tabular-nums">
@@ -446,7 +446,7 @@ function ItemModal({ me, item, ownerIgn, onClose, onChanged, onEdit }: {
           <VisibilityChip item={item} />
           {item.visibility === "private" && item.mine && item.shared.length > 0 && (
             <span className="text-crim/90">
-              shared with {item.shared.map((s) => s.ign || s.name).join(", ")}
+              shared with {item.shared.map((s, index) => <span key={s.id}>{index ? ", " : ""}<Ign text={s.ign || s.name} /></span>)}
             </span>
           )}
           <span className="ml-auto tabular-nums">
@@ -508,7 +508,7 @@ function ItemModal({ me, item, ownerIgn, onClose, onChanged, onEdit }: {
                   <AvatarImg user={{ name: c.author?.name || "?", ign: c.author?.ign || "", avatar: c.author?.avatar ?? null }} size={24} />
                   <div className="flex-1 min-w-0 rounded-lg border border-edge/70 bg-raised/40 px-2.5 py-1.5">
                     <div className="flex items-center gap-2 text-[10.5px]">
-                      <span className="font-bold text-text/90">{c.author?.ign || c.author?.name || "?"}</span>
+                      <span className="font-bold text-text/90"><Ign text={c.author?.ign || c.author?.name || "?"} /></span>
                       <span className="text-faint tabular-nums">{fmtStamp(c.created_at)}</span>
                       {(c.author?.id === me.id || item.mine) && (
                         <button className="ml-auto text-faint hover:text-crim" title="Delete reply"
@@ -758,7 +758,7 @@ function ItemEditor({ me, folderId, initial, onClose, onSaved }: {
                       >
                         <AvatarImg user={{ name: m.name, ign: m.ign, avatar: m.avatar }} size={18} />
                         <span className={`text-[11px] font-semibold truncate ${on ? "text-text" : "text-mute"}`}>
-                          {m.ign || m.name}
+                          <Ign text={m.ign || m.name} />
                         </span>
                       </button>
                     );

@@ -51,8 +51,24 @@ export function CaseSafe({ text }: { text: string }) {
   );
 }
 
-/** Letters flip up on a 3D hinge, one after another. Words never break in the middle. Visual only. */
-function FlipText({ text }: { text: string }) {
+/** A player's in-game name exactly as the game gave it: the device's own sans font, upright,
+ *  no letter-spacing, no heavy stroke and no case changes — never the app's Courier style.
+ *  Stylised letters and symbols (ᴋαмɪɴαʀɪ⚝, 私, ✿) come through untouched. */
+export function Ign({ text, className = "" }: { text: string | null | undefined; className?: string }) {
+  return <bdi className={`ign${className ? ` ${className}` : ""}`} dir="auto">{text ?? ""}</bdi>;
+}
+
+/** Letters flip up on a 3D hinge, one after another. Words never break in the middle. Visual only.
+ *  A player's in-game name inside the title is shown as given (see Ign), not flipped. */
+function FlipText({ text, ign }: { text: string; ign?: string }) {
+  const at = ign ? text.indexOf(ign) : -1;
+  if (ign && at >= 0) {
+    return <>
+      {at > 0 && <FlipText text={text.slice(0, at)} />}
+      <Ign text={ign} className="flip-ign" />
+      {at + ign.length < text.length && <FlipText text={text.slice(at + ign.length)} />}
+    </>;
+  }
   let index = 0;
   return (
     <>
@@ -92,7 +108,7 @@ function useCalmMotion(): boolean {
  * letter by letter with an extruded accent edge, and the banner tilts toward the
  * pointer. Calm motion / reduced motion: no auto-advance, tilt or letter flips.
  */
-export function PageTitle({ title, sub, right, slides = [] }: { title: string; sub?: ReactNode; right?: ReactNode; slides?: HeroSlide[] }) {
+export function PageTitle({ title, sub, right, slides = [], ign }: { title: string; sub?: ReactNode; right?: ReactNode; slides?: HeroSlide[]; ign?: string }) {
   const chrome = useContext(PageChrome);
   const deck: HeroSlide[] = [{ eyebrow: chrome?.eyebrow, title, sub }, ...slides];
   const count = deck.length;
@@ -181,7 +197,7 @@ export function PageTitle({ title, sub, right, slides = [] }: { title: string; s
                   <div className="page-hero__title">
                     {/* The main title is already the page's <h1>; other slide titles are read once here. */}
                     {!isMain && <span className="sr-only">{slide.title}</span>}
-                    <span aria-hidden="true"><FlipText text={slide.title} /></span>
+                    <span aria-hidden="true"><FlipText text={slide.title} ign={isMain ? ign : undefined} /></span>
                   </div>
                   {slide.steps ? (
                     <ol className="hero-loop" aria-label="Team loop">

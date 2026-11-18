@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, qs } from "../lib/api";
 import type { Activity, Meta, Program, ProgressCell, User, Week } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
-import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner, Tabs } from "../components/ui";
+import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Segments, Spinner, Tabs, Ign } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
 import { FilePick } from "../components/FilePick";
 import { nice } from "../lib/caseText";
@@ -49,7 +49,7 @@ function ActivityRow({ a, me, onOpen }: { a: Activity; me: User; onOpen: () => v
           <div className="flex flex-wrap gap-1 mt-1.5">
             {(a.assigned ?? []).map((u) => (
               <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-                {u.ign}{u.main_role ? ` · ${nice(u.main_role)}` : ""}
+                <Ign text={u.ign} />{u.main_role ? ` · ${nice(u.main_role)}` : ""}
               </span>
             ))}
           </div>
@@ -152,7 +152,7 @@ function ActivityForm({ meta, users, weeks, initial, onSaved, onClose }: {
                 <button type="button" key={u.id}
                   onClick={() => set("assigned_player_ids", on ? ids.filter((i) => i !== u.id) : [...ids, u.id])}
                   className={`chip ${on ? "border-crim/60 text-crim bg-crim-dim/40" : "text-mute"}`}>
-                  {u.ign} <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
+                  <Ign text={u.ign} /> <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
                 </button>
               );
             })}
@@ -329,7 +329,7 @@ function ProgramForm({ users, program, onSaved, onClose }: {
                 <button type="button" key={u.id}
                   onClick={() => set("enrolled_ids", on ? ids.filter((i) => i !== u.id) : [...ids, u.id])}
                   className={`chip ${on ? "border-crim/60 text-crim bg-crim-dim/40" : "text-mute"}`}>
-                  {u.ign} <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
+                  <Ign text={u.ign} /> <span className="text-faint text-[9px]">{nice(u.main_role)}</span>
                 </button>
               );
             })}
@@ -493,7 +493,7 @@ function ProgramCard({ p, me, onOpen }: { p: Program; me: User; onOpen: () => vo
       <div className="flex flex-wrap gap-1 mt-2.5">
         {p.enrolled.map((u) => (
           <span key={u.id} className="chip !text-[9px] !py-0.5 !px-1.5 text-mute border-edge-2" title={u.name}>
-            {u.ign}{u.main_role ? ` · ${nice(u.main_role)}` : ""}
+            <Ign text={u.ign} />{u.main_role ? ` · ${nice(u.main_role)}` : ""}
           </span>
         ))}
         {p.enrolled.length === 0 && <span className="text-[11px] text-faint">No players enrolled yet</span>}
@@ -605,7 +605,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                       <th key={u.id} className="px-2 py-2.5 text-center min-w-16">
                         <div className="flex flex-col items-center gap-1">
                           <AvatarImg user={u} size={22} />
-                          <span className="text-[9.5px] font-extrabold text-mute tracking-wide">{u.ign}</span>
+                          <span className="text-[9.5px] font-extrabold text-mute tracking-wide"><Ign text={u.ign} /></span>
                         </div>
                       </th>
                     ))}
@@ -740,7 +740,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
                             <AvatarImg user={u} size={20} />
                             <div className="min-w-0 flex-1">
                               <div className="text-[10px] font-extrabold text-mute">
-                                {u.ign}
+                                <Ign text={u.ign} />
                                 {c?.status === "done" && <span className="text-leaf"> ✓</span>}
                                 {c?.completed_at && <span className="text-faint normal-case font-semibold"> · {dayLabel(c.completed_at.split("T")[0])}</span>}
                               </div>
@@ -813,7 +813,7 @@ export function TrainingPage({ me, meta, parts }: { me: User; meta: Meta; parts:
               {(a.assigned ?? []).map((u) => (
                 <span key={u.id} className="flex items-center gap-1.5 chip !py-1 text-mute border-edge-2" title={u.name}>
                   <AvatarImg user={u} size={18} />
-                  <span className="font-bold text-text">{u.ign}</span>
+                  <span className="font-bold text-text"><Ign text={u.ign} /></span>
                   {u.main_role && <span className="text-crim font-bold !text-[9px]">{nice(u.main_role)}</span>}
                 </span>
               ))}

@@ -422,7 +422,7 @@ export function Heatmap({ rows, columns, caption, color = CHART_COLORS.accent, c
       <svg width={width} height={height} role="img" aria-label={caption} className="block">
         {rows.map((r, ri) => (
           <g key={`${r.label}-${ri}`}>
-            <text x={labelW - 8} y={ri * pitch + pitch / 2 + 3.5} textAnchor="end" className="fill-mute text-[10px]">{r.label.length > chars ? `${r.label.slice(0, chars - 1)}…` : r.label}</text>
+            <text x={labelW - 8} y={ri * pitch + pitch / 2 + 3.5} textAnchor="end" className="ign fill-mute text-[10px]">{r.label.length > chars ? `${r.label.slice(0, chars - 1)}…` : r.label}</text>
             {r.cells.slice(from).map((v, ci) => (
               <rect key={ci} className="chart-pop" style={{ animationDelay: `${ci * 18 + ri * 10}ms` }}
                 x={labelW + ci * (size + gap)} y={ri * pitch + (pitch - size) / 2} width={size} height={size} rx={Math.min(4, size / 3)}

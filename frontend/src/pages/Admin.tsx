@@ -2,7 +2,7 @@ import { KeyRound, Loader2, Plus, ShieldCheck, Trash2, UserCog } from "lucide-re
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Meta, User } from "../lib/types";
-import { Badge, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner } from "../components/ui";
+import { Badge, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, Ign } from "../components/ui";
 import { TeamFocusPanel } from "../components/TeamFocusPanel";
 import { nice } from "../lib/caseText";
 
@@ -107,7 +107,7 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
             <tbody>
               {(users ?? []).map((u) => (
                 <tr key={u.id} className="hover:bg-raised/60">
-                  <td className="td"><span className="font-bold">{u.ign || u.name}</span> <span className="text-faint text-[11px]">{u.name}</span>
+                  <td className="td"><span className="font-bold"><Ign text={u.ign || u.name} /></span> <span className="text-faint text-[11px]">{u.name}</span>
                     <span className="sm:hidden block text-[11px] text-mute">signs in as <b className="text-text">{u.email.split("@")[0]}</b>{u.active ? "" : <span className="text-crim"> · disabled</span>}</span></td>
                   <td className="td hidden sm:table-cell text-mute text-[12.5px]"><b className="text-text">{u.email.split("@")[0]}</b><span className="text-faint">@{u.email.split("@")[1] ?? ""}</span></td>
                   <td className="td"><Badge cls={u.role === "admin" ? "text-crim border-crim/40" : "text-mute"}>{u.role_label}</Badge></td>

@@ -21,7 +21,7 @@ const localModules = {
   "../lib/esports": { teamCode: () => "" },
   "../lib/util": { navigate: () => {} },
   "../components/Logo": { BrandImg: emptyComponent },
-  "../components/ui": { ErrorNote: emptyComponent, Field: emptyComponent, Modal: emptyComponent },
+  "../components/ui": { ErrorNote: emptyComponent, Field: emptyComponent, Ign: ({ text }) => text ?? null, Modal: emptyComponent },
   "../components/AIDataControls": { AIDataControls: emptyComponent },
   "../components/AIMatchPicker": { AIMatchPicker: emptyComponent },
   "../components/AIBoardPicker": { AIBoardPicker: emptyComponent },
@@ -115,4 +115,17 @@ test("mobile history remains separate and global navigation only collapses on AI
   // Content padding follows the sidebar: none when hidden on AI, rail or full width otherwise.
   assert.match(layout, /const navPad = hideDesktopNav \? "" : collapsed \? "md:pl-\[76px\]" : "md:pl-64";/);
   assert.match(layout, /motion-reduce:transition-none/);
+});
+
+test("phones get the AI as its own full-screen app: back button, drawer and its own tabs", async () => {
+  const html = render({ navigationOpen: true, historyOpen: true, headerOpen: true });
+  assert.match(html, /class="ai-app /);
+  assert.match(html, /<div class="ai-topbar md:hidden"><button type="button" class="ai-topbar__btn" aria-label="Back to the hub">/);
+  assert.match(html, /<nav aria-label="AI tabs" class="ai-tabbar md:hidden">/);
+  assert.match(html, /<nav aria-label="AI sections" class="grid grid-cols-2 /);
+  const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.match(css, /\.ai-app \{\n  --color-ink:/);
+  assert.match(css, /\.ai-app \.ai-drawer \{\n    position: fixed;/);
+  const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /const immersive = section === "ai";/);
 });

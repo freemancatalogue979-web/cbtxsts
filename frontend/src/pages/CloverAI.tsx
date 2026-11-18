@@ -2,6 +2,7 @@ import {
   ArrowDownRight, BookOpenText, BrainCircuit, Check, ChevronRight, CircleHelp, Download, ExternalLink,
   History, Lightbulb, Loader2, LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelTopClose, PanelTopOpen,
   Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
+  ArrowLeft, Menu, SquarePen,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, ApiError, qs } from "../lib/api";
@@ -10,7 +11,7 @@ import type { AIBoardSummary, AIContext, AIConversation, AIEsportsAttachment, AI
 import type { User } from "../lib/types";
 import { navigate } from "../lib/util";
 import { BrandImg } from "../components/Logo";
-import { ErrorNote, Field, Modal } from "../components/ui";
+import { ErrorNote, Field, Modal, Ign } from "../components/ui";
 import { AIDataControls } from "../components/AIDataControls";
 import { AIMatchPicker } from "../components/AIMatchPicker";
 import { AIBoardPicker } from "../components/AIBoardPicker";
@@ -156,12 +157,12 @@ function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
 }
 
 function MessageBubble({ message, conversationId, onFeedback, onManageMemory, onProposal }: { message: AIMessage; conversationId: string | null; onFeedback: (id: number, rating: -1 | 0 | 1) => void; onManageMemory: () => void; onProposal: (id: number, proposal: AIProposal) => void }) {
-  if (message.role === "user") return <div className="flex justify-end"><div className="max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{message.content}
+  if (message.role === "user") return <div className="flex justify-end"><div className="ai-bubble-user max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{message.content}
     {message.sources.some((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection) && <div className="mt-2 pt-2 border-t border-crim/20 text-[10px] font-semibold text-mute whitespace-normal">Attached: {message.sources.filter((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection).map((source) => source.match_id || source.label).join(" · ")}</div>}
   </div></div>;
   return <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
     <div className="rounded-lg bg-raised border border-edge p-1 shrink-0"><BrandImg size={24} /></div>
-    <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-edge bg-raised/50 p-3 sm:p-4">
+    <div className="ai-bubble-bot min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-edge bg-raised/50 p-3 sm:p-4">
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span className="text-[10px] tracking-[0.14em] font-extrabold">9 Clover AI</span>
         <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-bold ${message.mode === "ai" || message.mode === "think" || message.mode === "guidance" ? "border-leaf/25 text-leaf bg-leaf/5" : "border-amber/25 text-amber bg-amber/5"}`}>{message.mode === "ai" ? "AI response" : message.mode === "think" ? "Deep analysis" : message.mode === "guidance" ? "Next step" : "Local facts only"}</span>
@@ -352,8 +353,23 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   }, [selected, loadingChat, desktopLayout.historyOpen, desktopLayout.navigationOpen, desktopLayout.headerOpen]);
 
   useEffect(() => {
-    if (showHistory && window.innerWidth < 1024) mobileHistoryRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    // Phones open the history as a drawer (nothing to scroll to); tablets show it inline.
+    if (showHistory && window.innerWidth >= 768 && window.innerWidth < 1024) mobileHistoryRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
   }, [showHistory]);
+
+  useEffect(() => {
+    if (!showHistory) return;
+    const onKey = (event: globalThis.KeyboardEvent) => { if (event.key === "Escape") setShowHistory(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showHistory]);
+  /** Phone back button: return to wherever the member came from (never out of the app). */
+  function leaveChat() {
+    let previous = "";
+    try { previous = window.sessionStorage.getItem("clover_prev_route") || ""; } catch { /* storage blocked */ }
+    if (previous && !/^#\/ai\b/.test(previous)) window.location.hash = previous;
+    else navigate("dashboard");
+  }
 
   function selectChat(id: string) {
     if (selectedRef.current !== id) { setAttachedMatches([]); setAttachedDrafts([]); setAttachedMaps([]); olderVersion.current++; setLoadingMore(false); }
@@ -522,8 +538,21 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   const conversationHeight = `min-h-min sm:h-[min(740px,calc(100vh-235px))] ${
     desktopLayout.headerOpen ? "" : "md:h-[calc(100dvh-125px)]"
   }`;
-  return <div className="space-y-4 pb-3">
-    <header className="relative overflow-hidden rounded-xl border border-edge bg-panel" style={{ backgroundImage: "radial-gradient(circle at 85% -40%, rgba(52,211,153,.14), transparent 42%), radial-gradient(circle at 0% 0%, rgba(225,29,72,.12), transparent 35%)" }}>
+  const tabLabel = tabs.find((item) => item.id === tab)?.label ?? "Chat";
+  return <div className="ai-app space-y-4 pb-3">
+    {/* Phones: the AI is its own full-screen app — back button, its own drawer and its own tab bar. */}
+    <div className="ai-topbar md:hidden">
+      <button type="button" className="ai-topbar__btn" onClick={leaveChat} aria-label="Back to the hub"><ArrowLeft size={19} /></button>
+      <button type="button" className="ai-topbar__btn" aria-controls="ai-mobile-history" aria-expanded={showHistory}
+        aria-label={showHistory ? "Close conversation history" : "Open conversation history"} onClick={() => setShowHistory(!showHistory)}><Menu size={19} /></button>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-extrabold truncate">{tab === "chat" ? current?.title || "New conversation" : tabLabel}</div>
+        <div className="flex items-center gap-1.5 text-[9.5px] text-faint whitespace-nowrap overflow-hidden"><span className={`shrink-0 h-1.5 w-1.5 rounded-full ${status?.provider_configured ? "bg-leaf" : "bg-amber"}`} />9 Clover AI · {status ? (status.provider_configured ? "ready" : "basic mode") : "checking"}</div>
+      </div>
+      {tab === "chat" && <button type="button" className="ai-topbar__btn" aria-label="New conversation" disabled={busy || exporting} onClick={newChat}><SquarePen size={18} /></button>}
+      <button type="button" className="ai-topbar__btn" aria-label="Your AI context" onClick={() => setShowControls(true)}><Settings2 size={18} /></button>
+    </div>
+    <header className="ai-header relative overflow-hidden rounded-xl border border-edge bg-panel" style={{ backgroundImage: "radial-gradient(circle at 85% -40%, rgba(52,211,153,.14), transparent 42%), radial-gradient(circle at 0% 0%, rgba(225,29,72,.12), transparent 35%)" }}>
       <h1 className="sr-only">9 Clover AI</h1>
       <div id="ai-workspace-intro" className={`${desktopLayout.headerOpen ? "" : "md:hidden"} flex flex-wrap items-start justify-between gap-4 p-4 sm:p-6 pb-4`}>
         <div className="flex items-start gap-3 min-w-0">
@@ -558,14 +587,36 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
       </div>
     </header>
 
-    {tab === "chat" ? <div className={`grid gap-3 ${desktopLayout.historyOpen ? "lg:grid-cols-[228px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}>
+    <aside id="ai-mobile-history" ref={mobileHistoryRef} aria-label="Conversation history" className={`${showHistory ? "" : "hidden"} lg:hidden ai-drawer rounded-xl border border-edge bg-panel h-72`}>
+      <div className="h-full flex flex-col min-h-0">
+        <div className="ai-drawer__head md:hidden">
+          <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
+            <div className="rounded-xl border border-edge-2 bg-ink/70 p-1 shrink-0"><BrandImg size={30} /></div>
+            <div className="min-w-0 flex-1"><div className="text-[14px] font-extrabold">9 Clover <span className="text-leaf">AI</span></div><div className="text-[10px] text-faint">Private to you</div></div>
+            <button type="button" className="ai-topbar__btn" aria-label="Close menu" onClick={() => setShowHistory(false)}><X size={18} /></button>
+          </div>
+          <nav aria-label="AI sections" className="grid grid-cols-2 gap-1.5 px-3 pb-3">
+            {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => { setTab(id); setShowHistory(false); }} aria-current={tab === id ? "page" : undefined}
+              className={`ai-drawer__tab ${tab === id ? "ai-drawer__tab--on" : ""}`}><Icon size={14} />{label}</button>)}
+          </nav>
+          {selected && <div className="flex items-center gap-1.5 px-3 pb-3">
+            <span className="text-[10px] text-faint mr-auto">This chat</span>
+            <button type="button" className="btn-ghost !p-2" aria-label="Download conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); void exportChat(); }}><Download size={14} /></button>
+            <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); setRename(current?.title ?? ""); }}><PenLine size={14} /></button>
+            <button type="button" className="btn-ghost !p-2 hover:!text-crim" aria-label="Delete conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); void removeChat(); }}><Trash2 size={14} /></button>
+          </div>}
+        </div>
+        <div className="flex-1 min-h-0"><HistoryPanel {...historyProps} onSelect={(id) => { if (tab !== "chat") setTab("chat"); selectChat(id); }} onNew={() => { if (tab !== "chat") setTab("chat"); newChat(); }} /></div>
+      </div>
+    </aside>
+    {showHistory && <div className="ai-drawer-backdrop md:hidden" aria-hidden="true" onClick={() => setShowHistory(false)} />}
+    {tab === "chat" ? <div className={`ai-main grid gap-3 ${desktopLayout.historyOpen ? "lg:grid-cols-[228px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}>
       {/* History follows the chat height; its long list must not stretch the grid row. */}
       <aside id="ai-desktop-history" aria-label="Conversation history" className={`${desktopLayout.historyOpen ? "hidden lg:block" : "hidden"} relative rounded-xl border border-edge bg-panel h-full min-h-0`}>
         <div className="absolute inset-0"><HistoryPanel {...historyProps} /></div>
       </aside>
-      <aside id="ai-mobile-history" ref={mobileHistoryRef} aria-label="Conversation history" className={`${showHistory ? "" : "hidden"} lg:hidden rounded-xl border border-edge bg-panel h-72`}><HistoryPanel {...historyProps} /></aside>
       <section aria-label="AI conversation" className={`rounded-xl border border-edge bg-panel min-w-0 flex flex-col ${conversationHeight}`}>
-        <div className={`flex flex-wrap items-center gap-2 max-[430px]:gap-y-1 sm:gap-3 border-b border-edge px-3 sm:px-4 py-3 max-[430px]:py-2 ${desktopLayout.headerOpen ? "" : "md:py-2"}`}>
+        <div className={`ai-chat-head flex flex-wrap items-center gap-2 max-[430px]:gap-y-1 sm:gap-3 border-b border-edge px-3 sm:px-4 py-3 max-[430px]:py-2 ${desktopLayout.headerOpen ? "" : "md:py-2"}`}>
           <button className="btn-ghost lg:hidden !p-2" type="button" aria-controls="ai-mobile-history" aria-expanded={showHistory}
             aria-label={showHistory ? "Close conversation history" : "Open conversation history"} onClick={() => setShowHistory(!showHistory)}><History size={15} /></button>
           <button type="button" className="btn-ghost hidden lg:inline-flex !p-2 !text-[10px]" aria-controls="ai-desktop-history" aria-expanded={desktopLayout.historyOpen}
@@ -587,12 +638,12 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
               {messages.map((message) => <MessageBubble key={message.id} message={message} conversationId={selected} onFeedback={giveFeedback} onManageMemory={() => setShowControls(true)} onProposal={(id, proposal) => setMessages((previous) => previous.map((item) => item.id === id ? { ...item, proposal } : item))} />)}
-              {showPending && pendingQuestion && <div className="flex justify-end"><div className="max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{pendingQuestion.text}</div></div>}
+              {showPending && pendingQuestion && <div className="flex justify-end"><div className="ai-bubble-user max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{pendingQuestion.text}</div></div>}
               {waiting && ((waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>)}
             </div> :
             <div className="min-h-full flex flex-col justify-center max-w-2xl mx-auto py-2">
               <div className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-leaf"><Sparkles size={13} /> Made for your game</div>
-              <h2 className="text-[22px] sm:text-[28px] leading-tight font-extrabold mt-2">What are we working on, <span className="text-leaf">{me.ign || me.name}</span>?</h2>
+              <h2 className="text-[22px] sm:text-[28px] leading-tight font-extrabold mt-2">What are we working on, <span className="text-leaf"><Ign text={me.ign || me.name} /></span>?</h2>
               <p className="text-[12px] text-mute leading-relaxed mt-2 max-w-lg">Ask about MLBB, explore ideas, or use your own data for coaching. You choose what personal context to share.</p>
               <div className="grid sm:grid-cols-2 gap-2 mt-6">{SUGGESTIONS.map(({ label, hint, icon: Icon, prompt }) => <button key={label} type="button" disabled={waiting || !workspaceReady} onClick={() => void send(prompt)} className="group text-left rounded-lg border border-edge bg-raised/40 hover:bg-raised hover:border-leaf/30 p-3 transition-colors min-w-0">
                 <span className="flex items-center gap-2"><Icon size={15} className="text-leaf" /><span className="text-[12px] font-extrabold flex-1">{label}</span><ArrowDownRight size={13} className="text-faint group-hover:text-leaf" /></span>
@@ -636,18 +687,25 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
                 <button type="button" onClick={() => setShowControls(true)} className="text-[10px] text-faint hover:text-leaf inline-flex items-center gap-1.5"><LockKeyhole size={12} /> Manage context</button>
               </div>
               <div className="flex items-center gap-2"><span className="text-[10px] text-faint hidden sm:block">Enter to send · Shift + Enter for a new line</span>
-                <button type="submit" disabled={!draft.trim() || waiting || exporting || !workspaceReady || (Boolean(selected) && loadingChat)} aria-label="Send message" className="rounded-lg bg-leaf text-ink p-2 hover:bg-emerald-300 disabled:opacity-40 transition-colors"><Send size={15} /></button></div>
+                <button type="submit" disabled={!draft.trim() || waiting || exporting || !workspaceReady || (Boolean(selected) && loadingChat)} aria-label="Send message" className="ai-send rounded-lg bg-leaf text-ink p-2 hover:brightness-110 disabled:opacity-40 transition"><Send size={15} /></button></div>
             </div>
           </form>
-          {think && <p className="text-[10px] text-mute leading-relaxed mt-2">Think stays on until you switch it off or reload. Deeper analysis can take minutes and may use more credits; closing the tab won’t stop an active request.</p>}
+          {think && <p className="ai-note text-[10px] text-mute leading-relaxed mt-2">Think stays on until you switch it off or reload. Deeper analysis can take minutes and may use more credits; closing the tab won’t stop an active request.</p>}
           <AIWebControls mode={webMode} onChange={setWebMode} enabled={Boolean(status?.web_search_enabled)} disabled={waiting || exporting || !workspaceReady} dailyLimit={status?.web_search_daily_limit ?? null} />
-          {me.role === "admin" && <p className="text-[10px] text-leaf mt-2">Ask Clover to prepare drafts, strategies, heroes, patch labels or equipment changes for your review. Attach an existing draft to change its patch.</p>}
-          <p className="text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Game and MPL questions may load public Rone references even with web search off; AI does not request Rone player accounts. Avoid sharing secrets.</p>
+          {me.role === "admin" && <p className="ai-note text-[10px] text-leaf mt-2">Ask Clover to prepare drafts, strategies, heroes, patch labels or equipment changes for your review. Attach an existing draft to change its patch.</p>}
+          <p className="md:hidden text-[10px] text-faint mt-2">Private chat{think ? " · Think on" : ""} · <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>What gets shared</button></p>
+          <p className="ai-note text-[10px] text-mute leading-relaxed mt-2">Explicit teachings can be saved privately. Relevant memories, your question, enabled context, attached boards and esports evidence may be sent to the external AI provider. <button type="button" className="text-leaf underline" onClick={() => setShowControls(true)}>Manage memory & context</button>. Game and MPL questions may load public Rone references even with web search off; AI does not request Rone player accounts. Avoid sharing secrets.</p>
         </div>
       </section>
-    </div> : <div className="rounded-xl border border-edge bg-panel p-4 sm:p-6 min-h-[400px]">
+    </div> : <div className="ai-main ai-pane rounded-xl border border-edge bg-panel p-4 sm:p-6 min-h-[400px]">
       {tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <div className="space-y-5"><AIActionHistory /><AIReviewQueue /></div>}
     </div>}
+
+    <nav aria-label="AI tabs" className="ai-tabbar md:hidden">
+      <button type="button" onClick={() => { setTab("chat"); setShowHistory(false); }} aria-current={tab === "chat" && !showHistory ? "page" : undefined}><MessageSquare size={18} />Chat</button>
+      <button type="button" onClick={() => setShowHistory(true)} aria-current={showHistory ? "page" : undefined}><History size={18} />Chats</button>
+      {tabs.filter((item) => item.id !== "chat").map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => { setTab(id); setShowHistory(false); }} aria-current={tab === id && !showHistory ? "page" : undefined}><Icon size={18} />{label}</button>)}
+    </nav>
 
     {showMatchPicker && <Modal title="Attach esports matches" onClose={() => setShowMatchPicker(false)} wide>
       <AIMatchPicker initial={attachedMatches[0] ?? null} onCancel={() => setShowMatchPicker(false)} onApply={(item) => { setAttachedMatches(item ? [item] : []); setShowMatchPicker(false); }} />

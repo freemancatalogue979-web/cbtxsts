@@ -1,4 +1,4 @@
-import { ChevronsLeft, ChevronsRight, Gamepad2, LogOut, Menu, Palette, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, Gamepad2, LogOut, Menu, Palette, Search, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
@@ -15,7 +15,7 @@ import { CommandPalette } from "./CommandPalette";
 import { InstallAppButton } from "./AppControls";
 import { Wordmark, BrandImg } from "./Logo";
 import { AvatarImg } from "./Avatar";
-import { ErrorNote, Field, PageChrome, CaseSafe } from "./ui";
+import { ErrorNote, Field, PageChrome, Ign } from "./ui";
 import { nice } from "../lib/caseText";
 
 const ROLE_TONE: Record<string, string> = {
@@ -192,35 +192,63 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
     }
   }
 
+  // Escape closes; the page behind doesn't scroll while the sheet is open.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; };
+  }, [onClose]);
+
   // Rendered into <body>: the blurred sidebar and drawer create containing
   // blocks, so a fixed dialog inside them would be cropped and mispositioned.
+  // Phones get a full-screen sheet (header, scrolling body, sticky save bar);
+  // larger screens get a centred dialog.
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4" onClick={onClose}>
-      <div className="card p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto bg-panel" onClick={(e) => e.stopPropagation()}
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div className="profile-sheet w-full sm:max-w-md h-[100dvh] sm:h-auto sm:max-h-[90dvh] flex flex-col bg-panel sm:rounded-2xl sm:border sm:border-edge overflow-hidden" onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label="Edit profile">
-      <form className="space-y-4" onSubmit={save}>
-        <div className="flex items-center gap-4">
-          <AvatarImg user={user} size={64} />
-          <div className="flex-1">
-            <div className="text-[15px] font-extrabold"><CaseSafe text={user.ign || user.name} /></div>
-            <div className="text-[11px] text-faint">{user.email}</div>
-            <div className="flex gap-2 mt-2">
-              <button type="button" className="btn-ghost !py-1 !text-[11px]" onClick={() => fileRef.current?.click()}>
-                Upload photo
-              </button>
-              {user.avatar && (
-                <button type="button" className="btn-ghost !py-1 !text-[11px] hover:!text-crim"
-                  onClick={async () => { await api.del("/users/me/avatar"); onSaved({ ...user, avatar: null }); }}>
-                  Remove
-                </button>
-              )}
+      <form className="flex flex-col min-h-0 flex-1" onSubmit={save}>
+        <div className="flex items-center gap-2 px-3 sm:px-5 h-14 shrink-0 border-b border-edge pt-[env(safe-area-inset-top)] box-content">
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-lg text-mute hover:text-text hover:bg-white/5" onClick={onClose} aria-label="Close profile">
+            <ArrowLeft size={18} className="sm:hidden" /><X size={17} className="hidden sm:block" />
+          </button>
+          <h2 className="text-[14px] font-extrabold flex-1">My profile</h2>
+          <button className="btn-primary !py-1.5 !px-3 !text-[11px] sm:hidden" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5 space-y-5">
+        <div className="profile-card rounded-2xl border border-edge p-4 flex items-center gap-4">
+          <AvatarImg user={user} size={72} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[19px] leading-tight break-words"><Ign text={user.ign || user.name} /></div>
+            <div className="text-[11px] text-faint truncate mt-0.5">{user.name} · signs in as <b className="text-mute">{user.email.split("@")[0]}</b></div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <span className={`chip !text-[9.5px] !py-0 ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
+              {user.main_role && <span className="chip !text-[9.5px] !py-0 text-mute">{nice(user.main_role)}</span>}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
-              onChange={(e) => { const f2 = e.target.files?.[0]; if (f2) upload(f2); e.target.value = ""; }} />
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost flex-1 !text-[11px]" onClick={() => fileRef.current?.click()}>
+            <Camera size={14} /> Upload photo
+          </button>
+          {user.avatar && (
+            <button type="button" className="btn-ghost !text-[11px] hover:!text-crim"
+              onClick={async () => { await api.del("/users/me/avatar"); onSaved({ ...user, avatar: null }); }}>
+              Remove photo
+            </button>
+          )}
+          {user.roster && (
+            <button type="button" className="btn-ghost flex-1 !text-[11px]" onClick={() => { onClose(); navigate("players", user.id); }}>
+              <UserRound size={14} /> My player page
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f2 = e.target.files?.[0]; if (f2) upload(f2); e.target.value = ""; }} />
+        </div>
         {mlbb && (
-          <div className={`rounded-lg px-3.5 py-3 flex items-center gap-3 border ${mlbb.linked ? "bg-raised border-leaf/35" : "bg-raised border-edge/60"}`}>
+          <div className={`rounded-xl px-3.5 py-3 flex flex-wrap items-center gap-3 border ${mlbb.linked ? "bg-raised border-leaf/35" : "bg-raised border-edge/60"}`}>
             {mlbb.linked ? (
               <>
                 <span className="w-10 h-10 rounded-lg overflow-hidden border border-edge-2 bg-overlay grid place-items-center shrink-0">
@@ -229,7 +257,7 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
                     : <Gamepad2 size={16} className="text-leaf" />}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] font-extrabold text-leaf truncate">{mlbb.name || "MLBB account"} <span className="text-[9px] text-faint font-bold">· connected</span></div>
+                  <div className="text-[12.5px] font-extrabold text-leaf truncate">{mlbb.name ? <Ign text={mlbb.name} /> : "MLBB account"} <span className="text-[9px] text-faint font-bold">· connected</span></div>
                   <div className="text-[10px] text-faint">
                     {mlbb.level != null ? `Lv ${mlbb.level} · ` : ""}{mlbb.rank_level != null ? `rank tier ${mlbb.rank_level} · ` : ""}ID {mlbb.role_id}
                   </div>
@@ -242,29 +270,31 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
                 )}
               </>
             ) : (
-              <div className="flex items-center gap-2.5 w-full">
+              <>
                 <Gamepad2 size={15} className="text-faint shrink-0" />
-                <div className="text-[11px] text-faint flex-1">MLBB account not connected — rank, level and official IGN can fill this profile.</div>
+                <div className="text-[11px] text-faint flex-1 min-w-[160px]">MLBB account not connected — rank, level and official IGN can fill this profile.</div>
                 <button type="button" className="btn-ghost !py-1 !text-[11px] !text-rose-300 shrink-0" onClick={() => { onClose(); navigate("mlbb"); }}>Connect</button>
-              </div>
+              </>
             )}
           </div>
         )}
         <Field label="Name"><input className="input" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="In-game name"><input className="input" value={f.ign} onChange={(e) => setF({ ...f, ign: e.target.value })} /></Field>
+        <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
+          <Field label="In-game name"><input className="input ign" value={f.ign} onChange={(e) => setF({ ...f, ign: e.target.value })} autoCapitalize="off" autoCorrect="off" spellCheck={false} /></Field>
           <Field label="Main lane">
             <select className="input" value={f.main_role} onChange={(e) => setF({ ...f, main_role: e.target.value })}>
               {["", "EXP", "JUNGLE", "MID", "GOLD", "ROAM"].map((l) => <option key={l} value={l}>{nice(l) || "—"}</option>)}
             </select>
           </Field>
         </div>
+        <p className="-mt-3 text-[10px] text-faint">Your IGN shows exactly as typed — same letters, symbols and case as in the game.</p>
         <Field label="Bio"><textarea className="input min-h-20" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} placeholder="Role, goals, offline focus…" /></Field>
         <ThemePicker theme={theme} onChange={onThemeChange} />
         <ErrorNote error={err} />
-        <div className="flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={onClose}>Close</button>
-          <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
+        </div>
+        <div className="flex justify-end gap-2 px-4 sm:px-6 py-3 border-t border-edge shrink-0 bg-panel pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button type="button" className="btn-ghost flex-1 sm:flex-none" onClick={onClose}>Close</button>
+          <button className="btn-primary flex-1 sm:flex-none" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
         </div>
       </form>
       </div>
@@ -305,7 +335,7 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
       <button className="flex flex-1 min-w-0 items-center gap-2.5 text-left" onClick={() => setEditing(true)} title="Edit profile">
         <span className="shrink-0"><AvatarImg user={user} size={36} /></span>
         <span className="min-w-0">
-          <span className="block text-[13px] font-bold truncate"><CaseSafe text={user.ign || user.name} /></span>
+          <span className="block text-[13px] font-bold truncate"><Ign text={user.ign || user.name} /></span>
           <span className="flex items-center gap-1.5 mt-0.5">
             <span className={`chip !text-[9px] !px-1.5 !py-0 ${ROLE_TONE[user.role] || ""}`}>{user.role_label}</span>
             {user.main_role && <span className="text-[10px] text-faint font-bold">{nice(user.main_role)}</span>}
@@ -324,6 +354,8 @@ function UserCard({ user, theme, onThemeChange, onLogout, onUserUpdate, collapse
   );
 }
 
+const QUICK_BAR_KEY = "clover_quick_bar";
+
 export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, section, hideDesktopNav = false, children }: {
   user: User; onLogout: () => void; onUserUpdate: (u: User) => void;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
@@ -334,6 +366,11 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
   const [unread, setUnread] = useState(0);
   const [collapsed, setCollapsed] = useState(() => readNavCollapsed(deviceStorage()));
   const [palette, setPalette] = useState(false);
+  // Phones can tuck the bottom quick bar away for more room; remembered on this device.
+  const [quickHidden, setQuickHidden] = useState(() => { try { return window.localStorage.getItem(QUICK_BAR_KEY) === "hidden"; } catch { return false; } });
+  useEffect(() => { try { window.localStorage.setItem(QUICK_BAR_KEY, quickHidden ? "hidden" : "shown"); } catch { /* storage blocked */ } }, [quickHidden]);
+  // The AI runs as its own full-screen app on phones (its own top bar, drawer and tabs).
+  const immersive = section === "ai";
   const drawerClose = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const onHash = () => setRoute(hashRoute());
@@ -406,13 +443,13 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
       </aside>
 
       {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-40 bg-panel/80 backdrop-blur-xl border-b border-edge pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <header className={`${immersive ? "hidden" : "md:hidden"} sticky top-0 z-40 bg-panel/80 backdrop-blur-xl border-b border-edge pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]`}>
         <div className="flex items-center justify-between gap-3 px-4 h-14">
           <span className="shrink-0"><Wordmark compact /></span>
           <div className="flex min-w-0 items-center gap-2">
             {/* A long name truncates instead of running into the wordmark. */}
             <span className={`chip min-w-0 overflow-hidden !text-[9px] ${ROLE_TONE[user.role] || ""}`} title={user.ign || user.role_label}>
-              <span className="truncate"><CaseSafe text={user.ign || user.role_label} /></span>
+              <span className="truncate"><Ign text={user.ign || user.role_label} /></span>
             </span>
             <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
               <Search size={17} />
@@ -442,14 +479,23 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
         </div>
       )}
 
-      <main className={`relative z-10 ${navPad} pb-24 md:pb-10 transition-[padding] duration-200 motion-reduce:transition-none`}>
+      <main className={`relative z-10 ${navPad} ${immersive ? "pb-0" : quickHidden ? "pb-16" : "pb-24"} md:pb-10 transition-[padding] duration-200 motion-reduce:transition-none`}>
         <PageChrome.Provider value={chrome}>
-          <div className={`${hideDesktopNav ? "max-w-none" : "max-w-7xl"} mx-auto px-4 sm:px-8 pt-5 sm:pt-7`}>{children}</div>
+          <div className={`${hideDesktopNav ? "max-w-none" : "max-w-7xl"} mx-auto ${immersive ? "max-md:p-0" : ""} px-4 sm:px-8 pt-5 sm:pt-7`}>{children}</div>
         </PageChrome.Provider>
       </main>
 
       {/* Mobile bottom quick bar */}
-      <nav aria-label="Quick links" className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/90 backdrop-blur-xl border-t border-edge pb-[env(safe-area-inset-bottom)]">
+      {!immersive && (
+        <button type="button" onClick={() => setQuickHidden((value) => !value)}
+          aria-controls="quick-links" aria-expanded={!quickHidden}
+          aria-label={quickHidden ? "Show the bottom bar" : "Hide the bottom bar"} title={quickHidden ? "Show the bottom bar" : "Hide the bottom bar"}
+          className={`quick-toggle md:hidden ${quickHidden ? "quick-toggle--hidden" : ""}`}>
+          {quickHidden ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      )}
+      <nav id="quick-links" aria-label="Quick links" aria-hidden={quickHidden || immersive ? true : undefined} inert={quickHidden || immersive ? true : undefined}
+        className={`${immersive ? "hidden" : "md:hidden"} fixed bottom-0 inset-x-0 z-40 bg-panel/90 backdrop-blur-xl border-t border-edge pb-[env(safe-area-inset-bottom)] transition-transform duration-200 motion-reduce:transition-none ${quickHidden ? "translate-y-full" : ""}`}>
         <div className="grid grid-cols-6">
           {MOBILE_QUICK.map((id) => {
             const item = navItem(id)!;

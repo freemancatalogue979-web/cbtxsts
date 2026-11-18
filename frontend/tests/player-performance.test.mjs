@@ -15,7 +15,7 @@ test("the player page shows scrim + tournament games and the heroes to work on",
   assert.match(players, /<PerformancePanel perf=\{p\.performance\} ign=\{p\.ign\} isSelf=\{p\.is_self\} \/>/);
   assert.match(perf, /label="Scrim games"/);
   assert.match(perf, /label="Tournament games"/);
-  assert.match(perf, /isSelf \? "Heroes to work on" : `Heroes \$\{ign\} should work on`/);
+  assert.match(perf, /isSelf \? "Heroes to work on" : <>Heroes <Ign text=\{ign\} \/> should work on<\/>/);
   assert.match(perf, /<HeroPerformance heroes=\{perf\.heroes\} \/>/);
 });
 

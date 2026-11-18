@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { DevEntry, Hero, Meta, PlayerDetail, PoolEntry, User, PlayerProgress } from "../lib/types";
 import { dayLabel, navigate, pct, ResultBadge } from "../lib/util";
-import { Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Spinner, StatTile } from "../components/ui";
+import { Empty, ErrorNote, Field, Modal, PageTitle, Progress, SectionTitle, Spinner, StatTile, Ign } from "../components/ui";
 import { AvatarImg } from "../components/Avatar";
 import { HeroPickerModal } from "../components/HeroPicker";
 import { HeroImg } from "../components/HeroImg";
@@ -197,7 +197,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
           <div className="flex items-center gap-4">
             <AvatarImg user={p} size={56} />
             <div>
-              <div className="text-xl font-extrabold">{p.ign}</div>
+              <div className="text-xl font-extrabold"><Ign text={p.ign} /></div>
               <div className="text-[13px] text-mute">{p.name} · {nice(p.main_role) || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
               {(() => {
                 const l = links.get(p.id);
@@ -250,7 +250,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
         {/* Hero pool */}
         <section>
           <SectionTitle right={canEditPool && <button className="btn-ghost !py-1.5 !text-[12px]" onClick={() => setShowPool(true)}><Plus size={13} /> Add hero</button>}>
-            Hero pool · {p.ign}
+            Hero pool · <Ign text={p.ign} />
           </SectionTitle>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {POOL_ORDER.map((cat) => (
@@ -348,7 +348,7 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             <div className="flex items-center gap-3">
               <AvatarImg user={p} size={44} />
               <div className="flex-1 min-w-0">
-                <div className="font-extrabold truncate">{p.ign}
+                <div className="font-extrabold truncate"><Ign text={p.ign} />
                   {p.role === "captain" && <span className="text-amber text-[10px] font-bold"> · C</span>}
                 </div>
                 <div className="text-[11px] text-faint flex items-center gap-1.5">{nice(p.main_role) || p.role_label}
@@ -389,7 +389,7 @@ function ProgressPanel({ userId, ign }: { userId: number; ign: string }) {
 
   return (
     <section>
-      <SectionTitle>Progress · {ign}</SectionTitle>
+      <SectionTitle>Progress · <Ign text={ign} /></SectionTitle>
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="card p-4 col-span-1 sm:col-span-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-2.5">

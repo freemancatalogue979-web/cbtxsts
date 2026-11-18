@@ -76,6 +76,22 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     letter-spacing: 0.1em;
     line-height: 1.6;
   }
+  /* In-game names (components/ui.tsx → Ign) are shown exactly as the game gave them: the
+     device's own sans font — the closest thing to the game's — upright, normal spacing, no
+     extra stroke, no case changes. Stylised letters and symbols fall back to the symbol fonts. */
+  .ign {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
+      "Noto Sans Symbols", "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-style: normal;
+    font-weight: 600;
+    font-variant: normal;
+    font-feature-settings: normal;
+    letter-spacing: normal;
+    word-spacing: normal;
+    -webkit-text-stroke-width: 0;
+    text-transform: none;
+    unicode-bidi: isolate;
+  }
   /* Nothing is shown in all caps: text appears exactly as written, and this
      guard stops any shouted-caps styling from coming back. */
   *, *::before, *::after, ::placeholder {
@@ -1045,3 +1061,133 @@ html[data-effects="calm"] .utility-drop::before { opacity: 0; }
   .evidence-scan, .utility-drop::before { animation: none !important; }
   .utility-drop::before { opacity: 0; }
 }
+
+/* ---- Bottom quick bar: hide / show on phones (components/Layout.tsx) ------------------- */
+.quick-toggle {
+  position: fixed; z-index: 41; right: 12px;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  display: grid; place-items: center; width: 30px; height: 22px;
+  border-radius: 10px 10px 0 0; border: 1px solid var(--color-edge); border-bottom: 0;
+  background: color-mix(in srgb, var(--color-panel) 92%, transparent); color: var(--color-mute);
+  backdrop-filter: blur(12px);
+  transition: bottom 200ms ease, border-radius 200ms ease, width 200ms ease, height 200ms ease;
+}
+.quick-toggle:hover { color: var(--color-text); }
+.quick-toggle--hidden {
+  bottom: calc(12px + env(safe-area-inset-bottom)); width: 40px; height: 40px; border-radius: 9999px; border-bottom: 1px solid var(--color-edge);
+  color: var(--color-crim); box-shadow: 0 8px 24px -10px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(var(--accent-glow) / 0.25);
+}
+@media (prefers-reduced-motion: reduce) { .quick-toggle { transition: none; } }
+
+/* ---- Profile sheet (components/Layout.tsx → ProfileModal) ------------------------------- */
+.profile-card {
+  background:
+    radial-gradient(80% 140% at 0% 0%, rgb(var(--accent-glow) / 0.14), transparent 60%),
+    var(--color-raised);
+}
+
+/* ---- 9 Clover AI: its own "aurora" theme (pages/CloverAI.tsx) ---------------------------
+   Indigo night with violet and cyan light, different from the rest of the hub on every
+   screen size. Remaps the theme tokens, so every part of the AI picks it up. */
+.ai-app {
+  --color-ink: #080a1d;
+  --color-panel: #0f1230;
+  --color-raised: #161a40;
+  --color-overlay: #1d2250;
+  --color-edge: #252b5c;
+  --color-edge-2: #343b7a;
+  --color-mute: #b9bfe6;
+  --color-faint: #8a91c4;
+  --color-crim: #b8a9ff;
+  --color-crim-deep: #6d5dfc;
+  --color-crim-dim: #231d52;
+  --accent-solid: #6d5dfc;
+  --accent-glow: 155 135 255;
+  --color-leaf: #67e8f9;
+  --color-leaf-dim: #0c2e3a;
+}
+.ai-app .section-pill { --pill-accent: #67e8f9; }
+.ai-bubble-user {
+  border-color: rgb(155 135 255 / 0.45) !important;
+  background: linear-gradient(135deg, #3b2f9e, #5b3fc4 60%, #7a4fd8) !important;
+  color: #f4f2ff;
+  box-shadow: 0 10px 26px -14px rgb(109 93 252 / 0.9);
+}
+.ai-bubble-bot {
+  background: linear-gradient(160deg, rgb(103 232 249 / 0.06), rgb(22 26 64 / 0.85) 45%) !important;
+  border-color: #2a3168 !important;
+}
+.ai-send { background: linear-gradient(135deg, #67e8f9, #8b7bff); color: #080a1d; }
+.ai-topbar, .ai-tabbar, .ai-drawer__head, .ai-drawer-backdrop { display: none; }
+
+@media (max-width: 767px) {
+  /* The AI takes the whole phone screen: top bar, chat, composer, tab bar. */
+  .ai-app {
+    position: fixed; inset: 0; z-index: 45;
+    display: flex; flex-direction: column;
+    padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    background:
+      radial-gradient(120% 55% at 100% 0%, rgb(139 92 246 / 0.22), transparent 60%),
+      radial-gradient(90% 45% at 0% 100%, rgb(34 211 238 / 0.12), transparent 60%),
+      #080a1d;
+    color: var(--color-text);
+  }
+  .ai-app > * { margin: 0 !important; }
+  .ai-app > .ai-header, .ai-app .ai-chat-head, .ai-app .ai-note, .ai-app #ai-desktop-history { display: none !important; }
+
+  .ai-topbar {
+    display: flex; align-items: center; gap: 4px; flex: 0 0 auto;
+    padding: calc(6px + env(safe-area-inset-top)) 6px 6px;
+    border-bottom: 1px solid var(--color-edge);
+    background: rgb(15 18 48 / 0.85); backdrop-filter: blur(14px);
+  }
+  .ai-topbar__btn {
+    display: grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; color: var(--color-mute);
+  }
+  .ai-topbar__btn:hover, .ai-topbar__btn:active { background: rgb(255 255 255 / 0.06); color: var(--color-text); }
+  .ai-topbar__btn:disabled { opacity: 0.4; }
+
+  .ai-app > .ai-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0; }
+  .ai-app > .ai-pane { overflow-y: auto; overscroll-behavior: contain; border: 0; border-radius: 0; background: transparent; min-height: 0; }
+  .ai-app section[aria-label="AI conversation"] {
+    flex: 1 1 auto; min-height: 0 !important; height: auto !important;
+    border: 0; border-radius: 0; background: transparent;
+  }
+  .ai-app section[aria-label="AI conversation"] > div:nth-child(2) { max-height: none !important; min-height: 0 !important; }
+  .ai-app section[aria-label="AI conversation"] > div:last-child {
+    background: rgb(15 18 48 / 0.9); backdrop-filter: blur(14px); padding-bottom: 8px;
+  }
+
+  /* Its own sidebar: a drawer from the left. */
+  .ai-app .ai-drawer {
+    position: fixed; z-index: 47; top: 0; bottom: 0; left: 0; height: auto !important;
+    width: min(86vw, 330px); border-radius: 0 18px 18px 0; border-left: 0;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+    background: linear-gradient(180deg, #13174a, #0d1030 55%);
+    box-shadow: 24px 0 60px -20px rgb(0 0 0 / 0.9);
+    animation: ai-drawer-in 220ms cubic-bezier(.2, .8, .2, 1);
+  }
+  .ai-drawer__head { display: block; border-bottom: 1px solid var(--color-edge); }
+  .ai-drawer__tab {
+    display: flex; align-items: center; gap: 0.45rem; padding: 0.6rem 0.7rem; border-radius: 12px;
+    border: 1px solid var(--color-edge); background: rgb(255 255 255 / 0.02); color: var(--color-mute); font-size: 11px; font-weight: 800;
+  }
+  .ai-drawer__tab--on { border-color: rgb(155 135 255 / 0.55); background: rgb(109 93 252 / 0.18); color: var(--color-text); }
+  .ai-drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 46; background: rgb(3 4 14 / 0.65); backdrop-filter: blur(2px); }
+
+  /* Its own tab bar. */
+  .ai-tabbar {
+    display: flex; flex: 0 0 auto;
+    padding: 4px 4px env(safe-area-inset-bottom);
+    border-top: 1px solid var(--color-edge);
+    background: rgb(12 14 40 / 0.95); backdrop-filter: blur(14px);
+  }
+  .ai-tabbar > button {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 7px 2px; border-radius: 12px; font-size: 9.5px; font-weight: 800; color: var(--color-faint);
+  }
+  .ai-tabbar > button[aria-current="page"] { color: #fff; background: linear-gradient(180deg, rgb(109 93 252 / 0.28), rgb(103 232 249 / 0.08)); }
+  .ai-tabbar > button[aria-current="page"] svg { color: #67e8f9; }
+}
+@keyframes ai-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ai-app .ai-drawer { animation: none; } }

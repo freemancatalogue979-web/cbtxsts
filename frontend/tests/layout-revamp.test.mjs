@@ -144,7 +144,7 @@ test("stylised names keep their exact letters inside the all-caps style", () => 
   // The same protection applies to names in the sidebar, drawer and top bar.
   assert.equal(renderToStaticMarkup(React.createElement(ui.CaseSafe, { text: "Dre" })), "Dre");
   assert.equal(renderToStaticMarkup(React.createElement(ui.CaseSafe, { text: "ᴋα⚝" })), 'ᴋ<span class="normal-case">α</span>⚝');
-  assert.equal((layout.match(/<CaseSafe text=\{user\.ign \|\| /g) ?? []).length, 3);
+  assert.equal((layout.match(/<Ign text=\{user\.ign \|\| /g) ?? []).length, 3);
 });
 
 test("symbols in names (like ⚝) have a bundled fallback that loads only when needed", async () => {
@@ -260,5 +260,33 @@ test("the mobile top bar never lets the name badge cover the wordmark", async ()
   assert.match(bar, /<span className="shrink-0"><Wordmark compact \/><\/span>/);
   assert.match(bar, /className="flex min-w-0 items-center gap-2"/);
   assert.match(bar, /chip min-w-0 overflow-hidden/);
-  assert.match(bar, /<span className="truncate"><CaseSafe/);
+  assert.match(bar, /<span className="truncate"><Ign/);
+});
+
+test("in-game names show exactly as the game gave them: no Courier, no italic, no case changes", async () => {
+  // Rendered untouched (isolated so symbols and right-to-left names never scramble the line).
+  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝" })), '<bdi class="ign" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
+  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "dRe xX" })), '<bdi class="ign" dir="auto">dRe xX</bdi>');
+  const rule = css.match(/\.ign \{[^}]*\}/)?.[0] ?? "";
+  assert.ok(rule, ".ign rule exists");
+  assert.doesNotMatch(rule, /Courier/);
+  assert.match(rule, /font-style: normal/);
+  assert.match(rule, /text-transform: none/);
+  assert.match(rule, /letter-spacing: normal/);
+  // The page title keeps the name whole instead of flipping it letter by letter.
+  const title = renderToStaticMarkup(React.createElement(ui.PageTitle, { title: "Welcome back, ᴋα", ign: "ᴋα" }));
+  assert.match(title, /<bdi class="ign flip-ign" dir="auto">ᴋα<\/bdi>/);
+  // Avatar initials keep the member's own letters (no forced capitals).
+  const avatar = await readFile(new URL("../src/components/Avatar.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(avatar, /toUpperCase/);
+});
+
+test("phones can tuck the bottom quick bar away and get it back", async () => {
+  const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /const QUICK_BAR_KEY = "clover_quick_bar";/);
+  assert.match(layout, /aria-label=\{quickHidden \? "Show the bottom bar" : "Hide the bottom bar"\}/);
+  assert.match(layout, /id="quick-links" aria-label="Quick links"/);
+  assert.match(layout, /\$\{quickHidden \? "translate-y-full" : ""\}/);
+  assert.match(layout, /immersive \? "pb-0" : quickHidden \? "pb-16" : "pb-24"/);
+  assert.match(css, /\.quick-toggle--hidden \{/);
 });

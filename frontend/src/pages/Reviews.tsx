@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Hero, Meta, Review, Scrim, TournamentMatchT, User } from "../lib/types";
 import { dayLabel, navigate, REVIEW_STATUS_STYLE } from "../lib/util";
-import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
+import { Badge, Empty, ErrorNote, Field, PageTitle, SectionTitle, Spinner, Tabs, Ign } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { nice } from "../lib/caseText";
 
@@ -206,7 +206,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
           {review.player_ids.length > 0 && (
             <div className="mt-4">
               <div className="section-pill mb-1.5">Players</div>
-              <div className="flex flex-wrap gap-1.5">{review.player_ids.map((id) => <Badge key={id}>{userName(id)}</Badge>)}</div>
+              <div className="flex flex-wrap gap-1.5">{review.player_ids.map((id) => <Badge key={id}><Ign text={userName(id)} /></Badge>)}</div>
             </div>
           )}
         </div>
@@ -249,7 +249,7 @@ function ReviewDetail({ review, users, canEdit, onEdit, onStatus, onDelete }: {
         )}>Action item</SectionTitle>
         <p className="text-[13.5px] text-text/90 whitespace-pre-wrap">{review.action_item || "—"}</p>
         <div className="flex flex-wrap gap-4 mt-3 text-[12px] text-mute">
-          <span>Owner: <b className="text-text">{review.action_assignee_id ? userName(review.action_assignee_id) : "—"}</b></span>
+          <span>Owner: <b className="text-text">{review.action_assignee_id ? <Ign text={userName(review.action_assignee_id)} /> : "—"}</b></span>
           <span>Deadline: <b className="text-text">{dayLabel(review.action_deadline)}</b></span>
         </div>
       </section>

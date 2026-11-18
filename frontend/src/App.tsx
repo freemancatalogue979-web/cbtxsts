@@ -79,6 +79,11 @@ export default function App() {
   const section = user ? parseSection(route[0] || "dashboard") : "login";
 
   useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
+  // Remember the last page outside the AI, so its phone back button returns there.
+  useEffect(() => {
+    if (section === "ai" || section === "login") return;
+    try { window.sessionStorage.setItem("clover_prev_route", window.location.hash || "#/dashboard"); } catch { /* storage blocked */ }
+  }, [section, route]);
   useEffect(() => { applyTheme(theme, section); saveThemePrefs(deviceStorage(), theme); }, [theme, section]);
   // Undo from the Trash toast: remount the open page so it shows the restored item.
   const [revision, setRevision] = useState(0);

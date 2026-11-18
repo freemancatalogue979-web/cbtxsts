@@ -17,7 +17,7 @@ import {
 } from "../components/SoloGames";
 import { StrategyMaker } from "../components/StrategyMaker";
 import { kdaText } from "../components/PlayerPerformance";
-import { ErrorNote, Modal, PageTitle, SectionTitle, Spinner, Tabs, type HeroSlide } from "../components/ui";
+import { ErrorNote, Modal, PageTitle, SectionTitle, Spinner, Tabs, type HeroSlide, Ign } from "../components/ui";
 
 type View = "overview" | "add" | "progress" | "matches" | "strategy";
 const FILLERS = new Set(["admin", "captain"]);
@@ -85,7 +85,7 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-[11px] font-bold text-faint">Your record</p>
-                <h2 className="text-[22px] sm:text-[26px] font-extrabold leading-tight truncate">{name}</h2>
+                <h2 className="text-[22px] sm:text-[26px] font-extrabold leading-tight truncate"><Ign text={name} /></h2>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {lane && <span className="u-pill u-pill--blue">{lane === "EXP" ? "EXP" : lane[0] + lane.slice(1).toLowerCase()} lane</span>}
                   {s && s.streak.count >= 2 && (

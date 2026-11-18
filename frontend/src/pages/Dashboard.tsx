@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Dashboard, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge, useCountdown } from "../lib/util";
-import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide } from "../components/ui";
+import { Empty, PageTitle, SectionTitle, Spinner, StatTile, type HeroSlide, Ign } from "../components/ui";
 import { DashboardInsights } from "../components/DashboardInsights";
 import { nice } from "../lib/caseText";
 import { FocusAlerts, FormDots, kdaText } from "../components/PlayerPerformance";
@@ -238,7 +238,7 @@ function SquadFocus({ rows }: { rows: NonNullable<Dashboard["squad_focus"]> }) {
               <HeroImg name={r.alert.hero} size={38} className="rounded-lg shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="text-[12.5px] font-extrabold truncate">{r.name}</span>
+                  <span className="text-[12.5px] font-extrabold truncate"><Ign text={r.name} /></span>
                   <span className={`chip !py-0 !text-[9px] ${tone[r.alert.tone]}`}>{r.alert.tone === "good" ? "strength" : r.alert.tone === "bad" ? "work on" : "watch"}</span>
                 </span>
                 <span className="block text-[12px] font-bold truncate">{r.alert.title}</span>
@@ -304,6 +304,7 @@ export function DashboardPage({ me }: { me?: User }) {
     <div className="space-y-6">
       <PageTitle
         title={name ? `${greeting()}, ${name}` : "The Hub"}
+        ign={me?.ign || undefined}
         sub={<>{today}{season ? ` · ${season}` : ""}<span className="hidden sm:inline"> · Play → review → train → improve</span></>}
         slides={slides}
         right={
