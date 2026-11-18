@@ -11,21 +11,21 @@ import html
 import io
 import json
 import re
-import urllib.error
-import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .ai_scoreboard import IMAGE_EXT, ReadError, ai_key, prepare_image
+from .ai_credentials import GROQ, PROVIDER as MAIN_PROVIDER
+from .ai_scoreboard import IMAGE_EXT, ReadError, prepare_image, reader_key
 from .ai_scoreboard import call_model as _vision_call
 from .config import UPLOAD_DIR
-from .esports_ai import ENDPOINT, MODEL, _NoRedirect
+from .esports_ai import ENDPOINT, MODEL
 from .hero_vision import HINT_RULE, portrait_help
 from .models import User, utcnow
 from .solo_games import clean_game, hero_names
+from .vision_provider import ProviderError, Reader, groq_chat, post_chat, with_backup
 
 DOC_EXT = {"pdf", "docx", "txt", "md", "json"}
 SHEET_EXT = {"csv", "tsv", "xlsx"}
@@ -203,29 +203,29 @@ def rows_text(rows: list[list[str]]) -> str:
 # --------------------------------------------------------------------------- #
 # the model
 # --------------------------------------------------------------------------- #
-def call_vision(api_key: str, system: str, text: str, image: bytes, mime: str,
+def call_vision(api_key: "str | Reader", system: str, text: str, image: bytes, mime: str,
                 extra: list[tuple[bytes, str]] | None = None) -> dict:
     return _vision_call(api_key, system, text, image, mime, extra=extra)
 
 
-def call_text(api_key: str, system: str, text: str) -> dict:
+def call_text(api_key: "str | Reader", system: str, text: str) -> dict:
     """One JSON chat request (temperature 0: transcription, not writing). Tests replace this."""
-    body = {"model": MODEL, "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
-            "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 8000,
-            "response_format": {"type": "json_object"}}
-    req = urllib.request.Request(ENDPOINT, data=json.dumps(body, ensure_ascii=False).encode("utf-8"), method="POST",
-                                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+    reader = api_key if isinstance(api_key, Reader) else Reader(MAIN_PROVIDER, api_key)
+
+    def once(r: Reader) -> dict:
+        if r.provider == GROQ:
+            return groq_chat(r.key, system, text, max_tokens=8000, timeout=120)
+        body = {"model": MODEL, "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
+                "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 8000,
+                "response_format": {"type": "json_object"}}
+        return post_chat(ENDPOINT, r.key, body, timeout=120, limit=800_000)
+
     try:
-        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=120) as resp:
-            raw = resp.read(800_001)
-        parsed = json.loads(json.loads(raw)["choices"][0]["message"]["content"])
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return with_backup(reader, once)
+    except ProviderError as exc:
+        if exc.kind == "garbled":
+            raise ReadError("Couldn't make sense of that file. Try again.", 502) from exc
         raise ReadError("Couldn't read that file right now. Try again in a minute, or add the games by hand.", 502) from exc
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise ReadError("Couldn't make sense of that file. Try again.", 502) from exc
-    if not isinstance(parsed, dict):
-        raise ReadError("Couldn't make sense of that file. Try again.", 502)
-    return parsed
 
 
 def _context(user: User, heroes: dict[str, str]) -> dict:
@@ -257,7 +257,7 @@ def extract(db: Session, user: User, url: str) -> dict:
         else:
             used_ai = True
             prompt = {**_context(user, heroes), "kind": "table", "content": rows_text(rows)[:MAX_TEXT]}
-            reply = call_text(ai_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False))
+            reply = call_text(reader_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False))
     elif ext in DOC_EXT:
         text = pdf_text(path) if ext == "pdf" else docx_text(path) if ext == "docx" else _decode(path.read_bytes())
         if not text.strip():
@@ -266,12 +266,12 @@ def extract(db: Session, user: User, url: str) -> dict:
             checks.append({"tone": "warn", "text": "Long document — only the first part was read. Split it if games are missing."})
         used_ai = True
         prompt = {**_context(user, heroes), "kind": "document", "content": text[:MAX_TEXT]}
-        reply = call_text(ai_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False))
+        reply = call_text(reader_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False))
     else:
         raw_bytes = path.read_bytes()
         image, mime = prepare_image(raw_bytes, IMAGE_EXT[ext])
         used_ai = True
-        api_key = ai_key(db, user)
+        api_key = reader_key(db, user)
         help_ = portrait_help(raw_bytes, sorted(heroes.values()))
         if help_.image:
             image, mime = help_.image, "image/jpeg"

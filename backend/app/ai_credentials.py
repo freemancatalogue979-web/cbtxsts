@@ -23,6 +23,8 @@ from .models import utcnow
 KEY_PATH = DATA_DIR / "credential-encryption.key"
 MASTER_KEY_ENV = "CLOVER_CREDENTIAL_ENCRYPTION_KEY"
 PROVIDER = "deepseek"
+GROQ = "groq"  # optional second key: reads screenshots and documents (app/vision_provider.py)
+ENV_NAMES = {PROVIDER: ("CLOVER_AI_API_KEY", "DEEPSEEK_API_KEY"), GROQ: ("CLOVER_GROQ_API_KEY", "GROQ_API_KEY")}
 
 
 class ProviderCredential(Base):
@@ -93,21 +95,25 @@ def _decrypt(row: ProviderCredential) -> str:
         raise CredentialStorageError("The saved key could not be unlocked. Restore the encryption key or save a new API key.") from exc
 
 
-def _environment_key() -> str | None:
+def _environment_key(provider: str = PROVIDER) -> str | None:
     # Keep existing deployments working while supporting a provider-neutral name.
-    return os.getenv("CLOVER_AI_API_KEY", "").strip() or os.getenv("DEEPSEEK_API_KEY", "").strip() or None
+    for name in ENV_NAMES.get(provider, ()):
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return None
 
 
-def resolved_key(db: Session) -> str | None:
+def resolved_key(db: Session, provider: str = PROVIDER) -> str | None:
     """Admin-saved key takes precedence; a locked saved key fails closed."""
-    row = db.get(ProviderCredential, PROVIDER)
+    row = db.get(ProviderCredential, provider)
     if row is not None:
         return _decrypt(row)
-    return _environment_key()
+    return _environment_key(provider)
 
 
-def key_status(db: Session) -> dict:
-    row = db.get(ProviderCredential, PROVIDER)
+def key_status(db: Session, provider: str = PROVIDER) -> dict:
+    row = db.get(ProviderCredential, provider)
     if row is not None:
         try:
             usable = bool(_decrypt(row))
@@ -116,19 +122,19 @@ def key_status(db: Session) -> dict:
                     "updated_at": row.updated_at.isoformat() + "Z", "message": "The saved key cannot be unlocked. Restore the encryption key or save a replacement."}
         return {"configured": usable, "source": "admin", "has_saved_key": True,
                 "updated_at": row.updated_at.isoformat() + "Z", "message": None}
-    from_env = bool(_environment_key())
+    from_env = bool(_environment_key(provider))
     return {"configured": from_env, "source": "environment" if from_env else "none", "has_saved_key": False,
             "updated_at": None, "message": None}
 
 
-def save_key(db: Session, key: str) -> None:
+def save_key(db: Session, key: str, provider: str = PROVIDER) -> None:
     try:
         ciphertext = _cipher(create=True).encrypt(key.encode("ascii")).decode("ascii")
     except (UnicodeError, ValueError, TypeError) as exc:
         raise CredentialStorageError("Could not encrypt the API key.") from exc
-    row = db.get(ProviderCredential, PROVIDER)
+    row = db.get(ProviderCredential, provider)
     if row is None:
-        row = ProviderCredential(provider=PROVIDER, ciphertext=ciphertext, updated_at=utcnow())
+        row = ProviderCredential(provider=provider, ciphertext=ciphertext, updated_at=utcnow())
         db.add(row)
     else:
         row.ciphertext = ciphertext
@@ -136,8 +142,8 @@ def save_key(db: Session, key: str) -> None:
     db.commit()
 
 
-def remove_key(db: Session) -> None:
-    row = db.get(ProviderCredential, PROVIDER)
+def remove_key(db: Session, provider: str = PROVIDER) -> None:
+    row = db.get(ProviderCredential, provider)
     if row is not None:
         db.delete(row)
         db.commit()

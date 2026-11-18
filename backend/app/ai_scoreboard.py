@@ -24,19 +24,19 @@ import io
 import json
 import os
 import re
-import urllib.error
-import urllib.request
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import UPLOAD_DIR
-from .esports_ai import ENDPOINT, MODEL, _NoRedirect, _credential, _reserve
+from .ai_credentials import GROQ, PROVIDER as MAIN_PROVIDER
+from .esports_ai import ENDPOINT, MODEL, _credential, _reserve
 from .hero_vision import HINT_RULE, portrait_help
 from .models import Hero, User
 from .performance import clean_line, clean_lineup, hero_key
 from .security import LANES
+from .vision_provider import ProviderError, Reader, groq_chat, groq_image_parts, post_chat, reader_for, with_backup
 
 # deepseek-flash reads images (JPEG/PNG/GIF/WebP) through the normal chat endpoint.
 VISION_MODEL = os.getenv("CLOVER_AI_VISION_MODEL", MODEL).strip() or MODEL
@@ -134,11 +134,29 @@ def prepare_image(raw: bytes, mime: str) -> tuple[bytes, str]:
 # --------------------------------------------------------------------------- #
 # provider
 # --------------------------------------------------------------------------- #
-def call_model(api_key: str, system: str, text: str, image: bytes, mime: str,
+def call_model(api_key: "str | Reader", system: str, text: str, image: bytes, mime: str,
                extra: list[tuple[bytes, str]] | None = None) -> dict:
     """One vision request → the JSON object the model returned. Tests replace this.
 
+    ``api_key`` — a plain main key, or a :class:`Reader` (Groq first, main key as backup).
     ``extra`` — more pictures after the screenshot (the hero reference sheet)."""
+    reader = api_key if isinstance(api_key, Reader) else Reader(MAIN_PROVIDER, api_key)
+    images = [(image, mime), *(extra or [])]
+    try:
+        return with_backup(reader, lambda r: _read_once(r, system, text, images))
+    except ProviderError as exc:
+        if exc.kind == "rejected":
+            raise ReadError("Couldn't read that picture. Try a clearer, uncropped screenshot.", 502) from exc
+        if exc.kind == "garbled":
+            raise ReadError("That reading came back garbled. Try again.", 502) from exc
+        raise ReadError("Reading isn't answering right now. Try again in a minute, or fill it in by hand.", 502) from exc
+
+
+def _read_once(reader: Reader, system: str, text: str, images: list[tuple[bytes, str]]) -> dict:
+    if reader.provider == GROQ:
+        content = [{"type": "text", "text": text}, *groq_image_parts(images)]
+        return groq_chat(reader.key, system, content, max_tokens=4000, timeout=90)
+
     def part(data: bytes, kind: str) -> dict:
         return {"type": "image_url", "image_url": {"url": f"data:{kind};base64,{base64.b64encode(data).decode('ascii')}",
                                                    "detail": "high"}}
@@ -146,37 +164,26 @@ def call_model(api_key: str, system: str, text: str, image: bytes, mime: str,
         "model": VISION_MODEL,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": [
-                {"type": "text", "text": text},
-                part(image, mime),
-                *(part(data, kind) for data, kind in (extra or [])),
-            ]},
+            {"role": "user", "content": [{"type": "text", "text": text}, *(part(d, k) for d, k in images)]},
         ],
         "thinking": {"type": "disabled"},
         "temperature": 0,
         "max_tokens": 4000,
         "response_format": {"type": "json_object"},
     }
-    req = urllib.request.Request(ENDPOINT, data=json.dumps(body).encode("utf-8"), method="POST", headers={
-        "Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json",
-    })
-    try:
-        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=90) as resp:
-            raw = resp.read(400_001)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 400:
-            raise ReadError("The AI couldn't read that picture. Try a clearer, uncropped screenshot.", 502) from exc
-        raise ReadError("The AI service didn't answer. Try again in a minute, or fill it in by hand.", 502) from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ReadError("The AI service didn't answer. Try again in a minute, or fill it in by hand.", 502) from exc
-    try:
-        content = json.loads(raw)["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise ReadError("The AI's reading came back garbled. Try again.", 502) from exc
-    if not isinstance(parsed, dict):
-        raise ReadError("The AI's reading came back garbled. Try again.", 502)
-    return parsed
+    return post_chat(ENDPOINT, reader.key, body, timeout=90, limit=400_000)
+
+
+def reader_key(db: Session, user: User) -> Reader:
+    """Who reads uploads: Groq when Team Admin saved its key, else (and as backup) the main key."""
+    main_key, _reason = _credential(db)
+    reader = reader_for(db, main_key)
+    if reader is None:
+        raise ReadError("Reading uploads isn't set up yet — an admin adds the key in Team Admin. "
+                        "You can still fill everything in by hand.", 503)
+    if not _reserve(db, user.id):
+        raise ReadError("Couldn't record this request. Try again.", 503)
+    return reader
 
 
 def ai_key(db: Session, user: User) -> str:
@@ -481,7 +488,7 @@ def read_scoreboard(db: Session, user: User, *, image_url: str, lineup: dict | N
                     opponent: str = "", result: str = "") -> dict:
     raw_bytes, mime, name = load_upload(image_url)
     image, mime = prepare_image(raw_bytes, mime)
-    api_key = ai_key(db, user)
+    api_key = reader_key(db, user)
     names = {u.id: (u.ign or u.name) for u in db.scalars(select(User).where(User.active.is_(True))).all()}
     clean = clean_lineup(lineup)
     draft = draft if isinstance(draft, dict) else {}

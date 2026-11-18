@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..ai_credentials import CredentialStorageError, key_status, remove_key, save_key
+from .. import vision_provider
+from ..ai_credentials import GROQ, PROVIDER, CredentialStorageError, key_status, remove_key, resolved_key, save_key
 from ..deps import can, get_current_user, get_db, require
 from ..trash import send_to_trash
 from ..models import TeamSettings, User
@@ -135,6 +136,27 @@ def _require_secret_write(request: Request, authorization: str | None) -> None:
         raise HTTPException(403, "Use HTTPS to change a provider key.")
 
 
+def _clean_key(payload: AIKeyIn) -> str:
+    value = payload.key.get_secret_value().strip()
+    if not value or len(value) > 512 or any(ord(char) < 33 or ord(char) > 126 for char in value):
+        raise HTTPException(422, "Enter an API key of at most 512 printable ASCII characters without spaces.")
+    return value
+
+
+def _save(db: Session, value: str, provider: str) -> None:
+    try:
+        save_key(db, value, provider)
+    except CredentialStorageError as exc:
+        raise HTTPException(503, str(exc)) from None
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Another update was saved at the same time. Please try again.") from None
+
+
+def _groq_status(db: Session) -> dict:
+    return {**key_status(db, GROQ), "model": vision_provider.GROQ_MODEL, "backup": bool(key_status(db)["configured"])}
+
+
 @router.get("/integrations/ai")
 def ai_key_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     require(can.manage_users(user), "manage provider credentials")
@@ -148,16 +170,7 @@ def update_ai_key(payload: AIKeyIn, request: Request, response: Response,
                         user: User = Depends(get_current_user)):
     require(can.manage_users(user), "manage provider credentials")
     _require_secret_write(request, authorization)
-    value = payload.key.get_secret_value().strip()
-    if not value or len(value) > 512 or any(ord(char) < 33 or ord(char) > 126 for char in value):
-        raise HTTPException(422, "Enter an API key of at most 512 printable ASCII characters without spaces.")
-    try:
-        save_key(db, value)
-    except CredentialStorageError as exc:
-        raise HTTPException(503, str(exc)) from None
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(409, "Another update was saved at the same time. Please try again.") from None
+    _save(db, _clean_key(payload), PROVIDER)
     response.headers["Cache-Control"] = "no-store"
     return key_status(db)
 
@@ -170,6 +183,49 @@ def remove_ai_key(request: Request, response: Response, authorization: str | Non
     remove_key(db)
     response.headers["Cache-Control"] = "no-store"
     return key_status(db)
+
+
+# Groq: optional key that reads screenshots and documents (app/vision_provider.py).
+@router.get("/integrations/groq")
+def groq_key_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    response.headers["Cache-Control"] = "no-store"
+    return _groq_status(db)
+
+
+@router.post("/integrations/groq")
+def update_groq_key(payload: AIKeyIn, request: Request, response: Response,
+                    authorization: str | None = Header(default=None), db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    _save(db, _clean_key(payload), GROQ)
+    response.headers["Cache-Control"] = "no-store"
+    return _groq_status(db)
+
+
+@router.delete("/integrations/groq")
+def remove_groq_key(request: Request, response: Response, authorization: str | None = Header(default=None),
+                    db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    remove_key(db, GROQ)
+    response.headers["Cache-Control"] = "no-store"
+    return _groq_status(db)
+
+
+@router.post("/integrations/groq/test")
+def test_groq_key(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Check the saved key against Groq's model list (no image is sent, nothing is billed)."""
+    require(can.manage_users(user), "manage provider credentials")
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        key = resolved_key(db, GROQ)
+    except CredentialStorageError as exc:
+        raise HTTPException(503, str(exc)) from None
+    if not key:
+        raise HTTPException(409, "Save a Groq key first.")
+    return vision_provider.check_groq_key(key)
 
 
 # ---------------------------------------------------------------------------
