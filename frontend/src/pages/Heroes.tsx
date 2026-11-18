@@ -1,4 +1,4 @@
-import { Plus, Search, ShieldBan, Users2 } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCw, Search, ShieldBan, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api, qs } from "../lib/api";
@@ -113,6 +113,72 @@ function HeroChip({ name, tone }: { name: string; tone: string }) {
       <HeroImg name={name} size={20} className="rounded" />
       {name}
     </span>
+  );
+}
+
+interface HeroSyncStatus {
+  enabled: boolean; source: string; interval_hours: number; running: boolean; queued: boolean;
+  last_success_at: string | null; last_attempt_at: string | null; next_due_at: string | null;
+  added: number; updated: number; added_names: string[]; total: number; error: string;
+}
+
+function ago(iso: string | null, future = false): string {
+  if (!iso) return "";
+  const minutes = Math.round(Math.abs(Date.parse(iso) - Date.now()) / 60_000);
+  const text = minutes < 1 ? "a moment" : minutes < 60 ? `${minutes} min` : minutes < 48 * 60 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes / 1440)} days`;
+  return future ? (Date.parse(iso) <= Date.now() ? "any moment now" : `in ${text}`) : `${text} ago`;
+}
+
+/** When the hero database last refreshed from Rone (daily), what changed, and a manual refresh for admins. */
+function HeroSyncBar({ canRefresh, onSynced }: { canRefresh: boolean; onSynced: () => void }) {
+  const [state, setState] = useState<HeroSyncStatus | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const load = useCallback(() => api.get<HeroSyncStatus>("/heroes/sync").then((next) => { setState(next); return next; }), []);
+  useEffect(() => { void load().catch(() => undefined); }, [load]);
+  useEffect(() => {
+    if (!waiting) return;
+    const started = state?.last_attempt_at ?? null;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      void load().then((next) => {
+        if ((next.last_attempt_at !== started && !next.running && !next.queued) || tries > 40) {
+          setWaiting(false);
+          if (next.last_success_at) onSynced();
+        }
+      }).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
+  if (!state) return null;
+  async function refresh() {
+    setError(null);
+    try { setState(await api.post<HeroSyncStatus>("/heroes/sync")); setWaiting(true); } catch (err) { setError(err); }
+  }
+  const busy = waiting || state.running || state.queued;
+  return (
+    <div className="card hero-sync" data-state={state.error ? "error" : busy ? "busy" : "ok"} role="status">
+      <span className="hero-sync__icon" aria-hidden="true">{state.error ? <AlertTriangle size={15} /> : <RefreshCw size={15} className={busy ? "animate-spin motion-reduce:animate-none" : ""} />}</span>
+      <div className="min-w-[210px] flex-1">
+        <div className="text-[11.5px] font-bold">
+          {!state.enabled ? "Daily hero refresh is off on this server"
+            : busy ? "Refreshing heroes from Rone…"
+            : state.last_success_at ? <>Heroes refreshed from Rone {ago(state.last_success_at)}</> : "Waiting for the first refresh from Rone"}
+        </div>
+        <div className="text-[10.5px] text-faint mt-0.5 leading-relaxed">
+          {state.error ? <span className="text-amber">{state.error} </span> : null}
+          {state.enabled && <>Daily: new heroes plus win / pick / ban rates (all ranks, 7 days).
+            {state.next_due_at && !busy ? ` Next ${ago(state.next_due_at, true)}.` : ""}</>}
+          {state.last_success_at && !busy && (state.added > 0 ? <> New: <b className="text-leaf">{state.added_names.slice(0, 6).join(", ")}{state.added > 6 ? ` +${state.added - 6}` : ""}</b>.</> : state.updated > 0 ? ` ${state.updated} heroes updated.` : " No changes.")}
+          {" "}Your notes, tiers and ratings stay as you set them.
+        </div>
+        <ErrorNote error={error} />
+      </div>
+      {canRefresh && state.enabled && <button type="button" className="btn-ghost !py-1.5 !px-2.5 !text-[10.5px] shrink-0 max-sm:ml-[38px]" disabled={busy} onClick={() => void refresh()}>
+        <RefreshCw size={13} /> {busy ? "Working…" : "Refresh now"}</button>}
+    </div>
   );
 }
 
@@ -275,8 +341,9 @@ export function HeroesPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
   return (
     <div className="space-y-8">
-      <PageTitle title="Hero Database" sub="Saved hero records include older community snapshots and local entries. Rates, tiers and counters may be placeholders and are not verified live meta."
+      <PageTitle title="Hero Database" sub="Every hero, refreshed daily from Rone. Tiers, notes and Clover ratings are the team's own."
         right={canAdd && <button className="btn-primary" onClick={() => setForm({})}><Plus size={15} /> Add hero</button>} />
+      <HeroSyncBar canRefresh={canAdd} onSynced={load} />
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />

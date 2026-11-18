@@ -267,8 +267,8 @@ test("the mobile top bar never lets the name badge cover the wordmark", async ()
 
 test("in-game names show exactly as the game gave them: no Courier, no italic, no case changes", async () => {
   // Rendered untouched (isolated so symbols and right-to-left names never scramble the line).
-  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝" })), '<bdi class="ign" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
-  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "dRe xX" })), '<bdi class="ign" dir="auto">dRe xX</bdi>');
+  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝" })), '<bdi class="ign flip-ign" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
+  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "dRe xX" })), '<bdi class="ign flip-ign" dir="auto">dRe xX</bdi>');
   const rule = css.match(/\.ign \{[^}]*\}/)?.[0] ?? "";
   assert.ok(rule, ".ign rule exists");
   assert.doesNotMatch(rule, /Courier/);
@@ -291,4 +291,17 @@ test("phones can tuck the bottom quick bar away and get it back", async () => {
   assert.match(layout, /\$\{quickHidden \? "translate-y-full" : ""\}/);
   assert.match(layout, /immersive \? "pb-0" : quickHidden \? "pb-16" : "pb-24"/);
   assert.match(css, /\.quick-toggle--hidden \{/);
+});
+
+test("every IGN wears the page-title look: same class as the title, extruded edge, glyphs untouched", () => {
+  // A caller's extra classes are kept and flip-ign is never doubled.
+  assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝", className: "flip-ign truncate" })),
+    '<bdi class="ign flip-ign truncate" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
+  const rule = css.match(/\.flip-ign \{[^}]*\}/)?.[0] ?? "";
+  assert.ok(rule, ".flip-ign rule exists");
+  // Same layered edge as .page-hero__title, in em so it scales from chips to headings.
+  assert.match(rule, /text-shadow:\s*0 0\.045em 0 color-mix\(in srgb, var\(--color-crim\) 70%, #000\)/);
+  assert.match(rule, /0 0\.18em 0 color-mix\(in srgb, var\(--color-crim-deep\) 45%, #000\)/);
+  // Look only: never the font, style, case or spacing the game gave the name.
+  assert.doesNotMatch(rule, /font-family|font-style|text-transform|letter-spacing/);
 });

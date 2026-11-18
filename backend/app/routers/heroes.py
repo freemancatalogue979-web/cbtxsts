@@ -33,6 +33,27 @@ def list_heroes(
     return [hero_out(h) for h in db.scalars(stmt).all()]
 
 
+@router.get("/sync")
+def hero_sync_status(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """When the hero database last refreshed from Rone, and what changed."""
+    from ..hero_sync import status
+
+    return status(db)
+
+
+@router.post("/sync", status_code=202)
+def hero_sync_now(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Queue an immediate refresh (staff who manage heroes). The worker runs it in the background."""
+    from ..hero_sync import HeroSyncError, request_refresh, status
+
+    require(can.manage_heroes(user), "refresh the hero database")
+    try:
+        request_refresh(db)
+    except HeroSyncError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    return status(db)
+
+
 @router.get("/{hero_id}")
 def get_hero(hero_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     hero = db.get(Hero, hero_id)

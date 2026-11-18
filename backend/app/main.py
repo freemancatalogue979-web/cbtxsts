@@ -40,6 +40,7 @@ from .routers import (
     users,
 )
 from .seed import seed_if_empty
+from . import hero_sync  # daily hero refresh; also registers its state table for create_all
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("clover")
@@ -123,9 +124,12 @@ def startup() -> None:
     # esports tables. A database lease prevents duplicate refreshes per deployment.
     from .aerena_service import start_worker
     start_worker()
+    # Daily hero database refresh from Rone (new heroes, win/pick/ban rates).
+    hero_sync.start_worker()
 
 
 @app.on_event("shutdown")
 def shutdown() -> None:
     from .aerena_service import stop_worker
     stop_worker()
+    hero_sync.stop_worker()

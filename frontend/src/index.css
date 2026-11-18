@@ -92,6 +92,20 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     text-transform: none;
     unicode-bidi: isolate;
   }
+  /* Every rendered IGN gets the page-title look the team picked: white, a short extruded
+     edge in the area's colour, a soft drop shadow and glow. Offsets are in em, so the same
+     depth reads right from the 26px greeting down to a 12px chip. (Inputs, SVG labels and
+     avatar initials carry .ign for the font only — they don't get the edge.) */
+  .flip-ign {
+    color: var(--color-text);
+    text-shadow:
+      0 0.045em 0 color-mix(in srgb, var(--color-crim) 70%, #000),
+      0 0.09em 0 color-mix(in srgb, var(--color-crim-deep) 80%, #000),
+      0 0.135em 0 color-mix(in srgb, var(--color-crim-deep) 62%, #000),
+      0 0.18em 0 color-mix(in srgb, var(--color-crim-deep) 45%, #000),
+      0 0.42em 0.75em rgb(0 0 0 / 0.6),
+      0 0 1.1em rgb(var(--accent-glow) / 0.22);
+  }
   /* Nothing is shown in all caps: text appears exactly as written, and this
      guard stops any shouted-caps styling from coming back. */
   *, *::before, *::after, ::placeholder {
@@ -1343,3 +1357,9 @@ html [data-lane="ROAM"] { --lane: #7db5f5; }
   background: linear-gradient(160deg, color-mix(in srgb, var(--lane) 30%, var(--color-ink)), color-mix(in srgb, var(--lane) 10%, var(--color-ink)));
   color: color-mix(in srgb, var(--lane) 70%, white);
 }
+
+/* ---- Hero database: daily Rone refresh status (pages/Heroes.tsx) ---------------------- */
+.hero-sync { --tone: var(--color-leaf); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; border-left: 3px solid var(--tone); }
+.hero-sync[data-state="busy"] { --tone: var(--color-sky); }
+.hero-sync[data-state="error"] { --tone: var(--color-amber); }
+.hero-sync__icon { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); }

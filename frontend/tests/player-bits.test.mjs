@@ -29,7 +29,7 @@ test("a member chip shows face, the exact IGN and a lane-coloured tag", () => {
   const out = html(bits.PlayerChip, { user: { ign: "ᴋαмɪɴαʀɪ⚝", name: "Dre", main_role: "JUNGLE" } });
   assert.match(out, /^<span class="player-chip " data-lane="JUNGLE" title="Dre · Jungle">/);
   assert.match(out, /<span class="player-chip__face" aria-hidden="true"><span class="ign">ᴋ<\/span><\/span>/);
-  assert.match(out, /<span class="player-chip__name"><bdi class="ign" dir="auto">ᴋαмɪɴαʀɪ⚝<\/bdi><\/span>/);
+  assert.match(out, /<span class="player-chip__name"><bdi class="ign flip-ign" dir="auto">ᴋαмɪɴαʀɪ⚝<\/bdi><\/span>/);
   assert.match(out, /<span class="player-chip__lane">Jungle<\/span>/);
   // No lane → no lane tag and no lane colour.
   const plain = html(bits.PlayerChip, { user: { ign: "Pip", name: "Pip Lan" } });

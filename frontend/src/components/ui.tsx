@@ -55,7 +55,9 @@ export function CaseSafe({ text }: { text: string }) {
  *  no letter-spacing, no heavy stroke and no case changes — never the app's Courier style.
  *  Stylised letters and symbols (ᴋαмɪɴαʀɪ⚝, 私, ✿) come through untouched. */
 export function Ign({ text, className = "" }: { text: string | null | undefined; className?: string }) {
-  return <bdi className={`ign${className ? ` ${className}` : ""}`} dir="auto">{text ?? ""}</bdi>;
+  // Every IGN wears the page-title look (.flip-ign in index.css): same glyphs and font, extruded edge.
+  const extra = className.split(/\s+/).filter((name) => name && name !== "flip-ign").join(" ");
+  return <bdi className={`ign flip-ign${extra ? ` ${extra}` : ""}`} dir="auto">{text ?? ""}</bdi>;
 }
 
 /** Letters flip up on a 3D hinge, one after another. Words never break in the middle. Visual only.
@@ -65,7 +67,7 @@ function FlipText({ text, ign }: { text: string; ign?: string }) {
   if (ign && at >= 0) {
     return <>
       {at > 0 && <FlipText text={text.slice(0, at)} />}
-      <Ign text={ign} className="flip-ign" />
+      <Ign text={ign} />
       {at + ign.length < text.length && <FlipText text={text.slice(at + ign.length)} />}
     </>;
   }
