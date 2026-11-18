@@ -1,4 +1,4 @@
-import { KeyRound, Loader2, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
+import { KeyRound, Loader2, PlugZap, Plus, ScanEye, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Meta, User } from "../lib/types";
@@ -95,6 +95,7 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
         right={<button className="btn-primary" onClick={() => setForm({})}><Plus size={15} /> New account</button>} />
 
       <AIProviderPanel />
+      <GroqReaderPanel />
 
       <section>
         <SectionTitle>Accounts</SectionTitle>
@@ -204,6 +205,99 @@ function AIProviderPanel() {
         {status.has_saved_key && <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
           {!confirmRemove ? <button type="button" className="btn-ghost !text-[11px]" onClick={() => setConfirmRemove(true)} disabled={busy || !secure}><Trash2 size={13} /> Remove saved key</button>
             : <><span className="text-[11px] text-mute">Remove the saved key?</span><button type="button" className="btn-ghost !text-[11px] text-crim" onClick={() => void remove()} disabled={busy}>Yes, remove</button><button type="button" className="btn-ghost !text-[11px]" onClick={() => setConfirmRemove(false)} disabled={busy}>Cancel</button></>}
+        </div>}
+      </>}
+      {notice && <p role="status" className="text-[11px] font-bold text-leaf">{notice}</p>}
+      <ErrorNote error={error} />
+    </div>
+  </section>;
+}
+
+interface GroqStatus extends AIProviderStatus { model: string; backup: boolean }
+interface GroqCheck { ok: boolean; model: string; message: string }
+
+/** Optional Groq key: reads uploaded screenshots and documents (Utility, scoreboards, match evidence). */
+function GroqReaderPanel() {
+  const [status, setStatus] = useState<GroqStatus | null>(null);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState<"" | "save" | "test" | "remove">("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [check, setCheck] = useState<GroqCheck | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const secure = window.isSecureContext || ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+
+  useEffect(() => {
+    let active = true;
+    api.get<GroqStatus>("/admin/integrations/groq")
+      .then((value) => { if (active) setStatus(value); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Could not load the Groq settings."); });
+    return () => { active = false; };
+  }, []);
+
+  async function test() {
+    setBusy("test"); setError(null); setCheck(null);
+    try { setCheck(await api.post<GroqCheck>("/admin/integrations/groq/test", {})); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not test the key."); }
+    finally { setBusy(""); }
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (!key.trim() || busy || !secure) return;
+    setBusy("save"); setError(null); setNotice(null); setCheck(null);
+    try {
+      const next = await api.post<GroqStatus>("/admin/integrations/groq", { key: key.trim() });
+      setKey(""); setStatus(next); setConfirmRemove(false);
+      setNotice("Groq key saved. Uploads are read with it from now on.");
+      setBusy("");
+      void test();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save the key."); setBusy(""); }
+  }
+
+  async function remove() {
+    if (busy || !secure) return;
+    setBusy("remove"); setError(null); setNotice(null); setCheck(null);
+    try {
+      const next = await api.del<GroqStatus>("/admin/integrations/groq");
+      setStatus(next); setConfirmRemove(false);
+      setNotice(next.configured ? "Saved key removed. The server environment Groq key is now in use."
+        : next.backup ? "Groq key removed. Uploads go back to the main AI key." : "Groq key removed.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not remove the key."); }
+    finally { setBusy(""); }
+  }
+
+  const label = status?.source === "admin" ? "Groq on" : status?.source === "environment" ? "Server environment key" : status?.source === "unavailable" ? "Saved key locked" : "Off";
+  return <section className="max-w-3xl">
+    <SectionTitle>Upload reading</SectionTitle>
+    <div className="card p-4 sm:p-5 space-y-4">
+      <div className="flex flex-wrap justify-between gap-3">
+        <div className="flex gap-3 items-start min-w-0"><div className="rounded-lg border border-sky/20 bg-sky/10 p-2 text-sky"><ScanEye size={17} /></div>
+          <div className="min-w-0"><h3 className="text-sm font-extrabold">Groq API key</h3><p className="mt-1 text-[11px] text-mute leading-relaxed">Admin only. When set, Groq&apos;s vision model reads every uploaded screenshot, scoreboard, document and sheet: Utility uploads, match evidence and game forms. The main AI key above stays as the automatic backup and still writes strategy and chat.</p></div></div>
+        {status && <span className={`h-fit rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${status.configured ? "border-sky/30 bg-sky/10 text-sky" : "border-edge bg-raised text-mute"}`}>{label}</span>}
+      </div>
+      {!status && !error && <Spinner label="Loading the Groq settings" />}
+      {status && <>
+        {status.message && <div className="rounded-lg border border-amber/30 bg-amber/5 px-3 py-2 text-[11px] text-amber">{status.message}</div>}
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-edge bg-raised px-2.5 py-1 text-mute">Model <b className="text-text break-all">{status.model}</b></span>
+          <span className={`rounded-full border px-2.5 py-1 ${status.backup ? "border-leaf/30 bg-leaf/10 text-leaf" : "border-amber/30 bg-amber/10 text-amber"}`}>{status.backup ? "Backup: main AI key ready" : "No backup key"}</span>
+        </div>
+        <form onSubmit={save} className="space-y-2">
+          <label htmlFor="groq-key" className="label block">{status.has_saved_key || status.source === "environment" ? "Enter a new Groq key to replace the current one" : "Paste your Groq key (console.groq.com/keys)"}</label>
+          <div className="flex flex-wrap sm:flex-nowrap gap-2"><input id="groq-key" className="input min-w-0 flex-1" type="password" autoComplete="off" spellCheck={false}
+            value={key} onChange={(event) => setKey(event.target.value)} placeholder={status.configured ? "Existing key is hidden" : "gsk_…"} maxLength={512} disabled={!!busy || !secure} />
+            <button className="btn-primary shrink-0" disabled={!!busy || !key.trim() || !secure}>{busy === "save" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} {status.has_saved_key || status.source === "environment" ? "Update key" : "Save key"}</button></div>
+        </form>
+        {status.configured && <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn-ghost !text-[11px]" onClick={() => void test()} disabled={!!busy}>{busy === "test" ? <Loader2 size={13} className="animate-spin" /> : <PlugZap size={13} />} Test key</button>
+          {check && <span role="status" className={`text-[11px] font-bold ${check.ok ? "text-leaf" : "text-amber"}`}>{check.message}</span>}
+        </div>}
+        <p className="flex items-start gap-2 text-[11px] text-faint leading-relaxed"><ShieldCheck size={14} className="shrink-0 text-leaf" /><span>Encrypted on the server and never shown again. The test only lists the models your key can use; no picture is sent. Groq bills by usage; watch your limits in the Groq console.</span></p>
+        {!secure && <div className="text-[11px] text-amber">Open the hub over HTTPS before entering a key.</div>}
+        {status.has_saved_key && <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
+          {!confirmRemove ? <button type="button" className="btn-ghost !text-[11px]" onClick={() => setConfirmRemove(true)} disabled={!!busy || !secure}><Trash2 size={13} /> Remove Groq key</button>
+            : <><span className="text-[11px] text-mute">Remove the Groq key?</span><button type="button" className="btn-ghost !text-[11px] text-crim" onClick={() => void remove()} disabled={!!busy}>Yes, remove</button><button type="button" className="btn-ghost !text-[11px]" onClick={() => setConfirmRemove(false)} disabled={!!busy}>Cancel</button></>}
         </div>}
       </>}
       {notice && <p role="status" className="text-[11px] font-bold text-leaf">{notice}</p>}
