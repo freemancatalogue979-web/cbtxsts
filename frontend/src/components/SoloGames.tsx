@@ -343,9 +343,9 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
     <div className="space-y-3">
       <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
         onPaste={onPaste} tabIndex={-1}
-        className={`utility-drop u-drop sdrop relative overflow-hidden rounded-3xl border p-3 sm:p-4 transition ${drag ? "u-drop--over sdrop--over" : ""}`}>
+        className={`utility-drop u-drop sdrop @container relative overflow-hidden rounded-3xl border p-3 sm:p-4 transition ${drag ? "u-drop--over sdrop--over" : ""}`}>
         <input ref={fileRef} id="solo-upload" type="file" className="sr-only" multiple accept={SOLO_ACCEPT} onChange={(e) => void handle(e.target.files)} />
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-stretch">
+        <div className="grid gap-3 @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-stretch">
           <label htmlFor="solo-upload" className={`sdrop__pad group relative flex flex-col items-center justify-center text-center cursor-pointer rounded-2xl border-2 border-dashed px-4 py-6 sm:py-8 ${busy ? "sdrop__pad--busy" : ""}`}>
             <span className="sdrop__stack" aria-hidden="true">
               <span className="sdrop__card sdrop__card--sheet"><FileSpreadsheet size={18} /></span>
@@ -363,16 +363,16 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
             <span className="btn-primary mt-4 pointer-events-none"><Upload size={14} /> Pick files</span>
           </label>
           <div className="flex flex-col gap-2.5 min-w-0">
-            <ol className="sdrop__steps grid grid-cols-3 lg:grid-cols-1 gap-2">
+            <ol className="sdrop__steps grid grid-cols-3 @2xl:grid-cols-1 gap-2">
               {[
                 { icon: Upload, title: "Drop it", sub: "screens, docs or sheets" },
                 { icon: Search, title: "Check heroes", sub: "tap any to fix it" },
                 { icon: CheckCircle2, title: "On your record", sub: "undo any time" },
               ].map((step, i) => (
-                <li key={step.title} className="sdrop__step flex flex-col lg:flex-row items-center lg:items-center gap-1.5 lg:gap-2.5 rounded-xl border border-edge px-2 py-2.5 lg:px-3 text-center lg:text-left min-w-0">
+                <li key={step.title} className="sdrop__step flex flex-col @2xl:flex-row items-center @2xl:items-center gap-1.5 @2xl:gap-2.5 rounded-xl border border-edge px-2 py-2.5 @2xl:px-3 text-center @2xl:text-left min-w-0">
                   <span className="sdrop__num shrink-0" aria-hidden="true">{i + 1}</span>
                   <span className="min-w-0">
-                    <span className="flex items-center justify-center lg:justify-start gap-1 text-[11.5px] font-extrabold"><step.icon size={12} className="shrink-0 hidden sm:block" /> {step.title}</span>
+                    <span className="flex items-center justify-center @2xl:justify-start gap-1 text-[11.5px] font-extrabold"><step.icon size={12} className="shrink-0 hidden sm:block" /> {step.title}</span>
                     <span className="block text-[10px] text-faint leading-tight">{step.sub}</span>
                   </span>
                 </li>
