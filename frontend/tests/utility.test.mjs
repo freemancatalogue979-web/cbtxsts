@@ -115,7 +115,7 @@ test("line charts draw animated paths and ship a screen-reader table", () => {
   assert.match(html, /role="img" aria-label="Form"/);
   assert.match(html, /class="chart-draw chart-glow"/);
   assert.match(html, /stroke-dasharray="5 6"/);
-  assert.match(html, /<table class="sr-only"><caption>Form<\/caption>/);
+  assert.match(html, /<div class="sr-only"><table><caption>Form<\/caption>/);
   assert.match(html, /<td>—<\/td>/); // the gap stays a gap
 });
 

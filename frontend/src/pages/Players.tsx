@@ -201,10 +201,6 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             <div>
               <div className="text-xl font-extrabold"><Ign text={p.ign} /></div>
               <div className="text-[13px] text-mute">{p.name} · {nice(p.main_role) || p.role_label}{p.role === "captain" ? " · Captain" : ""}</div>
-              {(() => {
-                const l = links.get(p.id);
-                return l?.linked ? <LinkedAccountCard link={l} /> : null;
-              })()}
             </div>
           </div>
           <div className="flex gap-2">
@@ -212,6 +208,11 @@ export function PlayersPage({ me, meta, parts }: { me: User; meta: Meta; parts: 
             {p.can_rate && !p.is_self && <button className="btn-primary" onClick={() => setShowDev(true)}><Star size={14} /> Rate player</button>}
           </div>
         </div>
+
+        {(() => {
+          const l = links.get(p.id);
+          return l?.linked ? <LinkedAccountCard link={l} /> : null;
+        })()}
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
           <StatTile label="Series" value={stats.series_played} hint={`${stats.series_won}W – ${stats.series_lost}L`} />

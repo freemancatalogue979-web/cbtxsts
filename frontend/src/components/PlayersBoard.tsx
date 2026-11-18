@@ -15,7 +15,7 @@ import type { LinkSummary } from "../lib/mlbb";
 import { dayLabel, navigate, ResultBadge } from "../lib/util";
 import { nice } from "../lib/caseText";
 import { AvatarImg } from "./Avatar";
-import { BarChart, CHART_COLORS, weekLabel } from "./Charts";
+import { BarChart, CHART_COLORS, Legend, weekLabel } from "./Charts";
 import { HeroImg } from "./HeroImg";
 import { laneKey, WinRing } from "./PlayerBits";
 import { AlertCard, FormDots, kdaText } from "./PlayerPerformance";
@@ -262,6 +262,7 @@ export function UtilityPanel({ userId, ign }: { userId: number; ign: string }) {
               <div><span className="label">Form</span><FormDots form={data.form.slice(0, 5)} label={`${ign} recent utility games`} /><small>{streak || " "}</small></div>
             </div>
           </div>
+          <Legend items={[{ name: "Utility games", color: CHART_COLORS.sky }, { name: "Team games", color: CHART_COLORS.violet }, { name: "Win %", color: CHART_COLORS.win }]} />
           <BarChart height={190} labels={labels}
             series={[{ name: "Utility games", color: CHART_COLORS.sky, values: data.weeks.map((w) => w.solo_games) },
               { name: "Team games", color: CHART_COLORS.violet, values: data.weeks.map((w) => w.team_games) }]}

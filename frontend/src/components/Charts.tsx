@@ -146,11 +146,12 @@ function Readout({ x, width, title, rows }: { x: number; width: number; title: s
 
 function SrTable({ caption, labels, series }: { caption: string; labels: string[]; series: { name: string; values: (number | null)[] }[] }) {
   return (
-    <table className="sr-only">
+    // A table ignores width:1px, so the clipping lives on a wrapping div (never widens a phone page).
+    <div className="sr-only"><table>
       <caption>{caption}</caption>
       <thead><tr><th scope="col">Period</th>{series.map((s) => <th key={s.name} scope="col">{s.name}</th>)}</tr></thead>
       <tbody>{labels.map((l, i) => <tr key={`${l}-${i}`}><th scope="row">{l}</th>{series.map((s) => <td key={s.name}>{fmt(s.values[i])}</td>)}</tr>)}</tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -436,10 +437,10 @@ export function Heatmap({ rows, columns, caption, color = CHART_COLORS.accent, c
           <text key={`${c}-${ci}`} x={labelW + ci * (size + gap)} y={height - 3} className="fill-faint text-[9px]">{c}</text>
         ) : null))}
       </svg>
-      <table className="sr-only">
+      <div className="sr-only"><table>
         <caption>{caption}</caption>
         <tbody>{rows.map((r) => <tr key={r.label}><th scope="row">{r.label}</th><td>{r.cells.filter(Boolean).length} active days{r.hint ? `, ${r.hint}` : ""}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     </div>
   );
 }
