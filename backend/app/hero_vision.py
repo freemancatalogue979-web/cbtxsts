@@ -18,6 +18,7 @@ the draft and its own eyes.
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import threading
 from dataclasses import dataclass
@@ -30,8 +31,14 @@ try:
 except ImportError:  # pragma: no cover - without numpy the matcher is off and reading works as before
     np = None  # type: ignore[assignment]
 
+from .config import DATA_DIR
+
 ROOT = Path(__file__).resolve().parents[2]
 HERO_DIRS = (ROOT / "frontend" / "public" / "heroes", ROOT / "frontend" / "dist" / "heroes")
+# Portraits people confirmed (skins, odd crops): data/hero_portraits/<slug>/<hash>.png, used next to the art.
+LEARN_DIR = DATA_DIR / "hero_portraits"
+LEARN_SIDE = 64
+LEARN_MAX = 16               # newest kept per hero
 
 T = 16                       # template side at scan scale
 VERIFY = 40                  # template side when verifying in colour
@@ -54,6 +61,14 @@ MAX_MAYBES = 18
 MAX_SPOTS = 160
 MAX_WINDOWS = 6000           # strongest windows looked at when grouping them into spots
 MASK_R = 0.42                # round mask radius (share of the side)
+# One known portrait spot (the reader says where each row's portrait is), checked against every hero.
+# Calibrated on fake scoreboards with rough boxes: no wrong corrections at these levels.
+BOX_ACCEPT = (0.70, 0.06)    # score, margin over the next hero — enough to correct the reader
+BOX_ACCEPT_SMALL = (0.74, 0.08)   # ... for portraits under BOX_SMALL px (tiny portraits blur together)
+BOX_SMALL = 30
+BOX_KNOWN = (0.60, 0.04)     # ... when only this game's drafted heroes can be there
+BOX_AGREE = 0.60             # the portrait's best hero IS the reader's hero at this score: confirmed
+BOX_LIKELY = 0.50            # the reader's hero scores this here, near the best hero: probably right
 
 _lock = threading.Lock()
 _bank: "_Bank | None" = None
@@ -88,16 +103,30 @@ def _unit(rows: np.ndarray) -> np.ndarray:
 
 
 class _Bank:
-    def __init__(self, heads: dict[str, Image.Image]):
-        self.names = sorted(heads)
+    """Templates: each hero's official head, plus any learned portraits of that hero.
+
+    ``names[i]`` is the hero of template ``i`` (a hero can have several templates)."""
+
+    def __init__(self, heads: list[tuple[str, Image.Image]]):
+        heads = sorted(heads, key=lambda item: item[0])
+        self.names = [n for n, _ in heads]
+        self.heroes = sorted(set(self.names))
+        index = {n: i for i, n in enumerate(self.heroes)}
+        self.hid = np.array([index[n] for n in self.names])                   # template → hero
         self.mask_t = _mask(T)
         self.mask_v = _mask(VERIFY)
-        scan = [np.asarray(heads[n].convert("RGB").resize((T, T), Image.LANCZOS), np.float32)[self.mask_t].reshape(-1)
-                for n in self.names]
-        self.scan = _unit(np.stack(scan)).astype(np.float32)                    # heroes × 3m
-        color = [np.asarray(heads[n].convert("RGB").resize((VERIFY, VERIFY), Image.LANCZOS), np.float32)[self.mask_v].reshape(-1)
-                 for n in self.names]
-        self.color = _unit(np.stack(color)).astype(np.float32)                  # heroes × 3m
+        scan = [np.asarray(im.convert("RGB").resize((T, T), Image.LANCZOS), np.float32)[self.mask_t].reshape(-1)
+                for _, im in heads]
+        self.scan = _unit(np.stack(scan)).astype(np.float32)                    # templates × 3m
+        color = [np.asarray(im.convert("RGB").resize((VERIFY, VERIFY), Image.LANCZOS), np.float32)[self.mask_v].reshape(-1)
+                 for _, im in heads]
+        self.color = _unit(np.stack(color)).astype(np.float32)                  # templates × 3m
+
+    def per_hero(self, scores: np.ndarray) -> np.ndarray:
+        """Best template score for every hero (templates → heroes)."""
+        out = np.full(len(self.heroes), -1.0, np.float32)
+        np.maximum.at(out, self.hid, scores.astype(np.float32))
+        return out
 
 
 def hero_heads(names: dict[str, str] | None = None) -> dict[str, Image.Image]:
@@ -120,7 +149,24 @@ def hero_heads(names: dict[str, str] | None = None) -> dict[str, Image.Image]:
 
 
 def slug(name: str) -> str:
-    return "-".join(name.lower().replace("'", " ").replace("’", " ").split())
+    return "-".join(str(name or "").lower().replace("'", " ").replace("’", " ").split())
+
+
+def learned_heads(names: dict[str, str] | None = None) -> list[tuple[str, Image.Image]]:
+    """Confirmed portraits saved by :func:`learn` → [(hero name, image)]."""
+    out: list[tuple[str, Image.Image]] = []
+    if not LEARN_DIR.is_dir():
+        return out
+    for folder in sorted(LEARN_DIR.iterdir()):
+        if not folder.is_dir():
+            continue
+        name = (names or {}).get(folder.name) or folder.name.replace("-", " ").title()
+        for path in sorted(folder.glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)[:LEARN_MAX]:
+            try:
+                out.append((name, Image.open(path).convert("RGB")))
+            except OSError:
+                continue
+    return out
 
 
 def bank(names: list[str] | None = None) -> "_Bank | None":
@@ -130,8 +176,11 @@ def bank(names: list[str] | None = None) -> "_Bank | None":
         return None
     with _lock:
         if _bank is None:
-            heads = hero_heads({slug(n): n for n in (names or [])})
-            _bank = _Bank(heads) if heads else None
+            spelled = {slug(n): n for n in (names or [])}
+            heads = hero_heads(spelled)
+            if heads:
+                official = {slug(n): n for n in heads}       # learned folders take the official spelling
+                _bank = _Bank(list(heads.items()) + learned_heads({**official, **spelled}))
         return _bank
 
 
@@ -226,7 +275,7 @@ def _verify(rgb: Image.Image, b: _Bank, cx: float, cy: float, d: float, heroes: 
                     s = np.where(only, s, -1.0)
                 pick = max(heroes, key=lambda k: s[k])
                 if s[pick] > best[1]:
-                    others = np.delete(s, pick)
+                    others = s[b.hid != b.hid[pick]]          # the runner-up is another hero, not another picture of it
                     best = (int(pick), float(s[pick]), float(others.max()) if len(others) else -1.0, box)
     return best
 
@@ -251,7 +300,7 @@ def analyse(raw: bytes, hero_names: list[str] | None = None, limit: int = 30,
     wanted = {slug(c) for c in (candidates or []) if c}
     if len(wanted) >= 3:
         only = np.array([slug(n) in wanted for n in b.names])
-        if only.sum() < 3:
+        if len({n for n, ok in zip(b.names, only) if ok}) < 3:
             only = None
     accept, accept_low, margin, accept_stand = (ACCEPT, ACCEPT_LOW, MARGIN, ACCEPT_STAND) if only is None else KNOWN
     try:
@@ -399,4 +448,208 @@ HINT_RULE = """- Heroes — work in this order and never guess from a vague look
   2. A hero name printed as text on the screen.
   3. The recorded picks ("known_picks"/"candidate_heroes"): every hero in this game is one of them when they are given.
   4. The reference sheet (the second picture, official portraits with names under them): compare face, hair, helmet, weapon and colours. Skins change outfits and colours but usually keep the face shape and silhouette.
-  Use the exact spelling from hero_names. If a portrait is still unclear, give your best match and say which row in "notes"."""
+  Use the exact spelling from hero_names. If a portrait is still unclear, give your best match and say which row in "notes".
+- "portrait": the box around that row's hero portrait on the screenshot as [x0, y0, x1, y1], integers from 0 to 1000 relative to the picture's width (x) and height (y). We re-check the hero at that spot against the official art, so make the box tight around the portrait. null if the row has no portrait."""
+
+
+# --------------------------------------------------------------------------- #
+# one known spot: the reader says where each row's portrait is
+# --------------------------------------------------------------------------- #
+@dataclass
+class BoxCheck:
+    hero: str
+    score: float
+    margin: float
+    box: tuple[int, int, int, int]       # pixels
+    norm: list[float]                    # x0, y0, x1, y1 as shares of width/height
+
+
+def parse_box(value) -> list[float] | None:
+    """[x0, y0, x1, y1] in 0–1000 (Qwen style) or 0–1 → shares of width/height, or None."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        nums = [float(v) for v in value]
+    except (TypeError, ValueError):
+        return None
+    scale = 1.0 if max(nums) <= 1.0 else 1000.0
+    x0, y0, x1, y1 = (max(0.0, min(1.0, v / scale)) for v in nums)
+    if x1 - x0 < 0.004 or y1 - y0 < 0.004 or x1 - x0 > 0.5 or y1 - y0 > 0.6:
+        return None
+    return [x0, y0, x1, y1]
+
+
+def _open(raw: bytes) -> Image.Image | None:
+    try:
+        return ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _box_scores(img: Image.Image, norm: list[float], b: "_Bank"):
+    """(per-hero best score, patches×templates scores, patch boxes) around one spot, or None."""
+    w, h = img.width, img.height
+    cx, cy = (norm[0] + norm[2]) / 2 * w, (norm[1] + norm[3]) / 2 * h
+    d0 = ((norm[2] - norm[0]) * w + (norm[3] - norm[1]) * h) / 2
+    patches, boxes = [], []
+    for ds in (0.8, 0.9, 1.0, 1.12):
+        d = d0 * ds
+        if d < 8:
+            continue
+        for dx in (-0.15, -0.075, 0.0, 0.075, 0.15):
+            for dy in (-0.15, -0.075, 0.0, 0.075, 0.15):
+                left, top = cx + dx * d0 - d / 2, cy + dy * d0 - d / 2
+                bx = (round(left), round(top), round(left + d), round(top + d))
+                if bx[0] < 0 or bx[1] < 0 or bx[2] > w or bx[3] > h:
+                    continue
+                patch = np.asarray(img.crop(bx).resize((VERIFY, VERIFY), Image.BILINEAR), np.float32)[b.mask_v].reshape(-1)
+                if patch.std() < FLAT_STD:
+                    continue
+                patches.append(patch)
+                boxes.append(bx)
+    if not patches:
+        return None
+    S = _unit(np.stack(patches)) @ b.color.T                     # patches × templates
+    return b.per_hero(S.max(axis=0)), S, boxes
+
+
+def check_box(raw: bytes | Image.Image, box, hero_names: list[str] | None = None,
+              candidates: list[str] | None = None) -> BoxCheck | None:
+    """Which hero is in this portrait spot? Searches a little around the box (the reader's box is rough)."""
+    b = bank(hero_names)
+    norm = parse_box(box)
+    img = raw if isinstance(raw, Image.Image) else _open(raw)
+    if b is None or norm is None or img is None:
+        return None
+    found = _box_scores(img, norm, b)
+    if found is None:
+        return None
+    hero_scores, S, boxes = found
+    wanted = {slug(c) for c in (candidates or []) if c}
+    if len(wanted) >= 3:
+        allowed = np.array([slug(n) in wanted for n in b.heroes])
+        if allowed.sum() >= 3:
+            hero_scores = np.where(allowed, hero_scores, -1.0)
+    top = int(hero_scores.argmax())
+    second = float(np.delete(hero_scores, top).max()) if len(hero_scores) > 1 else -1.0
+    templates = np.nonzero(b.hid == top)[0]
+    best = templates[int(S.max(axis=0)[templates].argmax())]
+    bx = boxes[int(S[:, best].argmax())]
+    w, h = img.width, img.height
+    return BoxCheck(hero=b.heroes[top], score=float(hero_scores[top]), margin=float(hero_scores[top]) - second, box=bx,
+                    norm=[round(bx[0] / w, 4), round(bx[1] / h, 4), round(bx[2] / w, 4), round(bx[3] / h, 4)])
+
+
+def hero_score(raw: bytes | Image.Image, box, hero: str, hero_names: list[str] | None = None) -> float | None:
+    """How well ``hero`` (any of its pictures) fits this spot, or None if it can't be checked."""
+    b = bank(hero_names)
+    norm = parse_box(box)
+    img = raw if isinstance(raw, Image.Image) else _open(raw)
+    k = next((i for i, n in enumerate(b.heroes) if slug(n) == slug(hero)), None) if b is not None else None
+    if k is None or norm is None or img is None:
+        return None
+    found = _box_scores(img, norm, b)
+    return float(found[0][k]) if found is not None else None
+
+
+def _match_norm(m: Match, w: int, h: int) -> list[float]:
+    return [round(m.box[0] / w, 4), round(m.box[1] / h, 4), round(m.box[2] / w, 4), round(m.box[3] / h, 4)]
+
+
+def check_rows(raw: bytes, rows: list[dict], hero_names: list[str] | None = None, candidates: list[str] | None = None,
+               matches: list[Match] | None = None, unique: bool = True) -> list[dict]:
+    """Verify each row's hero at its own portrait. Rows get ``hero_check`` and ``portrait`` (and
+    ``hero_was`` when the portrait clearly shows another hero, which replaces the reader's guess).
+
+    hero_check: "portrait" (the picture agrees) · "corrected" · "likely" · "unsure" · "unchecked" (no box).
+    Returns notes: [{"tone", "text"}]. Never raises."""
+    notes: list[dict] = []
+    try:
+        img = _open(raw)
+        if img is None or bank(hero_names) is None:
+            return notes
+        w, h = img.width, img.height
+        known = len({slug(c) for c in (candidates or []) if c}) >= 3
+        taken = {slug(r.get("hero")) for r in rows if r.get("hero")}
+        corrected, unsure = [], []
+        for r in rows:
+            said = str(r.get("hero") or "")
+            box = parse_box(r.get("portrait"))
+            seen = next((m for m in (matches or []) if slug(m.hero) == slug(said)), None) if said else None
+            if box is None and seen is not None:
+                box = _match_norm(seen, w, h)
+            if box is None:
+                r.pop("portrait", None)
+                # nowhere to look: say nothing rather than flag every row
+                r["hero_check"] = "portrait" if seen is not None and seen.score >= SURE else "likely" if seen else "unchecked"
+                continue
+            chk = check_box(img, box, hero_names, candidates)
+            r["portrait"] = chk.norm if chk else [round(v, 4) for v in box]
+            if chk and slug(chk.hero) == slug(said) and chk.score >= BOX_AGREE:
+                r["hero_check"] = "portrait"
+                continue
+            accept, margin = BOX_KNOWN if known else BOX_ACCEPT_SMALL if chk and chk.box[2] - chk.box[0] < BOX_SMALL else BOX_ACCEPT
+            if chk and chk.score >= accept and chk.margin >= margin:
+                if not unique or slug(chk.hero) not in taken:
+                    taken.discard(slug(said))
+                    taken.add(slug(chk.hero))
+                    r["hero_was"], r["hero"], r["hero_check"] = said, chk.hero, "corrected"
+                    corrected.append(f"{said or 'blank'} → {chk.hero}")
+                    continue
+            fit = hero_score(img, box, said, hero_names) if said else None
+            if seen is not None and seen.score >= SURE:
+                r["hero_check"] = "portrait"
+            elif fit is not None and fit >= BOX_LIKELY and (chk is None or fit >= chk.score - 0.05):
+                r["hero_check"] = "likely"
+            else:
+                r["hero_check"] = "unsure"
+                unsure.append(said or "a row")
+        if corrected:
+            notes.append({"tone": "warn", "text": "Fixed from the portraits: " + ", ".join(corrected[:6]) + ". Check them."})
+        if unsure:
+            notes.append({"tone": "warn", "text": "Not sure about " + ", ".join(unsure[:6])
+                          + " — tap the hero to change it if it's wrong."})
+    except Exception:  # noqa: BLE001 - checking only helps; reading must still work
+        return notes
+    return notes
+
+
+def learn(raw: bytes, box, hero: str, hero_names: list[str] | None = None) -> bool:
+    """Remember a confirmed portrait (a skin the art doesn't cover) so the next screenshot is matched.
+
+    The crop comes from the server's own copy of the screenshot, never from the browser."""
+    norm = parse_box(box)
+    img = _open(raw)
+    if norm is None or img is None or not hero or np is None:
+        return False
+    b = bank(hero_names)
+    if b is None or slug(hero) not in {slug(n) for n in b.heroes}:
+        return False
+    w, h = img.width, img.height
+    side = ((norm[2] - norm[0]) * w + (norm[3] - norm[1]) * h) / 2
+    if side < 12:
+        return False
+    cx, cy = (norm[0] + norm[2]) / 2 * w, (norm[1] + norm[3]) / 2 * h
+    crop = img.crop((round(cx - side / 2), round(cy - side / 2), round(cx + side / 2), round(cy + side / 2)))
+    crop = crop.resize((LEARN_SIDE, LEARN_SIDE), Image.LANCZOS)
+    if np.asarray(crop, np.float32)[_mask(LEARN_SIDE)].std() < FLAT_STD:
+        return False                                  # a flat patch is not a portrait
+    buf = io.BytesIO()
+    crop.save(buf, "PNG")
+    data = buf.getvalue()
+    folder = LEARN_DIR / slug(hero)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{hashlib.sha1(data).hexdigest()[:16]}.png").write_bytes(data)
+        for old in sorted(folder.glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)[LEARN_MAX:]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        return False
+    reset()
+    return True
+
+
+def learned_counts() -> dict[str, int]:
+    if not LEARN_DIR.is_dir():
+        return {}
+    return {f.name: len(list(f.glob("*.png"))) for f in sorted(LEARN_DIR.iterdir()) if f.is_dir()}

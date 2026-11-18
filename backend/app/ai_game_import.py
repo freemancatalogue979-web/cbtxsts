@@ -22,7 +22,7 @@ from .ai_scoreboard import IMAGE_EXT, ReadError, prepare_image, reader_key
 from .ai_scoreboard import call_model as _vision_call
 from .config import UPLOAD_DIR
 from .esports_ai import ENDPOINT, MODEL
-from .hero_vision import HINT_RULE, portrait_help
+from .hero_vision import HINT_RULE, check_rows, portrait_help
 from .models import User, utcnow
 from .solo_games import clean_game, hero_names
 from .vision_provider import ProviderError, Reader, groq_chat, post_chat, with_backup
@@ -67,7 +67,7 @@ Return one JSON object only:
      "hero": "hero name", "lane": "EXP|JUNGLE|MID|GOLD|ROAM or null", "result": "WIN" | "LOSS" | null,
      "duration": "mm:ss or null", "kills": n|null, "deaths": n|null, "assists": n|null, "rating": n|null,
      "gold": n|null, "damage": n|null, "damage_taken": n|null, "turret_damage": n|null, "mvp": true|false,
-     "notes": "short, only if printed (e.g. medal, Savage)"}
+     "notes": "short, only if printed (e.g. medal, Savage)", "portrait": [x0, y0, x1, y1] | null}
   ],
   "notes": ["short notes on anything unreadable, cut off or unusual"]
 }
@@ -278,6 +278,10 @@ def extract(db: Session, user: User, url: str) -> dict:
         prompt = {**_context(user, heroes), "kind": "screenshot", **help_.hints()}
         reply = call_vision(api_key, SYSTEM, json.dumps(prompt, ensure_ascii=False), image, mime,
                             extra=[(help_.sheet, "image/png")] if help_.sheet else None)
+        if isinstance(reply, dict) and isinstance(reply.get("games"), list):
+            # each game's hero re-checked at its own portrait (a history list repeats heroes: not unique)
+            checks.extend(check_rows(raw_bytes, [g for g in reply["games"] if isinstance(g, dict)],
+                                     sorted(heroes.values()), matches=help_.matches, unique=False))
         if help_.matches:
             seen = ", ".join(m.hero for m in help_.matches[:10])
             checks.append({"tone": "ok", "text": f"Recognised from the portraits: {seen}."})

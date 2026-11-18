@@ -18,9 +18,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..ai_scoreboard import IMAGE_EXT, ReadError, read_scoreboard
+from .. import hero_vision
+from ..ai_scoreboard import IMAGE_EXT, ReadError, load_upload, read_scoreboard
 from ..deps import can, get_current_user, get_db, require
-from ..models import Scrim, Tournament, TournamentMatch, User, dumps, loads
+from ..models import Hero, Scrim, Tournament, TournamentMatch, User, dumps, loads
 from ..performance import clean_enemy_stats, clean_lineup, clean_player_stats, scrim_game_lineup
 from ..schemas import GameIn
 from . import scrims as scrims_router
@@ -184,6 +185,38 @@ class ApplyIn(BaseModel):
     player_stats: dict[str, dict] = Field(default_factory=dict)
     enemy_stats: dict[str, dict] = Field(default_factory=dict)
     evidence_url: str = Field(default="", max_length=300)
+    # confirmed heroes at their portrait spots on the evidence screenshot → the matcher learns them
+    portraits: list["PortraitIn"] = Field(default_factory=list, max_length=10)
+
+
+class PortraitIn(BaseModel):
+    hero: str = Field(min_length=1, max_length=40)
+    box: list[float] = Field(min_length=4, max_length=4)
+
+
+ApplyIn.model_rebuild()
+
+
+def learn_portraits(db: Session, url: str, portraits: list[PortraitIn]) -> int:
+    """Save confirmed portraits (from our own copy of the screenshot). Never fails the save."""
+    if not portraits or not url:
+        return 0
+    try:
+        raw, _, _ = load_upload(url)
+    except ReadError:
+        return 0
+    names = {hero_vision.slug(n): n for (n,) in db.execute(select(Hero.name)).all()}
+    learned = 0
+    for p in portraits:
+        hero = names.get(hero_vision.slug(p.hero))
+        if not hero:
+            continue
+        # already recognised confidently at this spot: nothing new to learn
+        known = hero_vision.check_box(raw, p.box, list(names.values()))
+        if known is not None and known.hero == hero and known.score >= hero_vision.BOX_ACCEPT[0]:
+            continue
+        learned += hero_vision.learn(raw, p.box, hero, list(names.values()))
+    return learned
 
 
 def _attach(obj, url: str, game_no: int) -> None:
@@ -231,4 +264,5 @@ def apply(payload: ApplyIn, db: Session = Depends(get_db), user: User = Depends(
     _attach(obj, payload.evidence_url, payload.game_no)
     db.commit()
     db.refresh(obj)
-    return {"ok": True, "target": _row(db, obj), "game_no": payload.game_no}
+    learned = learn_portraits(db, payload.evidence_url, payload.portraits)
+    return {"ok": True, "target": _row(db, obj), "game_no": payload.game_no, "learned": learned}

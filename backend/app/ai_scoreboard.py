@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from .config import UPLOAD_DIR
 from .ai_credentials import GROQ, PROVIDER as MAIN_PROVIDER
 from .esports_ai import ENDPOINT, MODEL, _credential, _reserve
-from .hero_vision import HINT_RULE, portrait_help
+from .hero_vision import HINT_RULE, check_rows, portrait_help
 from .models import Hero, User
 from .performance import clean_line, clean_lineup, hero_key
 from .security import LANES
@@ -70,7 +70,7 @@ Return one JSON object only:
       "players": [
         {"name": "in-game name exactly as printed", "hero": "hero name", "kills": n, "deaths": n, "assists": n,
          "gold": n|null, "damage": n|null, "damage_taken": n|null, "turret_damage": n|null,
-         "rating": n|null, "mvp": true|false}
+         "rating": n|null, "mvp": true|false, "portrait": [x0, y0, x1, y1] | null}
       ]
     }
   ],
@@ -462,7 +462,11 @@ def interpret(raw: dict, *, db: Session, lineup: dict | None, draft: dict | None
                 continue
             row = it["row"]
             item = {"lane": lane, "name": str(row.get("name") or "")[:60], "hero": row.get("hero") or "",
-                    "line": _line(row), "placed_by": it["how"]}
+                    "line": _line(row), "placed_by": it["how"], "hero_check": row.get("hero_check") or "unchecked"}
+            if isinstance(row.get("portrait"), list):
+                item["portrait"] = row["portrait"]
+            if row.get("hero_was"):
+                item["hero_was"] = str(row["hero_was"])[:40]
             if not enemy_side:
                 user = it["user"]
                 item["user_id"] = user.id if user else None
@@ -509,8 +513,11 @@ def read_scoreboard(db: Session, user: User, *, image_url: str, lineup: dict | N
     }
     raw = call_model(api_key, SYSTEM, "Transcribe this screenshot. Game context:\n" + json.dumps(context, ensure_ascii=False),
                      image, mime, extra=[(help_.sheet, "image/png")] if help_.sheet else None)
+    rows = [r for t in (raw.get("teams") or []) if isinstance(t, dict) for r in _rows(t)] \
+        if isinstance(raw, dict) and isinstance(raw.get("teams"), list) else []
+    hero_notes = check_rows(raw_bytes, rows, all_heroes, candidates=picked or None, matches=help_.matches)
     out = interpret(raw, db=db, lineup=clean, draft=draft, result=result)
-    out["checks"] = out.get("checks", []) + portrait_checks(help_, out)
+    out["checks"] = out.get("checks", []) + portrait_checks(help_, out) + hero_notes
     out["heroes_seen"] = [m.out() for m in help_.matches]
     out["image_url"] = f"/api/files/{name}"
     return out
