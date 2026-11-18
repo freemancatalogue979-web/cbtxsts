@@ -1050,6 +1050,82 @@ html[data-effects="calm"] .chart-live::before, html[data-effects="calm"] .chart-
 .u-empty { border-style: dashed; }
 .u-drop { border-color: color-mix(in srgb, var(--color-crim) 40%, var(--color-edge)); background: linear-gradient(180deg, color-mix(in srgb, var(--color-crim) 6%, var(--color-panel)), var(--color-panel)); }
 .u-drop:hover, .u-drop--over { border-color: var(--color-crim); background: linear-gradient(180deg, color-mix(in srgb, var(--color-crim) 12%, var(--color-panel)), var(--color-panel)); }
+/* MLBB Intel builds */
+.build-head {
+  background:
+    radial-gradient(110% 140% at 0% 0%, color-mix(in srgb, var(--color-crim) 14%, transparent), transparent 60%),
+    var(--color-panel);
+}
+.build-head__art {
+  position: absolute; inset: 0 0 0 auto; width: min(46%, 260px); pointer-events: none; opacity: .34;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 60%); mask-image: linear-gradient(90deg, transparent, #000 60%);
+}
+.build-head__art img { height: 100%; width: 100%; object-fit: cover; object-position: top center; }
+.build-card { transition: border-color 180ms, transform 180ms; }
+.build-card:hover { border-color: var(--color-edge-2); }
+.build-card--top { border-color: color-mix(in srgb, var(--color-amber) 45%, var(--color-edge)); background: linear-gradient(160deg, color-mix(in srgb, var(--color-amber) 8%, var(--color-panel)), var(--color-panel) 60%); }
+.build-rank {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0;
+  font-size: 12px; font-weight: 900; color: var(--color-mute); background: var(--color-raised); border: 1px solid var(--color-edge);
+}
+.build-card--top .build-rank { color: var(--color-ink); background: var(--color-amber); border-color: transparent; }
+.build-item__n {
+  position: absolute; left: -3px; top: -3px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 999px;
+  font-size: 8.5px; font-weight: 900; color: var(--color-ink); background: var(--color-text); box-shadow: 0 0 0 2px var(--color-panel);
+}
+@media (max-width: 639px) { .build-head__art { opacity: .18; } }
+
+/* Utility drop zone: a landing pad with a stack of file cards, the 3 steps and the kinds of files */
+.sdrop {
+  border-color: color-mix(in srgb, var(--color-crim) 28%, var(--color-edge));
+  background:
+    radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--color-crim) 14%, transparent), transparent 60%),
+    radial-gradient(80% 110% at 100% 100%, color-mix(in srgb, var(--color-sky) 10%, transparent), transparent 60%),
+    var(--color-panel);
+  box-shadow: 0 18px 40px -28px rgb(var(--accent-glow) / 0.7);
+}
+.sdrop:focus { outline: none; }
+.sdrop__pad {
+  border-color: color-mix(in srgb, var(--color-crim) 45%, var(--color-edge));
+  background: color-mix(in srgb, var(--color-ink) 45%, transparent);
+  transition: border-color 180ms, background-color 180ms, transform 180ms;
+}
+.sdrop__pad:hover, .sdrop--over .sdrop__pad { border-color: var(--color-crim); background: color-mix(in srgb, var(--color-crim) 9%, var(--color-ink)); }
+.sdrop--over .sdrop__pad { transform: scale(1.01); }
+.sdrop__pad:focus-within { outline: 2px solid var(--color-crim); outline-offset: 2px; }
+.sdrop__stack { position: relative; display: block; width: 92px; height: 76px; }
+.sdrop__card {
+  position: absolute; display: grid; place-items: center; width: 52px; height: 64px; border-radius: 12px;
+  border: 1px solid var(--color-edge-2); background: var(--color-raised); color: var(--color-mute);
+  box-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.8); transition: transform 260ms cubic-bezier(.2, .8, .2, 1);
+}
+.sdrop__card--sheet { left: 0; top: 8px; transform: rotate(-14deg); color: var(--color-leaf); }
+.sdrop__card--doc { right: 0; top: 8px; transform: rotate(14deg); color: var(--color-danger); }
+.sdrop__card--shot {
+  left: 50%; top: 0; width: 58px; height: 72px; margin-left: -29px; color: #fff; border-color: transparent;
+  background: linear-gradient(150deg, var(--accent-solid), var(--color-crim-deep));
+  box-shadow: 0 14px 28px -12px rgb(var(--accent-glow) / 0.9); animation: sdrop-float 3.2s ease-in-out infinite;
+}
+.sdrop__pad:hover .sdrop__card--sheet, .sdrop--over .sdrop__card--sheet { transform: rotate(-24deg) translate(-8px, 2px); }
+.sdrop__pad:hover .sdrop__card--doc, .sdrop--over .sdrop__card--doc { transform: rotate(24deg) translate(8px, 2px); }
+.sdrop--over .sdrop__card--shot { animation-duration: 0.9s; }
+@keyframes sdrop-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.sdrop__step { background: color-mix(in srgb, var(--color-raised) 70%, transparent); }
+.sdrop__num {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; font-size: 10.5px; font-weight: 900;
+  color: var(--color-ink); background: var(--color-crim); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-crim) 20%, transparent);
+}
+.sdrop__kind {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; min-width: 0; padding: 0.55rem 0.6rem;
+  border-radius: 12px; border: 1px solid var(--color-edge); background: var(--color-raised);
+}
+.sdrop__kind b { font-size: 11px; font-weight: 800; color: var(--color-text); }
+.sdrop__kind small { font-size: 9.5px; line-height: 1.2; color: var(--color-faint); overflow-wrap: anywhere; }
+.sdrop__kind--blue { color: var(--color-sky); border-color: color-mix(in srgb, var(--color-sky) 30%, var(--color-edge)); background: linear-gradient(160deg, color-mix(in srgb, var(--color-sky) 12%, var(--color-raised)), var(--color-raised) 70%); }
+.sdrop__kind--red { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 30%, var(--color-edge)); background: linear-gradient(160deg, color-mix(in srgb, var(--color-danger) 12%, var(--color-raised)), var(--color-raised) 70%); }
+.sdrop__kind--green { color: var(--color-leaf); border-color: color-mix(in srgb, var(--color-leaf) 30%, var(--color-edge)); background: linear-gradient(160deg, color-mix(in srgb, var(--color-leaf) 12%, var(--color-raised)), var(--color-raised) 70%); }
+html[data-effects="calm"] .sdrop__card--shot { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sdrop__card--shot { animation: none; } .sdrop__card { transition: none; } }
 @media (max-width: 639px) {
   .u-stat { gap: 0.6rem; padding: 0.7rem; }
   .u-stat .u-icon { width: 30px; height: 30px; border-radius: 10px; }

@@ -7,7 +7,7 @@
  * animated progress charts and a personal plan. Player-facing copy never talks about how
  * files are read.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from "react";
 import {
   AlertTriangle, CheckCircle2, CircleDashed, Crown, FileSpreadsheet, FileText, Flame, Gauge, Hourglass, Image as ImageIcon, Info,
   Loader2, Pencil, Plus, RotateCcw, Search, Skull, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Upload, X,
@@ -271,7 +271,7 @@ function downloadTemplate() {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Drop screenshots / documents / sheets; your games are picked out and added right away. */
+/** Drop screenshots / documents / sheets; the games are picked out, heroes checked, then added. */
 export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => void; onAddByHand?: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [drag, setDrag] = useState(false);
@@ -331,28 +331,65 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
   }
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); void handle(e.dataTransfer.files); };
-  const busy = jobs.some((j) => j.status === "uploading" || j.status === "reading" || j.status === "saving");
+  const working = jobs.filter((j) => j.status === "uploading" || j.status === "reading" || j.status === "saving").length;
+  const busy = working > 0;
+  // a screenshot copied to the clipboard can be pasted straight in
+  const onPaste = (e: ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length) { e.preventDefault(); void handle(files); }
+  };
 
   return (
     <div className="space-y-3">
       <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
-        className={`utility-drop u-drop relative overflow-hidden rounded-2xl border-2 border-dashed p-5 sm:p-7 text-center transition ${drag ? "u-drop--over" : ""}`}>
+        onPaste={onPaste} tabIndex={-1}
+        className={`utility-drop u-drop sdrop relative overflow-hidden rounded-3xl border p-3 sm:p-4 transition ${drag ? "u-drop--over sdrop--over" : ""}`}>
         <input ref={fileRef} id="solo-upload" type="file" className="sr-only" multiple accept={SOLO_ACCEPT} onChange={(e) => void handle(e.target.files)} />
-        <div className="u-drop__icon relative mx-auto grid h-16 w-16 place-items-center rounded-full mb-3">
-          {busy ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-stretch">
+          <label htmlFor="solo-upload" className={`sdrop__pad group relative flex flex-col items-center justify-center text-center cursor-pointer rounded-2xl border-2 border-dashed px-4 py-6 sm:py-8 ${busy ? "sdrop__pad--busy" : ""}`}>
+            <span className="sdrop__stack" aria-hidden="true">
+              <span className="sdrop__card sdrop__card--sheet"><FileSpreadsheet size={18} /></span>
+              <span className="sdrop__card sdrop__card--doc"><FileText size={18} /></span>
+              <span className="sdrop__card sdrop__card--shot">
+                {busy ? <Loader2 size={22} className="animate-spin" /> : <ImageIcon size={22} />}
+              </span>
+            </span>
+            <span className="text-[17px] sm:text-[19px] font-extrabold mt-4">
+              {drag ? "Let go to add them" : busy ? `Reading ${working} ${working === 1 ? "file" : "files"}…` : "Drop your games here"}
+            </span>
+            <span className="text-[11.5px] text-mute mt-1 max-w-sm">
+              Tap to pick files, drag them in, or paste a screenshot. Up to 10 at once.
+            </span>
+            <span className="btn-primary mt-4 pointer-events-none"><Upload size={14} /> Pick files</span>
+          </label>
+          <div className="flex flex-col gap-2.5 min-w-0">
+            <ol className="sdrop__steps grid grid-cols-3 lg:grid-cols-1 gap-2">
+              {[
+                { icon: Upload, title: "Drop it", sub: "screens, docs or sheets" },
+                { icon: Search, title: "Check heroes", sub: "tap any to fix it" },
+                { icon: CheckCircle2, title: "On your record", sub: "undo any time" },
+              ].map((step, i) => (
+                <li key={step.title} className="sdrop__step flex flex-col lg:flex-row items-center lg:items-center gap-1.5 lg:gap-2.5 rounded-xl border border-edge px-2 py-2.5 lg:px-3 text-center lg:text-left min-w-0">
+                  <span className="sdrop__num shrink-0" aria-hidden="true">{i + 1}</span>
+                  <span className="min-w-0">
+                    <span className="flex items-center justify-center lg:justify-start gap-1 text-[11.5px] font-extrabold"><step.icon size={12} className="shrink-0 hidden sm:block" /> {step.title}</span>
+                    <span className="block text-[10px] text-faint leading-tight">{step.sub}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <div className="grid grid-cols-3 gap-2">
+              <span className="sdrop__kind sdrop__kind--blue"><ImageIcon size={15} /><b>Screenshots</b><small>Match history · scoreboard</small></span>
+              <span className="sdrop__kind sdrop__kind--red"><FileText size={15} /><b>Documents</b><small>PDF · Word · text</small></span>
+              <span className="sdrop__kind sdrop__kind--green"><FileSpreadsheet size={15} /><b>Sheets</b><small>Excel · CSV</small></span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-auto">
+              {onAddByHand && <button type="button" className="btn-ghost !py-1.5 !text-[11px]" onClick={onAddByHand}><Plus size={13} /> Add one by hand</button>}
+              <button type="button" className="btn-ghost !py-1.5 !text-[11px]" onClick={downloadTemplate}><FileSpreadsheet size={13} /> CSV template</button>
+              <span className="text-[10px] text-faint basis-full">Sheets with hero / result / K / D / A columns go straight in.</span>
+            </div>
+          </div>
         </div>
-        <p className="text-[15px] font-extrabold">Drop your games here</p>
-        <p className="text-[11.5px] text-mute mt-1 max-w-md mx-auto">A match-history screen, a post-match scoreboard, a PDF or Word file, or a sheet with lots of games. Check the heroes, then add them to your record.</p>
-        <div className="mt-3.5 flex flex-wrap justify-center gap-2">
-          <label htmlFor="solo-upload" className="btn-primary cursor-pointer inline-flex"><Upload size={14} /> Pick files</label>
-          {onAddByHand && <button type="button" className="btn-ghost" onClick={onAddByHand}><Plus size={14} /> Add one by hand</button>}
-        </div>
-        <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-[10px]">
-          <span className="u-pill u-pill--blue"><ImageIcon size={11} /> Screenshots</span>
-          <span className="u-pill u-pill--red"><FileText size={11} /> PDF · Word · text</span>
-          <span className="u-pill u-pill--green"><FileSpreadsheet size={11} /> Excel · CSV</span>
-        </div>
-        <p className="text-[10.5px] text-faint mt-3">Up to 10 at once. Sheets with hero / result / K / D / A columns work best. <button type="button" className="text-crim underline" onClick={downloadTemplate}>Get the CSV template</button></p>
       </div>
       <ErrorNote error={actionError} />
       {jobs.length > 0 && (

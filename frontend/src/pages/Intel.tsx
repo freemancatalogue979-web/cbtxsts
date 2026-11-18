@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calculator, Crown, RefreshCw, Search, Sparkles, Swords, TrendingUp } from "lucide-react";
+import { Calculator, Crown, RefreshCw, Search, Swords, TrendingUp } from "lucide-react";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, Tabs } from "../components/ui";
 import { heroRecords, intel, intelRaw, pct, rankRecords, recData, digRecords, stripTags, pickStr, pickNum, RANK_DAYS, RANK_TIERS } from "../lib/mlbb";
 import type { AnyRec, IntelHero, RankRecord, Records } from "../lib/mlbb";
@@ -7,6 +7,7 @@ import { HeroImg } from "../components/HeroImg";
 import { navigate } from "../lib/util";
 import type { User } from "../lib/types";
 import { TeamEquipment } from "../components/TeamEquipment";
+import { IntelBuilds } from "../components/IntelBuilds";
 
 type SortField = "win_rate" | "pick_rate" | "ban_rate";
 
@@ -177,54 +178,6 @@ function ReferenceGrid({ path, searchKeys, iconKeys, titleKeys, descKeys }: {
   );
 }
 
-function BuildsTab({ byId }: { byId: Map<number, IntelHero> }) {
-  const [rows, setRows] = useState<{ id: unknown; data: AnyRec }[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    intel<Records<AnyRec>>("academy/recommended", { size: 60, index: 1 })
-      .then((d) => setRows((d.records ?? []).map((r) => ({ id: (r as AnyRec & { id?: unknown }).id, data: r.data ?? {} }))))
-      .catch((e) => setErr(e instanceof Error ? e.message : "Failed"));
-  }, []);
-  if (err) return <ErrorNote error={err} />;
-  if (!rows) return <Spinner label="Loading recommended builds" />;
-  if (rows.length === 0) return <Empty title="No recommended builds published upstream right now" />;
-  return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {rows.map((r, i) => {
-        const inner = (r.data.data ?? undefined) as AnyRec | undefined;
-        const cooperates = Array.isArray(inner?.cooperates) ? inner!.cooperates as AnyRec[] : [];
-        const heroId = pickNum(r.data, "hero_id") ?? pickNum(inner, "hero_id", "heroid");
-        const heroName = heroId ? byId.get(heroId)?.hero?.data?.name : undefined;
-        const title = pickStr(r.data, "title", "name") ?? pickStr(inner, "title", "name") ?? (heroName ? `${heroName} setup` : `Build #${i + 1}`);
-        return (
-          <div key={String(r.id ?? i)} className="card p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              {heroName
-                ? <HeroImg name={heroName} size={34} className="rounded-lg border border-edge" />
-                : <Sparkles size={18} className="text-amber" />}
-              <div>
-                <div className="text-[13px] font-extrabold truncate">{stripTags(title)}</div>
-                {heroName && <div className="text-[10px] text-faint">for {heroName}</div>}
-              </div>
-            </div>
-            {cooperates.length > 0 && (
-              <ul className="space-y-1.5 mt-2">
-                {cooperates.slice(0, 3).map((c, j) => (
-                  <li key={j} className="text-[11.5px] text-mute leading-relaxed">
-                    <span className="text-leaf font-bold">{byId.get(pickNum(c, "cooperate_hero_id") ?? -1)?.hero?.data?.name ?? "Synergy"}: </span>
-                    {stripTags(String(c.cooperate_desc ?? ""))}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="text-[10px] text-faint mt-2">Upstream recommended set — equipment/emblem detail page next phase.</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function ToolsTab() {
   const [matches, setMatches] = useState("500");
   const [wrNow, setWrNow] = useState("52");
@@ -382,7 +335,7 @@ export function IntelPage({ me, parts }: { me: User; parts: string[] }) {
       {tab === "emblems" && <ReferenceGrid path="academy/emblems" searchKeys={["emblemname", "skillname"]} iconKeys={["emblemicon", "skillicon", "icon"]} titleKeys={["emblemname", "skillname", "name"]} descKeys={["skilldesc", "skilldescemblem", "description"]} />}
       {tab === "spells" && <ReferenceGrid path="academy/spells" searchKeys={["skillname", "name"]} iconKeys={["skillicon", "icon"]} titleKeys={["skillname", "name"]} descKeys={["skilldesc", "description"]} />}
       {tab === "ranks" && <ReferenceGrid path="academy/ranks" searchKeys={["bigrank_name", "minrank_name"]} iconKeys={["icon"]} titleKeys={["bigrank_name", "name"]} descKeys={["minrank_name", "description"]} />}
-      {tab === "builds" && <BuildsTab byId={byId} />}
+      {tab === "builds" && <IntelBuilds byId={byId} />}
       {tab === "tools" && <ToolsTab />}
 
       <p className="text-[10.5px] text-faint leading-relaxed border-t border-edge/60 pt-3">

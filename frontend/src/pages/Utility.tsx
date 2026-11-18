@@ -64,7 +64,7 @@ export function UtilityPage({ me, meta, parts = [] }: { me: User; meta: Meta; pa
   const addFor = (hero?: string, laneFor?: string) => setEditing({ game: null, hero, lane: laneFor });
 
   const slides: HeroSlide[] = [
-    { eyebrow: "Your record", title: s?.overall.games ? `${s.overall.games} games on your record` : "Start your record", sub: "Drop a screenshot, a document or a sheet. Your games go straight on." },
+    { eyebrow: "Your record", title: s?.overall.games ? `${s.overall.games} games on your record` : "Start your record", sub: "Drop a screenshot, a document or a sheet. Check the heroes, and they're on." },
     { eyebrow: "What to work on", title: s?.alerts.length ? `${s.alerts.length} things to look at` : "Heroes to fill in", sub: "The heroes you haven't logged, the ones you've stopped playing, and where you're slipping." },
   ];
   if (canFill || canWrite) slides.push({ eyebrow: "Staff", title: "Match data and strategy", sub: "Fill scrim and tournament games from a scoreboard, then generate a playbook note.", steps: ["Choose the match", "Check the sheet", "Confirm"] });
