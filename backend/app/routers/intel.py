@@ -134,6 +134,7 @@ def _rone_request(method: str, path: str, *, payload: dict | None = None,
 
 PLAYER_SOURCE = os.getenv("MLBB_PLAYER_SOURCE", "moonton").strip().lower()  # moonton | rone
 RONE_BACKUP = os.getenv("MLBB_RONE_BACKUP", "1").strip().lower() not in {"0", "false", "no", "off"}
+_SIGN_IN_PATHS = {"user/auth/send-vc", "user/auth/login"}
 _FRIENDLY = {"user/matches": "matches", "user/heroes/frequent": "heroes", "user/stats": "stats", "user/season": "season"}
 
 
@@ -196,16 +197,29 @@ def _account_request(method: str, path: str, *, payload: dict | None = None,
     """Player-account call: Moonton direct first, Rone relay only if Moonton can't be reached."""
     from .. import mlbb_moonton as mt
 
+    signed_in = path not in _SIGN_IN_PATHS
+    if signed_in and path != "user/auth/logout" and mt.token_expired(jwt):
+        return {"code": 401, "msg": mt.EXPIRED_MSG, "relink": True}  # don't even ask; it'll say no
     env = None
+    why = ""
     if PLAYER_SOURCE != "rone":
         try:
             env = _moonton_call(method, path, payload=payload, params=params, jwt=jwt)
         except mt.SourceDown as exc:
-            logger.info("Moonton unreachable for %s (%s)%s", path, exc, "; trying backup" if RONE_BACKUP else "")
+            why = str(exc)
+            logger.warning("Moonton unreachable for %s (%s)%s", path, why, "; trying backup" if RONE_BACKUP else "")
             if not RONE_BACKUP:
-                raise HTTPException(502, "MLBB servers are unreachable right now.") from None
+                raise HTTPException(502, f"Couldn't reach MLBB's servers from this computer: {why}.") from None
     if env is None:
-        env = _rone_call(method, path, payload=payload, params=params, jwt=jwt)
+        try:
+            env = _rone_call(method, path, payload=payload, params=params, jwt=jwt)
+        except HTTPException as exc:
+            if not why:
+                raise
+            raise HTTPException(502, f"Couldn't reach MLBB's servers from this computer ({why}), "
+                                     f"and the backup didn't answer either ({exc.detail})") from None
+    if signed_in and mt.is_auth_error(env):
+        return {"code": env.get("code"), "msg": mt.EXPIRED_MSG, "relink": True}
     kind = _FRIENDLY.get(path)
     return mt.friendly(kind, env) if kind else env
 
@@ -217,7 +231,12 @@ def _envelope_error(env: dict) -> str | None:
 
 
 def _summary(link: IntelLink) -> dict:
+    from .. import mlbb_moonton as mt
+
+    exp = mt.token_expiry(link.jwt or "")
     return {"linked": True, "name": link.display_name, "avatar": link.avatar,
+            "session_expired": mt.token_expired(link.jwt),
+            "session_expires_at": exp,
             "role_id": link.role_id, "zone_id": link.zone_id,
             "level": link.level, "rank_level": link.rank_level,
             "linked_at": link.linked_at.isoformat() if link.linked_at else None}
@@ -291,9 +310,16 @@ def account_connect(body: ConnectIn, user: User = Depends(account_user), db: Ses
     if not jwt:
         raise HTTPException(502, "Upstream login returned no token")
     link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none() or IntelLink(user_id=user.id)
-    # Capture the new profile before replacing the existing link. Old account
-    # snapshots and AI consent must never carry across a relink.
     info = _account_request("GET", "user/info", params={"lang": "en"}, jwt=jwt)
+    if link.id and link.role_id == body.role_id and link.zone_id == body.zone_id:
+        # Same account, fresh sign-in (Moonton's lasts ~a day): keep saved data and sharing choice.
+        link.jwt, link.token, link.linked_at = jwt, str(data.get("token") or ""), utcnow()
+        idata = info.get("data") if isinstance(info.get("data"), dict) and not _envelope_error(info) else {}
+        _cache_profile(link, idata)
+        db.commit()
+        logger.info("MLBB sign-in refreshed for user %s (role %s)", user.id, body.role_id)
+        return {"linked": True, "refreshed": True, "name": link.display_name, "role_id": body.role_id, "zone_id": body.zone_id}
+    # A different account: old account snapshots and AI consent must never carry across.
     _purge_account_data(db, user.id)
     link.role_id = body.role_id
     link.zone_id = body.zone_id
@@ -317,6 +343,40 @@ def account_connect(body: ConnectIn, user: User = Depends(account_user), db: Ses
         db.rollback()  # Linking succeeded even if the optional first snapshot could not be saved.
     logger.info("MLBB account linked for user %s (role %s)", user.id, body.role_id)  # ids only, never tokens
     return {"linked": True, "name": link.display_name, "role_id": body.role_id, "zone_id": body.zone_id}
+
+
+@router.get("/account/check")
+def account_check(user: User = Depends(account_user), db: Session = Depends(get_db)) -> dict:
+    """Plain-language connection test: can this server reach Moonton, is the sign-in alive, is the backup up."""
+    from .. import mlbb_moonton as mt
+
+    out: dict = {"source": "rone" if PLAYER_SOURCE == "rone" else "moonton", "backup_enabled": RONE_BACKUP,
+                 "moonton": mt.server_check()}
+    link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none()
+    if link is None:
+        out["session"] = {"ok": False, "detail": "No MLBB account linked yet"}
+    elif mt.token_expired(link.jwt):
+        out["session"] = {"ok": False, "detail": mt.EXPIRED_MSG, "relink": True}
+    elif out["moonton"]["ok"]:
+        try:
+            env = mt.seasons(link.jwt)
+            ok = env.get("code") == 0
+            out["session"] = {"ok": ok, "detail": "Signed in — stats are readable" if ok else
+                              (mt.EXPIRED_MSG if mt.is_auth_error(env) else str(env.get("msg") or env.get("message") or env.get("code"))),
+                              **({} if ok or not mt.is_auth_error(env) else {"relink": True})}
+        except mt.SourceDown as exc:
+            out["session"] = {"ok": False, "detail": f"Stats server didn't answer: {exc}"}
+    else:
+        out["session"] = {"ok": None, "detail": "Can't test the sign-in until Moonton is reachable"}
+    if RONE_BACKUP or PLAYER_SOURCE == "rone":
+        try:
+            _fetch(f"{BASE_URL}/heroes?size=1")
+            out["backup"] = {"ok": True, "detail": "Backup relay answered"}
+        except urllib.error.HTTPError:
+            out["backup"] = {"ok": True, "detail": "Backup relay answered"}
+        except Exception as exc:  # noqa: BLE001
+            out["backup"] = {"ok": False, "detail": f"Backup relay didn't answer ({exc.__class__.__name__})"}
+    return out
 
 
 @router.get("/account/status")

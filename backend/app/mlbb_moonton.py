@@ -54,11 +54,13 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _headers(jwt: str | None = None, *, form: bool = False, info: bool = False, lang: str = "en") -> dict[str, str]:
+    # Same header set the mobilelegends.com academy page (and mlbb-api-own) sends.
     h = {
         "User-Agent": random.choice(_AGENTS),
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "*/*" if form else "application/json, text/plain, */*",
         "Origin": "https://www.mobilelegends.com",
         "Referer": "https://www.mobilelegends.com/",
+        "DNT": "1",
     }
     if form:
         h["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
@@ -84,9 +86,10 @@ def _send(req: urllib.request.Request) -> dict:
                 return env
         except (ValueError, OSError):
             pass
-        raise SourceDown(f"HTTP {exc.code}") from None
+        where = exc.headers.get("Location") if 300 <= exc.code < 400 and exc.headers else None
+        raise SourceDown(f"HTTP {exc.code}" + (f" (sent to {urllib.parse.urlsplit(where).netloc or where})" if where else "")) from None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise SourceDown(str(getattr(exc, "reason", exc))[:120]) from None
+        raise SourceDown(_why(exc)) from None
     if len(body) > MAX_BYTES:
         raise SourceDown("response too large")
     try:
@@ -96,6 +99,22 @@ def _send(req: urllib.request.Request) -> dict:
     if not isinstance(env, dict) or "code" not in env:
         raise SourceDown("unexpected answer")
     return env
+
+
+def _why(exc: BaseException) -> str:
+    """Plain reason a request never got an answer (shown to the admin, never contains tokens)."""
+    reason = getattr(exc, "reason", exc)
+    text = str(reason)
+    low = text.lower()
+    if "certificate" in low or "ssl" in low:
+        return f"secure connection failed ({text[:90]})"
+    if "getaddrinfo" in low or "name or service" in low or "nodename" in low or "resolve" in low:
+        return "this computer can't look up the MLBB server address (DNS / internet)"
+    if isinstance(reason, TimeoutError) or "timed out" in low:
+        return "timed out waiting for MLBB"
+    if "refused" in low:
+        return "connection refused"
+    return text[:120] or exc.__class__.__name__
 
 
 def _post(path: str, form: dict[str, Any], jwt: str | None = None, *, info: bool = False, lang: str = "en") -> dict:
@@ -331,3 +350,55 @@ def friendly(kind: str, env: dict) -> dict:
     else:
         return env
     return {"code": 0, "msg": env.get("msg") or "ok", "data": body}
+
+
+# ---------------------------------------------------------------------------------------------- #
+# session health
+# ---------------------------------------------------------------------------------------------- #
+def token_expiry(jwt: str) -> int | None:
+    import base64
+
+    try:
+        part = jwt.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+        return int(claims["exp"])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def token_expired(jwt: str | None, slack: int = 60) -> bool:
+    """Moonton web sign-ins last about a day. Unknown expiry counts as still valid."""
+    if not jwt:
+        return True
+    exp = token_expiry(jwt)
+    return exp is not None and exp <= time.time() + slack
+
+
+_AUTH_CODES = {401, 403, 1001, 1002, 1003, 1004, 1005, 10001, 10002, 10003}
+_AUTH_WORDS = ("auth", "token", "jwt", "expire", "login", "sign in", "unauthor", "not logged")
+
+
+def is_auth_error(env: dict) -> bool:
+    if not isinstance(env, dict) or env.get("code") in (0, None):
+        return False
+    text = str(env.get("message") or env.get("msg") or "").lower()
+    try:
+        code = int(env.get("code"))
+    except (TypeError, ValueError):
+        code = None
+    return code in _AUTH_CODES or any(w in text for w in _AUTH_WORDS)
+
+
+EXPIRED_MSG = ("Your MLBB sign-in expired (Moonton only keeps it for about a day). "
+               "Send a new code to your in-game mail to refresh it — your saved data stays.")
+
+
+def server_check() -> dict:
+    """Can this computer talk to Moonton at all? (public call, no account needed)"""
+    start = time.monotonic()
+    try:
+        env = _post("base/getServerConfig", {})
+        return {"ok": env.get("code") == 0, "ms": int((time.monotonic() - start) * 1000),
+                "detail": "Moonton answered" if env.get("code") == 0 else str(env.get("msg") or env.get("message") or env.get("code"))}
+    except SourceDown as exc:
+        return {"ok": False, "ms": int((time.monotonic() - start) * 1000), "detail": str(exc)}
