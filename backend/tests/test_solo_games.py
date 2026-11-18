@@ -199,6 +199,21 @@ class SoloGamesTests(unittest.TestCase):
         self.assertEqual((g["hero"], g["gold"], g["source"], g["played_on"]), ("Ling", 14100, "screenshot", utcnow().date().isoformat()))
         self.assertTrue(any("Damage tab" in c["text"] for c in out["checks"]))
 
+    def test_screenshot_heroes_come_from_the_portrait_matcher(self) -> None:
+        from app import hero_vision
+        url = self.png("test0solo3.png")
+        seen = hero_vision.Match(hero="Ling", score=0.91, margin=0.3, x=0.1, y=0.4, size=0.1, box=(1, 1, 20, 20))
+        help_ = hero_vision.PortraitHelp(image=b"tagged", sheet=b"sheet", matches=[seen], maybes=["Fanny"])
+        reply = {"games": [{"hero": "Ling", "result": "WIN", "kills": 3, "deaths": 1, "assists": 2}]}
+        with patch.dict(os.environ, KEY), patch.object(ai_game_import, "portrait_help", return_value=help_), \
+                patch.object(ai_game_import, "call_vision", return_value=reply) as call:
+            out = api.import_file(api.ImportIn(file_url=url), db=self.db, user=self.me)
+        self.assertEqual(call.call_args.args[3:], (b"tagged", "image/jpeg"))
+        self.assertEqual(call.call_args.kwargs["extra"], [(b"sheet", "image/png")])
+        self.assertIn('"portrait_matches"', call.call_args.args[2])
+        self.assertIn("yellow tag", call.call_args.args[1])
+        self.assertTrue(any(c["text"] == "Recognised from the portraits: Ling." for c in out["checks"]))
+
     def test_screenshot_without_me_says_so(self) -> None:
         url = self.png("test0solo2.png")
         with patch.dict(os.environ, KEY), patch.object(ai_game_import, "call_vision",

@@ -87,6 +87,28 @@ class AIToolsTests(unittest.TestCase):
         return out, call
 
     # ------------------------------------------------------------------ #
+    def test_portrait_matcher_feeds_the_reader_and_flags_missed_heroes(self) -> None:
+        from app import hero_vision
+        sure = hero_vision.Match(hero="Chip", score=0.93, margin=0.3, x=0.1, y=0.3, size=0.09, box=(1, 2, 30, 31))
+        lost = hero_vision.Match(hero="Lukas", score=0.9, margin=0.3, x=0.9, y=0.5, size=0.09, box=(40, 2, 60, 22))
+        help_ = hero_vision.PortraitHelp(image=b"tagged-jpeg", sheet=b"sheet-png", matches=[sure, lost], maybes=[])
+        draft = {"our_picks": {"EXP": "Arlott", "JUNGLE": "Hayabusa", "MID": "Yve", "GOLD": "Karrie", "ROAM": "Khufra"},
+                 "enemy_picks": {"EXP": "Yu Zhong", "JUNGLE": "Ling"}}
+        with patch.object(ai_scoreboard, "portrait_help", return_value=help_) as matcher:
+            out, call = self.read(screenshot(us_on_right=True), draft=draft)
+        # the recorded picks narrow the matcher down
+        self.assertEqual(set(matcher.call_args.args[2]), {"Arlott", "Hayabusa", "Yve", "Karrie", "Khufra", "Yu Zhong", "Ling"})
+        _key, _system, text, image, mime = call.call_args.args
+        self.assertEqual((image, mime), (b"tagged-jpeg", "image/jpeg"))
+        self.assertEqual(call.call_args.kwargs["extra"], [(b"sheet-png", "image/png")])
+        self.assertIn('"portrait_matches"', text)
+        self.assertIn('"hero": "Chip"', text)
+        texts = [c["text"] for c in out["checks"]]
+        self.assertTrue(any("Recognised 2 heroes from their portraits: Chip, Lukas." == t for t in texts), texts)
+        self.assertTrue(any("clearly show Lukas" in t for t in texts), texts)
+        self.assertFalse(any("clearly show Chip" in t for t in texts))
+        self.assertEqual([h["hero"] for h in out["heroes_seen"]], ["Chip", "Lukas"])
+
     def test_reads_the_scoreboard_into_lanes_players_and_team_totals(self) -> None:
         draft = {"our_picks": {"EXP": "Arlott", "JUNGLE": "Hayabusa", "MID": "Yve", "GOLD": "Karrie", "ROAM": "Khufra"}}
         out, call = self.read(screenshot(us_on_right=True), draft=draft)

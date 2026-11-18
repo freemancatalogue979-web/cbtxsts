@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from .config import UPLOAD_DIR
 from .esports_ai import ENDPOINT, MODEL, _NoRedirect, _credential, _reserve
+from .hero_vision import HINT_RULE, portrait_help
 from .models import Hero, User
 from .performance import clean_line, clean_lineup, hero_key
 from .security import LANES
@@ -82,10 +83,10 @@ Rules:
 - K/D/A is usually printed as kills/deaths/assists.
 - "rating" is the per-player score (e.g. 8.6, 11.2). "mvp" is true only for players marked MVP (gold MVP / silver MVP-loss badge).
 - "victory" is true for the team shown as VICTORY / winning, false for DEFEAT, null if not shown.
-- Identify each hero from its portrait. Use the exact spelling from hero_names. If the portrait matches a hero in the game's known picks, prefer that hero.
+{HINT_RULE}
 - Player names: copy as printed, including clan tags or symbols.
 - A draft screen has picks/bans but no K/D/A: put the picked heroes as players with null numbers.
-- Return only the JSON object, no commentary."""
+- Return only the JSON object, no commentary.""".replace("{HINT_RULE}", HINT_RULE)
 
 
 # --------------------------------------------------------------------------- #
@@ -133,16 +134,22 @@ def prepare_image(raw: bytes, mime: str) -> tuple[bytes, str]:
 # --------------------------------------------------------------------------- #
 # provider
 # --------------------------------------------------------------------------- #
-def call_model(api_key: str, system: str, text: str, image: bytes, mime: str) -> dict:
-    """One vision request → the JSON object the model returned. Tests replace this."""
-    data_url = f"data:{mime};base64,{base64.b64encode(image).decode('ascii')}"
+def call_model(api_key: str, system: str, text: str, image: bytes, mime: str,
+               extra: list[tuple[bytes, str]] | None = None) -> dict:
+    """One vision request → the JSON object the model returned. Tests replace this.
+
+    ``extra`` — more pictures after the screenshot (the hero reference sheet)."""
+    def part(data: bytes, kind: str) -> dict:
+        return {"type": "image_url", "image_url": {"url": f"data:{kind};base64,{base64.b64encode(data).decode('ascii')}",
+                                                   "detail": "high"}}
     body = {
         "model": VISION_MODEL,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": [
                 {"type": "text", "text": text},
-                {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+                part(image, mime),
+                *(part(data, kind) for data, kind in (extra or [])),
             ]},
         ],
         "thinking": {"type": "disabled"},
@@ -478,16 +485,42 @@ def read_scoreboard(db: Session, user: User, *, image_url: str, lineup: dict | N
     names = {u.id: (u.ign or u.name) for u in db.scalars(select(User).where(User.active.is_(True))).all()}
     clean = clean_lineup(lineup)
     draft = draft if isinstance(draft, dict) else {}
+    all_heroes = [n for (n,) in db.execute(select(Hero.name).order_by(Hero.name)).all()]
+    picked = [str(h) for side in ("our_picks", "enemy_picks") for h in (draft.get(side) or {}).values() if h] \
+        if all(isinstance(draft.get(s) or {}, dict) for s in ("our_picks", "enemy_picks")) else []
+    help_ = portrait_help(raw_bytes, all_heroes, picked)
+    if help_.image:
+        image, mime = help_.image, "image/jpeg"
     context = {
         "our_team": "9 Clover",
         "opponent": opponent[:120],
         "our_roster_igns": sorted(set(names.values())),
         "who_played_by_lane": {ln: names.get(uid, "") for ln, uid in clean.items()},
         "known_picks": {"ours": draft.get("our_picks") or {}, "theirs": draft.get("enemy_picks") or {}},
-        "hero_names": [n for (n,) in db.execute(select(Hero.name).order_by(Hero.name)).all()],
+        **help_.hints(),
+        "hero_names": all_heroes,
     }
     raw = call_model(api_key, SYSTEM, "Transcribe this screenshot. Game context:\n" + json.dumps(context, ensure_ascii=False),
-                     image, mime)
+                     image, mime, extra=[(help_.sheet, "image/png")] if help_.sheet else None)
     out = interpret(raw, db=db, lineup=clean, draft=draft, result=result)
+    out["checks"] = out.get("checks", []) + portrait_checks(help_, out)
+    out["heroes_seen"] = [m.out() for m in help_.matches]
     out["image_url"] = f"/api/files/{name}"
     return out
+
+
+def portrait_checks(help_, out: dict) -> list[dict]:
+    """Say how the heroes were recognised, and flag any sure portrait the reading left out."""
+    rows = [r for side in ("ours", "enemy") for r in ((out.get("rows") or {}).get(side) or [])]
+    read = {hero_key(r.get("hero")) for r in rows if isinstance(r, dict) and r.get("hero")}
+    sure = [m for m in help_.matches if m.score >= 0.8]
+    missing = [m.hero for m in sure if hero_key(m.hero) not in read]
+    checks: list[dict] = []
+    if help_.matches:
+        checks.append({"tone": "ok", "text": f"Recognised {len(help_.matches)} "
+                       f"{'hero' if len(help_.matches) == 1 else 'heroes'} from their portraits: "
+                       + ", ".join(m.hero for m in help_.matches[:10]) + "."})
+    if rows and missing:
+        checks.append({"tone": "warn", "text": "The portraits clearly show " + ", ".join(missing[:5])
+                       + " but the reading doesn't have " + ("it" if len(missing) == 1 else "them") + " — check the heroes."})
+    return checks

@@ -23,6 +23,7 @@ from .ai_scoreboard import IMAGE_EXT, ReadError, ai_key, prepare_image
 from .ai_scoreboard import call_model as _vision_call
 from .config import UPLOAD_DIR
 from .esports_ai import ENDPOINT, MODEL, _NoRedirect
+from .hero_vision import HINT_RULE, portrait_help
 from .models import User, utcnow
 from .solo_games import clean_game, hero_names
 
@@ -77,8 +78,8 @@ Rules:
 - Copy numbers exactly as printed; "12.3k" means 12300. Use null for anything not shown. Never invent a number, date or hero.
 - K/D/A is printed as kills/deaths/assists. "rating" is the per-game score (e.g. 7.8, 11.2). "mvp" is true only for MVP badges.
 - Victory/VICTORY/win → "WIN", Defeat/DEFEAT/loss → "LOSS".
-- Identify heroes from portraits or names and spell them exactly as in "hero_names".
-- Return only the JSON object."""
+{HINT_RULE}
+- Return only the JSON object.""".replace("{HINT_RULE}", HINT_RULE)
 
 
 # --------------------------------------------------------------------------- #
@@ -202,8 +203,9 @@ def rows_text(rows: list[list[str]]) -> str:
 # --------------------------------------------------------------------------- #
 # the model
 # --------------------------------------------------------------------------- #
-def call_vision(api_key: str, system: str, text: str, image: bytes, mime: str) -> dict:
-    return _vision_call(api_key, system, text, image, mime)
+def call_vision(api_key: str, system: str, text: str, image: bytes, mime: str,
+                extra: list[tuple[bytes, str]] | None = None) -> dict:
+    return _vision_call(api_key, system, text, image, mime, extra=extra)
 
 
 def call_text(api_key: str, system: str, text: str) -> dict:
@@ -266,10 +268,19 @@ def extract(db: Session, user: User, url: str) -> dict:
         prompt = {**_context(user, heroes), "kind": "document", "content": text[:MAX_TEXT]}
         reply = call_text(ai_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False))
     else:
-        image, mime = prepare_image(path.read_bytes(), IMAGE_EXT[ext])
+        raw_bytes = path.read_bytes()
+        image, mime = prepare_image(raw_bytes, IMAGE_EXT[ext])
         used_ai = True
-        prompt = {**_context(user, heroes), "kind": "screenshot"}
-        reply = call_vision(ai_key(db, user), SYSTEM, json.dumps(prompt, ensure_ascii=False), image, mime)
+        api_key = ai_key(db, user)
+        help_ = portrait_help(raw_bytes, sorted(heroes.values()))
+        if help_.image:
+            image, mime = help_.image, "image/jpeg"
+        prompt = {**_context(user, heroes), "kind": "screenshot", **help_.hints()}
+        reply = call_vision(api_key, SYSTEM, json.dumps(prompt, ensure_ascii=False), image, mime,
+                            extra=[(help_.sheet, "image/png")] if help_.sheet else None)
+        if help_.matches:
+            seen = ", ".join(m.hero for m in help_.matches[:10])
+            checks.append({"tone": "ok", "text": f"Recognised from the portraits: {seen}."})
 
     if used_ai:
         raw_games = [g for g in (reply.get("games") or []) if isinstance(g, dict)] if isinstance(reply.get("games"), list) else []

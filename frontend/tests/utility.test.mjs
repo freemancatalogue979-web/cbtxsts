@@ -82,6 +82,30 @@ test("the dashboard carries the big insight charts", () => {
   assert.match(insights, /Who's active/);
 });
 
+test("progress & activity is a light Google-style board with readable text", async () => {
+  const css = await read("../src/index.css");
+  assert.match(insights, /<section className="gl-light [^"]*" aria-label="Progress charts">/);
+  const block = css.slice(css.indexOf(".gl-light {"), css.indexOf("}", css.indexOf(".gl-light {")));
+  const v = (name) => block.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"))?.[1];
+  // Google's blue / red / yellow / green paint the charts; soft blue and light red tint the board
+  assert.deepEqual([v("chart-sky"), v("chart-accent"), v("chart-amber"), v("chart-win")], ["#4285f4", "#ea4335", "#fbbc05", "#34a853"]);
+  assert.equal(v("chart-soft-blue"), "#8ab4f8");
+  assert.equal(v("chart-violet"), "#f28b82");
+  assert.match(block, /color-scheme: light/);
+  assert.match(charts.CHART_COLORS.sky, /^var\(--chart-sky, var\(--color-sky\)\)$/);
+  // every text colour passes WCAG AA on white, the grey chips and the tinted tiles
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const text of ["color-text", "color-mute", "color-faint", "color-crim", "color-danger", "color-leaf", "color-amber"]) {
+    for (const bg of ["#ffffff", v("color-raised"), "#e8f0fe", "#fce8e6", "#e6f4ea", "#fef7e0"]) {
+      assert.ok(ratio(v(text), bg) >= 4.5, `${text} ${v(text)} on ${bg}: ${ratio(v(text), bg).toFixed(2)}`);
+    }
+  }
+});
+
 test("line charts draw animated paths and ship a screen-reader table", () => {
   const html = renderToStaticMarkup(React.createElement(charts.LineChart, {
     caption: "Form", labels: ["a", "b", "c"], series: [{ name: "KDA", color: "red", values: [1, null, 3], area: true }, { name: "Win", color: "green", values: [40, 60, 80], right: true, dashed: true }],

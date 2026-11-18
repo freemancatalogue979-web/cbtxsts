@@ -6,15 +6,18 @@
  */
 import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+/** Chart paint. A section can repaint every chart inside it by setting the --chart-*
+ *  variables (the light dashboard board does); otherwise the theme colours are used. */
 export const CHART_COLORS = {
-  accent: "var(--color-crim)",
-  win: "var(--color-leaf)",
-  loss: "var(--color-danger)",
-  amber: "var(--color-amber)",
-  sky: "var(--color-sky)",
-  violet: "#c4b5fd",
-  pink: "#f9a8d4",
-  teal: "#5eead4",
+  accent: "var(--chart-accent, var(--color-crim))",
+  win: "var(--chart-win, var(--color-leaf))",
+  loss: "var(--chart-loss, var(--color-danger))",
+  amber: "var(--chart-amber, var(--color-amber))",
+  sky: "var(--chart-sky, var(--color-sky))",
+  softBlue: "var(--chart-soft-blue, var(--color-sky))",
+  violet: "var(--chart-violet, #c4b5fd)",
+  pink: "var(--chart-pink, #f9a8d4)",
+  teal: "var(--chart-teal, #5eead4)",
 };
 
 const fmt = (v: number | null | undefined, digits = 1) =>

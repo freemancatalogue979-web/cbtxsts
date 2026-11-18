@@ -2,6 +2,8 @@
  * Dashboard → big animated charts from GET /dashboard/insights: team games and win rate by
  * week, form (KDA / rating) next to your own, who's active (daily line + heatmap), top
  * heroes, the scrim/tournament/solo split, and (staff) every player's trend.
+ * The whole section is a light Google-style board (.gl-light in index.css): soft blue and
+ * light red on white, with Google's blue / red / yellow / green painting the charts.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, Flame, Users } from "lucide-react";
@@ -18,9 +20,11 @@ const dayShort = (iso: string) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 };
 
-function Big({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "good" | "bad" }) {
+type Tint = "blue" | "red" | "green" | "yellow";
+
+function Big({ label, value, hint, tone, tint = "blue" }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: "good" | "bad"; tint?: Tint }) {
   return (
-    <div className="card chart-card p-3.5 min-w-0">
+    <div className={`card chart-card gl-tile-${tint} p-3.5 min-w-0`}>
       <div className="text-[10.5px] text-faint">{label}</div>
       <div className={`text-[28px] sm:text-[32px] font-extrabold tabular-nums leading-tight ${tone === "good" ? "text-leaf" : tone === "bad" ? "text-danger" : ""}`}>{value}</div>
       {hint && <div className="text-[10.5px] text-faint truncate">{hint}</div>}
@@ -50,12 +54,12 @@ export function DashboardInsights() {
   const titleWeek = (i: number) => `Week of ${labels[i]}`;
 
   return (
-    <section className="space-y-4" aria-label="Progress charts">
+    <section className="gl-light space-y-4 p-3 sm:p-5" aria-label="Progress charts">
       <SectionTitle right={
         <span className="flex items-center gap-1" role="group" aria-label="Chart range">
           {RANGES.map((r) => (
             <button key={r} type="button" aria-pressed={weeks === r} onClick={() => setWeeks(r)}
-              className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold border ${weeks === r ? "border-crim/60 bg-crim/10 text-crim" : "border-edge text-faint hover:text-mute"}`}>{r} weeks</button>
+              className={`gl-range px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${weeks === r ? "border-crim/60 bg-crim/10 text-crim" : "border-edge bg-panel text-faint hover:text-mute"}`}>{r} weeks</button>
           ))}
         </span>
       }>
@@ -63,14 +67,14 @@ export function DashboardInsights() {
       </SectionTitle>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Big label="Team games" value={<CountUp value={s.games} />} hint={`${s.scrim_games} scrim · ${s.tournament_games} tournament`} />
-        <Big label="Win rate" value={s.win_rate == null ? "—" : <CountUp value={s.win_rate} digits={0} suffix="%" />} hint={`${s.wins}W · ${s.losses}L`}
+        <Big tint="blue" label="Team games" value={<CountUp value={s.games} />} hint={`${s.scrim_games} scrim · ${s.tournament_games} tournament`} />
+        <Big tint="green" label="Win rate" value={s.win_rate == null ? "—" : <CountUp value={s.win_rate} digits={0} suffix="%" />} hint={`${s.wins}W · ${s.losses}L`}
           tone={s.win_rate == null ? undefined : s.win_rate >= 50 ? "good" : "bad"} />
-        <Big label="Streak" value={s.streak.count ? <span className="inline-flex items-center gap-1"><Flame size={20} aria-hidden="true" /><CountUp value={s.streak.count} />{s.streak.result === "WIN" ? "W" : "L"}</span> : "—"}
+        <Big tint="red" label="Streak" value={s.streak.count ? <span className="inline-flex items-center gap-1"><Flame size={20} aria-hidden="true" /><CountUp value={s.streak.count} />{s.streak.result === "WIN" ? "W" : "L"}</span> : "—"}
           tone={s.streak.result === "WIN" ? "good" : s.streak.result === "LOSS" && s.streak.count >= 2 ? "bad" : undefined} hint="current run" />
-        <Big label="Team KDA" value={s.kda == null ? "—" : <CountUp value={s.kda} digits={2} />} hint={s.rating == null ? "no ratings yet" : `rating ${s.rating}`} />
-        <Big label={staff ? "Solo games (squad)" : "My solo games"} value={<CountUp value={s.solo_games} />} hint="ranked & classic" />
-        <Big label={staff ? "Active this week" : "My active days"} value={staff ? <span><CountUp value={a.active_7} /><span className="text-[15px] text-faint">/{a.members}</span></span> : <CountUp value={a.people[0]?.active_7 ?? 0} />}
+        <Big tint="yellow" label="Team KDA" value={s.kda == null ? "—" : <CountUp value={s.kda} digits={2} />} hint={s.rating == null ? "no ratings yet" : `rating ${s.rating}`} />
+        <Big tint="red" label={staff ? "Solo games (squad)" : "My solo games"} value={<CountUp value={s.solo_games} />} hint="ranked & classic" />
+        <Big tint="blue" label={staff ? "Active this week" : "My active days"} value={staff ? <span><CountUp value={a.active_7} /><span className="text-[15px] text-faint">/{a.members}</span></span> : <CountUp value={a.people[0]?.active_7 ?? 0} />}
           hint={staff ? <span className="inline-flex items-center gap-1.5"><span className="chart-live inline-block h-1.5 w-1.5 rounded-full bg-leaf text-leaf" aria-hidden="true" />{a.active_today} on today</span> : "last 7 days"} />
       </div>
 
@@ -106,17 +110,17 @@ export function DashboardInsights() {
         <div className="card chart-card p-4 sm:p-5 min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
             <div>
-              <h3 className="text-[14px] font-extrabold inline-flex items-center gap-2"><Activity size={15} className="text-leaf" aria-hidden="true" /> {staff ? "Who's active" : "My activity"}</h3>
+              <h3 className="text-[14px] font-extrabold inline-flex items-center gap-2"><Activity size={15} className="text-crim" aria-hidden="true" /> {staff ? "Who's active" : "My activity"}</h3>
               <p className="text-[10.5px] text-faint">{staff ? `Members who opened the app each day · ${a.active_28} of ${a.members} in the last 4 weeks` : "Days you opened the app in the last 4 weeks"}</p>
             </div>
-            {staff && <Legend items={[{ name: "Active members", color: CHART_COLORS.win }]} />}
+            {staff && <Legend items={[{ name: "Active members", color: CHART_COLORS.sky }]} />}
           </div>
           {staff && (
             <LineChart caption="Active members per day" labels={a.days.map(dayShort)} height={180}
-              series={[{ name: "Active", color: CHART_COLORS.win, values: a.daily_active, area: true }]} yFormat={(v) => String(Math.round(v))} />
+              series={[{ name: "Active", color: CHART_COLORS.sky, values: a.daily_active, area: true }]} yFormat={(v) => (Number.isInteger(Math.round(v * 100) / 100) ? String(Math.round(v)) : "")} />
           )}
           <div className={staff ? "mt-4" : ""}>
-            <Heatmap caption={staff ? "Each member's active days" : "Your active days"} columns={a.days.map(dayShort)} color={CHART_COLORS.win}
+            <Heatmap caption={staff ? "Each member's active days" : "Your active days"} columns={a.days.map(dayShort)} color={CHART_COLORS.sky}
               rows={people.slice(0, staff ? 24 : 1).map((p) => ({ label: p.name, cells: p.days, hint: `${p.active_days} days` }))} />
           </div>
           {staff && (
@@ -137,8 +141,8 @@ export function DashboardInsights() {
                 { label: "Solo", value: s.solo_games, color: CHART_COLORS.violet },
               ]} center={<div><div className="text-[20px] font-extrabold tabular-nums"><CountUp value={s.games + s.solo_games} /></div><div className="text-[9.5px] text-faint">games</div></div>} />
               <ul className="space-y-1.5 text-[11px]">
-                <li className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-sky" />Scrims <b className="tabular-nums">{s.scrim_games}</b></li>
-                <li className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber" />Tournament <b className="tabular-nums">{s.tournament_games}</b></li>
+                <li className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS.sky }} />Scrims <b className="tabular-nums">{s.scrim_games}</b></li>
+                <li className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS.amber }} />Tournament <b className="tabular-nums">{s.tournament_games}</b></li>
                 <li className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS.violet }} />Solo <b className="tabular-nums">{s.solo_games}</b></li>
               </ul>
             </div>

@@ -927,6 +927,80 @@ html[data-effects="calm"] .chart-live::before, html[data-effects="calm"] .chart-
 }
 .chart-bar-x-rev { transform-origin: right center; }
 
+/* ---- Light "Google" board (dashboard progress & activity) ------------------------------
+   Only this section is light: white cards on a soft blue-white board with a light-red glow,
+   Google's blue / red / yellow / green for the charts, and darker shades of the same hues
+   for text so every label stays readable on white. Everything inside reads the remapped
+   colour variables, so the charts, chips, tables and readouts switch with no extra classes. */
+.gl-light {
+  --color-ink: #ffffff;
+  --color-panel: #ffffff;
+  --color-raised: #f1f3f4;
+  --color-overlay: #e8eaed;
+  --color-edge: #dadce0;
+  --color-edge-2: #bdc1c6;
+  --color-text: #202124;
+  --color-mute: #3c4043;
+  --color-faint: #5f6368;
+  --color-crim: #1967d2;
+  --color-crim-deep: #185abc;
+  --color-crim-dim: #e8f0fe;
+  --accent-solid: #1a73e8;
+  --accent-glow: 66 133 244;
+  --color-danger: #c5221f;
+  --color-danger-dim: #fce8e6;
+  --color-leaf: #137333;
+  --color-leaf-dim: #e6f4ea;
+  --color-amber: #a15000;
+  --color-sky: #1967d2;
+  /* chart paint: the bright Google colours */
+  --chart-accent: #ea4335;
+  --chart-win: #34a853;
+  --chart-loss: #ea4335;
+  --chart-amber: #fbbc05;
+  --chart-sky: #4285f4;
+  --chart-soft-blue: #8ab4f8;
+  --chart-violet: #f28b82;
+  --chart-pink: #f28b82;
+  --chart-teal: #1a73e8;
+  color-scheme: light;
+  color: var(--color-text);
+  position: relative;
+  isolation: isolate;
+  border: 1px solid #d2e3fc;
+  border-radius: 20px;
+  background:
+    radial-gradient(60% 55% at 100% 0%, rgb(242 139 130 / 0.22), transparent 70%),
+    radial-gradient(55% 60% at 0% 100%, rgb(138 180 248 / 0.28), transparent 70%),
+    linear-gradient(180deg, #f8fbff, #f6f8fc);
+  box-shadow: 0 1px 2px rgb(60 64 67 / 0.25), 0 8px 28px -12px rgb(26 115 232 / 0.35);
+}
+.gl-light .card {
+  background: #ffffff;
+  background-image: none;
+  border-color: #e3e7ee;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgb(60 64 67 / 0.18), 0 1px 3px 1px rgb(60 64 67 / 0.08);
+}
+.gl-light .chart-card::after {
+  background: linear-gradient(110deg, transparent 35%, rgb(138 180 248 / 0.16) 50%, transparent 65%);
+  background-size: 250% 100%;
+}
+.gl-light .chart-glow { filter: drop-shadow(0 2px 3px color-mix(in srgb, currentColor 30%, transparent)); }
+.gl-light .section-pill {
+  --pill-frame: linear-gradient(135deg, #8ab4f8, #f28b82);
+  --pill-fill: #ffffff;
+  --pill-accent: #ea4335;
+  --pill-glow: rgb(234 67 53 / 0.35);
+  color: #174ea6;
+}
+.gl-light .chip { background: #ffffff; }
+.gl-light .gl-tile-blue { background: linear-gradient(160deg, #e8f0fe, #ffffff 70%); }
+.gl-light .gl-tile-red { background: linear-gradient(160deg, #fce8e6, #ffffff 70%); }
+.gl-light .gl-tile-green { background: linear-gradient(160deg, #e6f4ea, #ffffff 70%); }
+.gl-light .gl-tile-yellow { background: linear-gradient(160deg, #fef7e0, #ffffff 70%); }
+.gl-light .gl-range[aria-pressed="true"] { background: #e8f0fe; border-color: #8ab4f8; color: #174ea6; }
+
 /* ---- Utility page ---------------------------------------------------------------------- */
 .step-dot {
   display: inline-grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 9999px; flex-shrink: 0;
