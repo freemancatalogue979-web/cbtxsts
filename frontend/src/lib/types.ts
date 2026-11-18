@@ -431,6 +431,9 @@ export interface SoloGamesPayload { user: { id: number; name: string; lane?: str
 
 export interface SoloCheck { tone: "ok" | "info" | "warn"; text: string }
 
+/** A game read from a file, not saved yet: shown so heroes can be fixed first. */
+export type SoloReadGame = Omit<SoloGame, "id" | "source" | "source_file" | "batch" | "created_at"> & { look?: SheetRowHero };
+
 export interface SoloImport {
   batch: string | null;
   file: string;
@@ -439,6 +442,11 @@ export interface SoloImport {
   added: SoloGame[];
   duplicates: number;
   checks: SoloCheck[];
+  /** true: nothing saved yet — check the games, then confirm */
+  preview?: boolean;
+  games?: SoloReadGame[];
+  /** hero portraits remembered for next time */
+  learned?: number;
 }
 
 export interface SoloCoaching {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
@@ -28,7 +29,7 @@ test("players can pick screenshots, documents and spreadsheets — several at on
   assert.match(solo, /type="file" className="sr-only" multiple accept=\{SOLO_ACCEPT\}/);
   assert.match(solo, /onDrop=\{onDrop\}/);
   assert.match(solo, /api\.upload<\{ url: string \}>\("\/files", form\)/);
-  assert.match(solo, /api\.post<SoloImport>\("\/solo-games\/import", \{ file_url: saved\.url \}\)/);
+  assert.match(solo, /api\.post<SoloImport>\("\/solo-games\/import", \{ file_url: saved\.url, preview: true \}\)/);
   assert.match(solo, /downloadTemplate/);
 });
 
@@ -71,4 +72,27 @@ test("solo games show on the dashboard and the hero pool, apart from team number
 
 test("no all-caps styling sneaks in", () => {
   assert.doesNotMatch(solo, /\b(uppercase|capitalize)\b/);
+});
+
+test("read games wait for a check: heroes can be changed with the hero picker before they're added", () => {
+  assert.match(solo, /function ImportReview\(/);
+  assert.match(solo, /status: read\.preview \? "review" : "done"/);
+  assert.match(solo, /<HeroPickerModal heroes=\{heroes\} value=\{id\} disabled=\{!r\.keep \|\| busy\}/);
+  assert.match(solo, /api\.post<SoloImport>\("\/solo-games\/import\/confirm"/);
+  assert.match(solo, /portraits,/);
+  assert.doesNotMatch(solo.slice(solo.indexOf("function ImportReview(")), /<select/);
+});
+
+test("scrim/tournament evidence review: every hero is editable and checked chips show how sure we are", () => {
+  const ev = readFileSync(new URL("../src/components/MatchEvidence.tsx", import.meta.url), "utf8");
+  const sb = readFileSync(new URL("../src/components/Scoreboard.tsx", import.meta.url), "utf8");
+  const chip = readFileSync(new URL("../src/components/HeroCheck.tsx", import.meta.url), "utf8");
+  assert.match(ev, /function HeroFix\(/);
+  assert.match(ev, /heroControl=\{heroControl\("ours"\)\}/);
+  assert.match(ev, /heroControl=\{heroControl\("enemy"\)\}/);
+  assert.match(ev, /portraits: portraits\(\)/);
+  assert.match(ev, /our_picks: filled\(picks\.ours\), enemy_picks: filled\(picks\.enemy\)/);
+  assert.match(sb, /\{heroControl && <div className="min-w-0">\{heroControl\(lane\)\}<\/div>\}/);
+  for (const k of ["portrait", "corrected", "likely", "unsure", "edited", "confirmed"]) assert.match(chip, new RegExp(`${k}: \\{`));
+  assert.doesNotMatch(chip + ev.slice(ev.indexOf("function HeroFix(")), /\bAI\b/);
 });

@@ -13,10 +13,11 @@ import {
   Loader2, Pencil, Plus, RotateCcw, Search, Skull, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Trophy, Upload, X,
 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Hero, SoloAlert, SoloCheck, SoloCoaching, SoloGame, SoloGamesPayload, SoloGaps, SoloGroup, SoloImport } from "../lib/types";
+import type { Hero, SoloAlert, SoloCheck, SoloCoaching, SoloGame, SoloGamesPayload, SoloGaps, SoloGroup, SoloImport, SoloReadGame } from "../lib/types";
 import { fmtDate, pct } from "../lib/util";
 import { HeroImg } from "./HeroImg";
 import { HeroPickerModal } from "./HeroPicker";
+import { CHECK_CHIP, type HeroCheckState } from "./HeroCheck";
 import { FormDots, kdaText } from "./PlayerPerformance";
 import { BarChart, CHART_COLORS, CountUp, Donut, HBars, Legend, LineChart, weekLabel } from "./Charts";
 import { Empty, ErrorNote, Field, SectionTitle, Spinner } from "./ui";
@@ -193,7 +194,73 @@ export function SoloGameEditor({ game, heroes, lane, hero, onSaved, onCancel }: 
 // --------------------------------------------------------------------------- //
 // add games: upload files
 // --------------------------------------------------------------------------- //
-type Job = { id: string; name: string; status: "uploading" | "reading" | "done" | "error" | "undone"; result?: SoloImport; error?: string };
+type Job = {
+  id: string; name: string; status: "uploading" | "reading" | "review" | "saving" | "done" | "error" | "undone";
+  result?: SoloImport; error?: string; url?: string;
+};
+
+type ReviewRow = { game: SoloReadGame; hero: string; keep: boolean; ok: boolean };
+
+/** Games read from one file, before they go on the record: fix any hero, drop a wrong row, then add. */
+function ImportReview({ job, heroes, onConfirm, onCancel }: {
+  job: Job; heroes: Hero[]; onConfirm: (rows: ReviewRow[]) => Promise<void>; onCancel: () => void;
+}) {
+  const [rows, setRows] = useState<ReviewRow[]>(() => (job.result?.games ?? []).map((g) => ({ game: g, hero: g.hero, keep: true, ok: false })));
+  const [busy, setBusy] = useState(false);
+  const set = (i: number, patch: Partial<ReviewRow>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const kept = rows.filter((r) => r.keep);
+  const unsure = rows.filter((r) => r.keep && r.game.look?.hero_check === "unsure" && r.hero === r.game.hero && !r.ok).length;
+  const [shown, setShown] = useState(12);
+  return (
+    <div className="mt-2.5 space-y-2">
+      <p className="text-[11px] text-mute">
+        Check the heroes before they go on your record. Tap a hero to change it.
+        {unsure > 0 && <span className="text-danger"> {unsure} {unsure === 1 ? "hero needs" : "heroes need"} a look.</span>}
+      </p>
+      <ul className="space-y-1.5">
+        {rows.slice(0, shown).map((r, i) => {
+          const id = heroes.find((h) => h.name.toLowerCase() === r.hero.toLowerCase())?.id ?? "";
+          const edited = r.hero !== r.game.hero;
+          const state: HeroCheckState = edited ? "edited" : r.ok ? "confirmed" : r.game.look?.hero_check ?? "unchecked";
+          const chip = CHECK_CHIP[state];
+          return (
+            <li key={i} className={`rounded-xl border p-2 ${!r.keep ? "opacity-45 border-edge" : state === "unsure" ? "border-danger/50" : "border-edge"}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <HeroPickerModal heroes={heroes} value={id} disabled={!r.keep || busy}
+                    placeholder={r.hero ? `Read as ${r.hero} — pick the hero` : "Pick the hero"}
+                    onChange={(next) => set(i, { hero: heroes.find((h) => h.id === next)?.name ?? r.hero })} />
+                </div>
+                <button type="button" className="btn-ghost !p-1.5 shrink-0" disabled={busy}
+                  aria-label={r.keep ? `Leave out game ${i + 1}` : `Put game ${i + 1} back`} title={r.keep ? "Leave this one out" : "Put it back"}
+                  onClick={() => set(i, { keep: !r.keep })}>{r.keep ? <X size={13} /> : <RotateCcw size={13} />}</button>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                <span className={`chip !text-[9.5px] ${r.game.result === "WIN" ? "border-leaf/40 text-leaf" : r.game.result === "LOSS" ? "border-danger/40 text-danger" : ""}`}>
+                  {r.game.result === "WIN" ? "Win" : r.game.result === "LOSS" ? "Loss" : "No result"}
+                </span>
+                <span className="text-faint tabular-nums">{kdaLine(r.game)}</span>
+                {r.game.played_on && <span className="text-faint">{fmtDate(r.game.played_on)}</span>}
+                {chip && r.keep && (state === "unsure"
+                  ? <button type="button" className={`chip !text-[9.5px] ${chip.cls}`} title={chip.tip} onClick={() => set(i, { ok: true })}>{chip.label}</button>
+                  : <span className={`chip !text-[9.5px] ${chip.cls}`} title={chip.tip}>{chip.label}</span>)}
+                {state === "corrected" && r.game.look?.hero_was && <span className="text-faint">read as {r.game.look.hero_was}</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {rows.length > shown && <button type="button" className="btn-ghost !text-[10.5px] w-full" onClick={() => setShown((s) => s + 24)}>Show {Math.min(24, rows.length - shown)} more</button>}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button type="button" className="btn-primary" disabled={busy || !kept.length}
+          onClick={async () => { setBusy(true); try { await onConfirm(rows); } finally { setBusy(false); } }}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Add {kept.length} {kept.length === 1 ? "game" : "games"}
+        </button>
+        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Don&apos;t add</button>
+      </div>
+    </div>
+  );
+}
 
 function downloadTemplate() {
   const example = [todayIso(), "Ranked", "Ling", "JUNGLE", "WIN", "9", "2", "7", "11.2", "13200", "98000", "41000", "6200", "14:32", "yes", ""];
@@ -209,6 +276,7 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
   const [jobs, setJobs] = useState<Job[]>([]);
   const [drag, setDrag] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
+  const heroes = useHeroes();
   const fileRef = useRef<HTMLInputElement>(null);
   const update = (id: string, patch: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
 
@@ -224,14 +292,33 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
         form.append("file", file);
         const saved = await api.upload<{ url: string }>("/files", form);
         update(id, { status: "reading" });
-        const read = await api.post<SoloImport>("/solo-games/import", { file_url: saved.url });
-        update(id, { status: "done", result: read });
+        const read = await api.post<SoloImport>("/solo-games/import", { file_url: saved.url, preview: true });
+        update(id, { status: read.preview ? "review" : "done", result: read, url: saved.url });
       } catch (e) {
         update(id, { status: "error", error: errText(e) });
       }
     }
     if (fileRef.current) fileRef.current.value = "";
     onChanged();
+  }
+
+  async function confirmImport(job: Job, rows: ReviewRow[]) {
+    if (!job.url || !job.result) return;
+    const strip = ({ look: _look, ...g }: SoloReadGame) => g;
+    const kept = rows.filter((r) => r.keep);
+    // heroes someone changed or OK'd at a portrait: remembered so the next upload gets them right
+    const portraits = kept.filter((r) => r.game.look?.portrait?.length === 4 && r.hero && (r.hero !== r.game.hero || r.ok))
+      .map((r) => ({ hero: r.hero, box: r.game.look!.portrait! })).slice(0, 20);
+    try {
+      const out = await api.post<SoloImport>("/solo-games/import/confirm", {
+        file_url: job.url, source: job.result.source, portraits,
+        games: kept.map((r) => ({ ...strip(r.game), hero: r.hero })),
+      });
+      const learned = out.learned ?? 0;
+      update(job.id, { status: "done", result: { ...out, checks: [...out.checks,
+        ...(learned > 0 ? [{ tone: "ok" as const, text: `Remembered ${learned} hero ${learned === 1 ? "portrait" : "portraits"} for next time.` }] : [])] } });
+      onChanged();
+    } catch (e) { setActionError(e); }
   }
 
   async function undo(job: Job) {
@@ -244,7 +331,7 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
   }
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); void handle(e.dataTransfer.files); };
-  const busy = jobs.some((j) => j.status === "uploading" || j.status === "reading");
+  const busy = jobs.some((j) => j.status === "uploading" || j.status === "reading" || j.status === "saving");
 
   return (
     <div className="space-y-3">
@@ -255,7 +342,7 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
           {busy ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
         </div>
         <p className="text-[15px] font-extrabold">Drop your games here</p>
-        <p className="text-[11.5px] text-mute mt-1 max-w-md mx-auto">A match-history screen, a post-match scoreboard, a PDF or Word file, or a sheet with lots of games. Your games go straight onto your record.</p>
+        <p className="text-[11.5px] text-mute mt-1 max-w-md mx-auto">A match-history screen, a post-match scoreboard, a PDF or Word file, or a sheet with lots of games. Check the heroes, then add them to your record.</p>
         <div className="mt-3.5 flex flex-wrap justify-center gap-2">
           <label htmlFor="solo-upload" className="btn-primary cursor-pointer inline-flex"><Upload size={14} /> Pick files</label>
           {onAddByHand && <button type="button" className="btn-ghost" onClick={onAddByHand}><Plus size={14} /> Add one by hand</button>}
@@ -276,6 +363,7 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
                 <span className="text-[12px] font-bold truncate max-w-[60%]">{j.name}</span>
                 <span className="text-[10.5px] text-faint">
                   {j.status === "uploading" ? "Uploading…" : j.status === "reading" ? "Reading your games…" : j.status === "error" ? "Couldn't read it"
+                    : j.status === "review" ? `${j.result?.games?.length ?? 0} found · not added yet` : j.status === "saving" ? "Adding…"
                     : j.status === "undone" ? "Taken back (in Trash)" : `${j.result?.added.length ?? 0} added${j.result?.duplicates ? ` · ${j.result.duplicates} already there` : ""}${j.result?.read_directly ? " · read straight from the sheet" : ""}`}
                 </span>
                 {(j.status === "uploading" || j.status === "reading") && <Loader2 size={13} className="animate-spin text-crim" />}
@@ -284,6 +372,13 @@ export function RecordUploader({ onChanged, onAddByHand }: { onChanged: () => vo
                 )}
               </div>
               {j.error && <p className="text-[11px] text-danger mt-1.5">{j.error}</p>}
+              {j.status === "review" && j.result && (
+                <>
+                  {j.result.checks.length > 0 && <ul className="mt-2 space-y-1">{j.result.checks.filter((c) => c.tone !== "ok").map((c, i) => <CheckLine key={i} check={c} />)}</ul>}
+                  <ImportReview job={j} heroes={heroes} onConfirm={(rows) => confirmImport(j, rows)}
+                    onCancel={() => setJobs((js) => js.filter((x) => x.id !== j.id))} />
+                </>
+              )}
               {j.status === "done" && j.result && (
                 <>
                   {j.result.added.length > 0 && (
