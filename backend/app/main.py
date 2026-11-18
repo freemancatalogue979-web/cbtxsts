@@ -40,7 +40,7 @@ from .routers import (
     users,
 )
 from .seed import seed_if_empty
-from . import hero_sync  # daily hero refresh; also registers its state table for create_all
+from . import frontend_static, hero_sync  # daily hero refresh; also registers its state table for create_all
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("clover")
@@ -137,3 +137,8 @@ def shutdown() -> None:
     from .aerena_service import stop_worker
     stop_worker()
     hero_sync.stop_worker()
+
+
+# Production on one port: with CLOVER_SERVE_FRONTEND=1 this process also serves the built
+# web app (frontend/dist). Registered last, so every API route above always wins.
+frontend_static.maybe_mount(app)
