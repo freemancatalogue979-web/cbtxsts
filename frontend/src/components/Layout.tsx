@@ -25,6 +25,8 @@ const ROLE_TONE: Record<string, string> = {
   analyst: "text-sky border-sky/40",
   player: "text-mute border-edge-2",
 };
+/** Role colour as a small status dot (the mobile top-bar name pill). */
+const ROLE_DOT: Record<string, string> = { admin: "bg-crim", captain: "bg-amber", coach: "bg-leaf", analyst: "bg-sky", player: "bg-mute" };
 
 function deviceStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
@@ -366,6 +368,7 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
   const [unread, setUnread] = useState(0);
   const [collapsed, setCollapsed] = useState(() => readNavCollapsed(deviceStorage()));
   const [palette, setPalette] = useState(false);
+  const [meOpen, setMeOpen] = useState(false);
   // Phones can tuck the bottom quick bar away for more room; remembered on this device.
   const [quickHidden, setQuickHidden] = useState(() => { try { return window.localStorage.getItem(QUICK_BAR_KEY) === "hidden"; } catch { return false; } });
   useEffect(() => { try { window.localStorage.setItem(QUICK_BAR_KEY, quickHidden ? "hidden" : "shown"); } catch { /* storage blocked */ } }, [quickHidden]);
@@ -448,9 +451,11 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
           <span className="shrink-0"><Wordmark compact /></span>
           <div className="flex min-w-0 items-center gap-2">
             {/* A long name truncates instead of running into the wordmark. */}
-            <span className={`chip min-w-0 overflow-hidden !text-[9px] ${ROLE_TONE[user.role] || ""}`} title={user.ign || user.role_label}>
-              <span className="truncate"><Ign text={user.ign || user.role_label} /></span>
-            </span>
+            <button type="button" onClick={() => setMeOpen(true)} className="me-pill"
+              title={`${user.ign || user.name} · ${user.role_label}`} aria-label={`My profile — ${user.ign || user.name}`}>
+              <span className="me-pill__face"><AvatarImg user={user} size={24} className="!rounded-full !border-0" /><i className={`me-pill__dot ${ROLE_DOT[user.role] || "bg-faint"}`} aria-hidden="true" /></span>
+              <span className="me-pill__name"><Ign text={user.ign || user.name} /></span>
+            </button>
             <button className="btn-ghost !px-2 !py-1.5" onClick={openPalette} aria-label="Jump to a page">
               <Search size={17} />
             </button>
@@ -460,6 +465,8 @@ export function Layout({ user, onLogout, onUserUpdate, theme, onThemeChange, sec
           </div>
         </div>
       </header>
+
+      {meOpen && <ProfileModal user={user} theme={theme} onThemeChange={onThemeChange} onClose={() => setMeOpen(false)} onSaved={(u) => { onUserUpdate(u); setMeOpen(false); }} />}
 
       {/* Mobile drawer */}
       {mobileNav && (

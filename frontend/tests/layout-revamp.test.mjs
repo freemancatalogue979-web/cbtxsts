@@ -259,8 +259,10 @@ test("the mobile top bar never lets the name badge cover the wordmark", async ()
   assert.match(bar, /justify-between gap-3/);
   assert.match(bar, /<span className="shrink-0"><Wordmark compact \/><\/span>/);
   assert.match(bar, /className="flex min-w-0 items-center gap-2"/);
-  assert.match(bar, /chip min-w-0 overflow-hidden/);
-  assert.match(bar, /<span className="truncate"><Ign/);
+  assert.match(bar, /className="me-pill"/);
+  assert.match(bar, /<span className="me-pill__name"><Ign text=\{user\.ign \|\| user\.name\} \/><\/span>/);
+  assert.match(bar, /onClick=\{\(\) => setMeOpen\(true\)\}/);
+  assert.match(css, /\.me-pill__name \{\n  min-width: 0; overflow: hidden; text-overflow: ellipsis;/);
 });
 
 test("in-game names show exactly as the game gave them: no Courier, no italic, no case changes", async () => {
