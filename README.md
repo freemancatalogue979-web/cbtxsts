@@ -112,9 +112,29 @@ BRANCH="$B" DOMAIN=hub.example.com bash setup-server.sh   # DOMAIN optional: add
 Quick local check of the production build (no nginx): `cd frontend && npm run build && npm run preview`
 serves `dist` on :9009 and proxies `/api` to the backend on :9000. Fine for a test; use nginx for real traffic.
 
+### Windows: `start-arena.bat`
+
 ```bat
-start-arena.bat             :: Windows — opens two terminals and your browser
+start-arena.bat             :: PRODUCTION (default): builds the app, one server on :9009
+start-arena.bat share       :: production + a public https link (Cloudflare quick tunnel)
+start-arena.bat update      :: git pull first, then start (close the server window before this)
+start-arena.bat dev         :: DEVELOPMENT: API :9000 with auto-reload + Vite dev server :9009
 ```
+
+Production mode runs `npm run build`, then starts **one** window ("9 CLOVER :9009 (production)")
+in which uvicorn serves both the built app (`frontend/dist`) and the API, no reload, no Vite.
+Open `http://localhost:9009`. Phones on the same Wi-Fi use `http://<this PC's IP>:9009`
+(allow Python through Windows Firewall when asked). API docs: `/docs`. Closing that window stops it.
+
+Before starting, `backend/scripts/prod_env.py` makes sure `backend\.env` has a private
+`CLOVER_SECRET_KEY` (an old `CBT_SECRET_KEY` is reused). A **brand-new database** gets a random
+admin password, shown once in the launcher window and saved in `backend\.env`. An existing
+database keeps its accounts; you get a warning if an admin still uses `clover2026`.
+
+The same one-port mode works anywhere: `CLOVER_SERVE_FRONTEND=1` (optional
+`CLOVER_FRONTEND_DIST=<folder>`) makes the backend serve the build itself. Unknown `/api/...`
+paths still return JSON 404s; every other unknown path gets the app (client-side routes).
+Good for a small team on one PC; for a public server the nginx setup above is sturdier.
 
 Or by hand:
 

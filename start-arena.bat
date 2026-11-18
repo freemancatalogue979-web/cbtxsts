@@ -103,7 +103,7 @@ REM One process serves the built app and the API (backend\app\frontend_static.py
 REM The new window inherits this setting.
 set "CLOVER_SERVE_FRONTEND=1"
 echo [*] Starting 9 Clover ^(production^) on http://localhost:9009 ...
-start "9 CLOVER :9009 (production)" cmd /k "cd /d %ROOT%backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 9009 --workers 1 --proxy-headers"
+start "9 CLOVER :9009 (production)" /d "%ROOT%backend" cmd /k ".venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 9009 --workers 1 --proxy-headers"
 
 REM Wait until it answers (up to ~40 s) before opening the browser.
 set /a TRIES=0
@@ -128,6 +128,9 @@ echo.
 echo   Closing the "9 CLOVER :9009" window stops the server.
 echo.
 start "" http://localhost:9009
+REM Double-clicked windows close at the end - keep this one so a new admin password stays readable.
+echo   Press any key to close this launcher window ^(the server keeps running^).
+pause >nul
 endlocal
 exit /b 0
 
@@ -136,12 +139,12 @@ REM ======================= DEVELOPMENT =======================
 REM Module form (python -m uvicorn) - immune to broken exe launchers.
 echo [*] DEVELOPMENT mode: auto-reload, not for real use.
 echo [*] Starting the API on http://localhost:9000 ...
-start "9 CLOVER API :9000" cmd /k "cd /d %ROOT%backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir app"
+start "9 CLOVER API :9000" /d "%ROOT%backend" cmd /k ".venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir app"
 
 timeout /t 3 /nobreak >nul
 
 echo [*] Starting the web app on http://localhost:9009 ...
-start "9 CLOVER Web :9009" cmd /k "cd /d %ROOT%frontend && npx vite --host 0.0.0.0 --port 9009"
+start "9 CLOVER Web :9009" /d "%ROOT%frontend" cmd /k "npx vite --host 0.0.0.0 --port 9009"
 
 if "%SHARE%"=="1" call :share
 
