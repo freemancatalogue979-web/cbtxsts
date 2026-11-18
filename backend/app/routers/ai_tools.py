@@ -35,6 +35,7 @@ class StrategyAIIn(BaseModel):
     topic: str = Field(default="", max_length=600)
     category: str = Field(default="", max_length=40)
     opponent: str = Field(default="", max_length=120)
+    document_url: str = Field(default="", max_length=300)
 
 
 @router.post("/scoreboard")
@@ -52,6 +53,6 @@ def strategy(payload: StrategyAIIn, db: Session = Depends(get_db), user=Depends(
     require(can.manage_strategy(user), "write strategies")
     try:
         return write_strategy(db, user, topic=payload.topic, category=payload.category.upper(),
-                              opponent=payload.opponent)
+                              opponent=payload.opponent, document_url=payload.document_url)
     except ReadError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc

@@ -229,6 +229,24 @@ class AIToolsTests(unittest.TestCase):
             strategy(StrategyAIIn(topic="x"), db=self.db, user=self.p["TOBI"])
         self.assertEqual(err.exception.status_code, 403)
 
+    def test_strategy_can_be_written_from_an_uploaded_document(self) -> None:
+        doc = UPLOAD_DIR / "test0strategydoc.md"
+        doc.write_text("Our turtle plan: rotate roam at 1:45, jungle takes lord at 8:00.", encoding="utf-8")
+        self.addCleanup(lambda: doc.unlink(missing_ok=True))
+        reply = {"title": "Turtle setup", "category": "objective", "tags": [], "body": "## Plan\nRotate at 1:45."}
+        with patch.dict(os.environ, KEY), patch.object(ai_strategy_writer, "call_model", return_value=reply) as call:
+            out = strategy(StrategyAIIn(document_url=f"/api/files/{doc.name}"), db=self.db, user=self.coach)
+        sent = call.call_args.args[2]
+        self.assertIn('"reference_document"', sent)
+        self.assertIn("rotate roam at 1:45", sent)
+        self.assertEqual(out["title"], "Turtle setup")
+        img = UPLOAD_DIR / "test0strategypic.png"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n")
+        self.addCleanup(lambda: img.unlink(missing_ok=True))
+        with patch.dict(os.environ, KEY), self.assertRaises(HTTPException) as err:
+            strategy(StrategyAIIn(document_url=f"/api/files/{img.name}"), db=self.db, user=self.coach)
+        self.assertEqual(err.exception.status_code, 422)
+
     def test_ai_chat_sees_own_games_and_team_records_only_when_asked_about_the_team(self) -> None:
         s = Scrim(number=1, opponent="Onyx", scrim_date=date(2026, 10, 1), lineup=dumps(self.lineup),
                   status="played", result="WIN", score_us=1)

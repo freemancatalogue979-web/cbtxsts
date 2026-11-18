@@ -289,6 +289,19 @@ class ScrimGame(Base):
     scrim: Mapped[Scrim] = relationship(back_populates="games")
 
 
+class UserActivity(Base):
+    """One row per member per day they used the hub — powers the activity charts."""
+    __tablename__ = "user_activity"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_user_activity_day"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    first_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class SoloGame(Base):
     """A member's own game (ranked/classic/brawl…), added by hand or read by the AI
     from a screenshot, document or spreadsheet. Counts straight away for that member."""

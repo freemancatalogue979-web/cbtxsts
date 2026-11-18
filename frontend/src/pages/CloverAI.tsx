@@ -1,7 +1,7 @@
 import {
-  ArrowDownRight, BookOpenText, BrainCircuit, Check, ChevronRight, CircleHelp, Download, ExternalLink, GraduationCap,
+  ArrowDownRight, BookOpenText, BrainCircuit, Check, ChevronRight, CircleHelp, Download, ExternalLink,
   History, Lightbulb, Loader2, LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelTopClose, PanelTopOpen,
-  Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, Upload, X,
+  Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, ApiError, qs } from "../lib/api";
@@ -19,11 +19,8 @@ import { AIKnowledge } from "../components/AIKnowledge";
 import { AIContributions, AIReviewQueue } from "../components/AIContributions";
 import { AIActionHistory, AIProposalCard } from "../components/AIProposalCard";
 import { AIMarkdown, AIVisuals } from "../components/AIVisuals";
-import { AILearning, AIUtility } from "../components/SoloGames";
 
-type Tab = "chat" | "utility" | "learning" | "knowledge" | "contribute" | "review";
-/** Deep links: #/ai/utility and #/ai/learning open those tabs. */
-const LINKED_TABS: readonly Tab[] = ["utility", "learning"];
+type Tab = "chat" | "knowledge" | "contribute" | "review";
 const SUGGESTIONS = [
   { label: "Review my hero pool", hint: "Find a focused practice plan", icon: Swords, prompt: "Review my recorded hero pool and suggest a practical practice plan. Tell me if I need to enable access to my pool." },
   { label: "Improve my rotations", hint: "Build better map habits", icon: Lightbulb, prompt: "How can I improve my early-game rotations? Give me a simple MLBB practice checklist." },
@@ -186,13 +183,10 @@ function MessageBubble({ message, conversationId, onFeedback, onManageMemory, on
   </div>;
 }
 
-export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout, view }: {
+export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   me: User; desktopLayout: AIWorkspaceLayout; onToggleDesktopLayout: (key: keyof AIWorkspaceLayout) => void;
-  /** #/ai/<view> — opens the Utility AI or Learning utility tab. */
-  view?: string;
 }) {
-  const [tab, setTab] = useState<Tab>(() => (LINKED_TABS.includes(view as Tab) ? view as Tab : "chat"));
-  useEffect(() => { if (LINKED_TABS.includes(view as Tab)) setTab(view as Tab); }, [view]);
+  const [tab, setTab] = useState<Tab>("chat");
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [settings, setSettings] = useState<AISettings | null>(null);
   const [context, setContext] = useState<AIContext | null>(null);
@@ -512,9 +506,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout, view }:
   }, []);
 
   const tabs: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
-    { id: "chat", label: "Chat", icon: MessageSquare },
-    { id: "utility", label: "Utility AI", icon: Upload }, { id: "learning", label: "Learning utility", icon: GraduationCap },
-    { id: "knowledge", label: "Knowledge", icon: BookOpenText },
+    { id: "chat", label: "Chat", icon: MessageSquare }, { id: "knowledge", label: "Knowledge", icon: BookOpenText },
     { id: "contribute", label: "Contribute", icon: Lightbulb }, ...(me.role === "admin" ? [{ id: "review" as const, label: "Review", icon: ShieldCheck }] : []),
   ];
   const searchActive = filter.trim().length >= 2;
@@ -654,9 +646,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout, view }:
         </div>
       </section>
     </div> : <div className="rounded-xl border border-edge bg-panel p-4 sm:p-6 min-h-[400px]">
-      {tab === "utility" ? <AIUtility me={me} onOpenLearning={() => setTab("learning")} />
-        : tab === "learning" ? <AILearning me={me} onOpenUtility={() => setTab("utility")} />
-        : tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <div className="space-y-5"><AIActionHistory /><AIReviewQueue /></div>}
+      {tab === "knowledge" ? <AIKnowledge canModerate={me.role === "admin"} /> : tab === "contribute" ? <AIContributions /> : <div className="space-y-5"><AIActionHistory /><AIReviewQueue /></div>}
     </div>}
 
     {showMatchPicker && <Modal title="Attach esports matches" onClose={() => setShowMatchPicker(false)} wide>

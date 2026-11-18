@@ -64,6 +64,8 @@ def get_current_user(
     user = db.get(User, payload.subject)
     if user is None or not user.active:
         raise HTTPException(status_code=401, detail="Account unavailable")
+    from .activity import touch  # late: keeps deps importable on its own
+    touch(db, user)
     return user
 
 

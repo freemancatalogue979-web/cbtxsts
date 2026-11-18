@@ -26,7 +26,7 @@ from ..ai_scoreboard import ReadError
 from ..ai_solo_coach import coach as ai_coach
 from ..deps import get_current_user, get_db
 from ..models import SoloGame, User
-from ..solo_games import clean_game, fingerprint, game_out, hero_names, solo_stats, user_games
+from ..solo_games import clean_game, fingerprint, game_out, hero_gaps, hero_names, solo_stats, user_games
 from ..trash import send_to_trash
 
 router = APIRouter(prefix="/solo-games", tags=["solo-games"])
@@ -65,8 +65,18 @@ class CoachIn(BaseModel):
     focus: str = Field(default="", max_length=300)
 
 
+# Members see plain words: what went wrong and what to do, nothing about how files are read.
+SERVICE_DOWN = "Reading files isn't available right now. Add your games by hand, or try again later."
+SERVICE_BUSY = "Couldn't read that file right now. Try again in a minute, or add the games by hand."
+
+
 def _ai_error(exc: ReadError) -> HTTPException:
-    return HTTPException(status_code=exc.status, detail=str(exc))
+    if exc.status == 503:
+        return HTTPException(status_code=503, detail=SERVICE_DOWN)
+    detail = str(exc)
+    if exc.status >= 500 and "AI" in detail:
+        detail = SERVICE_BUSY
+    return HTTPException(status_code=exc.status, detail=detail)
 
 
 def _owned(db: Session, game_id: int, user: User) -> SoloGame:
@@ -79,8 +89,9 @@ def _owned(db: Session, game_id: int, user: User) -> SoloGame:
 def _payload(user_id: int, db: Session) -> dict:
     games = user_games(db, user_id)
     owner = db.get(User, user_id)
-    return {"user": {"id": owner.id, "name": owner.ign or owner.name} if owner else None,
-            "games": [game_out(g) for g in games[:LIST_LIMIT]], "total": len(games), "stats": solo_stats(games)}
+    return {"user": {"id": owner.id, "name": owner.ign or owner.name, "lane": owner.main_role} if owner else None,
+            "games": [game_out(g) for g in games[:LIST_LIMIT]], "total": len(games), "stats": solo_stats(games),
+            "gaps": hero_gaps(db, owner, games) if owner else {"no_data": [], "not_playing": [], "lane_meta": []}}
 
 
 @router.get("")
@@ -158,7 +169,8 @@ def import_file(payload: ImportIn, db: Session = Depends(get_db), user: User = D
     if duplicates:
         checks.append({"tone": "info", "text": f"{duplicates} {'game was' if duplicates == 1 else 'games were'} already "
                                                "in your record and skipped."})
-    return {"batch": batch if added else None, "file": read["file"], "source": read["source"], "used_ai": read["used_ai"],
+    return {"batch": batch if added else None, "file": read["file"], "source": read["source"],
+            "read_directly": read["read_directly"],
             "added": [game_out(r) for r in added], "duplicates": duplicates, "checks": checks}
 
 

@@ -1,5 +1,5 @@
 import {
-  Archive, Bell, BookOpenText, BrainCircuit, CalendarDays, ClipboardList, Crosshair, Dumbbell,
+  Archive, Bell, BookOpenText, BrainCircuit, CalendarDays, ChartNoAxesCombined, ClipboardList, Crosshair, Dumbbell,
   Gamepad2, Home, Layers, Map, Radar, RadioTower, Settings2, ShieldBan, Swords, Trash2, Trophy, Users,
   type LucideIcon,
 } from "lucide-react";
@@ -36,6 +36,7 @@ export const NAV_GROUPS: { id: NavGroupId; label: string }[] = [
 export const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", short: "Home", icon: Home, group: "command", blurb: "Team pulse, next session and form", keywords: "home hub overview" },
   { id: "ai", label: "9 Clover AI", short: "AI", icon: BrainCircuit, group: "command", blurb: "Ask about drafts, matchups and esports", keywords: "assistant chat coach" },
+  { id: "utility", label: "Utility", short: "Utility", icon: ChartNoAxesCombined, group: "command", blurb: "Add your games, see your progress and what to work on", keywords: "upload screenshot record stats progress my games match data evidence scoreboard strategy generate" },
   { id: "notifications", label: "Notifications", short: "Alerts", icon: Bell, group: "command", blurb: "Everything that needs your attention", keywords: "inbox alerts" },
   { id: "events", label: "Calendar", short: "Calendar", icon: CalendarDays, group: "command", blurb: "Scrims, training and tournaments by date", keywords: "events schedule" },
   { id: "trash", label: "Trash", short: "Trash", icon: Trash2, group: "command", blurb: "Everything deleted waits here to be restored", keywords: "deleted recycle bin restore undo recover" },
@@ -61,7 +62,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /** Bottom bar on phones: the six most used areas. */
-export const MOBILE_QUICK: SectionId[] = ["dashboard", "ai", "training", "scrims", "tournaments", "esports"];
+export const MOBILE_QUICK: SectionId[] = ["dashboard", "ai", "utility", "training", "scrims", "tournaments"];
 
 export function navItem(id: string | undefined | null): NavItem | undefined {
   return NAV_ITEMS.find((item) => item.id === id);

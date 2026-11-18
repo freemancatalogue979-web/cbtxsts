@@ -136,17 +136,48 @@ def call_model(api_key: str, system: str, text: str) -> dict:
     return parsed
 
 
-def write_strategy(db: Session, user: User, *, topic: str, category: str = "", opponent: str = "") -> dict:
+MAX_DOC_CHARS = 14000
+
+
+def document_text(url: str) -> tuple[str, str]:
+    """An uploaded PDF / Word / text / sheet → (file name, its text) to write the note from."""
+    from .ai_game_import import docx_text, pdf_text, resolve, rows_text, sheet_rows, _decode
+    path, name, ext = resolve(url)
+    if ext in ("png", "jpg", "jpeg", "webp", "gif"):
+        raise ReadError("For a strategy, upload a document (PDF, Word, text) or a spreadsheet — not a picture.")
+    if ext == "pdf":
+        text = pdf_text(path)
+    elif ext == "docx":
+        text = docx_text(path)
+    elif ext in ("csv", "tsv", "xlsx"):
+        text = rows_text(sheet_rows(path, ext))
+    else:
+        text = _decode(path.read_bytes())
+    text = text.strip()
+    if len(text) < 20:
+        raise ReadError("That document looks empty. Upload one with some text in it.")
+    return name, text[:MAX_DOC_CHARS]
+
+
+def write_strategy(db: Session, user: User, *, topic: str, category: str = "", opponent: str = "",
+                   document_url: str = "") -> dict:
     topic = topic.strip()[:600]
-    if not topic and not opponent.strip():
+    doc = document_text(document_url) if document_url.strip() else None
+    if not topic and not opponent.strip() and not doc:
         raise ReadError("Say what the strategy is about (or pick an opponent).")
     api_key = ai_key(db, user)
     request = {
-        "topic": topic or f"Game plan against {opponent.strip()}",
+        "topic": topic or (f"Game plan against {opponent.strip()}" if opponent.strip()
+                           else "Turn the attached document into a playbook note"),
         "wanted_category": category if category in STRATEGY_CATEGORIES else "",
         "allowed_categories": STRATEGY_CATEGORIES,
         "team_records": team_context(db, opponent),
     }
+    if doc:
+        request["reference_document"] = {
+            "file": doc[0], "text": doc[1],
+            "how_to_use": "The staff's own notes/plan. Build the note from it, backed by team_records where they agree.",
+        }
     raw = call_model(api_key, SYSTEM, json.dumps(request, ensure_ascii=False))
     title = str(raw.get("title") or "").strip()[:160]
     body = str(raw.get("body") or "").strip()[:12000]

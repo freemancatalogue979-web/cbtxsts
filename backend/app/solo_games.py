@@ -369,3 +369,62 @@ def ai_summary(games: list[SoloGame], recent: int = 12) -> dict:
                           if k not in {"id", "source", "source_file", "batch", "created_at", "notes"} and v not in (None, "", False)}
                          for g in games[:recent]],
     }
+
+
+# --------------------------------------------------------------------------- #
+# heroes with no data / not being played
+# --------------------------------------------------------------------------- #
+NOT_PLAYING_DAYS = 21
+META = ("META", "STRONG")
+
+
+def hero_gaps(db: Session, user, games: list[SoloGame], limit: int = 8) -> dict:
+    """Pool heroes with no games at all, pool heroes gone quiet, and strong heroes in
+    the member's lane they've never played (solo or team)."""
+    from .models import HeroPoolEntry
+    from .performance import appearances
+
+    today = utcnow().date()
+    last: dict[str, date | None] = {}
+    count: dict[str, int] = {}
+
+    def seen(name: str, day: date | None) -> None:
+        k = hero_key(name)
+        if not k:
+            return
+        count[k] = count.get(k, 0) + 1
+        if day and (last.get(k) is None or day > last[k]):
+            last[k] = day
+        else:
+            last.setdefault(k, None)
+
+    for g in games:
+        seen(g.hero, g.played_on)
+    for a in appearances(db, user.id):
+        seen(a.hero, a.day)
+
+    pool = (db.query(Hero, HeroPoolEntry.category).join(HeroPoolEntry, HeroPoolEntry.hero_id == Hero.id)
+            .filter(HeroPoolEntry.user_id == user.id).all())
+    in_pool = {hero_key(h.name) for h, _ in pool}
+    no_data, quiet = [], []
+    for hero, category in pool:
+        k = hero_key(hero.name)
+        if not count.get(k):
+            no_data.append({"hero": hero.name, "role": hero.role, "category": category,
+                            "why": f"In your {category} pool, but no games recorded on it yet."})
+        elif last.get(k) and (today - last[k]).days >= NOT_PLAYING_DAYS:
+            days = (today - last[k]).days
+            quiet.append({"hero": hero.name, "role": hero.role, "category": category, "days": days, "games": count[k],
+                          "why": f"Last played {days} days ago — {count[k]} {'game' if count[k] == 1 else 'games'} on record."})
+    quiet.sort(key=lambda r: -r["days"])
+    lane = (user.main_role or "").upper()
+    lane_meta = []
+    if lane:
+        for hero in db.query(Hero).filter(Hero.role == lane, Hero.meta_status.in_(META)).all():
+            k = hero_key(hero.name)
+            if k in in_pool or count.get(k):
+                continue
+            lane_meta.append({"hero": hero.name, "role": hero.role, "status": hero.meta_status,
+                              "why": f"{hero.meta_status.title()} in your lane right now — you haven't played it."})
+        lane_meta.sort(key=lambda r: (META.index(r["status"]), r["hero"]))
+    return {"no_data": no_data[:limit], "not_playing": quiet[:limit], "lane_meta": lane_meta[:limit]}

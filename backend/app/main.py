@@ -13,6 +13,7 @@ from .routers import (
     ai_tools,
     archive,
     solo_games,
+    utility,
     clover_ai,
     auth,
     bans,
@@ -87,7 +88,7 @@ api = APIRouter(prefix="/api")
 for module in (auth, meta, dashboard, training, scrims, reviews, heroes, players,
                bans, events, strategy, drafts, admin, maps, users, map_guide, notifications,
                programs, files, tournaments, intel, items, archive, esports, clover_ai, trash, ai_tools,
-               solo_games):
+               solo_games, utility):
     api.include_router(module.router)
 app.include_router(api)
 

@@ -218,11 +218,11 @@ def call_text(api_key: str, system: str, text: str) -> dict:
             raw = resp.read(800_001)
         parsed = json.loads(json.loads(raw)["choices"][0]["message"]["content"])
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ReadError("The AI service didn't answer. Try again in a minute, or add the games by hand.", 502) from exc
+        raise ReadError("Couldn't read that file right now. Try again in a minute, or add the games by hand.", 502) from exc
     except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise ReadError("The AI's reading came back garbled. Try again.", 502) from exc
+        raise ReadError("Couldn't make sense of that file. Try again.", 502) from exc
     if not isinstance(parsed, dict):
-        raise ReadError("The AI's reading came back garbled. Try again.", 502)
+        raise ReadError("Couldn't make sense of that file. Try again.", 502)
     return parsed
 
 
@@ -251,7 +251,7 @@ def extract(db: Session, user: User, url: str) -> dict:
         direct = table_games(rows)
         if direct is not None:
             raw_games = direct
-            checks.append({"tone": "ok", "text": f"Read {len(direct)} {'row' if len(direct) == 1 else 'rows'} straight from the sheet's columns — no AI needed."})
+            checks.append({"tone": "ok", "text": f"Read {len(direct)} {'row' if len(direct) == 1 else 'rows'} from the sheet."})
         else:
             used_ai = True
             prompt = {**_context(user, heroes), "kind": "table", "content": rows_text(rows)[:MAX_TEXT]}
@@ -297,4 +297,4 @@ def extract(db: Session, user: User, url: str) -> dict:
     if not games and not any(c["tone"] == "warn" for c in checks):
         checks.append({"tone": "warn", "text": "No games found in that file. Use a match-history screen, a post-match "
                                                "scoreboard, or a sheet with hero / result / K / D / A columns."})
-    return {"file": name, "source": source, "used_ai": used_ai, "games": games, "checks": checks}
+    return {"file": name, "source": source, "read_directly": not used_ai, "games": games, "checks": checks}

@@ -51,7 +51,7 @@ def _items(value, keys: tuple[str, ...], limit: int) -> list[dict]:
 def coach(db: Session, user: User, focus: str = "") -> dict:
     games = user_games(db, user.id, limit=200)
     if len(games) < MIN_GAMES_TO_COACH:
-        raise ReadError(f"Add at least {MIN_GAMES_TO_COACH} of your games first (Utility AI tab).", 422)
+        raise ReadError(f"Add at least {MIN_GAMES_TO_COACH} of your games first on the Utility page.", 422)
     pool = [{"hero": name, "category": category} for name, category in
             db.query(Hero.name, HeroPoolEntry.category).join(Hero, Hero.id == HeroPoolEntry.hero_id)
             .filter(HeroPoolEntry.user_id == user.id).limit(25).all()]
@@ -73,5 +73,5 @@ def coach(db: Session, user: User, focus: str = "") -> dict:
         "games_used": len(games), "focus": focus.strip()[:300],
     }
     if not (out["headline"] or out["fixes"] or out["strengths"]):
-        raise ReadError("The AI's coaching came back empty. Try again.", 502)
+        raise ReadError("Couldn't build your plan just now. Try again.", 502)
     return out

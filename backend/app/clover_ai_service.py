@@ -591,7 +591,7 @@ def build_evidence(
                 "notice": "The member's own ranked/classic games, uploaded by them (screenshots, files or by hand). "
                           "Separate from team scrims and tournaments.",
             }
-            sources.append({"kind": "personal", "label": f"Your {len(solo)} solo {'game' if len(solo) == 1 else 'games'}", "route": "ai"})
+            sources.append({"kind": "personal", "label": f"Your {len(solo)} solo {'game' if len(solo) == 1 else 'games'}", "route": "utility"})
     records = team_records_for(db, search, user)
     if records:
         facts["team_records"] = records

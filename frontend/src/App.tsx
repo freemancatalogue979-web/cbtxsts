@@ -21,6 +21,7 @@ const ReviewsPage = lazy(() => import("./pages/Reviews").then((m) => ({ default:
 const HeroesPage = lazy(() => import("./pages/Heroes").then((m) => ({ default: m.HeroesPage })));
 const IntelPage = lazy(() => import("./pages/Intel").then((m) => ({ default: m.IntelPage })));
 const EsportsPage = lazy(() => import("./pages/Esports").then((m) => ({ default: m.EsportsPage })));
+const UtilityPage = lazy(() => import("./pages/Utility").then((m) => ({ default: m.UtilityPage })));
 const CloverAIPage = lazy(() => import("./pages/CloverAI").then((m) => ({ default: m.CloverAIPage })));
 const AccountMLBBPage = lazy(() => import("./pages/AccountMLBB").then((m) => ({ default: m.AccountMLBBPage })));
 const PlayersPage = lazy(() => import("./pages/Players").then((m) => ({ default: m.PlayersPage })));
@@ -141,7 +142,10 @@ export default function App() {
   let page: React.ReactNode;
   switch (section) {
     case "ai":
-      page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} view={rest[0]} />;
+      page = <CloverAIPage me={user} desktopLayout={aiLayout} onToggleDesktopLayout={toggleAILayout} />;
+      break;
+    case "utility":
+      page = <UtilityPage me={user} parts={rest} />;
       break;
     case "training":
       page = <TrainingPage me={user} meta={meta} parts={rest} />;

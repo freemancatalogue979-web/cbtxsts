@@ -154,7 +154,8 @@ class SoloGamesTests(unittest.TestCase):
         with patch.object(ai_game_import, "call_text") as call:
             out = api.import_file(api.ImportIn(file_url=url), db=self.db, user=self.me)
         call.assert_not_called()
-        self.assertFalse(out["used_ai"])
+        self.assertTrue(out["read_directly"])
+        self.assertFalse(any("AI" in c["text"] for c in out["checks"]))  # members never see how it's read
         self.assertEqual([g["hero"] for g in out["added"]], ["Ling", "Fanny"])
         self.assertEqual(out["added"][0]["duration_min"], 14.5)
         self.assertTrue(any("skipped" in c["text"] for c in out["checks"]))
@@ -233,6 +234,8 @@ class SoloGamesTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as err:
                 api.import_file(api.ImportIn(file_url=self.png("test0solo4.png")), db=self.db, user=self.me)
         self.assertEqual(err.exception.status_code, 503)
+        self.assertNotIn("AI", err.exception.detail)
+        self.assertIn("by hand", err.exception.detail)
 
     # -- learning --------------------------------------------------------------------
     def seed_history(self) -> None:
@@ -317,6 +320,26 @@ class SoloGamesTests(unittest.TestCase):
         self.assertNotIn("notes", solo["recent_games"][0])
         self.assertNotIn("Karrie", str(solo))  # never another player's games
         self.assertTrue(any(src["label"] == "Your 1 solo game" for src in sources))
+
+    def test_hero_gaps(self) -> None:
+        heroes = {h.name: h for h in self.db.query(Hero).all()}
+        heroes["Ling"].meta_status = "META"
+        heroes["Fanny"].meta_status = "STRONG"
+        heroes["Hayabusa"].meta_status = "META"
+        for name, cat in (("Yu Zhong", "comfort"), ("Khufra", "pocket"), ("Karrie", "meta")):
+            self.db.add(HeroPoolEntry(user_id=self.me.id, hero_id=heroes[name].id, category=cat))
+        self.db.commit()
+        old = str(utcnow().date() - timedelta(days=40))
+        self.add(hero="Khufra", result="WIN", kills=1, deaths=2, assists=9, played_on=old)
+        self.add(hero="Karrie", result="WIN", kills=8, deaths=2, assists=4)
+        self.add(hero="Hayabusa", result="LOSS", kills=3, deaths=5, assists=2)
+        gaps = api.list_games(db=self.db, user=self.me)["gaps"]
+        self.assertEqual([g["hero"] for g in gaps["no_data"]], ["Yu Zhong"])
+        self.assertEqual([g["hero"] for g in gaps["not_playing"]], ["Khufra"])
+        self.assertGreaterEqual(gaps["not_playing"][0]["days"], 40)
+        # jungle main: Ling and Fanny are strong and never played; Hayabusa is played already
+        self.assertEqual([g["hero"] for g in gaps["lane_meta"]], ["Ling", "Fanny"])
+
 
 if __name__ == "__main__":
     unittest.main()

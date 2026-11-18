@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from ..models import (
     loads,
 )
 from ..performance import player_performance, squad_focus
+from ..insights import insights
 from ..solo_games import solo_stats, user_games
 from ..serializers import activity_out, event_out, scrim_out, settings_out, week_out
 
@@ -177,3 +178,10 @@ def dashboard(db: Session = Depends(get_db), user=Depends(get_current_user)):
         "my_form": my_form(db, user),
         "squad_focus": squad_focus(db) if user.role in STAFF_ROLES else [],
     }
+
+
+@router.get("/insights")
+def dashboard_insights(weeks: int = Query(default=12, ge=4, le=26), db: Session = Depends(get_db),
+                       user=Depends(get_current_user)) -> dict:
+    """The big charts: team trend, own progress, heroes, players and activity."""
+    return insights(db, user, weeks)

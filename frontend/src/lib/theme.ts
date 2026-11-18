@@ -26,7 +26,7 @@ export const ACCENTS = [
 export type AccentId = (typeof ACCENTS)[number]["id"];
 
 export type SectionId =
-  | "dashboard" | "ai" | "training" | "scrims" | "tournaments" | "esports" | "mlbb"
+  | "dashboard" | "ai" | "utility" | "training" | "scrims" | "tournaments" | "esports" | "mlbb"
   | "reviews" | "heroes" | "intel" | "players" | "bans" | "drafts" | "maps"
   | "strategy" | "archive" | "events" | "notifications" | "trash" | "admin" | "login";
 
@@ -42,6 +42,7 @@ export interface SectionTheme {
 export const SECTION_THEMES: Record<SectionId, SectionTheme> = {
   dashboard: { accent: "crimson", spotlight: "atlas", shelf: ["tigreal", "khufra", "baxia", "grock"] },
   ai: { accent: "emerald", spotlight: "angela", shelf: ["novaria", "yve", "selena", "harith"] },
+  utility: { accent: "cyan", spotlight: "lunox", shelf: ["xavier", "lylia", "pharsa", "cecilion"] },
   training: { accent: "cyan", spotlight: "chou", shelf: ["badang", "fredrinn", "yu-zhong", "akai"] },
   scrims: { accent: "violet", spotlight: "ling", shelf: ["benedetta", "lancelot", "fanny", "harith"] },
   tournaments: { accent: "amber", spotlight: "beatrix", shelf: ["lesley", "miya", "clint", "brody"] },
