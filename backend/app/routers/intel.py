@@ -135,6 +135,7 @@ def _rone_request(method: str, path: str, *, payload: dict | None = None,
 PLAYER_SOURCE = os.getenv("MLBB_PLAYER_SOURCE", "moonton").strip().lower()  # moonton | rone
 RONE_BACKUP = os.getenv("MLBB_RONE_BACKUP", "1").strip().lower() not in {"0", "false", "no", "off"}
 _SIGN_IN_PATHS = {"user/auth/send-vc", "user/auth/login"}
+_BATTLEREPORT_PATHS = {"user/stats", "user/season", "user/matches", "user/heroes/frequent"}
 _FRIENDLY = {"user/matches": "matches", "user/heroes/frequent": "heroes", "user/stats": "stats", "user/season": "season"}
 
 
@@ -198,6 +199,8 @@ def _account_request(method: str, path: str, *, payload: dict | None = None,
     from .. import mlbb_moonton as mt
 
     signed_in = path not in _SIGN_IN_PATHS
+    if path in _BATTLEREPORT_PATHS and not mt.BATTLEREPORT:
+        return mt.offline_answer()  # retired by Moonton; nobody (Rone included) can serve it
     if signed_in and path != "user/auth/logout" and mt.token_expired(jwt):
         return {"code": 401, "msg": mt.EXPIRED_MSG, "relink": True}  # don't even ask; it'll say no
     env = None
@@ -218,6 +221,8 @@ def _account_request(method: str, path: str, *, payload: dict | None = None,
                 raise
             raise HTTPException(502, f"Couldn't reach MLBB's servers from this computer ({why}), "
                                      f"and the backup didn't answer either ({exc.detail})") from None
+    if mt.is_offline(env):
+        return mt.offline_answer()
     if signed_in and mt.is_auth_error(env):
         return {"code": env.get("code"), "msg": mt.EXPIRED_MSG, "relink": True}
     kind = _FRIENDLY.get(path)
@@ -351,7 +356,8 @@ def account_check(user: User = Depends(account_user), db: Session = Depends(get_
     from .. import mlbb_moonton as mt
 
     out: dict = {"source": "rone" if PLAYER_SOURCE == "rone" else "moonton", "backup_enabled": RONE_BACKUP,
-                 "moonton": mt.server_check()}
+                 "moonton": mt.server_check(),
+                 "battle_report": {"ok": False if not mt.BATTLEREPORT else None, "detail": mt.OFFLINE_MSG}}
     link = db.query(IntelLink).filter(IntelLink.user_id == user.id).one_or_none()
     if link is None:
         out["session"] = {"ok": False, "detail": "No MLBB account linked yet"}
@@ -359,13 +365,13 @@ def account_check(user: User = Depends(account_user), db: Session = Depends(get_
         out["session"] = {"ok": False, "detail": mt.EXPIRED_MSG, "relink": True}
     elif out["moonton"]["ok"]:
         try:
-            env = mt.seasons(link.jwt)
+            env = mt.profile(link.jwt, link.role_id, link.zone_id)  # the one signed-in call Moonton still serves
             ok = env.get("code") == 0
-            out["session"] = {"ok": ok, "detail": "Signed in — stats are readable" if ok else
+            out["session"] = {"ok": ok, "detail": "Signed in — your profile syncs" if ok else
                               (mt.EXPIRED_MSG if mt.is_auth_error(env) else str(env.get("msg") or env.get("message") or env.get("code"))),
                               **({} if ok or not mt.is_auth_error(env) else {"relink": True})}
         except mt.SourceDown as exc:
-            out["session"] = {"ok": False, "detail": f"Stats server didn't answer: {exc}"}
+            out["session"] = {"ok": False, "detail": f"Profile server didn't answer: {exc}"}
     else:
         out["session"] = {"ok": None, "detail": "Can't test the sign-in until Moonton is reachable"}
     if RONE_BACKUP or PLAYER_SOURCE == "rone":

@@ -205,6 +205,7 @@ class IntelSnapshotTests(unittest.TestCase):
         self.assertEqual(body["moonton"]["detail"], "connection refused")
         self.assertIsNone(body["session"]["ok"])
         self.assertTrue(body["backup"]["ok"])
+        self.assertFalse(body["battle_report"]["ok"])
         status, linked, _ = self.get("account/status")
         self.assertIn("session_expired", linked)
 

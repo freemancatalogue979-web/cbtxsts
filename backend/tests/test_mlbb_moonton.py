@@ -130,8 +130,13 @@ class MoontonClientTests(unittest.TestCase):
 
 
 class AccountRoutingTests(unittest.TestCase):
+    """Routing as it works if Moonton ever turns the battle report back on (MLBB_BATTLEREPORT=1)."""
+
     def setUp(self):
         mt._season_cache.clear()
+        flag = patch.object(mt, "BATTLEREPORT", True)
+        flag.start()
+        self.addCleanup(flag.stop)
 
     def test_moonton_is_used_first_and_answers_are_made_readable(self):
         rec = Recorder({"battlereport/season/list": {"code": 0, "data": {"sids": [40]}},
@@ -194,9 +199,41 @@ class AccountRoutingTests(unittest.TestCase):
                 mt.send_code(1, 2)
 
 
+class RetiredBattleReportTests(unittest.TestCase):
+    """Moonton retired battlereport/* on 30 Jun 2026 (code 10407, "接口下线")."""
+
+    def test_default_never_calls_the_dead_routes(self):
+        self.assertFalse(mt.BATTLEREPORT)
+        with patch.object(mt, "_send") as moonton, patch.object(intel, "_rone_request") as rone:
+            for path in ("user/stats", "user/season", "user/matches", "user/heroes/frequent"):
+                env = intel._account_request("GET", path, params={"lang": "en", "index": 1, "size": 10}, jwt=JWT)
+                self.assertTrue(env["offline"], path)
+                self.assertIn("30 June 2026", env["msg"])
+        moonton.assert_not_called()
+        rone.assert_not_called()
+
+    def test_profile_still_goes_to_moonton(self):
+        rec = Recorder({"base/getBaseInfo": {"code": 0, "data": {"name": "Tobi", "level": 50}}})
+        with patch.object(mt, "_send", rec):
+            env = intel._account_request("GET", "user/info", params={"lang": "en"}, jwt=JWT)
+        self.assertEqual(env["data"]["name"], "Tobi")
+
+    def test_10407_is_offline_not_expired(self):
+        answer = {"code": 10407, "message": "接口下线"}
+        self.assertTrue(mt.is_offline(answer))
+        self.assertFalse(mt.is_auth_error(answer))
+        with patch.object(mt, "BATTLEREPORT", True), patch.object(mt, "_send", return_value=answer):
+            env = intel._account_request("GET", "user/stats", params={"lang": "en"}, jwt=JWT)
+        self.assertTrue(env["offline"])
+        self.assertNotIn("relink", env)
+
+
 class SessionHealthTests(unittest.TestCase):
     def setUp(self):
         mt._season_cache.clear()
+        flag = patch.object(mt, "BATTLEREPORT", True)
+        flag.start()
+        self.addCleanup(flag.stop)
 
     def test_expired_token_is_caught_before_asking_anyone(self):
         import time as _t

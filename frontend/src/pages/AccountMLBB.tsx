@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, CheckCircle2, CircleAlert, CircleHelp, Gamepad2, KeyRound, Link2, LogOut, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
+import { Activity, ArrowRight, CheckCircle2, History, CircleAlert, CircleHelp, Gamepad2, KeyRound, Link2, LogOut, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 import { Badge, Empty, ErrorNote, Field, KV, PageTitle, SectionTitle, Spinner } from "../components/ui";
 import { HeroImg } from "../components/HeroImg";
+import { navigate } from "../lib/util";
 import { accountCheck, accountHeroes, accountMatches, accountProfile, connectLink, disconnectLink, linkStatus, sendLinkCode } from "../lib/mlbb";
 import type { AccountCheck, AnyRec, LinkStatus } from "../lib/mlbb";
 import { recData, stripTags, pickNum, pickStr } from "../lib/mlbb";
@@ -124,6 +125,7 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
     }
   };
   walk(data);
+  if (flat.length === 0) return null; // nothing beyond what the banner already shows
   const isImgUrl = (v: string) => /^https?:\/\//.test(v) && (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(v) || /face\/|akmpicture|youngjoygame/.test(v));
   return (
     <div className="card p-4">
@@ -141,7 +143,6 @@ function Section({ title, payload, hide }: { title: string; payload: unknown; hi
             <KV key={k} k={k} v={v} />
           ))}
       </div>
-      {flat.length === 0 && <div className="text-[11.5px] text-faint">No further fields.</div>}
       <SnapshotNote payload={payload} />
     </div>
   );
@@ -296,6 +297,26 @@ export function HeroList({ payload }: { payload: unknown }) {
   );
 }
 
+/** Moonton retired the web battle report (30 Jun 2026). Say so once, point at what works. */
+export function HistoryRetired() {
+  return (
+    <div className="mlbb-retired card p-5 border-sky/40 grid gap-3 max-w-3xl">
+      <div className="flex items-center gap-2 text-sky"><History size={16} /><span className="section-pill">Game history</span></div>
+      <p className="text-[13px] font-bold">MLBB doesn't share your games or stats outside the game any more.</p>
+      <p className="text-[12px] text-mute leading-relaxed">
+        Moonton switched off the web battle report on 30 June 2026 when it closed MLBB Academy. Every outside
+        app and site lost it at the same time, the backup relay included. Your link still works for your name,
+        level, rank and avatar, and those keep syncing.
+      </p>
+      <p className="text-[12px] text-mute leading-relaxed">
+        To track games, drop screenshots of your match history or results in Utility. They're read for you and land in
+        your hero pool and charts.
+      </p>
+      <div><button className="btn-primary" onClick={() => navigate("utility")}>Add games in Utility <ArrowRight size={14} /></button></div>
+    </div>
+  );
+}
+
 function CheckRow({ label, part }: { label: string; part?: { ok: boolean | null; detail: string; ms?: number } }) {
   if (!part) return null;
   const Icon = part.ok ? CheckCircle2 : part.ok === null ? CircleHelp : CircleAlert;
@@ -331,6 +352,7 @@ export function ConnectionCheck() {
         <ul className="grid gap-2.5 mt-3">
           <CheckRow label="Moonton servers" part={res.moonton} />
           <CheckRow label="Your MLBB sign-in" part={res.session} />
+          <CheckRow label="Game history from MLBB" part={res.battle_report} />
           <CheckRow label="Backup relay" part={res.backup} />
         </ul>
       )}
@@ -365,6 +387,8 @@ export function AccountMLBBPage() {
   useEffect(() => { void load(); }, [load]);
   const needsRelink = Boolean(status?.linked && (status.session_expired
     || [profile?.info, profile?.season, profile?.stats, matches, heroes].some((p) => (p as AnyRec | undefined)?.relink === true)));
+  const history = [profile?.season, profile?.stats, matches, heroes].filter(Boolean) as AnyRec[];
+  const historyRetired = history.length > 0 && history.every((p) => p.offline === true);
   const refreshing = [profile?.info, profile?.season, profile?.stats, matches, heroes].some((item) => accountCache(item)?.refreshing);
   useEffect(() => {
     if (!refreshing) return;
@@ -419,17 +443,22 @@ export function AccountMLBBPage() {
           )}
 
           {profile && (
-            <div className="grid lg:grid-cols-3 gap-4">
-              <Section title="Profile details" payload={profile.info}
-                hide={["avatar", "name", "level", "rank_level", "history_rank_level", "reg_country", "roleId", "zoneId", "role_id", "zone_id"]} />
-              <Section title="Current season" payload={profile.season} />
-              <Section title="Career stats" payload={profile.stats} />
-            </div>
+            <Section title="Profile details" payload={profile.info}
+              hide={["avatar", "name", "level", "rank_level", "history_rank_level", "reg_country", "roleId", "zoneId", "role_id", "zone_id"]} />
           )}
 
-          {heroes && <HeroList payload={heroes} />}
-
-          {matches && <MatchList payload={matches} />}
+          {historyRetired ? <HistoryRetired /> : (
+            <>
+              {profile && (
+                <div className="grid lg:grid-cols-2 gap-4">
+                  <Section title="Current season" payload={profile.season} />
+                  <Section title="Career stats" payload={profile.stats} />
+                </div>
+              )}
+              {heroes && <HeroList payload={heroes} />}
+              {matches && <MatchList payload={matches} />}
+            </>
+          )}
 
           <ConnectionCheck />
 

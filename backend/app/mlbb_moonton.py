@@ -34,6 +34,15 @@ ACT_ID, APP_ID = "2728785", "2713644"
 TIMEOUT = float(os.getenv("MLBB_TIMEOUT", "12"))
 MAX_BYTES = 2_000_000
 SEASON_TTL = 3600
+# The battle report (career, seasons, games, heroes) lived on MLBB Academy, which Moonton shut down on
+# 30 June 2026: every battlereport route now answers 10407 "接口下线" (interface taken offline), for every
+# relay including Rone. Off by default so we don't hammer dead routes; set MLBB_BATTLEREPORT=1 to probe
+# again if Moonton ever brings them back. The profile call (getBaseInfo) still works.
+BATTLEREPORT = os.getenv("MLBB_BATTLEREPORT", "0").strip().lower() in {"1", "true", "yes", "on"}
+OFFLINE_CODES = {10407}
+OFFLINE_MSG = ("Moonton switched off the web battle report on 30 June 2026 when it closed MLBB Academy, "
+               "so no website or app outside the game can read games, heroes or career stats any more. "
+               "Your profile (name, level, rank, avatar) still syncs.")
 
 _AGENTS = (
     "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36",
@@ -374,12 +383,28 @@ def token_expired(jwt: str | None, slack: int = 60) -> bool:
     return exp is not None and exp <= time.time() + slack
 
 
-_AUTH_CODES = {401, 403, 1001, 1002, 1003, 1004, 1005, 10001, 10002, 10003}
+_AUTH_CODES = {401, 403, 1001, 1002, 1003, 1004, 1005, 10001, 10002, 10003, -20020}
 _AUTH_WORDS = ("auth", "token", "jwt", "expire", "login", "sign in", "unauthor", "not logged")
 
 
-def is_auth_error(env: dict) -> bool:
+def is_offline(env: dict) -> bool:
+    """Moonton retired this route for good (10407 "接口下线")."""
     if not isinstance(env, dict) or env.get("code") in (0, None):
+        return False
+    try:
+        if int(env.get("code")) in OFFLINE_CODES:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return "下线" in str(env.get("message") or env.get("msg") or "")
+
+
+def offline_answer() -> dict:
+    return {"code": 10407, "msg": OFFLINE_MSG, "offline": True}
+
+
+def is_auth_error(env: dict) -> bool:
+    if not isinstance(env, dict) or env.get("code") in (0, None) or is_offline(env):
         return False
     text = str(env.get("message") or env.get("msg") or "").lower()
     try:
