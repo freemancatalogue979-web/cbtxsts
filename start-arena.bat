@@ -70,7 +70,7 @@ if /i "%~1"=="share" call :share
 echo.
 echo   API docs : http://localhost:9000/docs
 echo   Web app  : http://localhost:9009
-echo   Sign in  : admin@9clover.gg / clover2026  (roster/staff accounts use the same password)
+echo   Sign in  : admin / clover2026  (username = the part of the email before the @; roster/staff use the same password)
 echo.
 echo   Closing the two terminal windows stops the servers.
 echo.

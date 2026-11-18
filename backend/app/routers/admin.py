@@ -16,6 +16,7 @@ from ..models import TeamSettings, User
 from ..schemas import SettingsPatch, UserIn, UserPatch
 from ..security import ROLES, hash_password
 from ..serializers import settings_out, user_out
+from .auth import username_of, username_taken
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -34,6 +35,8 @@ def create_user(payload: UserIn, db: Session = Depends(get_db), user=Depends(get
     email = payload.email.strip().lower()
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Email already registered")
+    if username_taken(db, email):
+        raise HTTPException(status_code=409, detail=f"Username \"{username_of(email)}\" is taken — pick an email with a different part before the @")
     from ..config import DEFAULT_ADMIN_PASSWORD
 
     new = User(
@@ -62,6 +65,11 @@ def update_user(user_id: int, payload: UserPatch, db: Session = Depends(get_db),
 
     if "email" in data and data["email"]:
         data["email"] = data["email"].strip().lower()
+        if data["email"] != target.email:
+            if db.scalar(select(User).where(User.email == data["email"], User.id != target.id)):
+                raise HTTPException(status_code=409, detail="Email already registered")
+            if username_taken(db, data["email"], except_id=target.id):
+                raise HTTPException(status_code=409, detail=f"Username \"{username_of(data['email'])}\" is taken — pick an email with a different part before the @")
     if "role" in data and data["role"] and data["role"] not in ROLES:
         raise HTTPException(status_code=422, detail="Unknown role")
     if "main_role" in data and data["main_role"]:

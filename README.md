@@ -117,7 +117,7 @@ content are **opt-in**: set `CLOVER_DEMO_DATA=1` before the first startup to add
 them. The bundled hero default values are not a verified live patch/meta feed.
 Existing databases are not reseeded. Data-wipe actions in the app are admin-only.
 
-The development bootstrap login defaults to `admin@9clover.gg` / `clover2026`.
+The development bootstrap login defaults to username `admin` (or the full email `admin@9clover.gg`) / `clover2026`. Everyone signs in with the part of their email before the @; new accounts must keep that part unique.
 Set `CLOVER_ADMIN_EMAIL`, `CLOVER_ADMIN_PASSWORD` and a strong `CLOVER_SECRET_KEY`
 **before** exposing the application. Bootstrap credentials are used only when
 the database is first created; changing them later does not change an existing

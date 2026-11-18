@@ -19,7 +19,9 @@ OptionalId = Annotated[int | None, BeforeValidator(_blank_to_none)]
 
 
 class LoginIn(BaseModel):
-    email: str
+    """Sign in with a username (the part of the email before the @) or the full email."""
+    username: str = ""
+    email: str = ""          # older clients send the email here; a bare username works too
     password: str
 
 

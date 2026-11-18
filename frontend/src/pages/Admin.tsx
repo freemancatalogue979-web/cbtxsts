@@ -40,7 +40,12 @@ function UserForm({ meta, initial, onSaved, onClose }: {
           <Field label="Name"><input className="input" required value={String(f.name)} onChange={(e) => set("name", e.target.value)} /></Field>
           <Field label="In-game name"><input className="input" value={String(f.ign)} onChange={(e) => set("ign", e.target.value)} placeholder="Kaze" /></Field>
         </div>
-        <Field label="Email"><input className="input" type="email" required value={String(f.email)} onChange={(e) => set("email", e.target.value)} /></Field>
+        <div>
+          <Field label="Email"><input className="input" type="email" required value={String(f.email)} onChange={(e) => set("email", e.target.value)} /></Field>
+          {String(f.email).includes("@") && String(f.email).split("@")[0].trim() && (
+            <p className="text-[11px] text-faint mt-1">Signs in with username <b className="text-text">{String(f.email).split("@")[0].trim().toLowerCase()}</b></p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Platform role">
             <select className="input" value={String(f.role)} onChange={(e) => set("role", e.target.value)}>
@@ -97,13 +102,13 @@ export function AdminPage({ me, meta }: { me: User; meta: Meta }) {
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[640px]">
             <thead>
-              <tr><th className="th">Member</th><th className="th">Email</th><th className="th">Role</th><th className="th">Lane</th><th className="th">Roster</th><th className="th">Status</th><th className="th"></th></tr>
+              <tr><th className="th">Member</th><th className="th">Username · email</th><th className="th">Role</th><th className="th">Lane</th><th className="th">Roster</th><th className="th">Status</th><th className="th"></th></tr>
             </thead>
             <tbody>
               {(users ?? []).map((u) => (
                 <tr key={u.id} className="hover:bg-raised/60">
                   <td className="td"><span className="font-bold">{u.ign || u.name}</span> <span className="text-faint text-[11px]">{u.name}</span></td>
-                  <td className="td text-mute text-[12.5px]">{u.email}</td>
+                  <td className="td text-mute text-[12.5px]"><b className="text-text">{u.email.split("@")[0]}</b><span className="text-faint">@{u.email.split("@")[1] ?? ""}</span></td>
                   <td className="td"><Badge cls={u.role === "admin" ? "text-crim border-crim/40" : "text-mute"}>{u.role_label}</Badge></td>
                   <td className="td text-[12.5px]">{u.main_role || "—"}</td>
                   <td className="td text-[12.5px]">{u.roster ? "yes" : "—"}</td>

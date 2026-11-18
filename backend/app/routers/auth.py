@@ -13,6 +13,41 @@ from ..security import issue_token, verify_password
 from ..serializers import user_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+WRONG = "Wrong username or password"
+
+
+def username_of(email: str | None) -> str:
+    """The sign-in username: everything before the @ (\"admin\" for admin@9clover.gg)."""
+    return (email or "").strip().lower().split("@", 1)[0]
+
+
+def username_taken(db: Session, email: str, *, except_id: int | None = None) -> bool:
+    """True when another account already signs in with this email's username."""
+    name = username_of(email)
+    if not name:
+        return False
+    return any(u.id != except_id and username_of(u.email) == name
+               for u in db.scalars(select(User).where(User.email.like(f"%{name}%"))).all())
+
+
+def find_login_user(db: Session, identifier: str, password: str) -> User | None:
+    """The account for a username or a full email, if the password matches.
+
+    Usernames are unique for accounts made now, but older data might hold two emails with
+    the same part before the @ — then the password decides, and if it fits both the full
+    email is needed."""
+    ident = (identifier or "").strip().lower()
+    if not ident or not password:
+        return None
+    if "@" in ident:
+        user = db.scalar(select(User).where(User.email == ident))
+        return user if user is not None and verify_password(password, user.password_hash) else None
+    candidates = [u for u in db.scalars(select(User).where(User.email.like(f"{ident}@%"))).all()
+                  if username_of(u.email) == ident]
+    matches = [u for u in candidates if verify_password(password, u.password_hash)]
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="Two accounts use that username — sign in with your full email")
+    return matches[0] if matches else None
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -30,9 +65,9 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 @router.post("/login")
 def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == payload.email.strip().lower()))
-    if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Wrong email or password")
+    user = find_login_user(db, payload.username or payload.email, payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail=WRONG)
     if not user.active:
         raise HTTPException(status_code=403, detail="Account deactivated — talk to staff")
     token = issue_token(user.id, user.role, user.ign or user.name)

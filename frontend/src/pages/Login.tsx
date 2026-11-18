@@ -7,7 +7,7 @@ import { HeroMark } from "../components/Logo";
 import { InstallAppButton } from "../components/AppControls";
 
 export function Login({ onLogin }: { onLogin: (u: User) => void }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -17,7 +17,7 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
+      const res = await api.post<{ token: string; user: User }>("/auth/login", { username: username.trim(), password });
       setToken(res.token);
       onLogin(res.user);
     } catch (err) {
@@ -42,9 +42,9 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
         </div>
 
         <form onSubmit={submit} className="card p-5 space-y-4">
-          <Field label="Email">
-            <input className="input" type="email" autoComplete="email" required
-              value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@9clover.gg" />
+          <Field label="Username">
+            <input className="input" type="text" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required
+              value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" />
           </Field>
           <Field label="Password">
             <input className="input" type="password" autoComplete="current-password" required
