@@ -17,7 +17,7 @@ def game(result, minutes, stats, draft=None, players=None):
 
 def scrim(i, d, opp, result, games):
     w = sum(1 for g in games if g.result == "WIN")
-    return NS(id=i, number=i, opponent=opp, date=d, result=result, score_us=w, score_them=len(games) - w, games=games)
+    return NS(id=i, number=i, opponent=opp, scrim_date=d, result=result, score_us=w, score_them=len(games) - w, games=games)
 
 
 DRAFT = {"our_picks": {"EXP": "Arlott", "JUNGLE": "Ling"}, "enemy_picks": {"EXP": "Yu Zhong"},
@@ -68,6 +68,14 @@ class InsightTests(unittest.TestCase):
         self.assertEqual((exp["games"], exp["kda"], exp["rating"]), (2, 4.0, 9.0))
         onyx = self.out["opponents"][0]
         self.assertEqual((onyx["opponent"], onyx["played"], onyx["won"], onyx["game_wins"], onyx["game_losses"]), ("Onyx", 2, 1, 2, 1))
+
+    def test_real_models(self):
+        from app.models import Scrim, ScrimGame
+        sc = Scrim(id=9, number=9, opponent="Real", scrim_date=date(2026, 10, 1), status="played", result="WIN", score_us=1, score_them=0)
+        sc.games.append(ScrimGame(game_no=1, result="WIN", duration_min=15, stats=json.dumps({"kills": 10, "deaths": 4}),
+                                  draft="{}", player_stats="{}"))
+        out = scrim_insights_data([sc])
+        self.assertEqual((out["timeline"][0]["date"], out["timeline"][0]["kills"]), ("2026-10-01", 10.0))
 
     def test_empty(self):
         out = scrim_insights_data([])

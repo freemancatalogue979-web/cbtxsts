@@ -161,7 +161,7 @@ def _rate(wins: int, games: int) -> float | None:
 
 def scrim_insights_data(played: list[Scrim]) -> dict:
     """Chart-ready numbers for the scrim dashboard (pure: tested without a DB)."""
-    played = sorted(played, key=lambda s: (s.date or date.min, s.number or 0, s.id or 0))
+    played = sorted(played, key=lambda s: (s.scrim_date or date.min, s.number or 0, s.id or 0))
     timeline, monthly, opp = [], {}, {}
     wins_so_far = 0
     obj = {k: [0.0, 0.0, 0] for k in ("kills", "turrets", "turtles", "lords", "gold")}
@@ -242,15 +242,15 @@ def scrim_insights_data(played: list[Scrim]) -> dict:
         game_l = sum(1 for g in sc.games if g.result == "LOSS")
         timeline.append({
             "id": sc.id, "number": sc.number, "opponent": sc.opponent,
-            "date": sc.date.isoformat() if sc.date else None, "result": sc.result,
+            "date": sc.scrim_date.isoformat() if sc.scrim_date else None, "result": sc.result,
             "score_us": sc.score_us, "score_them": sc.score_them,
             "games": len(sc.games), "game_wins": game_w, "game_losses": game_l,
             "kills": round(g_kills / g_seen, 1) if g_seen else None,
             "deaths": round(g_deaths / g_seen, 1) if g_seen else None,
             "win_rate_to_date": _rate(wins_so_far, i),
         })
-        if sc.date:
-            m = monthly.setdefault(sc.date.strftime("%Y-%m"), {"month": sc.date.strftime("%Y-%m"), "played": 0, "wins": 0})
+        if sc.scrim_date:
+            m = monthly.setdefault(sc.scrim_date.strftime("%Y-%m"), {"month": sc.scrim_date.strftime("%Y-%m"), "played": 0, "wins": 0})
             m["played"] += 1
             m["wins"] += won
         o = opp.setdefault(sc.opponent, {"opponent": sc.opponent, "played": 0, "won": 0, "lost": 0, "game_wins": 0, "game_losses": 0})
