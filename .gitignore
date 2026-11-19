@@ -28,6 +28,8 @@ backend/data/material_files/
 backend/data/import-jobs/
 # Files of deleted items waiting in Trash (restorable, server-only).
 backend/data/trash/
+# Moonton's official hero pictures for the portrait check (downloaded daily on the server).
+backend/data/hero_official/
 # Teacher Network uploads (materials, chat attachments, qualification documents).
 backend/data/teacher_files/
 .env
