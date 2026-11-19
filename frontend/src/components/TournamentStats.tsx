@@ -3,7 +3,7 @@ import type { TournamentStatsT } from "../lib/types";
 import { nice } from "../lib/caseText";
 import { navigate, pct } from "../lib/util";
 import { HeroImg } from "./HeroImg";
-import { Empty, SectionTitle, StatTile } from "./ui";
+import { Empty, SectionTitle, StatTile, Ign } from "./ui";
 
 /** Match stats for one tournament (or all of them): series + game records from
  *  the scores, and who played each game with the heroes they were on. */
@@ -63,7 +63,7 @@ export function TournamentStats({ stats, title = "Match stats", overall = false,
                 {players.map((p) => (
                   <tr key={p.user_id}>
                     <td className="px-1 py-2">
-                      <button className="font-bold hover:text-sky truncate max-w-40" onClick={() => navigate("players", p.user_id)}>{p.name}</button>
+                      <button className="font-bold hover:text-sky truncate max-w-40" onClick={() => navigate("players", p.user_id)}><Ign text={p.name} /></button>
                     </td>
                     <td className="px-1 py-2 text-mute">
                       {nice(p.main_lane) || "—"}

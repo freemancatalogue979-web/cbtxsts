@@ -9,6 +9,7 @@ import { HeroImg } from "../components/HeroImg";
 import { TournamentStats } from "../components/TournamentStats";
 import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, ScoreboardReader, sumLines, type LineForm } from "../components/Scoreboard";
 import { nice } from "../lib/caseText";
+import { LineupCard, ScrimOverview, ScrimRecord, SeriesCharts, type ScrimInsightsT } from "../components/ScrimInsights";
 
 function ScrimRow({ s, onOpen }: { s: Scrim; onOpen: () => void }) {
   const played = s.status === "played";
@@ -384,10 +385,10 @@ function GamePlayers({ g }: { g: Scrim["games"][number] }) {
           const hero = g.draft?.our_picks?.[lane];
           const line = g.player_stats?.[lane];
           return (
-            <li key={lane} className="flex items-center gap-2 rounded-lg border border-edge/60 bg-raised/50 p-1.5 min-w-0">
+            <li key={lane} data-lane={lane} className="scrim-player flex items-center gap-2 rounded-lg border border-edge/60 bg-raised/50 p-1.5 min-w-0">
               {hero ? <HeroImg name={hero} size={30} className="rounded shrink-0" /> : <span className="h-[30px] w-[30px] shrink-0 rounded bg-panel" />}
               <span className="min-w-0 leading-tight">
-                <span className="block text-[11.5px] font-bold truncate">{g.players?.[lane] || "—"}</span>
+                <span className="block text-[11.5px] truncate">{g.players?.[lane] ? <Ign text={g.players[lane]} /> : "—"}</span>
                 <span className="block text-[10px] text-faint truncate">{nice(lane)}{hero ? ` · ${hero}` : ""}</span>
                 {line && (line.kills != null || line.deaths != null || line.assists != null || line.rating != null) && (
                   <span className="block text-[10.5px] tabular-nums text-mute">
@@ -409,6 +410,7 @@ function GamePlayers({ g }: { g: Scrim["games"][number] }) {
             const hero = line.hero || g.draft?.enemy_picks?.[lane];
             return (
               <span key={lane} className="chip !py-0.5 text-mute border-edge" title={line.name || undefined}>
+                {line.name && <Ign text={line.name} className="max-w-[7rem] truncate" />}
                 {hero ? <HeroImg name={hero} size={16} className="rounded" /> : <span className="text-faint">{nice(lane)}</span>}
                 <span className="tabular-nums">{line.kills ?? 0}/{line.deaths ?? 0}/{line.assists ?? 0}</span>
                 {line.rating != null && <span className="tabular-nums text-text/70">{line.rating.toFixed(1)}</span>}
@@ -541,10 +543,11 @@ function AttachmentForm({ scrim, onSaved, onClose }: { scrim: Scrim; onSaved: ()
 export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: string[] }) {
   const canManage = ["admin", "captain"].includes(me.role);
   const canUpload = canManage; // captain/admin upload results (coach watches)
-  const [tab, setTab] = useState("list");
+  const [tab, setTab] = useState("overview");
   const [scrims, setScrims] = useState<Scrim[] | null>(null);
   const [summary, setSummary] = useState<ScrimSummary | null>(null);
   const [stats, setStats] = useState<TournamentStatsT | null>(null);
+  const [insights, setInsights] = useState<ScrimInsightsT | null>(null);
   const [detail, setDetail] = useState<Scrim | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [showNew, setShowNew] = useState(false);
@@ -560,15 +563,13 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
     api.get<Scrim[]>(`/scrims${qs(filters)}`).then(setScrims).catch(() => setScrims([]));
     api.get<ScrimSummary>("/scrims/summary").then(setSummary).catch(() => setSummary(null));
     if (!id) api.get<TournamentStatsT>("/scrims/stats").then(setStats).catch(() => setStats(null));
+    if (!id) api.get<ScrimInsightsT>("/scrims/insights").then(setInsights).catch(() => setInsights(null));
     api.get<User[]>("/admin/users").then(setUsers).catch(() => setUsers([]));
-    if (id) api.get<Scrim>(`/scrims/${id}`).then(setDetail).catch(() => setDetail(null));
+    if (id) api.get<Scrim>(`/scrims/${id}`).then(setDetail).catch(() => { setDetail(null); setMissing(true); });
   }, [filters, id]);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => { setMissing(false); setDetail(null); }, [id]);
   useEffect(load, [load]);
-
-  const userName = (uid: number | null | undefined) => {
-    const u = users.find((x) => x.id === uid);
-    return u ? u.ign : "—";
-  };
 
   async function removeAttachment(sc: Scrim, att: Scrim["attachments"][number]) {
     if (!confirm(`Remove "${att.label || att.kind}"?`)) return;
@@ -578,7 +579,9 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
 
   // ------------------ detail ------------------
   if (id) {
-    if (!detail) return <Spinner />;
+    if (!detail) return missing
+      ? <div className="space-y-4"><button className="label !text-crim" onClick={() => navigate("scrims")}>← All scrims</button><Empty title="That scrim isn't here" hint="It may have been deleted or moved to the trash." /></div>
+      : <Spinner />;
     const s = detail;
     const played = s.status === "played";
     return (
@@ -621,18 +624,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
         )}
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="card p-3.5">
-            <div className="section-pill mb-2">Lineup</div>
-            <div className="space-y-1">
-              {meta.lanes.map((lane) => (
-                <div key={lane} className="flex justify-between text-[13px]">
-                  <span className="text-faint font-bold w-14">{nice(lane)}</span>
-                  <span className="font-semibold"><Ign text={userName(s.lineup?.[lane])} /></span>
-                </div>
-              ))}
-            </div>
-            {s.substitutes.length > 0 && <div className="mt-2 text-[11px] text-faint">Subs: {s.substitutes.map(userName).join(", ")}</div>}
-          </div>
+          <LineupCard lanes={meta.lanes} lineup={s.lineup} substitutes={s.substitutes} users={users} />
           <div className="card p-3.5 lg:col-span-2">
             <div className="section-pill mb-2">Expected strategy</div>
             <p className="text-[13px] text-text/85 whitespace-pre-wrap">{s.expected_strategy || "—"}</p>
@@ -680,6 +672,13 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
             {canUpload && <button className="btn-ghost w-full mt-3 !text-[12px]" onClick={() => setShowAttach(true)}><Plus size={13} /> Attach</button>}
           </div>
         </div>
+
+        {s.games.length > 0 && (
+          <section>
+            <SectionTitle>Series in numbers</SectionTitle>
+            <SeriesCharts scrim={s} />
+          </section>
+        )}
 
         {/* games */}
         <section>
@@ -770,19 +769,20 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
       )}
 
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2.5">
-          <StatTile label="Series" value={summary.series.total} hint={`${summary.series.wins}W – ${summary.series.losses}L`} />
-          <StatTile label="Series win" value={pct(summary.series.win_rate)} tone={(summary.series.win_rate ?? 0) >= 50 ? "good" : "bad"} />
-          <StatTile label="Games" value={summary.games.total} />
-          <StatTile label="Game win" value={pct(summary.games.win_rate)} />
-          <StatTile label="Avg duration" value={summary.averages.duration_min ? `${summary.averages.duration_min}m` : "—"} />
-          <StatTile label="Avg kills" value={summary.averages.kills ?? "—"} />
-          <StatTile label="Avg deaths" value={summary.averages.deaths ?? "—"} />
-          <StatTile label="Avg objectives" value={summary.averages.objectives ?? "—"} />
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <ScrimRecord data={insights} series={summary.series} games={summary.games} />
+          <div className="grid grid-cols-2 gap-2.5 content-start">
+            <StatTile label="Avg duration" value={summary.averages.duration_min ? `${summary.averages.duration_min}m` : "—"} />
+            <StatTile label="Avg kills" value={summary.averages.kills ?? "—"} />
+            <StatTile label="Avg deaths" value={summary.averages.deaths ?? "—"} />
+            <StatTile label="Avg objectives" value={summary.averages.objectives ?? "—"} />
+          </div>
         </div>
       )}
 
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: "list", label: "Scrims" }, { id: "players", label: "Player stats" }, { id: "opponents", label: "Opponent records" }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ id: "overview", label: "Overview" }, { id: "list", label: "Scrims" }, { id: "players", label: "Player stats" }, { id: "opponents", label: "Opponent records" }]} />
+
+      {tab === "overview" && <ScrimOverview data={insights} />}
 
       {tab === "players" && (stats
         ? (
