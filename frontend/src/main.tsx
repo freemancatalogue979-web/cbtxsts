@@ -5,6 +5,8 @@ import "@fontsource/courier-prime/700-italic.css";
 import "@fontsource/courier-prime/700.css";
 import "@fontsource/courier-prime/400-italic.css";
 import "@fontsource/courier-prime/400.css";
+// Montserrat (Julieta Ulanovsky, SIL OFL): the in-game-name font. Variable, one file per script, loaded only when used.
+import "@fontsource-variable/montserrat/wght.css";
 // Symbol fallback (e.g. ⚝ in stylised names). Downloaded only when such a character is on screen.
 import "@fontsource/noto-sans-symbols/500.css";
 import "./index.css";

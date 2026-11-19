@@ -265,13 +265,15 @@ test("the mobile top bar never lets the name badge cover the wordmark", async ()
   assert.match(css, /\.me-pill__name \{\n  min-width: 0; overflow: hidden; text-overflow: ellipsis;/);
 });
 
-test("in-game names use Courier New but otherwise show exactly as the game gave them: no italic, no case changes", async () => {
+test("in-game names use Montserrat but otherwise show exactly as the game gave them: no italic, no case changes", async () => {
   // Rendered untouched (isolated so symbols and right-to-left names never scramble the line).
   assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝" })), '<bdi class="ign flip-ign" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
   assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "dRe xX" })), '<bdi class="ign flip-ign" dir="auto">dRe xX</bdi>');
   const rule = css.match(/\.ign \{[^}]*\}/)?.[0] ?? "";
   assert.ok(rule, ".ign rule exists");
-  assert.match(rule, /"Courier New"/);
+  assert.match(rule, /"Montserrat Variable", Montserrat/);
+  assert.doesNotMatch(rule, /Courier/);
+  assert.match(rule, /font-weight: 700/);
   assert.match(rule, /font-style: normal/);
   assert.match(rule, /text-transform: none/);
   assert.match(rule, /letter-spacing: normal/);
@@ -293,15 +295,23 @@ test("phones can tuck the bottom quick bar away and get it back", async () => {
   assert.match(css, /\.quick-toggle--hidden \{/);
 });
 
-test("every IGN wears the page-title look: same class as the title, extruded edge, glyphs untouched", () => {
+test("every IGN wears the nameplate look: white-to-accent fill, shadow and glow, glyphs untouched", async () => {
   // A caller's extra classes are kept and flip-ign is never doubled.
   assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝", className: "flip-ign truncate" })),
     '<bdi class="ign flip-ign truncate" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
   const rule = css.match(/\.flip-ign \{[^}]*\}/)?.[0] ?? "";
   assert.ok(rule, ".flip-ign rule exists");
-  // Same layered edge as .page-hero__title, in em so it scales from chips to headings.
-  assert.match(rule, /text-shadow:\s*0 0\.045em 0 color-mix\(in srgb, var\(--color-crim\) 70%, #000\)/);
-  assert.match(rule, /0 0\.18em 0 color-mix\(in srgb, var\(--color-crim-deep\) 45%, #000\)/);
+  // Gradient fill in the area's colour; titles' extruded shadow is not inherited through the clipped text.
+  assert.match(rule, /background-image: linear-gradient\(100deg, #ffffff 0%, #f4f6ff 40%, color-mix\(in srgb, var\(--color-crim\) 82%, #ffffff\) 78%, #ffffff 100%\)/);
+  assert.match(rule, /-webkit-background-clip: text;\s*background-clip: text;\s*-webkit-text-fill-color: transparent;/);
+  assert.match(rule, /text-shadow: none/);
+  assert.match(rule, /filter: drop-shadow\(0 0\.06em 0 rgb\(0 0 0 \/ 0\.7\)\) drop-shadow\(0 0 0\.5em rgb\(var\(--accent-glow\) \/ 0\.32\)\)/);
+  assert.match(css, /html\[data-effects="calm"\] \.flip-ign \{ transition: none; \}/);
+  const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
+  assert.match(main, /import "@fontsource-variable\/montserrat\/wght\.css";/);
+  // Draft board captions are IGNs too.
+  const draft = await readFile(new URL("../src/components/DraftBoard.tsx", import.meta.url), "utf8");
+  assert.equal((draft.match(/player \? <Ign text=\{player\} \/>/g) ?? []).length, 2);
   // Look only: never the font, style, case or spacing the game gave the name.
   assert.doesNotMatch(rule, /font-family|font-style|text-transform|letter-spacing/);
 });

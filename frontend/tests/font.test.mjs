@@ -75,11 +75,15 @@ test("stored enums are shown in normal case while acronyms stay", async () => {
   assert.equal(nice(null), "");
 });
 
-test("the other fonts and the font menu are gone", async () => {
-  for (const gone of [/Corptic/i, /Space Grotesk/, /Space Mono/, /DM Mono/, /Montserrat/, /data-font/]) assert.doesNotMatch(css, gone);
-  for (const gone of [/space-grotesk/, /space-mono/, /dm-mono/, /montserrat/]) assert.doesNotMatch(main, gone);
+test("the other fonts and the font menu are gone (Montserrat only for in-game names)", async () => {
+  for (const gone of [/Corptic/i, /Space Grotesk/, /Space Mono/, /DM Mono/, /data-font/]) assert.doesNotMatch(css, gone);
+  for (const gone of [/space-grotesk/, /space-mono/, /dm-mono/]) assert.doesNotMatch(main, gone);
+  // Montserrat appears in the IGN rule only, never in the body/heading stacks.
+  const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.doesNotMatch(theme, /Montserrat/);
+  assert.equal((css.match(/"Montserrat Variable"/g) ?? []).length, 1);
   const pkg = await readFile(new URL("../package.json", import.meta.url), "utf8");
-  assert.doesNotMatch(pkg, /space-grotesk|space-mono|montserrat|dm-mono/);
+  assert.doesNotMatch(pkg, /space-grotesk|space-mono|dm-mono/);
   const layout = await readFile(new URL("../src/components/Layout.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(layout, /FontPicker|FontChoice|[Tt]ext style/);
   const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");

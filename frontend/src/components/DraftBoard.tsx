@@ -4,6 +4,7 @@ import { CircleSlash2 } from "lucide-react";
 import { BrandImg } from "./Logo";
 import { artFor, artVersion, heroArt, heroHead, heroOfficial, subscribeArt } from "../lib/mlbb";
 import { nice } from "../lib/caseText";
+import { Ign } from "./ui";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
 
@@ -64,7 +65,7 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
     <div className={`flex flex-col items-center gap-1 min-w-0 ${fluid ? "w-full" : ""}`}>
       {interactive ? <button type="button" onClick={onClick}>{card}</button> : card}
       <span className={`text-[10px] font-semibold truncate max-w-[92px] ${player ? "text-mute" : "text-faint/70"}`}>
-        {player || (filled ? "\u00A0" : "—")}
+        {player ? <Ign text={player} /> : (filled ? "\u00A0" : "—")}
       </span>
     </div>
   );
@@ -191,7 +192,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
         )}
       </div>
       {player !== undefined && (
-        <span className={`text-[10px] font-semibold truncate max-w-full ${player ? "text-mute" : "text-transparent"}`}>{player || "-"}</span>
+        <span className={`text-[10px] font-semibold truncate max-w-full ${player ? "text-mute" : "text-transparent"}`}>{player ? <Ign text={player} /> : "-"}</span>
       )}
     </figure>
   );

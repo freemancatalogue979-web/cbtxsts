@@ -75,17 +75,17 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     letter-spacing: 0.1em;
     line-height: 1.6;
   }
-  /* In-game names (components/ui.tsx → Ign) use Courier New too, but otherwise stay exactly as the
-     game gave them: upright, normal spacing, no extra stroke, no case changes. Stylised letters
-     Courier New lacks (small caps, Greek-looking letters) fall back to the device font, symbols to
-     the symbol fonts. */
+  /* In-game names (components/ui.tsx → Ign) are set in Montserrat (bundled, SIL OFL) so they stand
+     out from the Courier New body text, but otherwise stay exactly as the game gave them: upright,
+     no case changes. Stylised letters Montserrat lacks (small caps, Greek-looking letters) fall back
+     to the device font, symbols to the symbol fonts. */
   .ign {
-    /* Symbol-only fonts first (the bundled, range-limited Noto Sans Symbols): they have no letters, so letters still come from the device font,
+    /* Symbol-only fonts first (the bundled, range-limited Noto Sans Symbols): they have no letters, so letters still come from Montserrat,
        but stars and other symbols always find a real glyph instead of a box. */
-    font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", "Courier New", Courier, "Courier Prime", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
+    font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", "Montserrat Variable", Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
       "Segoe UI Symbol", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
     font-style: normal;
-    font-weight: 600;
+    font-weight: 700;
     font-variant: normal;
     font-feature-settings: normal;
     letter-spacing: normal;
@@ -94,20 +94,26 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     text-transform: none;
     unicode-bidi: isolate;
   }
-  /* Every rendered IGN gets the page-title look the team picked: white, a short extruded
-     edge in the area's colour, a soft drop shadow and glow. Offsets are in em, so the same
-     depth reads right from the 26px greeting down to a 12px chip. (Inputs, SVG labels and
-     avatar initials carry .ign for the font only — they don't get the edge.) */
+  /* Every rendered IGN is a nameplate: bright white melting into the area's colour, lifted off the
+     page by a crisp shadow and a soft glow, with a slow sheen when you point at it. (Inputs, SVG
+     labels and avatar initials carry .ign for the font only — they don't get the plate.) */
   .flip-ign {
     color: var(--color-text);
-    text-shadow:
-      0 0.045em 0 color-mix(in srgb, var(--color-crim) 70%, #000),
-      0 0.09em 0 color-mix(in srgb, var(--color-crim-deep) 80%, #000),
-      0 0.135em 0 color-mix(in srgb, var(--color-crim-deep) 62%, #000),
-      0 0.18em 0 color-mix(in srgb, var(--color-crim-deep) 45%, #000),
-      0 0.42em 0.75em rgb(0 0 0 / 0.6),
-      0 0 1.1em rgb(var(--accent-glow) / 0.22);
+    background-image: linear-gradient(100deg, #ffffff 0%, #f4f6ff 40%, color-mix(in srgb, var(--color-crim) 82%, #ffffff) 78%, #ffffff 100%);
+    background-size: 220% 100%;
+    background-position: 0% 50%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 0.06em 0 rgb(0 0 0 / 0.7)) drop-shadow(0 0 0.5em rgb(var(--accent-glow) / 0.32));
+    transition: background-position 1.2s cubic-bezier(0.22, 0.68, 0.24, 1);
   }
+  .flip-ign:hover,
+  :is(a, button, li, [role="button"]):hover > .flip-ign,
+  :is(a, button, li, [role="button"]):hover .flip-ign { background-position: 100% 50%; }
+  html[data-effects="calm"] .flip-ign { transition: none; }
+  @media (prefers-reduced-motion: reduce) { .flip-ign { transition: none; } }
   /* Nothing is shown in all caps: text appears exactly as written, and this
      guard stops any shouted-caps styling from coming back. */
   *, *::before, *::after, ::placeholder {
