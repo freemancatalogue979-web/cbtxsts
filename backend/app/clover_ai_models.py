@@ -219,3 +219,31 @@ class AIKnowledge(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class AIShare(Base):
+    """A link the owner made to show one AI answer or a chat snapshot to others.
+
+    The token is the only thing a viewer needs (public links) or the token plus a team sign-in
+    (team links). Deleting the share, the message or the chat ends the link.
+    """
+    __tablename__ = "clover_ai_shares"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("clover_ai_conversations.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # Set for a single-message share; empty for a whole-chat snapshot.
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clover_ai_messages.id", ondelete="CASCADE"), nullable=True
+    )
+    # Chat snapshots show messages up to this id, so later messages stay private.
+    through_message_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    include_prompt: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    audience: Mapped[str] = mapped_column(String(10), default="public", nullable=False)  # public | team
+    views: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

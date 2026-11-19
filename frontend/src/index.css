@@ -1799,3 +1799,144 @@ html[data-effects="calm"] .map-rec-dot { animation: none; }
 .map-replay-range { accent-color: #7df9ff; min-width: 0; }
 .map-take-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; min-width: 0; }
 .map-take-list > * { flex-shrink: 0; }
+
+/* ── Shared AI reader (#/share/<token>) ──────────────────────────────────── */
+.share-reader {
+  position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background:
+    radial-gradient(1200px 520px at 85% -10%, rgba(52, 211, 153, 0.10), transparent 60%),
+    radial-gradient(900px 480px at -10% 0%, rgba(125, 181, 245, 0.10), transparent 55%),
+    linear-gradient(180deg, #0a0f19 0%, #070a12 100%);
+  color: var(--color-text);
+  font-family: var(--reader-font);
+}
+.share-bar {
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+  background: rgba(9, 13, 21, 0.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--color-edge);
+}
+.share-bar__brand { flex-shrink: 0; display: grid; place-items: center; }
+.share-bar__title { min-width: 0; flex: 1; }
+.share-bar__name { font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share-bar__sub { font-size: 11px; color: var(--color-faint); }
+.share-bar__progress {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; transform-origin: 0 50%;
+  background: linear-gradient(90deg, var(--color-leaf), var(--color-sky)); transition: transform 0.1s linear;
+}
+.share-chip-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 36px; padding: 0 12px;
+  border-radius: 9999px; border: 1px solid var(--color-edge-2); background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text); font-size: 12.5px; font-weight: 700; transition: border-color 0.15s, background 0.15s;
+}
+.share-chip-btn:hover, .share-chip-btn--on { border-color: color-mix(in srgb, var(--color-leaf) 60%, transparent); background: color-mix(in srgb, var(--color-leaf) 12%, transparent); }
+.share-icon-btn { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--color-mute); flex-shrink: 0; }
+.share-icon-btn:hover { color: var(--color-text); background: rgba(255, 255, 255, 0.06); }
+@media (max-width: 420px) { .share-hide-xs { display: none; } .share-chip-btn { padding: 0 10px; } }
+
+.share-panel {
+  position: absolute; z-index: 5; top: calc(max(10px, env(safe-area-inset-top)) + 52px); right: max(10px, env(safe-area-inset-right));
+  width: min(380px, calc(100vw - 20px)); max-height: calc(100dvh - 90px); overflow-y: auto;
+  border-radius: 16px; border: 1px solid var(--color-edge-2); background: rgba(13, 18, 27, 0.97);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); padding: 6px 14px 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.share-panel__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-bottom: 1px solid var(--color-edge); }
+.share-panel__row:last-child { border-bottom: 0; }
+.share-panel__row--head { padding-top: 6px; }
+.share-panel__title { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; font-size: 13.5px; }
+.share-panel__label { font-size: 12.5px; font-weight: 700; color: var(--color-mute); }
+.share-seg { display: inline-flex; border: 1px solid var(--color-edge-2); border-radius: 10px; padding: 2px; background: rgba(0, 0, 0, 0.25); }
+.share-seg button { padding: 6px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--color-faint); }
+.share-seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-leaf) 45%, transparent); }
+.share-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.share-stepper button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--color-edge-2); color: var(--color-text); }
+.share-stepper button:disabled { opacity: 0.35; }
+.share-stepper input[type="range"] { width: 110px; accent-color: var(--color-leaf); }
+.share-stepper__value { min-width: 40px; text-align: right; font-size: 12px; font-weight: 700; color: var(--color-mute); font-variant-numeric: tabular-nums; }
+.share-stepper__value--wide { min-width: 48px; text-align: center; }
+
+.share-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scroll-behavior: smooth; }
+.share-center { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+.share-card {
+  width: min(380px, 100%); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 22px; border-radius: 18px; border: 1px solid var(--color-edge-2); background: rgba(13, 18, 27, 0.9);
+}
+.share-card h1 { font-size: 19px; font-weight: 800; }
+.share-card p { font-size: 14px; color: var(--color-mute); line-height: 1.55; margin-bottom: 6px; }
+
+.share-main {
+  zoom: var(--reader-zoom); width: 100%; max-width: var(--reader-width); margin: 0 auto;
+  padding: 28px max(16px, env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  font-size: var(--reader-size); line-height: var(--reader-lh);
+}
+.share-intro { padding-bottom: 22px; margin-bottom: 26px; border-bottom: 1px solid var(--color-edge); }
+.share-intro__pill {
+  display: inline-block; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 9999px;
+  color: var(--color-leaf); border: 1px solid color-mix(in srgb, var(--color-leaf) 35%, transparent); background: color-mix(in srgb, var(--color-leaf) 9%, transparent);
+}
+.share-intro__title { font-size: clamp(1.5em, 4.5vw, 2.15em); line-height: 1.18; font-weight: 800; letter-spacing: -0.015em; margin: 12px 0 10px; overflow-wrap: anywhere; }
+.share-intro__meta { font-size: 0.82em; color: var(--color-mute); }
+.share-thread { display: flex; flex-direction: column; gap: 26px; }
+
+.share-q { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; scroll-margin-top: 20px; }
+.share-q__who { font-size: 0.74em; color: var(--color-faint); text-align: right; }
+.share-q__who span { color: var(--color-faint); }
+.share-q__bubble {
+  max-width: min(88%, 620px); white-space: pre-wrap; overflow-wrap: anywhere;
+  padding: 0.75em 1em; border-radius: 1.1em 1.1em 0.3em 1.1em;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-crim) 22%, #131a26), color-mix(in srgb, var(--color-crim) 10%, #0f141e));
+  border: 1px solid color-mix(in srgb, var(--color-crim) 32%, transparent);
+}
+.share-a {
+  scroll-margin-top: 20px; border-radius: 18px; border: 1px solid var(--color-edge-2);
+  background: linear-gradient(180deg, rgba(20, 27, 40, 0.92), rgba(13, 18, 27, 0.92));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 1em 1.15em 1.15em; overflow: hidden;
+}
+@media (max-width: 520px) { .share-a { padding: 0.85em 0.9em 1em; border-radius: 14px; } }
+.share-a__head { display: flex; align-items: center; gap: 10px; padding-bottom: 0.7em; margin-bottom: 0.8em; border-bottom: 1px solid var(--color-edge); }
+.share-a__logo { display: grid; place-items: center; padding: 4px; border-radius: 10px; border: 1px solid var(--color-edge); background: var(--color-raised); flex-shrink: 0; }
+.share-a__name { font-size: 0.82em; font-weight: 800; line-height: 1.3; }
+.share-a__meta { font-size: 0.7em; color: var(--color-faint); line-height: 1.4; }
+.share-a__mode { color: var(--color-leaf); font-weight: 700; }
+.share-a__mode--facts { color: var(--color-amber); }
+.share-a__note { margin-top: 1em; font-size: 0.78em; color: var(--color-faint); }
+.share-md { overflow-wrap: anywhere; color: color-mix(in srgb, var(--color-text) 94%, transparent); }
+.share-md p + p, .share-md p + ul, .share-md p + ol, .share-md ul + p, .share-md ol + p { margin-top: 0.85em; }
+.share-md h1 { font-size: 1.5em; } .share-md h2 { font-size: 1.3em; } .share-md h3 { font-size: 1.14em; } .share-md h4 { font-size: 1em; }
+.share-md h1, .share-md h2, .share-md h3, .share-md h4 { line-height: 1.3; margin-block: 1.1em 0.45em; }
+.share-md > :first-child, .share-md > :first-child > :first-child { margin-top: 0; }
+.share-md li + li { margin-top: 0.35em; }
+.share-md code, .share-md pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace; }
+.share-md pre { font-size: 0.85em; }
+.share-md table { font-size: 0.9em; }
+.share-visuals:empty { display: none; }
+
+.share-sources { margin-top: 1.1em; }
+.share-q .share-sources { width: min(88%, 620px); margin-top: 0.2em; }
+.share-sources__title { font-size: 0.72em; font-weight: 800; color: var(--color-faint); margin-bottom: 0.45em; }
+.share-sources ul { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.share-source {
+  display: flex; flex-direction: column; gap: 2px; height: 100%; padding: 9px 11px; border-radius: 12px;
+  border: 1px solid var(--color-edge); background: rgba(255, 255, 255, 0.025); font-size: 0.74em; line-height: 1.4; min-width: 0;
+}
+a.share-source:hover { border-color: color-mix(in srgb, var(--color-sky) 50%, transparent); background: color-mix(in srgb, var(--color-sky) 8%, transparent); }
+.share-source__kind { font-size: 0.85em; font-weight: 800; color: var(--color-sky); }
+.share-source__label { font-weight: 700; color: var(--color-text); overflow-wrap: anywhere; }
+.share-source__host { display: inline-flex; align-items: center; gap: 4px; color: var(--color-faint); }
+.share-source__excerpt { color: var(--color-mute); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+.share-foot { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--color-edge); font-size: 0.76em; color: var(--color-faint); text-align: center; }
+.share-foot svg { display: inline; vertical-align: -2px; }
+.share-jump {
+  position: fixed; z-index: 6; right: max(14px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.share-jump button {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 9999px; color: var(--color-text);
+  border: 1px solid var(--color-edge-2); background: rgba(13, 18, 27, 0.9); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+.share-jump button:hover { border-color: color-mix(in srgb, var(--color-leaf) 55%, transparent); }
+@media (prefers-reduced-motion: reduce) { .share-scroll { scroll-behavior: auto; } .share-bar__progress { transition: none; } }
+html[data-effects="calm"] .share-scroll { scroll-behavior: auto; }

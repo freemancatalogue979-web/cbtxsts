@@ -233,3 +233,51 @@ export function safeExternal(value: string | null | undefined): string | undefin
     return undefined;
   }
 }
+
+// ── Share links ───────────────────────────────────────────────────────────
+export type AIShareAudience = "public" | "team";
+export type AIShareLink = {
+  token: string; kind: "message" | "chat"; title: string; audience: AIShareAudience; conversation_id: string;
+  message_id: number | null; views: number; created_at: string; last_viewed_at: string | null; path: string;
+};
+export type AISharedMessage = Pick<AIMessage, "id" | "role" | "content" | "mode" | "note" | "sources" | "created_at">;
+export type AISharedView = {
+  kind: "message" | "chat"; title: string; audience: AIShareAudience; shared_by: { name: string };
+  created_at: string; messages: AISharedMessage[]; truncated: boolean;
+};
+
+/** Full link for a share path ("/#/share/…"), on whatever host the hub is served from. */
+export function shareUrl(path: string, origin: string = typeof window !== "undefined" ? window.location.origin : ""): string {
+  return `${origin.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function isShareToken(value: string | undefined): value is string {
+  return !!value && /^[A-Za-z0-9_-]{16,64}$/.test(value);
+}
+
+// Reader settings stay on this device.
+export type ReaderFont = "system" | "serif" | "mono";
+export type ReaderPrefs = { font: ReaderFont; size: number; zoom: number; spacing: "compact" | "normal" | "airy"; width: "narrow" | "wide" };
+export const READER_DEFAULTS: ReaderPrefs = { font: "system", size: 17, zoom: 1, spacing: "normal", width: "narrow" };
+export const READER_SIZE = { min: 13, max: 30 };
+export const READER_ZOOM = { min: 0.8, max: 1.8 };
+const READER_KEY = "clover_reader_prefs";
+const clampNum = (n: unknown, min: number, max: number, fallback: number) =>
+  typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+
+export function readReaderPrefs(storage: Pick<Storage, "getItem"> | null): ReaderPrefs {
+  try {
+    const raw = JSON.parse(storage?.getItem(READER_KEY) ?? "null") as Partial<ReaderPrefs> | null;
+    if (!raw || typeof raw !== "object") return READER_DEFAULTS;
+    return {
+      font: raw.font === "serif" || raw.font === "mono" ? raw.font : "system",
+      size: Math.round(clampNum(raw.size, READER_SIZE.min, READER_SIZE.max, READER_DEFAULTS.size)),
+      zoom: Math.round(clampNum(raw.zoom, READER_ZOOM.min, READER_ZOOM.max, 1) * 10) / 10,
+      spacing: raw.spacing === "compact" || raw.spacing === "airy" ? raw.spacing : "normal",
+      width: raw.width === "wide" ? "wide" : "narrow",
+    };
+  } catch { return READER_DEFAULTS; }
+}
+export function saveReaderPrefs(storage: Pick<Storage, "setItem"> | null, prefs: ReaderPrefs): void {
+  try { storage?.setItem(READER_KEY, JSON.stringify(prefs)); } catch { /* storage blocked */ }
+}

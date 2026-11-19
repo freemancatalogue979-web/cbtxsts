@@ -1,7 +1,7 @@
 import {
   ArrowDownRight, BookOpenText, BrainCircuit, Check, ChevronRight, CircleHelp, Download, ExternalLink,
   History, Lightbulb, Loader2, LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelTopClose, PanelTopOpen,
-  Paperclip, PenLine, Plus, Send, Settings2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
+  Paperclip, PenLine, Plus, Send, Settings2, Share2, ShieldCheck, Sparkles, Swords, ThumbsDown, ThumbsUp, Trash2, X,
   ArrowLeft, Menu, SquarePen,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -20,6 +20,7 @@ import { AIKnowledge } from "../components/AIKnowledge";
 import { AIContributions, AIReviewQueue } from "../components/AIContributions";
 import { AIActionHistory, AIProposalCard } from "../components/AIProposalCard";
 import { AIMarkdown, AIVisuals } from "../components/AIVisuals";
+import { AIShareDialog } from "../components/AIShareDialog";
 
 type Tab = "chat" | "knowledge" | "contribute" | "review";
 const SUGGESTIONS = [
@@ -156,7 +157,7 @@ function SourceChips({ sources, conversationId, messageId, onManageMemory }: {
   </div>;
 }
 
-function MessageBubble({ message, conversationId, onFeedback, onManageMemory, onProposal }: { message: AIMessage; conversationId: string | null; onFeedback: (id: number, rating: -1 | 0 | 1) => void; onManageMemory: () => void; onProposal: (id: number, proposal: AIProposal) => void }) {
+function MessageBubble({ message, conversationId, onFeedback, onManageMemory, onProposal, onShare }: { message: AIMessage; conversationId: string | null; onFeedback: (id: number, rating: -1 | 0 | 1) => void; onManageMemory: () => void; onProposal: (id: number, proposal: AIProposal) => void; onShare?: (id: number) => void }) {
   if (message.role === "user") return <div className="flex justify-end"><div className="ai-bubble-user max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{message.content}
     {message.sources.some((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection) && <div className="mt-2 pt-2 border-t border-crim/20 text-[10px] font-semibold text-mute whitespace-normal">Attached: {message.sources.filter((source) => ["match", "draft", "map"].includes(source.kind) || source.esports_selection).map((source) => source.match_id || source.label).join(" · ")}</div>}
   </div></div>;
@@ -179,6 +180,8 @@ function MessageBubble({ message, conversationId, onFeedback, onManageMemory, on
         <button type="button" title="Helpful" aria-label="Mark response helpful" aria-pressed={message.feedback === 1} onClick={() => onFeedback(message.id, message.feedback === 1 ? 0 : 1)} className={`p-1.5 rounded hover:bg-overlay ${message.feedback === 1 ? "text-leaf" : "text-faint"}`}><ThumbsUp size={13} /></button>
         <button type="button" title="Not helpful" aria-label="Mark response not helpful" aria-pressed={message.feedback === -1} onClick={() => onFeedback(message.id, message.feedback === -1 ? 0 : -1)} className={`p-1.5 rounded hover:bg-overlay ${message.feedback === -1 ? "text-crim" : "text-faint"}`}><ThumbsDown size={13} /></button>
         <span className="text-[10px] w-full sm:w-auto sm:ml-1">Feedback is private.</span>
+        {onShare && conversationId && <button type="button" title="Share this answer" aria-label="Share this answer" onClick={() => onShare(message.id)}
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[10.5px] font-bold text-faint hover:text-leaf hover:bg-overlay"><Share2 size={13} /> Share</button>}
       </div>
     </div>
   </div>;
@@ -225,6 +228,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
   const [showHistory, setShowHistory] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [rename, setRename] = useState<string | null>(null);
+  const [share, setShare] = useState<{ messageId: number | null } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const selectedRef = useRef<string | null>(null);
@@ -601,6 +605,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           </nav>
           {selected && <div className="flex items-center gap-1.5 px-3 pb-3">
             <span className="text-[10px] text-faint mr-auto">This chat</span>
+            <button type="button" className="btn-ghost !p-2" aria-label="Share conversation" disabled={busy || exporting || !messages.length} onClick={() => { setShowHistory(false); setShare({ messageId: null }); }}><Share2 size={14} /></button>
             <button type="button" className="btn-ghost !p-2" aria-label="Download conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); void exportChat(); }}><Download size={14} /></button>
             <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); setRename(current?.title ?? ""); }}><PenLine size={14} /></button>
             <button type="button" className="btn-ghost !p-2 hover:!text-crim" aria-label="Delete conversation" disabled={busy || exporting} onClick={() => { setShowHistory(false); void removeChat(); }}><Trash2 size={14} /></button>
@@ -624,7 +629,8 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
             onClick={() => onToggleDesktopLayout("historyOpen")}><History size={15} /><span className="hidden lg:inline">{desktopLayout.historyOpen ? "Hide chats" : "Show chats"}</span></button>
           <div className={`min-w-[160px] flex-1 ${desktopLayout.headerOpen ? "" : "md:min-w-0"}`}><div className={desktopLayout.headerOpen ? "" : "md:hidden"}><div className="section-pill">Private conversation</div></div><div className={`text-[12px] font-extrabold truncate mt-1 ${desktopLayout.headerOpen ? "" : "md:mt-0"}`}>{current?.title || "New conversation"}</div></div>
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-            {selected && <><button type="button" className="btn-ghost !p-2" aria-label="Download conversation" title="Download conversation" disabled={busy || exporting} onClick={() => void exportChat()}>{exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}</button>
+            {selected && <><button type="button" className="btn-ghost !p-2" aria-label="Share conversation" title="Share a link to this chat" disabled={busy || exporting || !messages.length} onClick={() => setShare({ messageId: null })}><Share2 size={14} /></button>
+              <button type="button" className="btn-ghost !p-2" aria-label="Download conversation" title="Download conversation" disabled={busy || exporting} onClick={() => void exportChat()}>{exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}</button>
               <button type="button" className="btn-ghost !p-2" aria-label="Rename conversation" disabled={busy || exporting} onClick={() => setRename(current?.title ?? "")}><PenLine size={14} /></button>
               <button type="button" className="btn-ghost !p-2 hover:!text-crim" aria-label="Delete conversation" disabled={busy || exporting} onClick={() => void removeChat()}><Trash2 size={14} /></button></>}
             <button type="button" aria-label="Your context" className="btn-ghost !p-2 sm:!px-3 sm:!py-2" onClick={() => setShowControls(true)}><Settings2 size={15} /><span className="hidden sm:inline text-[11px]">Your context</span></button>
@@ -637,7 +643,7 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
           {loadingChat ? <div className="h-full grid place-items-center text-[12px] text-faint"><span className="inline-flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading conversation…</span></div> : messages.length || showPending ?
             <div className={`${desktopLayout.historyOpen && desktopLayout.navigationOpen ? "max-w-3xl" : "max-w-4xl"} mx-auto space-y-5`} aria-live="polite">
               {hasMoreMessages && <button type="button" className="btn-ghost !text-[10px] mx-auto flex" disabled={loadingMore} onClick={() => void olderMessages()}>{loadingMore ? "Loading…" : "Load earlier messages"}</button>}
-              {messages.map((message) => <MessageBubble key={message.id} message={message} conversationId={selected} onFeedback={giveFeedback} onManageMemory={() => setShowControls(true)} onProposal={(id, proposal) => setMessages((previous) => previous.map((item) => item.id === id ? { ...item, proposal } : item))} />)}
+              {messages.map((message) => <MessageBubble key={message.id} message={message} conversationId={selected} onFeedback={giveFeedback} onManageMemory={() => setShowControls(true)} onProposal={(id, proposal) => setMessages((previous) => previous.map((item) => item.id === id ? { ...item, proposal } : item))} onShare={(id) => setShare({ messageId: id })} />)}
               {showPending && pendingQuestion && <div className="flex justify-end"><div className="ai-bubble-user max-w-[92%] sm:max-w-[78%] rounded-2xl rounded-tr-sm border border-crim/25 bg-crim/10 px-4 py-3 text-[12px] sm:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{pendingQuestion.text}</div></div>}
               {waiting && ((waitingForThink || (busy && activeMatchLoad)) ? <ThinkingIndicator stage={busy ? thinkStage : null} startedAt={busy ? thinkStarted : null} isThink={waitingForThink} loadProgress={loadProgress} /> : <div role="status" className="flex items-center gap-2 text-[11px] text-mute"><Loader2 size={14} className="animate-spin motion-reduce:animate-none text-leaf" /> 9 Clover AI is working…</div>)}
             </div> :
@@ -715,6 +721,9 @@ export function CloverAIPage({ me, desktopLayout, onToggleDesktopLayout }: {
     </Modal>}
     {showControls && <Modal title="Your AI data controls" onClose={() => setShowControls(false)} wide>
       {settings ? <AIDataControls settings={settings} context={context} onChange={setSettings} onClearAttachments={() => { setAttachedMatches([]); setAttachedDrafts([]); setAttachedMaps([]); }} /> : <p className="text-[12px] text-faint">Data controls could not be loaded. Reopen the workspace to try again.</p>}
+    </Modal>}
+    {share && selected && <Modal title="Share" onClose={() => setShare(null)}>
+      <AIShareDialog conversationId={selected} messageId={share.messageId} onClose={() => setShare(null)} />
     </Modal>}
     {rename !== null && <Modal title="Rename conversation" onClose={() => setRename(null)}><form onSubmit={saveRename} className="space-y-4">
       <Field label="Conversation title"><input className="input" value={rename} maxLength={120} onChange={(e) => setRename(e.target.value)} autoFocus /></Field>

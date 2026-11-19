@@ -34,6 +34,19 @@ const EventsPage = lazy(() => import("./pages/Events").then((m) => ({ default: m
 const ArchivePage = lazy(() => import("./pages/Archive").then((m) => ({ default: m.ArchivePage })));
 const TrashPage = lazy(() => import("./pages/Trash").then((m) => ({ default: m.TrashPage })));
 const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
+const SharedChatPage = lazy(() => import("./pages/SharedChat").then((m) => ({ default: m.SharedChatPage })));
+
+/** After signing in from a team-only share link, go back to that link. */
+export function afterLoginRoute(stored: string | null): string {
+  return stored && /^#\/share\/[A-Za-z0-9_-]{16,64}$/.test(stored) ? stored.slice(1) : "/dashboard";
+}
+function takeAfterLogin(): string {
+  try {
+    const stored = window.sessionStorage.getItem("clover_after_login");
+    window.sessionStorage.removeItem("clover_after_login");
+    return afterLoginRoute(stored);
+  } catch { return "/dashboard"; }
+}
 
 function deviceStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
@@ -81,7 +94,7 @@ export default function App() {
   useEffect(() => { saveAIWorkspaceLayout(deviceStorage(), aiLayout); }, [aiLayout]);
   // Remember the last page outside the AI, so its phone back button returns there.
   useEffect(() => {
-    if (section === "ai" || section === "login") return;
+    if (section === "ai" || section === "login" || route[0] === "share") return;
     try { window.sessionStorage.setItem("clover_prev_route", window.location.hash || "#/dashboard"); } catch { /* storage blocked */ }
   }, [section, route]);
   useEffect(() => { applyTheme(theme, section); saveThemePrefs(deviceStorage(), theme); }, [theme, section]);
@@ -140,6 +153,13 @@ export default function App() {
     }
   }, [user, meta, attempt]);
 
+  // Shared AI links open as a standalone reader, signed in or not.
+  if (route[0] === "share") {
+    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner label="Opening" /></div>}>
+      <SharedChatPage key={route[1] ?? ""} token={route[1] ?? ""} />
+    </Suspense>;
+  }
+
   if (booting) {
     return <div className="min-h-screen flex items-center justify-center"><Spinner label="Waking up the hub" /></div>;
   }
@@ -149,7 +169,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <Login onLogin={(u) => { setUser(u); window.location.hash = "/dashboard"; }} />;
+    return <Login onLogin={(u) => { setUser(u); window.location.hash = takeAfterLogin(); }} />;
   }
 
   if (!meta) {

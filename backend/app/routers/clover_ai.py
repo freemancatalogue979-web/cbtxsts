@@ -20,7 +20,7 @@ from .. import ai_context, ai_esports_analysis, ai_learning, ai_web
 from .. import clover_ai_service as service
 from ..ai_credentials import key_status
 from ..ai_privacy import public_ai_mode, public_ai_text
-from ..clover_ai_models import AIAccountConsent, AIActionAudit, AIActionProposal, AIContribution, AIConversation, AIKnowledge, AILearnedMemory, AILearningSettings, AIMemoryNote, AIMessage, AISettings
+from ..clover_ai_models import AIAccountConsent, AIActionAudit, AIActionProposal, AIContribution, AIConversation, AIKnowledge, AILearnedMemory, AILearningSettings, AIMemoryNote, AIMessage, AISettings, AIShare
 from ..deps import get_current_user, get_db
 from ..trash import send_to_trash
 from ..hero_profiles import profile_for
@@ -681,6 +681,79 @@ def export_conversation(
         "next_after": rows[limit - 1].id if more else None,
         "notice": "Private conversation in plaintext. This file is not encrypted; keep it somewhere safe.",
     }
+
+
+class ShareIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message_id: int | None = Field(default=None, ge=1)
+    audience: Literal["public", "team"] = "public"
+    include_prompt: StrictBool = True
+    title: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/conversations/{conversation_id}/shares", status_code=201)
+def create_share(
+    conversation_id: str, data: ShareIn, user: User = Depends(ai_user), db: Session = Depends(get_db)
+) -> dict:
+    """Make (or reuse) a link to one message or to the chat as it is right now."""
+    from .. import ai_share
+
+    conversation = own_conversation(db, user, conversation_id)
+    if data.message_id is not None:
+        message = db.query(AIMessage).filter_by(id=data.message_id, conversation_id=conversation_id).first()
+        if message is None:
+            raise HTTPException(status_code=404, detail="Message not found.")
+        through = message.id
+    else:
+        through = db.query(func.max(AIMessage.id)).filter(AIMessage.conversation_id == conversation_id).scalar() or 0
+        if not through:
+            raise HTTPException(status_code=422, detail="Send a message first, then share the chat.")
+    title = (data.title or "").strip() or conversation.title or "Conversation"
+    existing = (
+        db.query(AIShare)
+        .filter_by(owner_id=user.id, conversation_id=conversation_id, message_id=data.message_id,
+                   through_message_id=through, audience=data.audience, include_prompt=data.include_prompt)
+        .first()
+    )
+    if existing is not None:
+        if data.title and existing.title != title:
+            existing.title = title
+            db.commit()
+        return ai_share.share_json(existing)
+    row = AIShare(
+        token=ai_share.new_token(), owner_id=user.id, conversation_id=conversation_id, message_id=data.message_id,
+        through_message_id=through, include_prompt=data.include_prompt, title=title[:120], audience=data.audience,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ai_share.share_json(row)
+
+
+@router.get("/shares")
+def list_shares(
+    conversation_id: str | None = Query(default=None, max_length=32),
+    user: User = Depends(ai_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    from .. import ai_share
+
+    query = db.query(AIShare).filter_by(owner_id=user.id)
+    if conversation_id:
+        query = query.filter_by(conversation_id=conversation_id)
+    rows = query.order_by(AIShare.created_at.desc()).limit(200).all()
+    return {"items": [ai_share.share_json(row) for row in rows]}
+
+
+@router.delete("/shares/{token}", status_code=204)
+def revoke_share(token: str, user: User = Depends(ai_user), db: Session = Depends(get_db)) -> Response:
+    row = db.query(AIShare).filter_by(token=token, owner_id=user.id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Link not found.")
+    # A revoked link must stay dead, so it is removed rather than sent to Trash.
+    db.delete(row)
+    db.commit()
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/conversations/{conversation_id}/messages")
