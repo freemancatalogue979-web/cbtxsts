@@ -79,6 +79,12 @@ Return one JSON object only:
 
 Rules:
 - Two teams: the left/top team and the right/bottom team, each player row in the order shown.
+- MLBB layout: the post-match data screen shows the two teams side by side (left half, right half), five rows each.
+  A row reads: hero portrait, player name, K/D/A as three numbers split by "/", gold (coin icon), then the score/rating
+  (e.g. 9.4) with an MVP badge on one player per team at most. Team kill totals are the big numbers at the top centre
+  ("12 VS 8" = left 12, right 8) — put them in each team's "kills".
+- Read each digit carefully: 1 vs 7, 3 vs 8, 5 vs 6, 0 vs 8 are the usual mistakes. A row's kills can't exceed its
+  team's kills; the team's kills are the sum of its rows' kills.
 - Copy every number exactly as printed. "12.3k" gold means 12300. Use null for anything not visible. Never invent a number.
 - K/D/A is usually printed as kills/deaths/assists.
 - "rating" is the per-player score (e.g. 8.6, 11.2). "mvp" is true only for players marked MVP (gold MVP / silver MVP-loss badge).
@@ -467,6 +473,8 @@ def interpret(raw: dict, *, db: Session, lineup: dict | None, draft: dict | None
                 item["portrait"] = row["portrait"]
             if row.get("hero_was"):
                 item["hero_was"] = str(row["hero_was"])[:40]
+            if isinstance(row.get("doubt"), list) and row["doubt"]:
+                item["doubt"] = [f for f in row["doubt"] if f in NUMBER_FIELDS][:6]
             if not enemy_side:
                 user = it["user"]
                 item["user_id"] = user.id if user else None
@@ -513,14 +521,207 @@ def read_scoreboard(db: Session, user: User, *, image_url: str, lineup: dict | N
     }
     raw = call_model(api_key, SYSTEM, "Transcribe this screenshot. Game context:\n" + json.dumps(context, ensure_ascii=False),
                      image, mime, extra=[(help_.sheet, "image/png")] if help_.sheet else None)
+    number_notes = double_check(api_key, raw_bytes, raw, {"our_roster_igns": context["our_roster_igns"]}) \
+        if isinstance(raw, dict) and raw.get("screen") != "draft" else []
+    number_notes += sanity(raw) if isinstance(raw, dict) else []
     rows = [r for t in (raw.get("teams") or []) if isinstance(t, dict) for r in _rows(t)] \
         if isinstance(raw, dict) and isinstance(raw.get("teams"), list) else []
     hero_notes = check_rows(raw_bytes, rows, all_heroes, candidates=picked or None, matches=help_.matches)
     out = interpret(raw, db=db, lineup=clean, draft=draft, result=result)
-    out["checks"] = out.get("checks", []) + portrait_checks(help_, out) + hero_notes
+    out["checks"] = out.get("checks", []) + number_notes + portrait_checks(help_, out) + hero_notes
     out["heroes_seen"] = [m.out() for m in help_.matches]
     out["image_url"] = f"/api/files/{name}"
     return out
+
+
+# --------------------------------------------------------------------------- #
+# accuracy: zoomed second look at the numbers, then sanity checks
+# --------------------------------------------------------------------------- #
+DOUBLE_CHECK = os.getenv("CLOVER_SCOREBOARD_DOUBLE_CHECK", "1").strip().lower() not in {"0", "false", "no", "off"}
+MIN_SIDE_FOR_ZOOM = 300          # tiny pictures have nothing to zoom into
+ZOOM_WIDTH = 1500
+NUMBER_FIELDS = ("kills", "deaths", "assists", "gold", "damage", "rating")
+
+NUMBERS_SYSTEM = """You double-check the numbers on a Mobile Legends: Bang Bang post-match scoreboard.
+
+You get two zoomed crops of the same screenshot: image 1 is the left (or top) team, image 2 is the right (or bottom) team.
+For each crop, list that team's player rows top to bottom (five rows when all are visible).
+
+Return one JSON object only:
+{"left": {"kills": team kill total or null, "players": [{"name": "as printed", "kills": n, "deaths": n, "assists": n,
+  "gold": n|null, "damage": n|null, "rating": n|null, "mvp": true|false}]},
+ "right": {same}}
+
+Rules:
+- Copy every digit exactly as printed; look twice at 1/7, 3/8, 5/6, 0/8. "12.3k" means 12300.
+- K/D/A is printed as kills/deaths/assists. Rating is the per-player score such as 8.6.
+- Use null for anything cut off or unreadable. Never guess and never invent a row.
+- Return only the JSON object."""
+
+
+def zoom_halves(raw: bytes) -> list[tuple[bytes, str]] | None:
+    """Two enlarged crops — one per team — so small digits get many more pixels."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+        img = img.convert("RGB")
+    except Exception:  # noqa: BLE001
+        return None
+    w, h = img.size
+    if min(w, h) < MIN_SIDE_FOR_ZOOM:
+        return None
+    if w >= h:   # landscape: teams side by side
+        boxes = [(0, 0, int(w * 0.53), h), (int(w * 0.47), 0, w, h)]
+    else:        # portrait: teams stacked
+        boxes = [(0, 0, w, int(h * 0.53)), (0, int(h * 0.47), w, h)]
+    out = []
+    for box in boxes:
+        part = img.crop(box)
+        scale = max(1.0, ZOOM_WIDTH / part.size[0])
+        if scale > 1.0:
+            part = part.resize((int(part.size[0] * scale), int(part.size[1] * scale)), Image.LANCZOS)
+        part.thumbnail((2400, 2400))
+        buf = io.BytesIO()
+        part.save(buf, "JPEG", quality=92)
+        out.append((buf.getvalue(), "image/jpeg"))
+    return out
+
+
+def call_numbers(reader: "str | Reader", crops: list[tuple[bytes, str]], context: dict) -> dict:
+    """Second, numbers-only look at the zoomed crops. Tests replace this."""
+    reader = reader if isinstance(reader, Reader) else Reader(MAIN_PROVIDER, reader)
+    text = "Double-check the numbers. Roster names for reference:\n" + json.dumps(context, ensure_ascii=False)
+    return with_backup(reader, lambda r: _read_once(r, NUMBERS_SYSTEM, text, crops))
+
+
+def _num(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*([kK])?\s*", str(value))
+    if not m:
+        return None
+    n = float(m.group(1))
+    return n * 1000 if m.group(2) else n
+
+
+def reconcile(raw: dict, second: Any) -> list[dict]:
+    """Merge the zoomed reading into the first one. Agreement confirms a number; a clash takes the zoomed
+    value (more pixels per digit) and marks the row so the person looks at it. Returns check notes."""
+    if not isinstance(second, dict) or not isinstance(raw.get("teams"), list):
+        return []
+    teams = [t for t in raw["teams"] if isinstance(t, dict)][:2]
+    by_side = {}
+    for i, t in enumerate(teams):
+        side = t.get("side") if t.get("side") in {"left", "right"} else ("left" if i == 0 else "right")
+        by_side.setdefault(side, t)
+    agreed = fixed = filled = 0
+    clashes: list[str] = []
+    for side in ("left", "right"):
+        team, zoom = by_side.get(side), second.get(side)
+        if not isinstance(team, dict) or not isinstance(zoom, dict):
+            continue
+        z_rows = [r for r in (zoom.get("players") or []) if isinstance(r, dict)][:5] if isinstance(zoom.get("players"), list) else []
+        rows = _rows(team)
+        used: set[int] = set()
+        for i, row in enumerate(rows):
+            j = next((k for k, z in enumerate(z_rows) if k not in used and z.get("name") and row.get("name")
+                      and names_match(str(z["name"]), str(row["name"]))), None)
+            if j is None and i < len(z_rows) and i not in used and len(z_rows) == len(rows):
+                j = i  # same number of rows: line them up by position
+            if j is None:
+                continue
+            used.add(j)
+            z = z_rows[j]
+            for field in NUMBER_FIELDS:
+                a, b = _num(row.get(field)), _num(z.get(field))
+                if b is None:
+                    continue
+                if a is None:
+                    row[field] = int(b) if field != "rating" else b
+                    filled += 1
+                elif abs(a - b) < (0.05 if field == "rating" else 0.5):
+                    agreed += 1
+                else:
+                    row[field] = int(b) if field != "rating" else b
+                    row.setdefault("doubt", []).append(field)
+                    fixed += 1
+                    if len(clashes) < 6:
+                        clashes.append(f"{row.get('name') or row.get('hero') or 'a row'} {field} {a:g}→{b:g}")
+        tk_a, tk_b = _num(team.get("kills")), _num(zoom.get("kills"))
+        if tk_b is not None and (tk_a is None or abs(tk_a - tk_b) >= 0.5):
+            team["kills"] = int(tk_b)
+    notes: list[dict] = []
+    if agreed or fixed or filled:
+        if fixed:
+            notes.append({"tone": "warn", "text": f"Double-checked every number on a zoomed-in copy: {agreed} matched, "
+                                                  f"{fixed} read differently and were corrected ({'; '.join(clashes)}) — glance at those."})
+        else:
+            notes.append({"tone": "ok", "text": f"Double-checked every number on a zoomed-in copy: all {agreed} matched"
+                                                + (f", {filled} filled in." if filled else ".")})
+    return notes
+
+
+def sanity(raw: dict) -> list[dict]:
+    """Numbers that can't all be right at once. Marks the rows it doubts."""
+    notes: list[dict] = []
+    teams = [t for t in (raw.get("teams") or []) if isinstance(t, dict)][:2] if isinstance(raw.get("teams"), list) else []
+    sums = []
+    for t in teams:
+        rows = _rows(t)
+        label = "Left team" if t.get("side") != "right" else "Right team"
+        kills = [_num(r.get("kills")) for r in rows]
+        total = sum(k for k in kills if k is not None) if rows and all(k is not None for k in kills) else None
+        printed = _num(t.get("kills"))
+        sums.append((total, sum(d for d in (_num(r.get("deaths")) for r in rows) if d is not None)
+                     if rows and all(_num(r.get("deaths")) is not None for r in rows) else None))
+        if total is not None and printed is not None and abs(total - printed) >= 0.5:
+            notes.append({"tone": "warn", "text": f"{label}: player kills add up to {total:g} but the scoreboard total says "
+                                                  f"{printed:g} — one K is probably misread."})
+            for r in rows:
+                r.setdefault("doubt", []).append("kills")
+        team_k = printed if printed is not None else total
+        for r in rows:
+            name = r.get("name") or r.get("hero") or "a player"
+            k, a = _num(r.get("kills")), _num(r.get("assists"))
+            if team_k is not None and ((k is not None and k > team_k) or (a is not None and a > team_k)):
+                notes.append({"tone": "warn", "text": f"{name}: K/A higher than the team's {team_k:g} kills — check it."})
+                r.setdefault("doubt", []).extend(["kills", "assists"])
+            rating = _num(r.get("rating"))
+            if rating is not None and not 0 < rating <= 20:
+                notes.append({"tone": "warn", "text": f"{name}: rating {rating:g} isn't a real score — removed."})
+                r["rating"] = None
+            gold = _num(r.get("gold"))
+            if gold is not None and not 300 <= gold <= 60000:
+                notes.append({"tone": "warn", "text": f"{name}: {gold:g} gold looks wrong — check it."})
+                r.setdefault("doubt", []).append("gold")
+        if sum(1 for r in rows if r.get("mvp") is True) > 1:
+            notes.append({"tone": "warn", "text": f"{label}: more than one MVP marked — only one player per team can be."})
+    if len(sums) == 2:
+        for (k, _), (_, d), who in ((sums[0], sums[1], "left"), (sums[1], sums[0], "right")):
+            if k is not None and d is not None and abs(k - d) > 3:
+                notes.append({"tone": "warn", "text": f"The {who} team's kills ({k:g}) and the other team's deaths ({d:g}) "
+                                                      "don't line up — a K or D is likely misread."})
+    for t in teams:
+        for r in _rows(t):
+            if r.get("doubt"):
+                r["doubt"] = sorted(set(r["doubt"]))
+    return notes
+
+
+def double_check(reader, raw_bytes: bytes, raw: dict, context: dict) -> list[dict]:
+    if not DOUBLE_CHECK or not isinstance(raw, dict):
+        return []
+    crops = zoom_halves(raw_bytes)
+    if not crops:
+        return []
+    try:
+        second = call_numbers(reader, crops, context)
+    except Exception:  # noqa: BLE001 - the first reading still stands
+        return [{"tone": "info", "text": "Couldn't do the zoomed-in double check this time — look over the numbers."}]
+    return reconcile(raw, second)
 
 
 def portrait_checks(help_, out: dict) -> list[dict]:
