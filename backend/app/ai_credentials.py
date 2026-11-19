@@ -24,7 +24,9 @@ KEY_PATH = DATA_DIR / "credential-encryption.key"
 MASTER_KEY_ENV = "CLOVER_CREDENTIAL_ENCRYPTION_KEY"
 PROVIDER = "deepseek"
 GROQ = "groq"  # optional second key: reads screenshots and documents (app/vision_provider.py)
-ENV_NAMES = {PROVIDER: ("CLOVER_AI_API_KEY", "DEEPSEEK_API_KEY"), GROQ: ("CLOVER_GROQ_API_KEY", "GROQ_API_KEY")}
+GEMINI = "gemini"  # optional Google Gemini key: first choice for reading match screenshots
+ENV_NAMES = {PROVIDER: ("CLOVER_AI_API_KEY", "DEEPSEEK_API_KEY"), GROQ: ("CLOVER_GROQ_API_KEY", "GROQ_API_KEY"),
+             GEMINI: ("CLOVER_GEMINI_API_KEY", "GEMINI_API_KEY")}
 
 
 class ProviderCredential(Base):

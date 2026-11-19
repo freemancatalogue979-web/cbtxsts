@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import vision_provider
-from ..ai_credentials import GROQ, PROVIDER, CredentialStorageError, key_status, remove_key, resolved_key, save_key
+from ..ai_credentials import GEMINI, GROQ, PROVIDER, CredentialStorageError, key_status, remove_key, resolved_key, save_key
 from ..deps import can, get_current_user, get_db, require
 from ..trash import send_to_trash
 from ..models import TeamSettings, User
@@ -226,6 +226,55 @@ def test_groq_key(response: Response, db: Session = Depends(get_db), user: User 
     if not key:
         raise HTTPException(409, "Save a Groq key first.")
     return vision_provider.check_groq_key(key)
+
+
+# Gemini: optional Google key, first choice for reading match screenshots (app/vision_provider.py).
+def _gemini_status(db: Session) -> dict:
+    return {**key_status(db, GEMINI), "model": vision_provider.GEMINI_MODEL,
+            "backup": bool(key_status(db, GROQ)["configured"] or key_status(db)["configured"]),
+            "backup_names": [name for name, prov in (("Groq", GROQ), ("main AI key", PROVIDER)) if key_status(db, prov)["configured"]]}
+
+
+@router.get("/integrations/gemini")
+def gemini_key_status(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    response.headers["Cache-Control"] = "no-store"
+    return _gemini_status(db)
+
+
+@router.post("/integrations/gemini")
+def update_gemini_key(payload: AIKeyIn, request: Request, response: Response,
+                      authorization: str | None = Header(default=None), db: Session = Depends(get_db),
+                      user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    _save(db, _clean_key(payload), GEMINI)
+    response.headers["Cache-Control"] = "no-store"
+    return _gemini_status(db)
+
+
+@router.delete("/integrations/gemini")
+def remove_gemini_key(request: Request, response: Response, authorization: str | None = Header(default=None),
+                      db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    require(can.manage_users(user), "manage provider credentials")
+    _require_secret_write(request, authorization)
+    remove_key(db, GEMINI)
+    response.headers["Cache-Control"] = "no-store"
+    return _gemini_status(db)
+
+
+@router.post("/integrations/gemini/test")
+def test_gemini_key(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Check the saved key against Gemini's model list (no image is sent, nothing is billed)."""
+    require(can.manage_users(user), "manage provider credentials")
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        key = resolved_key(db, GEMINI)
+    except CredentialStorageError as exc:
+        raise HTTPException(503, str(exc)) from None
+    if not key:
+        raise HTTPException(409, "Save a Gemini key first.")
+    return vision_provider.check_gemini_key(key)
 
 
 # ---------------------------------------------------------------------------

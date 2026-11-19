@@ -1,5 +1,10 @@
 """Who reads uploaded screenshots and documents.
 
+Order: Google Gemini (when Team Admin saved its key) → Groq (same) → the main AI key. Each one is
+the automatic backup of the one before it. Gemini is the most accurate reader of MLBB screenshots
+(small digits, names with symbols, portraits), so it goes first; it speaks the OpenAI chat format
+at https://generativelanguage.googleapis.com/v1beta/openai/ (see ai.google.dev/gemini-api/docs/openai).
+
 Team Admin can save a Groq API key next to the main AI key. When it is there,
 every *reading* job (Utility uploads, scoreboard/evidence screenshots, match
 documents) goes to Groq's vision model first; the main key is the automatic
@@ -24,7 +29,7 @@ from typing import Any, Callable, TypeVar
 
 from sqlalchemy.orm import Session
 
-from .ai_credentials import GROQ, PROVIDER as MAIN, CredentialStorageError, resolved_key
+from .ai_credentials import GEMINI, GROQ, PROVIDER as MAIN, CredentialStorageError, resolved_key
 
 log = logging.getLogger("clover")
 
@@ -34,6 +39,16 @@ GROQ_MODEL = os.getenv("CLOVER_GROQ_VISION_MODEL", "").strip() or "qwen/qwen3.8-
 GROQ_MAX_IMAGES = 3
 GROQ_IMAGE_BUDGET = 3_500_000   # raw image bytes per request (base64 adds a third); keeps requests small and fast
 GROQ_MAX_SIDE = 2400
+
+GEMINI_BASE = os.getenv("CLOVER_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip().rstrip("/")
+GEMINI_ENDPOINT = f"{GEMINI_BASE}/chat/completions"
+GEMINI_MODEL = os.getenv("CLOVER_GEMINI_VISION_MODEL", "").strip() or "gemini-3.8-flash"
+GEMINI_MAX_IMAGES = 6
+GEMINI_IMAGE_BUDGET = 12_000_000  # inline requests may be 20 MB; base64 adds a third
+GEMINI_MAX_SIDE = 3072
+# Gemini's own habit is [ymin, xmin, ymax, xmax]; our boxes are x first. Said once, plainly.
+GEMINI_BOX_RULE = ("\n- Coordinates: every box is [x0, y0, x1, y1] — x (left→right) first, then y (top→bottom) — "
+                   "on a 0–1000 scale of the whole picture. Not [ymin, xmin, ...].")
 
 T = TypeVar("T")
 
@@ -69,22 +84,40 @@ def _key(db: Session, provider: str) -> str | None:
 
 
 def reader_for(db: Session, main_key: str | None) -> Reader | None:
-    """Groq first when its key exists, the main key as backup (or alone)."""
-    main = Reader(MAIN, main_key) if main_key else None
+    """Gemini, then Groq, then the main key — whichever keys exist, each backing up the one before."""
+    chain = Reader(MAIN, main_key) if main_key else None
     groq = _key(db, GROQ)
     if groq:
-        return Reader(GROQ, groq, backup=main)
-    return main
+        chain = Reader(GROQ, groq, backup=chain)
+    gemini = _key(db, GEMINI)
+    if gemini:
+        chain = Reader(GEMINI, gemini, backup=chain)
+    return chain
 
 
 def with_backup(reader: Reader, job: Callable[[Reader], T]) -> T:
-    try:
-        return job(reader)
-    except ProviderError as exc:
-        if reader.backup is None:
-            raise
-        log.warning("%s could not read the upload (%s); using the backup key.", reader.provider, exc)
-        return job(reader.backup)
+    """Run the job with the reader; on a provider failure walk down the backups."""
+    current: Reader | None = reader
+    while True:
+        try:
+            return job(current)
+        except ProviderError as exc:
+            if current.backup is None:
+                raise
+            log.warning("%s could not read the upload (%s); using the backup key.", current.provider, exc)
+            current = current.backup
+
+
+def vision_chat(reader: Reader, system: str, text: str, images: list[tuple[bytes, str]], *,
+                max_tokens: int, timeout: int) -> dict | None:
+    """Gemini or Groq reading; None for the main key (each caller builds that request itself)."""
+    if reader.provider == GEMINI:
+        content: Any = [{"type": "text", "text": text}, *gemini_image_parts(images)] if images else text
+        return gemini_chat(reader.key, system, content, max_tokens=max_tokens, timeout=timeout)
+    if reader.provider == GROQ:
+        content = [{"type": "text", "text": text}, *groq_image_parts(images)] if images else text
+        return groq_chat(reader.key, system, content, max_tokens=max_tokens, timeout=timeout)
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -165,9 +198,9 @@ def groq_chat(key: str, system: str, user_content: Any, *, max_tokens: int, time
 
 
 def fit_images(images: list[tuple[bytes, str]], budget: int = GROQ_IMAGE_BUDGET,
-               max_side: int = GROQ_MAX_SIDE) -> list[tuple[bytes, str]]:
-    """At most 3 pictures, re-encoded until together they fit the request budget."""
-    images = images[:GROQ_MAX_IMAGES]
+               max_side: int = GROQ_MAX_SIDE, max_images: int = GROQ_MAX_IMAGES) -> list[tuple[bytes, str]]:
+    """At most ``max_images`` pictures, re-encoded until together they fit the request budget."""
+    images = images[:max_images]
     if sum(len(data) for data, _ in images) <= budget and all(kind != "image/gif" for _, kind in images):
         return images
     from PIL import Image
@@ -191,6 +224,64 @@ def fit_images(images: list[tuple[bytes, str]], budget: int = GROQ_IMAGE_BUDGET,
 def groq_image_parts(images: list[tuple[bytes, str]]) -> list[dict]:
     return [{"type": "image_url", "image_url": {"url": f"data:{kind};base64,{base64.b64encode(data).decode('ascii')}"}}
             for data, kind in fit_images(images)]
+
+
+# --------------------------------------------------------------------------- #
+# Gemini
+# --------------------------------------------------------------------------- #
+def gemini_body(system: str, user_content: Any, max_tokens: int, *, minimal: bool = False) -> dict:
+    body: dict[str, Any] = {
+        "model": GEMINI_MODEL,
+        "messages": [{"role": "system", "content": system + GEMINI_BOX_RULE},
+                     {"role": "user", "content": user_content}],
+        "temperature": 0,
+        # thinking tokens count here too: leave plenty of room so the JSON is never cut off
+        "max_tokens": max(max_tokens * 3, 12000),
+        "response_format": {"type": "json_object"},
+    }
+    if not minimal:
+        body["reasoning_effort"] = "low"   # a short think over the digits; the reading stays quick
+    return body
+
+
+def gemini_chat(key: str, system: str, user_content: Any, *, max_tokens: int, timeout: int) -> dict:
+    try:
+        return post_chat(GEMINI_ENDPOINT, key, gemini_body(system, user_content, max_tokens), timeout=timeout + 30)
+    except ProviderError as exc:
+        if exc.kind != "rejected" or "reasoning" not in exc.detail.lower():
+            raise
+        return post_chat(GEMINI_ENDPOINT, key, gemini_body(system, user_content, max_tokens, minimal=True), timeout=timeout + 30)
+
+
+def gemini_image_parts(images: list[tuple[bytes, str]]) -> list[dict]:
+    fitted = fit_images(images[:GEMINI_MAX_IMAGES], budget=GEMINI_IMAGE_BUDGET, max_side=GEMINI_MAX_SIDE,
+                        max_images=GEMINI_MAX_IMAGES)
+    return [{"type": "image_url", "image_url": {"url": f"data:{kind};base64,{base64.b64encode(data).decode('ascii')}"}}
+            for data, kind in fitted]
+
+
+def check_gemini_key(key: str) -> dict:
+    """Ask Gemini which models this key can use. Never raises; the key is never echoed."""
+    req = urllib.request.Request(f"{GEMINI_BASE}/models", headers={"Authorization": f"Bearer {key}",
+                                                                   "Accept": "application/json", "User-Agent": "9clover-hub/1.0"})
+    try:
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=15) as resp:
+            data = json.loads(resp.read(4_000_001))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (400, 401, 403):
+            return {"ok": False, "model": GEMINI_MODEL, "message": "Google refused this key. Copy it again from aistudio.google.com/apikey."}
+        if exc.code == 429:
+            return {"ok": False, "model": GEMINI_MODEL, "message": "The key works but its limit is used up right now. Try again later."}
+        return {"ok": False, "model": GEMINI_MODEL, "message": f"Gemini answered with an error ({exc.code}). Try again in a minute."}
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return {"ok": False, "model": GEMINI_MODEL, "message": "Couldn't reach Gemini from the server. Check its internet connection."}
+    ids = {str(m.get("id") or "").removeprefix("models/") for m in (data.get("data") or []) if isinstance(m, dict)} \
+        if isinstance(data, dict) else set()
+    if ids and GEMINI_MODEL not in ids:
+        return {"ok": False, "model": GEMINI_MODEL,
+                "message": f"The key works, but the model {GEMINI_MODEL} isn't available to it. "
+                           "Set CLOVER_GEMINI_VISION_MODEL to a Gemini model it lists."}
+    return {"ok": True, "model": GEMINI_MODEL, "message": f"Connected. Match screenshots are read with {GEMINI_MODEL} first."}
 
 
 def check_groq_key(key: str) -> dict:

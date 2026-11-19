@@ -30,13 +30,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import UPLOAD_DIR
-from .ai_credentials import GROQ, PROVIDER as MAIN_PROVIDER
+from .ai_credentials import PROVIDER as MAIN_PROVIDER
 from .esports_ai import ENDPOINT, MODEL, _credential, _reserve
 from .hero_vision import HINT_RULE, check_rows, portrait_help
 from .models import Hero, User
 from .performance import clean_line, clean_lineup, hero_key
 from .security import LANES
-from .vision_provider import ProviderError, Reader, groq_chat, groq_image_parts, post_chat, reader_for, with_backup
+from .vision_provider import ProviderError, Reader, post_chat, reader_for, vision_chat, with_backup
 
 # deepseek-flash reads images (JPEG/PNG/GIF/WebP) through the normal chat endpoint.
 VISION_MODEL = os.getenv("CLOVER_AI_VISION_MODEL", MODEL).strip() or MODEL
@@ -159,9 +159,9 @@ def call_model(api_key: "str | Reader", system: str, text: str, image: bytes, mi
 
 
 def _read_once(reader: Reader, system: str, text: str, images: list[tuple[bytes, str]]) -> dict:
-    if reader.provider == GROQ:
-        content = [{"type": "text", "text": text}, *groq_image_parts(images)]
-        return groq_chat(reader.key, system, content, max_tokens=4000, timeout=90)
+    read = vision_chat(reader, system, text, images, max_tokens=4000, timeout=90)
+    if read is not None:
+        return read
 
     def part(data: bytes, kind: str) -> dict:
         return {"type": "image_url", "image_url": {"url": f"data:{kind};base64,{base64.b64encode(data).decode('ascii')}",
@@ -181,7 +181,7 @@ def _read_once(reader: Reader, system: str, text: str, images: list[tuple[bytes,
 
 
 def reader_key(db: Session, user: User) -> Reader:
-    """Who reads uploads: Groq when Team Admin saved its key, else (and as backup) the main key."""
+    """Who reads uploads: Gemini, then Groq, when Team Admin saved their keys; the main key backs them up."""
     main_key, _reason = _credential(db)
     reader = reader_for(db, main_key)
     if reader is None:

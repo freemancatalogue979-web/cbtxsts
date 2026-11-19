@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .ai_credentials import GROQ, PROVIDER as MAIN_PROVIDER
+from .ai_credentials import PROVIDER as MAIN_PROVIDER
 from .ai_scoreboard import IMAGE_EXT, ReadError, prepare_image, reader_key
 from .ai_scoreboard import call_model as _vision_call
 from .config import UPLOAD_DIR
@@ -25,7 +25,7 @@ from .esports_ai import ENDPOINT, MODEL
 from .hero_vision import HINT_RULE, check_rows, portrait_help
 from .models import User, utcnow
 from .solo_games import clean_game, hero_names
-from .vision_provider import ProviderError, Reader, groq_chat, post_chat, with_backup
+from .vision_provider import ProviderError, Reader, post_chat, vision_chat, with_backup
 
 DOC_EXT = {"pdf", "docx", "txt", "md", "json"}
 SHEET_EXT = {"csv", "tsv", "xlsx"}
@@ -213,8 +213,9 @@ def call_text(api_key: "str | Reader", system: str, text: str) -> dict:
     reader = api_key if isinstance(api_key, Reader) else Reader(MAIN_PROVIDER, api_key)
 
     def once(r: Reader) -> dict:
-        if r.provider == GROQ:
-            return groq_chat(r.key, system, text, max_tokens=8000, timeout=120)
+        read = vision_chat(r, system, text, [], max_tokens=8000, timeout=120)
+        if read is not None:
+            return read
         body = {"model": MODEL, "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}],
                 "thinking": {"type": "disabled"}, "temperature": 0, "max_tokens": 8000,
                 "response_format": {"type": "json_object"}}
