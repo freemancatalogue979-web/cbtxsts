@@ -699,6 +699,8 @@ export interface MapChip {
   x: number;
   y: number;
   preset?: MapChipPreset;
+  /** Hide this chip's name label on the map. */
+  hideName?: boolean;
 }
 
 export interface MapZone {

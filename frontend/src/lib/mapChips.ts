@@ -1,6 +1,6 @@
 import type { MapChip, MapChipPreset } from "./types";
 
-export type ChipSettings = Pick<MapChip, "name" | "color" | "size" | "preset">;
+export type ChipSettings = Pick<MapChip, "name" | "color" | "size" | "preset" | "hideName">;
 type Preset = { id: MapChipPreset; name: string; label: string; color: string; description: string };
 type Bounds = Pick<DOMRect, "left" | "top" | "right" | "bottom" | "width" | "height">;
 type OccupiedMarker = { x: number; y: number; size: number };

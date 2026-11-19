@@ -1,6 +1,6 @@
 import {
-  CircleDot, CirclePlus, Eraser, Footprints, Hand, Layers, Maximize2, Minimize2, MousePointer2,
-  MoveUpRight, PenLine, RotateCcw, Save, Trash2, X, ZoomIn, ZoomOut,
+  Box, Circle, CircleDot, CirclePlus, Download, Eraser, Eye, EyeOff, Film, Footprints, Hand, Layers, Maximize2, Minimize2, MousePointer2,
+  MoveUpRight, Pause, PenLine, Play, RotateCcw, Save, Square, Trash2, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -13,6 +13,11 @@ import { BattlefieldMap } from "./BattlefieldMap";
 import { HeroImg } from "./HeroImg";
 import { Field, Spinner } from "./ui";
 import { nice } from "../lib/caseText";
+import {
+  addFrame, cleanRecordings, fmtDuration, frameAt, REC_FPS, REC_MAX_MS, REC_MAX_TAKES, startRecording, trailsAt, type MapRecording,
+} from "../lib/mapRecording";
+import { canRecordVideo, downloadBlob, renderVideo } from "../lib/mapVideo";
+import { ChipHologram, loadHoloEngine } from "./MapHologram";
 
 type Side = MapToken["side"];
 type DrawPath = { color: string; points: number[][]; mode?: "arrow" | "free" };
@@ -62,6 +67,9 @@ const DEFAULT_CHIP: ChipSettings = { name: "Minion", color: "#f5b942", size: 52 
 const uid = () => globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const endpoint = (step: MapStep) => step.points[step.points.length - 1];
+const HOLO_PRESETS = new Set<string>(CHIP_PRESETS.map((p) => p.id));
+const TRAIL_COLOR: Record<Side, string> = { ours: "#34d399", theirs: "#fb7185", neutral: "#fbbf24" };
+const fileSlug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "map";
 
 function contrast(color: string): string {
   const hex = /^#[\da-f]{6}$/i.test(color) ? color.slice(1) : "f5b942";
@@ -171,6 +179,19 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
   const [heroQ, setHeroQ] = useState("");
   const [newSide, setNewSide] = useState<Side>("ours");
   const [err, setErr] = useState<string | null>(null);
+  // Display: 3D hologram chips and chip name labels (saved with the board, viewers can flip them locally).
+  const [holo, setHolo] = useState(true);
+  const [chipNames, setChipNames] = useState(true);
+  // Recorder: takes saved with the board, the take being recorded, and the take being replayed.
+  const [recordings, setRecordings] = useState<MapRecording[]>([]);
+  const [recOn, setRecOn] = useState(false);
+  const [recMs, setRecMs] = useState(0);
+  const recRef = useRef<{ rec: MapRecording; t0: number } | null>(null);
+  const [replay, setReplay] = useState<{ id: string; t: number; playing: boolean; speed: number } | null>(null);
+  const [exporting, setExporting] = useState<number | null>(null);
+  const exportSignal = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const live = useRef({ tokens, chips, paths, steps, zones });
+  live.current = { tokens, chips, paths, steps, zones };
   const area = useRef<HTMLDivElement>(null);
   const surf = useRef<HTMLDivElement>(null);
   const fsWrap = useRef<HTMLDivElement>(null);
@@ -257,6 +278,10 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
         const preset = chipPreset(chip);
         return !chip.preset && preset ? { ...chip, preset: preset.id } : chip;
       }));
+      setHolo(data.chipStyle !== "portrait");
+      setChipNames(data.showChipNames !== false);
+      setRecordings(cleanRecordings(data.recordings));
+      setReplay(null);
       setHistory([]);
       setSelected(null);
       setView({ z: 1, x: 0, y: 0 });
@@ -268,6 +293,87 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
     if (canManage) api.get<Hero[]>("/heroes").then(setHeroes).catch(() => setHeroes([]));
   }, [id, canManage]);
   useEffect(load, [load]);
+
+  // ── Recorder ──────────────────────────────────────────────────────────
+  const replayRec = replay ? recordings.find((r) => r.id === replay.id) : undefined;
+  const replayState = replay && replayRec ? frameAt(replayRec, replay.t) : null;
+  const replayTrails = replay && replayRec ? trailsAt(replayRec, replay.t) : [];
+
+  function startRec() {
+    recRef.current = { rec: addFrame(startRecording(uid(), `Take ${recordings.length + 1}`), live.current, 0), t0: performance.now() };
+    setRecMs(0); setReplay(null); setSelected(null); setRecOn(true);
+  }
+  function stopRec() {
+    const r = recRef.current;
+    recRef.current = null;
+    setRecOn(false);
+    if (!r) return;
+    const finished = addFrame(r.rec, live.current, Math.min(REC_MAX_MS, performance.now() - r.t0));
+    setRecordings((list) => [...list, finished].slice(-REC_MAX_TAKES));
+    setDirty(true);
+    setSelected(null);
+    setReplay({ id: finished.id, t: 0, playing: false, speed: 1 });
+  }
+  const stopRecRef = useRef(stopRec);
+  stopRecRef.current = stopRec;
+  useEffect(() => {
+    if (!recOn) return;
+    const timer = window.setInterval(() => {
+      const r = recRef.current;
+      if (!r) return;
+      const t = performance.now() - r.t0;
+      r.rec = addFrame(r.rec, live.current, t);
+      setRecMs(t);
+      if (t >= REC_MAX_MS) stopRecRef.current();
+    }, 1000 / REC_FPS);
+    return () => window.clearInterval(timer);
+  }, [recOn]);
+  useEffect(() => {
+    if (!replay?.playing || !replayRec) return;
+    let raf = 0, last = performance.now();
+    const step = (now: number) => {
+      const dt = now - last;
+      last = now;
+      setReplay((r) => {
+        if (!r) return r;
+        const t = r.t + dt * r.speed;
+        return t >= replayRec.duration ? { ...r, t: replayRec.duration, playing: false } : { ...r, t };
+      });
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [replay?.playing, replayRec]);
+  useEffect(() => () => { exportSignal.current.cancelled = true; }, []);
+
+  function openReplay(takeId: string) {
+    setSelected(null); setGestureIdle();
+    setReplay({ id: takeId, t: 0, playing: true, speed: replay?.speed ?? 1 });
+  }
+  function setGestureIdle() { gesture.current = null; setPreview(null); setChipPreview(null); setZonePreview(null); }
+  function deleteTake(takeId: string) {
+    const take = recordings.find((r) => r.id === takeId);
+    if (!take || !confirm(`Delete "${take.name}"?`)) return;
+    setRecordings((list) => list.filter((r) => r.id !== takeId));
+    setReplay(null); setDirty(true);
+  }
+  async function exportVideo(take: MapRecording) {
+    if (!canRecordVideo()) { setErr("This browser can't make video files. Try Chrome, Edge or a recent Safari."); return; }
+    const signal = { cancelled: false };
+    exportSignal.current = signal;
+    setErr(null); setExporting(0);
+    setReplay((r) => r && { ...r, playing: false });
+    try {
+      const engine = holo ? await loadHoloEngine() : null;
+      const { blob, ext } = await renderVideo(take, {
+        title: `${board?.name || "Map"} · ${take.name}`, mapSrc: GAME_SRC, aspect: 1870 / 841, speed: replay?.speed ?? 1,
+        chipNames, heroNames: true, holo: engine, onProgress: setExporting, signal,
+      });
+      downloadBlob(blob, `${fileSlug(board?.name ?? "map")}-${fileSlug(take.name)}.${ext}`);
+    } catch (error) {
+      if (!signal.cancelled) setErr(error instanceof Error ? error.message : "Could not make the video");
+    } finally { setExporting(null); }
+  }
 
   const snapshot = () => setHistory((h) => [...h.slice(-29), { tokens, paths, steps, chips, zones }]);
   const undo = () => {
@@ -284,7 +390,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
 
   function chooseTool(next: Tool) {
     if (next === "chip" && selectedChip) {
-      setChipDraft({ name: selectedChip.name, color: selectedChip.color, size: selectedChip.size, preset: selectedChip.preset });
+      setChipDraft({ name: selectedChip.name, color: selectedChip.color, size: selectedChip.size, preset: selectedChip.preset, hideName: selectedChip.hideName });
     }
     setSelected(null);
     setTool(next);
@@ -293,7 +399,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
     setSelected(target);
     if (target.kind === "chip") {
       const chip = chips.find((c) => c.id === target.id);
-      if (chip) setChipDraft({ name: chip.name, color: chip.color, size: chip.size, preset: chip.preset });
+      if (chip) setChipDraft({ name: chip.name, color: chip.color, size: chip.size, preset: chip.preset, hideName: chip.hideName });
     }
   }
   function targetAt(e: React.PointerEvent): Target | null {
@@ -531,7 +637,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
   }
 
   function onMarkerKey(e: React.KeyboardEvent, target: Target) {
-    if (!canManage) return;
+    if (!canManage || replay) return;
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTool("move"); selectTarget(target); return; }
     if (tool !== "move") return;
     if (e.key === "Delete" || e.key === "Backspace") {
@@ -616,7 +722,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
     try {
       const b = await api.patch<MapBoard>(`/maps/${board.id}`, {
         name: board.name, opponent: board.opponent, notes: board.notes,
-        data: { ...board.data, tokens, paths, steps, chips, zones },
+        data: { ...board.data, tokens, paths, steps, chips, zones, chipStyle: holo ? "holo" : "portrait", showChipNames: chipNames, recordings },
       });
       setBoard(b); setDirty(false);
     } catch (error) { setErr(error instanceof Error ? error.message : "Save failed"); }
@@ -693,12 +799,24 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
             onChange={(e) => updateChip({ size: Number(e.target.value) })} className="w-full h-2 cursor-pointer"
             style={{ accentColor: chipSettings.color }} />
         </label>
+        <label className="flex items-center gap-2 text-[11px] font-bold text-mute cursor-pointer select-none pb-1">
+          <input type="checkbox" aria-label="Show chip name" checked={!chipSettings.hideName}
+            onChange={(e) => updateChip({ hideName: !e.target.checked })} style={{ accentColor: chipSettings.color }} />
+          Show name
+        </label>
         {!selectedChip && <button type="button" className="btn-primary !py-1.5 !text-[11px]" onClick={() => addChipToMap(chipSettings)}>
           <CirclePlus size={13} /> Add to map
         </button>}
       </div>
     </div>
   );
+
+  // During a replay the board shows the take instead of the live (still editable) layout.
+  const shownTokens: MapToken[] = replayState ? replayState.heroes : tokens;
+  const shownChips: MapChip[] = replayState ? replayState.chips : chips;
+  const shownPaths: DrawPath[] = replayState ? replayState.drawing.paths : paths;
+  const shownSteps: MapStep[] = replayState ? replayState.drawing.steps : steps;
+  const shownZones: MapZone[] = replayState ? replayState.drawing.zones : zones;
 
   if (!board) return <Spinner />;
 
@@ -727,7 +845,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
       <div className={`grid gap-5 items-start ${canManage ? "lg:grid-cols-[minmax(0,2.6fr)_minmax(240px,1fr)]" : ""}`}>
         <div ref={fsWrap} className={`card overflow-hidden ${isFs ? "!rounded-none !border-0 bg-ink flex flex-col h-full" : ""}`}>
           <div className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-edge bg-raised/60 ${isFs ? "map-fullscreen-toolbar" : ""}`}>
-            {canManage && ([
+            {canManage && !replay && ([
               ["move", "Drag", MousePointer2], ["pan", "Pan", Hand], ["pen", "Arrow", MoveUpRight],
               ["free", "Draw", PenLine], ["steps", "Steps", Footprints], ["zone", "Zone", CircleDot], ["chip", "Chip", CirclePlus], ["erase", "Erase", Eraser],
             ] as const).map(([t, label, Icon]) => (
@@ -737,7 +855,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
               </button>
             ))}
             {(tool === "pen" || tool === "free") && <PenPalette color={penColor} onChange={setPenColor} prefix="Drawing" />}
-            {canManage && <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />}
+            {canManage && !replay && <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />}
             <div className="flex items-center gap-1 rounded-md border border-edge p-0.5">
               {(["game", "diagram"] as const).map((m) => (
                 <button key={m} type="button" className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${mapStyle === m ? "bg-raised text-text" : "text-faint hover:text-mute"}`}
@@ -748,7 +866,25 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
               aria-label={isFs ? "Exit fullscreen" : "Plan fullscreen"} title={isFs ? "Exit fullscreen (Esc)" : "Plan fullscreen"}>
               {isFs ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
-            {canManage && <>
+            <button type="button" className={`btn-ghost !px-2 !py-1.5 !text-[11.5px] ${holo ? "border-[#7df9ff]/50 text-[#7df9ff] bg-[#7df9ff]/10" : ""}`}
+              aria-pressed={holo} title={holo ? "Show flat portraits on chips" : "Show 3D hologram models on chips"}
+              onClick={() => { setHolo((v) => !v); if (canManage) setDirty(true); }}>
+              <Box size={13} /> Holo
+            </button>
+            <button type="button" className={`btn-ghost !px-2 !py-1.5 !text-[11.5px] ${chipNames ? "" : "text-faint"}`}
+              aria-pressed={chipNames} title={chipNames ? "Hide the names under chips" : "Show the names under chips"}
+              onClick={() => { setChipNames((v) => !v); if (canManage) setDirty(true); }}>
+              {chipNames ? <Eye size={13} /> : <EyeOff size={13} />} Names
+            </button>
+            {canManage && !replay && (recOn
+              ? <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px] !text-crim border-crim/60" onClick={stopRec}>
+                <Square size={12} fill="currentColor" /> Stop
+              </button>
+              : <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px] hover:!text-crim" onClick={startRec}
+                title="Record how heroes and chips move, then replay it or save a video">
+                <Circle size={12} fill="currentColor" className="text-crim" /> Record
+              </button>)}
+            {canManage && !replay && <>
               <span className="map-toolbar-divider mx-1.5 w-px h-5 bg-edge" />
               <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11.5px]" onClick={undo} disabled={history.length === 0}>
                 <RotateCcw size={13} /> Undo
@@ -774,7 +910,56 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
             </span>
           </div>
 
-          {canManage && <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
+          {(recOn || replay || recordings.length > 0) && (
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-edge bg-[#06121a]/75 min-w-0" data-map-recorder>
+              {recOn ? (<>
+                <span className="map-rec-dot" aria-hidden="true" />
+                <span className="text-[11.5px] font-extrabold text-[#fb7185]">Recording</span>
+                <span className="text-[11px] tabular-nums text-mute">{fmtDuration(recMs)} / {fmtDuration(REC_MAX_MS)}</span>
+                <span className="text-[10.5px] text-faint flex-1 min-w-[140px]">Move heroes and chips, draw arrows — it's all captured.</span>
+                <button type="button" className="btn-primary !py-1.5 !text-[11px]" onClick={stopRec}><Square size={11} fill="currentColor" /> Stop</button>
+              </>) : replay && replayRec ? (<>
+                <button type="button" className="btn-ghost !px-2 !py-1.5 text-[#7df9ff]" aria-label={replay.playing ? "Pause" : "Play"}
+                  onClick={() => setReplay((r) => r && { ...r, playing: !r.playing, t: !r.playing && r.t >= replayRec.duration ? 0 : r.t })}>
+                  {replay.playing ? <Pause size={14} /> : <Play size={14} />}
+                </button>
+                <input type="range" className="map-replay-range flex-1 min-w-[110px]" aria-label="Replay position"
+                  min={0} max={Math.max(1, replayRec.duration)} step={50} value={Math.round(replay.t)}
+                  onChange={(e) => setReplay((r) => r && { ...r, t: Number(e.target.value), playing: false })} />
+                <span className="text-[11px] tabular-nums text-mute whitespace-nowrap">{fmtDuration(replay.t)} / {fmtDuration(replayRec.duration)}</span>
+                <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Replay speed">
+                  {[1, 2, 4].map((speed) => <button key={speed} type="button" aria-pressed={replay.speed === speed}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${replay.speed === speed ? "bg-raised text-text" : "text-faint"}`}
+                    onClick={() => setReplay((r) => r && { ...r, speed })}>{speed}x</button>)}
+                </div>
+                {canManage ? <input className="input !w-28 !py-1 !text-[11px]" aria-label="Take name" maxLength={40} value={replayRec.name}
+                  onChange={(e) => { const name = e.target.value; setRecordings((list) => list.map((r) => r.id === replayRec.id ? { ...r, name } : r)); setDirty(true); }} />
+                  : <span className="text-[11px] font-bold text-text truncate max-w-28">{replayRec.name}</span>}
+                {exporting != null ? (<>
+                  <span className="text-[10.5px] font-bold text-[#7df9ff] whitespace-nowrap">Making video… {Math.round(exporting * 100)}%</span>
+                  <button type="button" className="btn-ghost !px-2 !py-1 !text-[10.5px]" onClick={() => { exportSignal.current.cancelled = true; }}>Cancel</button>
+                </>) : (
+                  <button type="button" className="btn-primary !py-1.5 !text-[11px]" onClick={() => exportVideo(replayRec)}
+                    title={`Save this take as a video file (${replay.speed}x speed). Keep this tab open while it records.`}>
+                    <Download size={12} /> Video
+                  </button>
+                )}
+                {canManage && exporting == null && <button type="button" className="btn-ghost !px-2 !py-1.5 !text-crim" aria-label="Delete take" title="Delete take"
+                  onClick={() => deleteTake(replayRec.id)}><Trash2 size={12} /></button>}
+                <button type="button" className="btn-ghost !px-2 !py-1.5 !text-[11px]" disabled={exporting != null}
+                  onClick={() => setReplay(null)}><X size={12} /> Back to board</button>
+              </>) : (<>
+                <span className="section-pill !py-0.5 whitespace-nowrap"><Film size={12} /> Takes</span>
+                <div className="map-take-list flex-1">
+                  {recordings.map((r) => <button key={r.id} type="button" className="btn-ghost !px-2 !py-1 !text-[10.5px]" onClick={() => openReplay(r.id)}>
+                    <Play size={11} className="text-[#7df9ff]" /> {r.name} · {fmtDuration(r.duration)}
+                  </button>)}
+                </div>
+              </>)}
+            </div>
+          )}
+
+          {canManage && !replay && <div className={`map-quick-chips ${isFs ? "map-quick-chips-fullscreen" : ""} border-b border-edge bg-panel/70 px-3.5 py-2.5`}>
             <div className="map-quick-chips-heading flex items-center justify-between gap-3 mb-2">
               <span className="section-pill !py-0.5 whitespace-nowrap">Quick chips</span>
               <span role="status" aria-live="polite" className="text-[10px] text-mute truncate text-right">
@@ -798,7 +983,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
             </div>
           </div>}
 
-          {tool === "steps" && (
+          {tool === "steps" && !replay && (
             <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-2.5 border-b border-leaf/20 bg-leaf/[0.045] ${isFs ? "map-steps-fullscreen" : ""}`}>
               <div className="flex items-center gap-2 text-leaf">
                 <Footprints size={15} /><span className="text-[11px] font-extrabold tracking-[0.13em]">Steps</span>
@@ -821,7 +1006,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
             </div>
           )}
 
-          {tool === "chip" && !selectedChip && !isFs && chipEditor}
+          {tool === "chip" && !selectedChip && !isFs && !replay && chipEditor}
           {/* Selected marker controls follow the map so it stays put after a drag. */}
           <div className={isFs ? "map-fullscreen-workspace flex flex-col flex-1 min-h-0 overflow-hidden" : ""}>
             <div className={isFs ? "flex-1 min-h-0 min-w-0 grid place-items-center p-2 overflow-hidden" : "p-2 sm:p-3"}
@@ -830,8 +1015,9 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                 className={`relative w-full rounded-lg overflow-hidden border border-edge select-none touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-crim ${tool === "pan" ? "cursor-grab active:cursor-grabbing" : tool === "steps" || tool === "chip" || tool === "zone" ? "cursor-crosshair" : ""}`}
                 style={{ aspectRatio: mapStyle === "game" && !gameMapFailed ? "1870 / 841" : "1 / 1",
                   ...(isFs ? { width: `min(100%, calc(${fullscreenHeight} * ${mapAspect}))` } : {}) }}
-                onPointerDown={onAreaDown} onPointerMove={onAreaMove} onPointerUp={(e) => onAreaUp(e)} onKeyDown={onAreaKey}
-                onPointerCancel={(e) => onAreaUp(e, true)} onContextMenu={(e) => e.preventDefault()}>
+                onPointerDown={replay ? undefined : onAreaDown} onPointerMove={replay ? undefined : onAreaMove}
+                onPointerUp={replay ? undefined : (e) => onAreaUp(e)} onKeyDown={replay ? undefined : onAreaKey}
+                onPointerCancel={replay ? undefined : (e) => onAreaUp(e, true)} onContextMenu={(e) => e.preventDefault()}>
                 <div ref={surf} data-map-surface className="absolute inset-0"
                   style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: "0 0" }}>
                   {mapStyle === "game" && !gameMapFailed ? (
@@ -840,24 +1026,27 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                       className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none" />
                   ) : <BattlefieldMap className="absolute inset-0 pointer-events-none" />}
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
-                    {zones.map((z) => <ZoneShape key={z.id} zone={z} center={zoneCenter(z, tokens, chips)} aspect={mapAspect}
+                    {shownZones.map((z) => <ZoneShape key={z.id} zone={z} center={zoneCenter(z, shownTokens, shownChips)} aspect={mapAspect}
                       selected={selected?.kind === "zone" && selected.id === z.id} />)}
                     {zonePreview && <ZoneShape zone={zonePreview} center={zoneCenter(zonePreview, tokens, chips)} aspect={mapAspect} preview />}
-                    {paths.map((p, i) => <PathShape key={`path-${i}`} pathId={String(i)} points={p.points} color={p.color} aspect={mapAspect}
+                    {shownPaths.map((p, i) => <PathShape key={`path-${i}`} pathId={String(i)} points={p.points} color={p.color} aspect={mapAspect}
                       selected={selected?.kind === "path" && selected.id === String(i)} head={p.mode ? p.mode === "arrow" : p.points.length === 2} />)}
-                    {steps.map((s) => <PathShape key={s.id} stepId={s.id} points={resolvedPoints(s, steps, tokens, chips)} color={s.color} aspect={mapAspect}
+                    {shownSteps.map((s) => <PathShape key={s.id} stepId={s.id} points={resolvedPoints(s, shownSteps, shownTokens, shownChips)} color={s.color} aspect={mapAspect}
                       selected={selected?.kind === "step" && selected.id === s.id} head />)}
+                    {replayTrails.map((trail) => <polyline key={`trail-${trail.id}`} points={trail.points.map(([x, y]) => `${x},${y}`).join(" ")}
+                      fill="none" stroke={TRAIL_COLOR[trail.side]} strokeOpacity="0.8" strokeWidth="5" strokeDasharray="1 7"
+                      strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
                     {preview && <PathShape points={preview.points} color={preview.color} aspect={mapAspect} head={preview.head} fade />}
                   </svg>
 
-                  {tokens.map((t) => {
+                  {shownTokens.map((t) => {
                     const size = t.size ?? HERO_SIZE;
                     const target: Target = { kind: "hero", id: t.id };
                     return (
                       <button key={t.id} type="button" data-map-kind="hero" data-map-id={t.id} data-map-hero={t.hero}
                         aria-label={`${t.hero} hero token`} title={canManage ? `${t.hero} (${t.side}) — select to resize or remove` : `${t.hero} (${t.side})`}
                         tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)}
-                        onDoubleClick={() => { if (canManage && tool === "move") removeToken(t.id); }}
+                        onDoubleClick={() => { if (canManage && tool === "move" && !replay) removeToken(t.id); }}
                         className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ${SIDE_RING[t.side]} shadow-[0_4px_14px_rgba(0,0,0,0.65)] ${selected?.kind === "hero" && selected.id === t.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={{ left: `${t.x}%`, top: `${t.y}%`, width: size, height: size, touchAction: "none" }}>
                         <HeroImg name={t.hero} size={size} eager className="rounded-full block" />
@@ -865,21 +1054,23 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                       </button>
                     );
                   })}
-                  {chips.map((c) => {
+                  {shownChips.map((c) => {
                     const target: Target = { kind: "chip", id: c.id };
+                    const holoOn = holo && !!c.preset && HOLO_PRESETS.has(c.preset);
                     return (
                       <button key={c.id} type="button" data-map-kind="chip" data-map-id={c.id} data-map-chip={c.name}
                         aria-label={`${c.name || "Chip"} chip`} title={canManage ? `${c.name || "Chip"} — select to edit or resize` : (c.name || "Chip")}
-                        tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (canManage && tool === "move") removeChip(c.id); }}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
+                        tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (canManage && tool === "move" && !replay) removeChip(c.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${holoOn ? "map-chip--holo" : ""} ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={{ left: `${c.x}%`, top: `${c.y}%`, width: c.size, height: c.size, borderColor: c.color,
-                          fontSize: Math.max(12, c.size * 0.32), touchAction: "none" }}>
-                        <ChipPortrait chip={c} />
-                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9.5px] text-white font-bold bg-black/85 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[140px] truncate pointer-events-none">{c.name || "Chip"}</span>
+                          fontSize: Math.max(12, c.size * 0.32), touchAction: "none", "--holo": c.color } as React.CSSProperties}>
+                        {holoOn ? <ChipHologram preset={c.preset!} color={c.color} size={c.size} fallback={<ChipPortrait chip={c} />} />
+                          : <ChipPortrait chip={c} />}
+                        {chipNames && !c.hideName && <span data-chip-name className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9.5px] text-white font-bold bg-black/85 px-1.5 py-0.5 rounded leading-none whitespace-nowrap max-w-[140px] truncate pointer-events-none">{c.name || "Chip"}</span>}
                       </button>
                     );
                   })}
-                  {steps.map((s) => {
+                  {shownSteps.map((s) => {
                     const end = endpoint(s);
                     if (!end) return null;
                     const target: Target = { kind: "step", id: s.id };
@@ -893,7 +1084,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                       </button>
                     );
                   })}
-                  {tool === "move" && selectedZone && (() => {
+                  {tool === "move" && selectedZone && !replay && (() => {
                     const center = zoneCenter(selectedZone, tokens, chips);
                     return <button type="button" data-map-zone-handle={selectedZone.id} aria-label="Resize zone" title="Drag to resize the zone"
                       className="absolute z-[3] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-ink shadow-lg cursor-ew-resize"
@@ -920,7 +1111,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                 </div>
               </div>
             </div>
-            {(selectedChip || (isFs && tool === "chip") || (tool === "move" && (selectedHero || selectedStep || selectedZone || selectedPath))) && (
+            {!replay && (selectedChip || (isFs && tool === "chip") || (tool === "move" && (selectedHero || selectedStep || selectedZone || selectedPath))) && (
               <div className={isFs ? "map-fullscreen-inspector" : ""}>
                 {(selectedChip || (isFs && tool === "chip")) && chipEditor}
                 {tool === "move" && selectedHero && (

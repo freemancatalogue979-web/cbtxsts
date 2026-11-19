@@ -1773,3 +1773,29 @@ html[data-effects="calm"] .board-score__fill { animation: none; }
 }
 html[data-effects="calm"] .lineup__bar, html[data-effects="calm"] .lineup__row { animation: none; transition: none; }
 @media (prefers-reduced-motion: reduce) { .lineup__bar { animation: none; } .lineup__row { transition: none; } .lineup__row:hover { transform: none; } }
+
+/* ── Map Lab: 3D hologram chips ─────────────────────────────────────────── */
+.map-holo { position: absolute; inset: 0; pointer-events: none; }
+.map-holo__pad {
+  position: absolute; inset: 0; border-radius: 9999px;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--holo) 42%, transparent) 0%, rgba(4, 9, 18, 0.9) 68%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 3px, color-mix(in srgb, var(--holo) 18%, transparent) 3px 4px);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--holo) 60%, transparent), inset 0 0 12px color-mix(in srgb, var(--holo) 45%, transparent);
+}
+.map-holo__canvas {
+  position: absolute; left: 50%; top: 50%; max-width: none;
+  transform: translate(-50%, -85.5%);
+  transition: opacity 0.35s ease;
+}
+.map-chip--holo { background: transparent !important; box-shadow: none !important; }
+.map-chip--holo:not(:focus-visible) { border-color: color-mix(in srgb, var(--holo) 75%, transparent) !important; }
+
+/* Map Lab: recorder and replay */
+.map-rec-dot { width: 9px; height: 9px; border-radius: 9999px; background: #fb7185; box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.6); animation: map-rec-pulse 1.2s ease-out infinite; }
+@keyframes map-rec-pulse { 0% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.6); } 100% { box-shadow: 0 0 0 8px rgba(251, 113, 133, 0); } }
+html[data-effects="calm"] .map-rec-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) { .map-rec-dot { animation: none; } .map-holo__canvas { transition: none; } }
+.map-replay-range { accent-color: #7df9ff; min-width: 0; }
+.map-take-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; min-width: 0; }
+.map-take-list > * { flex-shrink: 0; }
