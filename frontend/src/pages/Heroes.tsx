@@ -120,6 +120,8 @@ interface HeroSyncStatus {
   enabled: boolean; source: string; interval_hours: number; running: boolean; queued: boolean;
   last_success_at: string | null; last_attempt_at: string | null; next_due_at: string | null;
   added: number; updated: number; added_names: string[]; total: number; error: string;
+  /** Moonton's official portraits used to check heroes in screenshots. */
+  art?: { enabled: boolean; heroes: number; pictures: number; last_at: string | null; source: string; downloaded: number; new_heroes: string[]; error: string };
 }
 
 function ago(iso: string | null, future = false): string {
@@ -174,6 +176,16 @@ function HeroSyncBar({ canRefresh, onSynced }: { canRefresh: boolean; onSynced: 
           {state.last_success_at && !busy && (state.added > 0 ? <> New: <b className="text-leaf">{state.added_names.slice(0, 6).join(", ")}{state.added > 6 ? ` +${state.added - 6}` : ""}</b>.</> : state.updated > 0 ? ` ${state.updated} heroes updated.` : " No changes.")}
           {" "}Your notes, tiers and ratings stay as you set them.
         </div>
+        {state.art?.enabled && (
+          <div className="hero-sync__art text-[10.5px] text-faint mt-1 leading-relaxed">
+            <b className="text-mute">Portrait check:</b>{" "}
+            {state.art.heroes
+              ? <>official pictures for {state.art.heroes} heroes{state.art.source ? ` from ${state.art.source.split(" (")[0]}` : ""}{state.art.last_at ? `, checked ${ago(state.art.last_at)}` : ""}.
+                {state.art.new_heroes.length > 0 && <> New: <b className="text-leaf">{state.art.new_heroes.slice(0, 6).join(", ")}</b>.</>}</>
+              : "uses the hero art built into the app; official pictures load with the next refresh."}
+            {state.art.error && <span className="text-amber"> Last try: {state.art.error}</span>}
+          </div>
+        )}
         <ErrorNote error={error} />
       </div>
       {canRefresh && state.enabled && <button type="button" className="btn-ghost !py-1.5 !px-2.5 !text-[10.5px] shrink-0 max-sm:ml-[38px]" disabled={busy} onClick={() => void refresh()}>

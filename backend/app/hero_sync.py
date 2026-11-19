@@ -327,7 +327,16 @@ def status(db: Session) -> dict:
         "next_due_at": iso((base + timedelta(seconds=delay)) if base else None) if ENABLED else None,
         "added": state.added, "updated": state.updated, "added_names": loads(state.added_names or "[]", []),
         "total": state.total, "error": state.last_error or "", "queued": state.requested_at is not None,
+        "art": _art_status(),
     }
+
+
+def _art_status() -> dict:
+    try:
+        from .hero_art_sync import status as art_status
+        return art_status()
+    except Exception:  # noqa: BLE001
+        return {"enabled": False, "heroes": 0, "pictures": 0, "last_at": None, "source": "", "downloaded": 0, "new_heroes": [], "error": ""}
 
 
 def request_refresh(db: Session) -> None:
@@ -365,10 +374,23 @@ def _run() -> None:
                         run_once(db)
                     except HeroSyncError:
                         pass  # recorded in the state row
+                    refresh_art()
         except Exception:
             logger.exception("Hero sync worker encountered an error")
         _wake.wait(300)
         _wake.clear()
+
+
+def refresh_art() -> None:
+    """Moonton's official hero pictures for the portrait checker (new heroes, refreshed art)."""
+    from . import hero_art_sync
+
+    if not hero_art_sync.ENABLED:
+        return
+    try:
+        hero_art_sync.run_once()
+    except Exception:  # noqa: BLE001 - pictures are a bonus; the hero data already landed
+        logger.exception("Official hero art refresh failed")
 
 
 def start_worker() -> None:

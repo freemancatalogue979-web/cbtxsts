@@ -70,6 +70,9 @@ BOX_KNOWN = (0.60, 0.04)     # ... when only this game's drafted heroes can be t
 BOX_AGREE = 0.60             # the portrait's best hero IS the reader's hero at this score: confirmed
 BOX_LIKELY = 0.50            # the reader's hero scores this here, near the best hero: probably right
 
+# Moonton's pictures and card faces join the bundled heads (CLOVER_HERO_OFFICIAL_ART=0 turns that off).
+OFFICIAL_EXTRA = __import__("os").getenv("CLOVER_HERO_OFFICIAL_ART", "1").strip().lower() not in {"0", "false", "off", "no"}
+
 _lock = threading.Lock()
 _bank: "_Bank | None" = None
 
@@ -169,6 +172,84 @@ def learned_heads(names: dict[str, str] | None = None) -> list[tuple[str, Image.
     return out
 
 
+# Tall hero card (smallmap) → face squares: (side as a share of the card width, centre as a share of its height).
+# Two framings, wide and tight, because screenshot portraits aren't all cropped like our heads.
+CARD_FACES = ((0.56, 0.27), (0.42, 0.25))
+CARD_FACE = CARD_FACES[0]
+SAME_ART = 0.985             # an official picture this close to the bundled head is the same art: not added twice
+
+
+def card_face(img: Image.Image, frame: tuple[float, float] = CARD_FACE) -> Image.Image:
+    """The face square out of a tall hero-list card (the ``smallmap`` on mobilelegends.com/m/hero).
+
+    The square heads are tighter crops of the same art, so this gives each hero a second, wider
+    framing — portraits in screenshots aren't always cropped like our heads."""
+    w, h = img.size
+    if h < w * 1.15:                       # already squarish
+        return img
+    side = frame[0] * w
+    cx, cy = w / 2, max(side / 2, min(h - side / 2, frame[1] * h))
+    return img.crop((round(cx - side / 2), round(cy - side / 2), round(cx + side / 2), round(cy + side / 2)))
+
+
+def _signature(img: Image.Image) -> "np.ndarray":
+    return _unit(np.asarray(img.convert("RGB").resize((24, 24), Image.LANCZOS), np.float32).reshape(1, -1))[0]
+
+
+def official_heads(names: dict[str, str] | None = None, bundled: dict[str, Image.Image] | None = None) -> list[tuple[str, Image.Image]]:
+    """Extra templates: Moonton's own pictures saved by :mod:`hero_art_sync` (new heroes, refreshed
+    art, larger square heads, card faces) plus the face out of each bundled card."""
+    out: list[tuple[str, Image.Image]] = []
+    bundled = bundled or {}
+    by_slug = {slug(n): n for n in bundled}
+    seen: dict[str, list] = {n: [_signature(im)] for n, im in bundled.items()}
+
+    def add(name: str, img: Image.Image) -> None:
+        sig = _signature(img)
+        if any(float(sig @ other) >= SAME_ART for other in seen.get(name, [])):
+            return
+        seen.setdefault(name, []).append(sig)
+        out.append((name, img))
+
+    try:
+        from .hero_art_sync import official_files
+        files = official_files()
+    except Exception:  # pragma: no cover - a broken manifest never stops reading
+        files = {}
+    for key, entry in sorted(files.items()):
+        name = (names or {}).get(key) or by_slug.get(key) or entry["name"]
+        for kind in ("head", "squarehead", "smallmap"):
+            path = entry["paths"].get(kind)
+            if not path:
+                continue
+            try:
+                img = Image.open(path).convert("RGB")
+            except OSError:
+                continue
+            if kind == "smallmap":
+                for frame in CARD_FACES:
+                    add(name, card_face(img, frame))
+            else:
+                add(name, img)
+    for folder in HERO_DIRS:                 # the bundled tall cards, same art as the site's smallmap
+        if not folder.is_dir():
+            continue
+        cards = [p for p in sorted(folder.glob("*.webp")) if not p.stem.startswith("head-")]
+        for path in cards:
+            name = (names or {}).get(path.stem) or by_slug.get(path.stem)
+            if not name:
+                continue
+            try:
+                card = Image.open(path).convert("RGB")
+            except OSError:
+                continue
+            for frame in CARD_FACES:
+                add(name, card_face(card, frame))
+        if cards:
+            break
+    return out
+
+
 def bank(names: list[str] | None = None) -> "_Bank | None":
     """The prepared hero art (built once). ``names`` gives the exact hero spellings."""
     global _bank
@@ -178,9 +259,10 @@ def bank(names: list[str] | None = None) -> "_Bank | None":
         if _bank is None:
             spelled = {slug(n): n for n in (names or [])}
             heads = hero_heads(spelled)
-            if heads:
-                official = {slug(n): n for n in heads}       # learned folders take the official spelling
-                _bank = _Bank(list(heads.items()) + learned_heads({**official, **spelled}))
+            extra = official_heads(spelled, heads) if OFFICIAL_EXTRA else []
+            if heads or extra:
+                official = {slug(n): n for n in heads} | {slug(n): n for n, _ in extra}  # learned folders take the official spelling
+                _bank = _Bank(list(heads.items()) + extra + learned_heads({**official, **spelled}))
         return _bank
 
 
