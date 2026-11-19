@@ -233,8 +233,8 @@ export interface ScoreboardRead {
   enemy_stats: Record<string, EnemyLine>;
   stats: Record<string, number>;
   rows: {
-    ours: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; user_id: number | null; player: string | null })[];
-    enemy: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string })[];
+    ours: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; user_id: number | null; player: string | null; doubt?: string[] })[];
+    enemy: (SheetRowHero & { lane: string; name: string; hero: string; line: PlayerLine; placed_by: string; doubt?: string[] })[];
   };
   checks: { tone: "ok" | "warn" | "info"; text: string }[];
   image_url: string;

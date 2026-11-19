@@ -51,8 +51,8 @@ export function CaseSafe({ text }: { text: string }) {
   );
 }
 
-/** A player's in-game name exactly as the game gave it: the device's own sans font, upright,
- *  no letter-spacing, no heavy stroke and no case changes — never the app's Courier style.
+/** A player's in-game name exactly as the game gave it, in Courier New, upright,
+ *  no letter-spacing, no heavy stroke and no case changes.
  *  Stylised letters and symbols (ᴋαмɪɴαʀɪ⚝, 私, ✿) come through untouched. */
 export function Ign({ text, className = "" }: { text: string | null | undefined; className?: string }) {
   // Every IGN wears the page-title look (.flip-ign in index.css): same glyphs and font, extruded edge.

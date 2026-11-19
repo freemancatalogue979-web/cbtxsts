@@ -1,13 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* Courier Std Bold is the typeface wherever it is installed (Adobe-licensed,
-     so it cannot be bundled); otherwise the bundled Courier Prime (SIL OFL)
-     draws the same Courier shapes. Symbol fonts cover the few characters it
-     lacks, such as the star in stylised names. */
-  --font-sans: "Courier Std", "Courier Prime", "Courier New", Courier, ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  /* Courier New is the typeface (Windows, macOS and iOS ship it). Phones without it
+     (most Android) get the bundled Courier Prime (SIL OFL), the closest free Courier.
+     Symbol fonts cover the few characters it lacks, such as the star in stylised names. */
+  --font-sans: "Courier New", Courier, "Courier Prime", ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Code and inputs use the same font. */
-  --font-mono: "Courier Std", "Courier Prime", "Courier New", Courier, ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
+  --font-mono: "Courier New", Courier, "Courier Prime", ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", "Noto Sans Symbols 2", monospace;
   /* Keep headings from squeezing together. */
   --tracking-tight: 0.01em;
 
@@ -63,7 +62,7 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
   .grid > * {
     min-width: 0;
   }
-  /* Default text style, everywhere: Courier Std Bold, heavy (900) italic,
+  /* Default text style, everywhere: Courier New Bold, heavy (900) italic,
      11px, 0.1em, normal case. Courier has no face heavier than Bold, so a thin
      stroke in the text's own colour gives the extra 900 weight. Elements with
      their own size class keep it. */
@@ -76,13 +75,14 @@ html[data-accent="lime"]    { --color-crim: #a3e635; --color-crim-deep: #4d7c0f;
     letter-spacing: 0.1em;
     line-height: 1.6;
   }
-  /* In-game names (components/ui.tsx → Ign) are shown exactly as the game gave them: the
-     device's own sans font — the closest thing to the game's — upright, normal spacing, no
-     extra stroke, no case changes. Stylised letters and symbols fall back to the symbol fonts. */
+  /* In-game names (components/ui.tsx → Ign) use Courier New too, but otherwise stay exactly as the
+     game gave them: upright, normal spacing, no extra stroke, no case changes. Stylised letters
+     Courier New lacks (small caps, Greek-looking letters) fall back to the device font, symbols to
+     the symbol fonts. */
   .ign {
     /* Symbol-only fonts first (the bundled, range-limited Noto Sans Symbols): they have no letters, so letters still come from the device font,
        but stars and other symbols always find a real glyph instead of a box. */
-    font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
+    font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", "Courier New", Courier, "Courier Prime", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
       "Segoe UI Symbol", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
     font-style: normal;
     font-weight: 600;

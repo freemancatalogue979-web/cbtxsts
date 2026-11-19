@@ -265,13 +265,13 @@ test("the mobile top bar never lets the name badge cover the wordmark", async ()
   assert.match(css, /\.me-pill__name \{\n  min-width: 0; overflow: hidden; text-overflow: ellipsis;/);
 });
 
-test("in-game names show exactly as the game gave them: no Courier, no italic, no case changes", async () => {
+test("in-game names use Courier New but otherwise show exactly as the game gave them: no italic, no case changes", async () => {
   // Rendered untouched (isolated so symbols and right-to-left names never scramble the line).
   assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "ᴋαмɪɴαʀɪ⚝" })), '<bdi class="ign flip-ign" dir="auto">ᴋαмɪɴαʀɪ⚝</bdi>');
   assert.equal(renderToStaticMarkup(React.createElement(ui.Ign, { text: "dRe xX" })), '<bdi class="ign flip-ign" dir="auto">dRe xX</bdi>');
   const rule = css.match(/\.ign \{[^}]*\}/)?.[0] ?? "";
   assert.ok(rule, ".ign rule exists");
-  assert.doesNotMatch(rule, /Courier/);
+  assert.match(rule, /"Courier New"/);
   assert.match(rule, /font-style: normal/);
   assert.match(rule, /text-transform: none/);
   assert.match(rule, /letter-spacing: normal/);

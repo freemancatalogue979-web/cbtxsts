@@ -5,12 +5,13 @@ import test from "node:test";
 const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
 const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
 
-test("Courier Std Bold is the only text style: 11px, 900 italic, 0.1em, never all caps", async () => {
+test("Courier New Bold is the only text style: 11px, 900 italic, 0.1em, never all caps", async () => {
   const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1] ?? "";
   for (const name of ["sans", "mono"]) {
     const stack = theme.match(new RegExp(`--font-${name}:\\s*([^;]+);`))?.[1] ?? "";
-    // The licensed Courier Std is used wherever it is installed; Courier Prime is the bundled stand-in.
-    assert.match(stack, /^"Courier Std", "Courier Prime", "Courier New", Courier,/);
+    // Courier New first; Courier Prime is the bundled stand-in for phones without it.
+    assert.match(stack, /^"Courier New", Courier, "Courier Prime",/);
+    assert.doesNotMatch(stack, /Courier Std/);
     assert.match(stack, /"Noto Sans Symbols"/, "symbol fallback for stylised names");
     assert.match(stack, /monospace$/);
   }

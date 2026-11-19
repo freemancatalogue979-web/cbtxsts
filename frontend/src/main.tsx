@@ -1,6 +1,6 @@
-// Courier Prime (Alan Dague-Greene, SIL OFL): the bundled stand-in for Courier
-// Std Bold, which Adobe licenses and cannot ship with the app. Courier Std is
-// still used first wherever it is installed. Each face downloads only when used.
+// Courier Prime (Alan Dague-Greene, SIL OFL): the bundled stand-in for Courier New
+// on devices that don't have it (most Android phones). Courier New itself is a
+// system font and can't be shipped. Each face downloads only when used.
 import "@fontsource/courier-prime/700-italic.css";
 import "@fontsource/courier-prime/700.css";
 import "@fontsource/courier-prime/400-italic.css";

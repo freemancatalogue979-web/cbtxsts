@@ -44,5 +44,5 @@ test("linked account card and alert cards use the shared designs; IGNs stay Ign"
 
 test("IGN symbols (⚝) resolve to the bundled symbol font first, so they never show as a box", () => {
   const rule = css.match(/\.ign \{[^}]*\}/)?.[0] ?? "";
-  assert.match(rule, /font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", system-ui,/);
+  assert.match(rule, /font-family: "Noto Sans Symbols", "Noto Sans Symbols 2", "Courier New", Courier, "Courier Prime", system-ui,/);
 });

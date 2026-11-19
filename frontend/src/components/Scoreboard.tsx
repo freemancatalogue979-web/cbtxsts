@@ -164,6 +164,45 @@ const isImage = (a: Attachment) => (a.url ?? "").startsWith("/api/files/")
 const CHECK_ICON = { ok: CheckCircle2, warn: AlertTriangle, info: Info };
 const CHECK_TONE = { ok: "text-leaf", warn: "text-amber", info: "text-mute" };
 
+const FIELD_LABEL: Record<string, string> = { kills: "K", deaths: "D", assists: "A", gold: "gold", damage: "damage", rating: "rating" };
+
+/** The rows whose numbers the double check doubted, next to the screenshot, so checking takes seconds. */
+export function LookAgain({ read }: { read: ScoreboardRead }) {
+  const [open, setOpen] = useState(false);
+  const doubtful = [
+    ...read.rows.ours.map((r) => ({ ...r, side: "Us" })),
+    ...read.rows.enemy.map((r) => ({ ...r, side: "Them" })),
+  ].filter((r) => r.doubt && r.doubt.length);
+  return (
+    <div className="look-again mt-2 grid gap-2">
+      {doubtful.length > 0 && (
+        <div className="rounded-lg border border-amber/40 bg-amber/10 p-2.5">
+          <div className="text-[11.5px] font-bold text-amber">Look again at {doubtful.length === 1 ? "this row" : `these ${doubtful.length} rows`}</div>
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {doubtful.map((r, i) => (
+              <li key={i} className="chip !py-0.5 text-amber border-amber/40">
+                {r.side} {nice(r.lane)} · {r.name || r.hero || "row"} · {r.doubt!.map((f) => FIELD_LABEL[f] ?? f).join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {read.image_url && (
+        <div>
+          <button type="button" className="btn-ghost !py-1 !text-[11px]" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open ? "Hide the screenshot" : "Show the screenshot to compare"}
+          </button>
+          {open && (
+            <a href={read.image_url} target="_blank" rel="noreferrer" className="block mt-2">
+              <img src={read.image_url} alt="The screenshot that was read" className="w-full max-h-[70vh] object-contain rounded-lg border border-edge bg-ink" />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** "Read the screenshot with AI": pick evidence (or upload one), the AI reads the
  *  scoreboard, compares it with the draft + lineup and fills the form. The person
  *  checks the numbers and saves — nothing is saved by the AI. */
@@ -257,6 +296,7 @@ export function ScoreboardReader({ evidence, context, onRead, onUploaded }: {
           <div className="text-[12px] font-bold text-text">
             Filled from {done.label}{done.read.result ? ` · ${done.read.result === "WIN" ? "win" : "loss"}` : ""}{filledLanes ? ` · ${filledLanes}/5 players` : ""} — check and save.
           </div>
+          <LookAgain read={done.read} />
           {done.read.checks.length > 0 && (
             <ul className="mt-1.5 space-y-1">
               {done.read.checks.map((c, i) => {
