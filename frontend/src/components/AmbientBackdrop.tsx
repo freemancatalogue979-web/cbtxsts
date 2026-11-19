@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { heroArt, sectionTheme, type SectionId } from "../lib/theme";
+import { useWallpaper } from "../lib/wallpapers";
 
 /**
  * The live wallpaper behind the hub: a drifting 3D shelf of MLBB hero art plus a
@@ -13,6 +14,8 @@ import { heroArt, sectionTheme, type SectionId } from "../lib/theme";
 export function AmbientBackdrop({ section, motion }: { section: SectionId; motion: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const theme = sectionTheme(section);
+  // An official MLBB wallpaper picked in the profile menu replaces the hero shelf (colour wash stays).
+  const wall = useWallpaper(section);
 
   useEffect(() => {
     const node = root.current;
@@ -45,9 +48,17 @@ export function AmbientBackdrop({ section, motion }: { section: SectionId; motio
   }, [motion]);
 
   return (
-    <div ref={root} className="ambient" aria-hidden="true">
+    <div ref={root} className={`ambient${wall ? " ambient--wallpaper" : ""}`} aria-hidden="true">
       <div className="ambient__wash" />
       <div className="ambient__stage">
+        {wall && (
+          <div className="ambient__wallpaper" key={`wall-${wall.id}`}>
+            <picture>
+              <source media="(max-width: 767px) and (orientation: portrait)" srcSet={wall.mobile} />
+              <img src={wall.desktop} alt="" decoding="async" referrerPolicy="no-referrer" draggable={false} />
+            </picture>
+          </div>
+        )}
         <div className="ambient__shelf" key={`shelf-${section}`}>
           {theme.shelf.map((slug) => (
             <img key={slug} src={heroArt(slug)} alt="" width={240} height={390} decoding="async" loading="lazy" draggable={false} />

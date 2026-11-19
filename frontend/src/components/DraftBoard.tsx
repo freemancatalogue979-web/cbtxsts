@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 import type { Draft, Hero } from "../lib/types";
 import { CircleSlash2 } from "lucide-react";
 import { BrandImg } from "./Logo";
-import { artFor, artVersion, heroArt, heroHead, subscribeArt } from "../lib/mlbb";
+import { artFor, artVersion, heroArt, heroHead, heroOfficial, subscribeArt } from "../lib/mlbb";
 import { nice } from "../lib/caseText";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
@@ -27,17 +27,18 @@ function HeroPortrait({ name, ours, player, interactive = false, onClick, fluid 
   fluid?: boolean; bare?: boolean;
 }) {
   useSyncExternalStore(subscribeArt, artVersion);
-  const [failed, setFailed] = useState(false);
+  const [stage, setStage] = useState(0);
   const filled = Boolean(name);
-  const local = filled ? heroArt(name!) : null; // our DB: rectangular splash portrait
-  const remote = filled ? artFor(name!)?.art : undefined;
-  const showImg = filled && (!failed && (local || remote));
+  // Bundled splash → Moonton's official card (new heroes, saved by our server) → Rone art.
+  const cands = filled ? [heroArt(name!), heroOfficial(name!, "smallmap"), artFor(name!)?.art].filter((u): u is string => Boolean(u)) : [];
+  const src = stage < cands.length ? cands[stage] : null;
+  const showImg = filled && Boolean(src);
   const card = (
     <div className={`relative ${fluid ? "w-full" : "w-[76px] sm:w-[92px]"} aspect-[5/8] overflow-hidden border transition bg-[#111111]
       ${filled ? "border-[#C8AA6E]/25" : "border-[#C8AA6E]/10"}
       ${interactive ? "cursor-pointer hover:scale-[1.05] hover:border-[#C8AA6E]/60 hover:brightness-110" : ""}`}>
       {showImg ? (
-        <img src={local ?? remote ?? ""} alt={name!} onError={() => setFailed(true)}
+        <img key={src} src={src!} alt={name!} onError={() => setStage((s) => s + 1)}
           className="absolute inset-0 w-full h-full object-cover object-center" draggable={false} referrerPolicy="no-referrer" loading="lazy" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center select-none">
@@ -78,7 +79,7 @@ function BanThumb({ name, order, interactive = false, onClick, fluid = false }: 
   const [stage, setStage] = useState(0);
   const filled = Boolean(name);
   const remote = filled ? (artFor(name!)?.head ?? artFor(name!)?.art) : undefined;
-  const cands = filled ? [heroHead(name!), remote].filter((u): u is string => Boolean(u)) : [];
+  const cands = filled ? [heroHead(name!), heroOfficial(name!, "head"), remote].filter((u): u is string => Boolean(u)) : [];
   const src = stage < cands.length ? cands[stage] : null;
   const thumb = (
     <div className={`relative ${fluid ? "w-full aspect-square" : "w-11 h-11 sm:w-12 sm:h-12"} rounded-full overflow-hidden transition
@@ -160,7 +161,7 @@ function BroadcastCard({ name, ours, player }: { name?: string | null; ours: boo
   const [stage, setStage] = useState(0);
   const filled = Boolean(name);
   const remote = filled ? artFor(name!)?.art : undefined; // wallpaper crop only — square heads stay on the round ban circles
-  const cands = filled ? [heroArt(name!), remote].filter((u): u is string => Boolean(u)) : [];
+  const cands = filled ? [heroArt(name!), heroOfficial(name!, "smallmap"), remote].filter((u): u is string => Boolean(u)) : [];
   const src = stage < cands.length ? cands[stage] : null;
   const showImg = filled && Boolean(src);
   return (

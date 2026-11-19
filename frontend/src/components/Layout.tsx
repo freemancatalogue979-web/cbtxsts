@@ -1,5 +1,5 @@
 import { ArrowLeft, Camera, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight, Gamepad2, LogOut, Menu, Palette, Search, UserRound, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { linkOf } from "../lib/mlbb";
@@ -7,6 +7,7 @@ import type { LinkSummary } from "../lib/mlbb";
 import type { User } from "../lib/types";
 import { hashRoute, navigate } from "../lib/util";
 import { ACCENTS, accentFor, heroArt, sectionTheme, type SectionId, type ThemePrefs } from "../lib/theme";
+import { getWallpaperChoice, loadWallpapers, setWallpaperChoice, subscribeWallpaper, type WallpaperGallery } from "../lib/wallpapers";
 import {
   MOBILE_QUICK, NAV_GROUPS, groupLabel, navItem, readNavCollapsed, saveNavCollapsed, visibleNav, type NavItem,
 } from "../lib/nav";
@@ -154,6 +155,84 @@ function ThemePicker({ theme, onChange }: { theme: ThemePrefs; onChange: (next: 
   );
 }
 
+/** Official MLBB wallpapers (mobilelegends.com gallery) behind the hub. Device-local, like the colour. */
+function WallpaperPicker({ admin, backdrop, onBackdrop }: { admin: boolean; backdrop: boolean; onBackdrop: () => void }) {
+  const choice = useSyncExternalStore(subscribeWallpaper, getWallpaperChoice);
+  const [gallery, setGallery] = useState<WallpaperGallery | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadWallpapers().then((g) => { if (active) setGallery(g); })
+      .catch((e) => { if (active) setError(e instanceof Error ? e.message : "Could not load the wallpapers."); });
+    return () => { active = false; };
+  }, []);
+
+  function pick(id: string) {
+    setWallpaperChoice(id);
+    if (id && !backdrop) onBackdrop(); // a wallpaper needs the backdrop layer on
+  }
+
+  async function refresh() {
+    setBusy(true); setError(null);
+    try {
+      await api.post<WallpaperGallery>("/wallpapers/sync", {});
+      // The download runs on the server; give it a moment, then reload the list.
+      await new Promise((r) => setTimeout(r, 6000));
+      setGallery(await loadWallpapers(true));
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not refresh the wallpapers."); }
+    finally { setBusy(false); }
+  }
+
+  const tile = "relative aspect-video overflow-hidden rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf/60";
+  const on = "border-leaf/70 ring-1 ring-leaf/40";
+  const off = "border-edge hover:border-edge-2";
+  return (
+    <div className="rounded-lg border border-edge bg-raised px-3.5 py-3 space-y-2.5 min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[12px] font-bold">Wallpaper</div>
+          <p className="text-[10.5px] text-faint mt-0.5 leading-relaxed" id="wallpaper-hint">
+            Official MLBB wallpapers from the mobilelegends.com gallery. Pick one for the whole hub, or Mix to give every area its own. Saved on this device.
+          </p>
+        </div>
+        {admin && <button type="button" className="btn-ghost !text-[10.5px] shrink-0" onClick={() => void refresh()} disabled={busy}>
+          {busy ? "Getting the newest…" : "Get the newest"}
+        </button>}
+      </div>
+      <div role="radiogroup" aria-label="Wallpaper" aria-describedby="wallpaper-hint" className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-60 overflow-y-auto overscroll-contain pr-0.5">
+        <button type="button" role="radio" aria-checked={choice === ""} onClick={() => pick("")}
+          className={`${tile} ${choice === "" ? on : off} bg-panel`}>
+          <img src={heroArt("atlas")} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" draggable={false} />
+          <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-[9.5px] font-bold text-text">Hero art</span>
+        </button>
+        <button type="button" role="radio" aria-checked={choice === "mix"} onClick={() => pick("mix")} disabled={!gallery?.items.length}
+          className={`${tile} ${choice === "mix" ? on : off} bg-panel disabled:opacity-40`}>
+          <span className="absolute inset-0 grid grid-cols-2">
+            {(gallery?.items ?? []).slice(0, 4).map((w) => <img key={w.id} src={w.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover opacity-70" draggable={false} />)}
+          </span>
+          <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-[9.5px] font-bold text-text">Mix by area</span>
+        </button>
+        {(gallery?.items ?? []).map((w, i) => {
+          const label = w.title || (w.heroes.length ? w.heroes.join(" & ") : `Wallpaper ${i + 1}`);
+          return (
+            <button key={w.id} type="button" role="radio" aria-checked={choice === w.id} aria-label={label} title={label} onClick={() => pick(w.id)}
+              className={`${tile} ${choice === w.id ? on : off} bg-panel`}>
+              <img src={w.thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+              {w.heroes.length > 0 && <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px] font-bold text-text">{w.heroes.join(" & ")}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {!gallery && !error && <p className="text-[10.5px] text-faint">Loading wallpapers…</p>}
+      {gallery && !gallery.items.length && <p className="text-[10.5px] text-faint">No wallpapers saved yet.</p>}
+      {admin && gallery?.error && <p className="text-[10px] text-amber leading-relaxed">Last refresh used the gallery page pictures: {gallery.error}</p>}
+      {error && <p className="text-[10.5px] text-amber">{error}</p>}
+    </div>
+  );
+}
+
 function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
   user: User;
   theme: ThemePrefs; onThemeChange: (next: ThemePrefs) => void;
@@ -292,6 +371,7 @@ function ProfileModal({ user, theme, onThemeChange, onClose, onSaved }: {
         <p className="-mt-3 text-[10px] text-faint">Your IGN shows exactly as typed — same letters, symbols and case as in the game.</p>
         <Field label="Bio"><textarea className="input min-h-20" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} placeholder="Role, goals, offline focus…" /></Field>
         <ThemePicker theme={theme} onChange={onThemeChange} />
+        <WallpaperPicker admin={user.role === "admin"} backdrop={theme.backdrop} onBackdrop={() => onThemeChange({ ...theme, backdrop: true })} />
         <ErrorNote error={err} />
         </div>
         <div className="flex justify-end gap-2 px-4 sm:px-6 py-3 border-t border-edge shrink-0 bg-panel pb-[max(0.75rem,env(safe-area-inset-bottom))]">

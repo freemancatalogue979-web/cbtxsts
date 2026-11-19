@@ -1,16 +1,16 @@
 import { useState, useSyncExternalStore } from "react";
-import { artFor, artVersion, heroArt, heroHead, heroSlug, subscribeArt } from "../lib/mlbb";
+import { artFor, artVersion, heroArt, heroHead, heroOfficial, heroSlug, subscribeArt } from "../lib/mlbb";
 
 export { heroSlug };
 
-/** Candidate chain (local DB first, Rone CDN as backup):
- *  icon → bundled square head → Rone head;  art → bundled splash portrait → Rone art. */
+/** Candidate chain (bundled pack first, then Moonton's official picture saved by our server, Rone CDN last):
+ *  icon → bundled square head → official head → Rone head;  art → bundled splash → official card → Rone art. */
 function useHeroCandidates(name: string, variant: "icon" | "art"): string[] {
   useSyncExternalStore(subscribeArt, artVersion); // re-render when the art index lands
   const remote = artFor(name);
   const list = variant === "art"
-    ? [heroArt(name), remote?.art]
-    : [heroHead(name), remote?.head];
+    ? [heroArt(name), heroOfficial(name, "smallmap"), remote?.art]
+    : [heroHead(name), heroOfficial(name, "head"), remote?.head];
   return list.filter((u): u is string => Boolean(u));
 }
 
@@ -20,6 +20,8 @@ export function HeroImg({ name, size = 40, className = "", eager = false, varian
 }) {
   const candidates = useHeroCandidates(name || "", variant);
   const [failed, setFailed] = useState(0);
+  const [seen, setSeen] = useState(name);
+  if (seen !== name) { setSeen(name); setFailed(0); } // a reused tile showing another hero starts over
   if (failed >= candidates.length || !name) {
     return (
       <div

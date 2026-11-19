@@ -70,6 +70,10 @@ export function heroSlug(name?: string | null): string {
  *  heroHead — square official head (ban circles / square contexts) */
 export const heroArt = (name?: string | null): string => `/heroes/${heroSlug(name)}.webp`;
 export const heroHead = (name?: string | null): string => `/heroes/head-${heroSlug(name)}.webp`;
+/** Moonton's official picture saved by the server's daily refresh (`/api/heroes/art`): covers heroes
+ *  released after the bundled pack. head = square face, smallmap = tall hero-list card. */
+export const heroOfficial = (name?: string | null, kind: "head" | "smallmap" = "head"): string =>
+  `/api/heroes/art/${encodeURIComponent(heroSlug(name))}/${kind}`;
 
 /* ---------------- official CDN artwork index ----------------
  * head     — square portrait (academy catalog)
