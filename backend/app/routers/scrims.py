@@ -146,6 +146,169 @@ def scrim_stats(db: Session = Depends(get_db), user=Depends(get_current_user)):
     return out
 
 
+def _n(value) -> float | None:
+    if isinstance(value, bool) or value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rate(wins: int, games: int) -> float | None:
+    return round(100 * wins / games, 1) if games else None
+
+
+def scrim_insights_data(played: list[Scrim]) -> dict:
+    """Chart-ready numbers for the scrim dashboard (pure: tested without a DB)."""
+    played = sorted(played, key=lambda s: (s.date or date.min, s.number or 0, s.id or 0))
+    timeline, monthly, opp = [], {}, {}
+    wins_so_far = 0
+    obj = {k: [0.0, 0.0, 0] for k in ("kills", "turrets", "turtles", "lords", "gold")}
+    buckets = [("Under 12 min", 0, 12), ("12–16 min", 12, 16), ("16–20 min", 16, 20), ("20 min +", 20, 999)]
+    dur = {b[0]: [0, 0] for b in buckets}
+    early = {"ahead": [0, 0], "behind": [0, 0]}
+    lord_edge = {"more": [0, 0], "fewer": [0, 0]}
+    picked, faced, our_bans, their_bans = {}, {}, {}, {}
+    lanes = {ln: {"games": 0, "kills": 0.0, "deaths": 0.0, "assists": 0.0, "rating": 0.0, "rated": 0} for ln in LANES}
+
+    def tally(table: dict, hero, win: bool | None = None) -> None:
+        if not hero:
+            return
+        row = table.setdefault(str(hero), [0, 0])
+        row[0] += 1
+        row[1] += 1 if win else 0
+
+    for i, sc in enumerate(played, 1):
+        won = sc.result == "WIN"
+        wins_so_far += won
+        g_kills = g_deaths = 0.0
+        g_seen = 0
+        for g in sc.games:
+            st = loads(g.stats, {}) or {}
+            gw = g.result == "WIN"
+            k, d = _n(st.get("kills")), _n(st.get("deaths"))
+            if k is not None:
+                g_kills += k
+                g_seen += 1
+            if d is not None:
+                g_deaths += d
+            for key, us_key, them_key in (("kills", "kills", "enemy_kills"), ("turrets", "turrets", "enemy_turrets"),
+                                          ("turtles", "turtles", "enemy_turtles"), ("lords", "lords", "enemy_lords"),
+                                          ("gold", "gold", "enemy_gold")):
+                a, b = _n(st.get(us_key)), _n(st.get(them_key))
+                if key == "kills" and b is None:
+                    b = _n(st.get("deaths"))
+                if a is not None and b is not None:
+                    obj[key][0] += a
+                    obj[key][1] += b
+                    obj[key][2] += 1
+            if g.result in {"WIN", "LOSS"} and g.duration_min:
+                for name, lo, hi in buckets:
+                    if lo <= g.duration_min < hi:
+                        dur[name][0] += 1
+                        dur[name][1] += gw
+            gd10 = _n(st.get("gold_diff_10"))
+            if gd10 is not None and gd10 != 0 and g.result in {"WIN", "LOSS"}:
+                side = early["ahead" if gd10 > 0 else "behind"]
+                side[0] += 1
+                side[1] += gw
+            lu, le = _n(st.get("lords")), _n(st.get("enemy_lords"))
+            if lu is not None and le is not None and lu != le and g.result in {"WIN", "LOSS"}:
+                side = lord_edge["more" if lu > le else "fewer"]
+                side[0] += 1
+                side[1] += gw
+            dr = loads(g.draft, {}) or {}
+            for h in (dr.get("our_picks") or {}).values():
+                tally(picked, h, gw)
+            for h in (dr.get("enemy_picks") or {}).values():
+                tally(faced, h, gw)
+            for h in dr.get("our_bans") or []:
+                tally(our_bans, h)
+            for h in dr.get("enemy_bans") or []:
+                tally(their_bans, h)
+            for ln, line in (loads(g.player_stats or "{}", {}) or {}).items():
+                if ln not in lanes or not isinstance(line, dict):
+                    continue
+                row = lanes[ln]
+                if any(_n(line.get(x)) is not None for x in ("kills", "deaths", "assists")):
+                    row["games"] += 1
+                    for x in ("kills", "deaths", "assists"):
+                        row[x] += _n(line.get(x)) or 0
+                if _n(line.get("rating")) is not None:
+                    row["rating"] += _n(line.get("rating"))
+                    row["rated"] += 1
+        game_w = sum(1 for g in sc.games if g.result == "WIN")
+        game_l = sum(1 for g in sc.games if g.result == "LOSS")
+        timeline.append({
+            "id": sc.id, "number": sc.number, "opponent": sc.opponent,
+            "date": sc.date.isoformat() if sc.date else None, "result": sc.result,
+            "score_us": sc.score_us, "score_them": sc.score_them,
+            "games": len(sc.games), "game_wins": game_w, "game_losses": game_l,
+            "kills": round(g_kills / g_seen, 1) if g_seen else None,
+            "deaths": round(g_deaths / g_seen, 1) if g_seen else None,
+            "win_rate_to_date": _rate(wins_so_far, i),
+        })
+        if sc.date:
+            m = monthly.setdefault(sc.date.strftime("%Y-%m"), {"month": sc.date.strftime("%Y-%m"), "played": 0, "wins": 0})
+            m["played"] += 1
+            m["wins"] += won
+        o = opp.setdefault(sc.opponent, {"opponent": sc.opponent, "played": 0, "won": 0, "lost": 0, "game_wins": 0, "game_losses": 0})
+        o["played"] += 1
+        o["won" if won else "lost"] += 1
+        o["game_wins"] += game_w
+        o["game_losses"] += game_l
+
+    # rolling form (last 5 series) next to the to-date line
+    for i, row in enumerate(timeline):
+        window = timeline[max(0, i - 4):i + 1]
+        row["win_rate_last5"] = _rate(sum(1 for r in window if r["result"] == "WIN"), len(window))
+    form = [r["result"] for r in timeline[-10:]]
+    streak = {"result": None, "count": 0}
+    for r in reversed(timeline):
+        if streak["result"] in (None, r["result"]):
+            streak = {"result": r["result"], "count": streak["count"] + 1}
+        else:
+            break
+
+    def top(table: dict, n: int = 8, by_rate: bool = False) -> list[dict]:
+        rows = [{"hero": h, "games": v[0], "wins": v[1], "win_rate": _rate(v[1], v[0])} for h, v in table.items()]
+        rows.sort(key=lambda r: (-r["games"], r["hero"]))
+        return rows[:n]
+
+    def side(pair: list[int]) -> dict:
+        return {"games": pair[0], "wins": pair[1], "win_rate": _rate(pair[1], pair[0])}
+
+    return {
+        "timeline": timeline,
+        "form": form,
+        "streak": streak,
+        "monthly": [{**m, "win_rate": _rate(m["wins"], m["played"])} for m in sorted(monthly.values(), key=lambda m: m["month"])],
+        "objectives": {k: {"us": round(v[0] / v[2], 1), "them": round(v[1] / v[2], 1), "games": v[2]}
+                       for k, v in obj.items() if v[2]},
+        "duration": [{"bucket": name, "games": dur[name][0], "wins": dur[name][1], "win_rate": _rate(dur[name][1], dur[name][0])}
+                     for name, _lo, _hi in buckets],
+        "early": {"ahead_at_10": side(early["ahead"]), "behind_at_10": side(early["behind"])},
+        "lord_edge": {"more_lords": side(lord_edge["more"]), "fewer_lords": side(lord_edge["fewer"])},
+        "heroes": {"picked": top(picked), "faced": top(faced),
+                   "banned_by_us": top(our_bans), "banned_by_them": top(their_bans)},
+        "lanes": [{"lane": ln, "games": r["games"],
+                   "kda": round((r["kills"] + r["assists"]) / max(1.0, r["deaths"]), 2) if r["games"] else None,
+                   "kills": round(r["kills"] / r["games"], 1) if r["games"] else None,
+                   "deaths": round(r["deaths"] / r["games"], 1) if r["games"] else None,
+                   "assists": round(r["assists"] / r["games"], 1) if r["games"] else None,
+                   "rating": round(r["rating"] / r["rated"], 1) if r["rated"] else None} for ln, r in lanes.items()],
+        "opponents": sorted(opp.values(), key=lambda o: (-o["played"], o["opponent"])),
+    }
+
+
+@router.get("/insights")
+def scrim_insights(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    """Everything the scrim dashboard charts: form over time, objectives, durations, heroes, lanes, opponents."""
+    played = db.scalars(select(Scrim).where(Scrim.status == "played")).all()
+    return scrim_insights_data(list(played))
+
+
 def _game_lineup(db: Session, lineup: dict | None) -> dict[str, int] | None:
     """Validate who played a game. None = not sent (keep what's saved)."""
     if lineup is None:
