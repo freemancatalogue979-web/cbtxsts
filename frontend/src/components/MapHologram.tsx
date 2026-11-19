@@ -12,13 +12,13 @@ export function loadHoloEngine(): Promise<HoloEngine | null> {
   return loading;
 }
 
-/** Share of the canvas height where the projector ring sits (matches the engine camera). */
-export const HOLO_BASE = 0.855;
+/** The model is drawn centred on the chip spot. */
+export const HOLO_BASE = 0.5;
 /** Canvas size relative to the chip, so the projector ring lines up with the chip disc. */
 export const HOLO_SCALE = 1.7;
 
 /**
- * A 3D hologram standing on the chip: glowing projector pad + the animated model rising above it.
+ * A free-standing 3D hologram on the map spot (no ring or disc under it), with a soft ground shadow.
  * Shows `fallback` (the flat portrait) while three.js loads or when the device has no WebGL.
  */
 export function ChipHologram({ preset, color, size, fallback }: {
@@ -49,7 +49,7 @@ export function ChipHologram({ preset, color, size, fallback }: {
       {state !== "on" && fallback}
       {state !== "off" && (
         <span className="map-holo" data-holo={preset} aria-hidden="true" style={{ "--holo": color } as React.CSSProperties}>
-          {state === "on" && <span className="map-holo__pad" />}
+          {state === "on" && <span className="map-holo__shadow" />}
           <canvas ref={ref} width={192} height={192} className="map-holo__canvas"
             style={{ width: px, height: px, opacity: state === "on" ? 1 : 0 }} />
         </span>

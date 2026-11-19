@@ -72,18 +72,6 @@ function at<T extends THREE.Object3D>(obj: T, x = 0, y = 0, z = 0, rx = 0, ry = 
   return obj;
 }
 
-function projector(mats: THREE.ShaderMaterial[]): THREE.Group {
-  const g = new THREE.Group();
-  g.add(at(holo(new THREE.RingGeometry(0.62, 0.78, 48), mats), 0, 0.01, 0, -Math.PI / 2));
-  g.add(at(holo(new THREE.RingGeometry(0.34, 0.4, 6), mats), 0, 0.012, 0, -Math.PI / 2));
-  // Faint light cone rising from the projector.
-  const beamMat = holoMat();
-  beamMat.uniforms.uOpacity.value = 0.18;
-  mats.push(beamMat);
-  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.5, 2.2, 32, 1, true), beamMat), 0, 1.1, 0));
-  return g;
-}
-
 const BUILD: Record<MapChipPreset, (mats: THREE.ShaderMaterial[]) => Part[]> = {
   minion: (m) => {
     const body = new THREE.Group();
@@ -196,7 +184,7 @@ class Engine {
     if (!model) {
       const mats: THREE.ShaderMaterial[] = [];
       const root = new THREE.Group();
-      root.add(projector(mats));
+      // The models stand free on the map: no base ring or light cone under them.
       const parts = BUILD[kind](mats);
       for (const p of parts) { p.mesh.userData.y0 = p.mesh.position.y; root.add(p.mesh); }
       model = { root, parts, mats };

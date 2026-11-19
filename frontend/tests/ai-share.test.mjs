@@ -22,20 +22,21 @@ test("share links are built on the current host and tokens are checked", () => {
   assert.ok(!lib.isShareToken(undefined));
 });
 
-test("reader settings default to the system font and clamp bad saved values", () => {
+test("reader settings default to Courier New and clamp bad saved values", () => {
   assert.deepEqual(lib.readReaderPrefs(null), lib.READER_DEFAULTS);
-  assert.equal(lib.READER_DEFAULTS.font, "system");
+  assert.equal(lib.READER_DEFAULTS.font, "mono");
   assert.deepEqual(lib.readReaderPrefs(memory("{broken")), lib.READER_DEFAULTS);
   const odd = lib.readReaderPrefs(memory(JSON.stringify({ font: "comic", size: 99, zoom: 0.1, spacing: "airy", width: "wide" })));
-  assert.deepEqual(odd, { font: "system", size: lib.READER_SIZE.max, zoom: lib.READER_ZOOM.min, spacing: "airy", width: "wide" });
+  assert.deepEqual(odd, { font: "mono", size: lib.READER_SIZE.max, zoom: lib.READER_ZOOM.min, spacing: "airy", width: "wide" });
   assert.equal(lib.readReaderPrefs(memory(JSON.stringify({ font: "serif", size: 20, zoom: 1.25 }))).zoom, 1.3);
 });
 
-test("reader uses the device's own font, text size, zoom, spacing and width controls", () => {
+test("reader uses Courier New by default with font, text size, zoom, spacing and width controls", () => {
+  assert.match(page, /mono: \{ label: "Courier", stack: '"Courier New"/);
   assert.match(page, /system: \{ label: "System", stack: 'system-ui/);
   for (const label of ['"Smaller text"', '"Bigger text"', '"Zoom in"', '"Zoom out"', '"Line spacing"', '"Page width"']) assert.ok(page.includes(label), label);
-  assert.match(css, /\.share-reader \{[^}]*font-family: var\(--reader-font\)/s);
-  assert.match(css, /\.share-main \{[^}]*zoom: var\(--reader-zoom\)[^}]*font-size: var\(--reader-size\)/s);
+  assert.match(css, /\.share-reader \{[^}]*font-family: "Courier New"/s);
+  assert.match(css, /\.share-main \{[^}]*zoom: var\(--reader-zoom\)[^}]*font-size: var\(--reader-size\)[^}]*font-family: var\(--reader-font\)/s);
   assert.match(page, /<AIMarkdown content=\{message\.content\} \/>/);
   assert.match(page, /<bdi className="ign flip-ign" dir="auto">/);
 });

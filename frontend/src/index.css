@@ -1776,20 +1776,20 @@ html[data-effects="calm"] .lineup__bar, html[data-effects="calm"] .lineup__row {
 
 /* ── Map Lab: 3D hologram chips ─────────────────────────────────────────── */
 .map-holo { position: absolute; inset: 0; pointer-events: none; }
-.map-holo__pad {
-  position: absolute; inset: 0; border-radius: 9999px;
-  background:
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--holo) 42%, transparent) 0%, rgba(4, 9, 18, 0.9) 68%),
-    repeating-radial-gradient(circle at 50% 50%, transparent 0 3px, color-mix(in srgb, var(--holo) 18%, transparent) 3px 4px);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--holo) 60%, transparent), inset 0 0 12px color-mix(in srgb, var(--holo) 45%, transparent);
+/* Soft blurred ground shadow under the free-standing model (not a ring). */
+.map-holo__shadow {
+  position: absolute; left: 50%; top: 90%; width: 110%; height: 38%; transform: translate(-50%, -50%);
+  border-radius: 50%; filter: blur(4px);
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.6) 0%, color-mix(in srgb, var(--holo) 22%, transparent) 45%, transparent 72%);
 }
 .map-holo__canvas {
   position: absolute; left: 50%; top: 50%; max-width: none;
-  transform: translate(-50%, -85.5%);
+  transform: translate(-50%, -50%); /* model centred on the chip, so tapping it grabs the chip */
   transition: opacity 0.35s ease;
 }
-.map-chip--holo { background: transparent !important; box-shadow: none !important; }
-.map-chip--holo:not(:focus-visible) { border-color: color-mix(in srgb, var(--holo) 75%, transparent) !important; }
+.map-chip--holo { background: transparent !important; box-shadow: none !important; border-color: transparent !important; outline: none !important; }
+.map-chip--holo:focus-visible .map-holo__canvas,
+.map-chip--holo-selected .map-holo__canvas { filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 8px var(--holo)); }
 
 /* Map Lab: recorder and replay */
 .map-rec-dot { width: 9px; height: 9px; border-radius: 9999px; background: #fb7185; box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.6); animation: map-rec-pulse 1.2s ease-out infinite; }
@@ -1808,7 +1808,7 @@ html[data-effects="calm"] .map-rec-dot { animation: none; }
     radial-gradient(900px 480px at -10% 0%, rgba(125, 181, 245, 0.10), transparent 55%),
     linear-gradient(180deg, #0a0f19 0%, #070a12 100%);
   color: var(--color-text);
-  font-family: var(--reader-font);
+  font-family: "Courier New", Courier, "Courier Prime", ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", monospace;
 }
 .share-bar {
   position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
@@ -1839,7 +1839,6 @@ html[data-effects="calm"] .map-rec-dot { animation: none; }
   width: min(380px, calc(100vw - 20px)); max-height: calc(100dvh - 90px); overflow-y: auto;
   border-radius: 16px; border: 1px solid var(--color-edge-2); background: rgba(13, 18, 27, 0.97);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); padding: 6px 14px 12px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 .share-panel__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-bottom: 1px solid var(--color-edge); }
 .share-panel__row:last-child { border-bottom: 0; }
@@ -1868,7 +1867,7 @@ html[data-effects="calm"] .map-rec-dot { animation: none; }
 .share-main {
   zoom: var(--reader-zoom); width: 100%; max-width: var(--reader-width); margin: 0 auto;
   padding: 28px max(16px, env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  font-size: var(--reader-size); line-height: var(--reader-lh);
+  font-size: var(--reader-size); line-height: var(--reader-lh); font-family: var(--reader-font);
 }
 .share-intro { padding-bottom: 22px; margin-bottom: 26px; border-bottom: 1px solid var(--color-edge); }
 .share-intro__pill {

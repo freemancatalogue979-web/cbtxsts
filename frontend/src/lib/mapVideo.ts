@@ -10,7 +10,7 @@ import type { HoloEngine } from "../components/MapHologram";
 
 export const VIDEO_WIDTH = 1280;
 const HOLO_SCALE = 1.7;
-const HOLO_BASE = 0.855;
+const HOLO_BASE = 0.5;
 const SIDE_COLOR: Record<MapToken["side"], string> = { ours: "#34d399", theirs: "#fb7185", neutral: "#fbbf24" };
 const FONT = '"Courier New", Courier, ui-monospace, monospace';
 
@@ -223,15 +223,16 @@ export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, r
   for (const c of state.chips) {
     const r = (c.size / 2) * s, x = X(c.x), y = Y(c.y);
     if (opts.holo && c.preset) {
-      const glow = ctx.createRadialGradient(x, y, 0, x, y, r);
-      glow.addColorStop(0, /^#[\da-f]{6}$/i.test(c.color) ? `${c.color}88` : "rgba(125,249,255,0.5)");
-      glow.addColorStop(1, "rgba(4,9,18,0.9)");
+      // Free-standing model: just a soft ground shadow, no disc or ring.
       ctx.save();
+      ctx.translate(x, y + r * 0.8);
+      ctx.scale(1, 0.35);
+      const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.1);
+      shadow.addColorStop(0, "rgba(0,0,0,0.55)");
+      shadow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = shadow;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = glow;
-      ctx.shadowColor = c.color;
-      ctx.shadowBlur = 14 * s;
+      ctx.arc(0, 0, r * 1.1, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       const px = c.size * s * HOLO_SCALE;

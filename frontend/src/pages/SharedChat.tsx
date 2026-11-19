@@ -12,10 +12,10 @@ import { BrandImg } from "../components/Logo";
 import { Spinner } from "../components/ui";
 
 export const READER_FONTS: Record<ReaderFont, { label: string; stack: string }> = {
-  // The reader's own device font, so long answers feel like any other article on their phone.
+  // Default: the app's Courier New. The reader can switch to their device font or a serif.
+  mono: { label: "Courier", stack: '"Courier New", Courier, "Courier Prime", ui-monospace, "Segoe UI Symbol", "Noto Sans Symbols", monospace' },
   system: { label: "System", stack: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"' },
   serif: { label: "Serif", stack: '"Iowan Old Style", "Palatino Linotype", Charter, Georgia, Cambria, "Times New Roman", serif' },
-  mono: { label: "Mono", stack: '"Courier New", Courier, ui-monospace, monospace' },
 };
 const SPACING: Record<ReaderPrefs["spacing"], number> = { compact: 1.45, normal: 1.7, airy: 1.95 };
 const MODE_LABEL: Record<string, string> = { ai: "AI response", think: "Deep analysis", guidance: "Next step", facts: "Local facts only" };

@@ -1061,7 +1061,7 @@ export function MapBoardEditor({ id, canManage }: { id: number; canManage: boole
                       <button key={c.id} type="button" data-map-kind="chip" data-map-id={c.id} data-map-chip={c.name}
                         aria-label={`${c.name || "Chip"} chip`} title={canManage ? `${c.name || "Chip"} — select to edit or resize` : (c.name || "Chip")}
                         tabIndex={canManage ? 0 : -1} onKeyDown={(e) => onMarkerKey(e, target)} onDoubleClick={() => { if (canManage && tool === "move" && !replay) removeChip(c.id); }}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${holoOn ? "map-chip--holo" : ""} ${selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.7)] font-black ${holoOn ? `map-chip--holo ${selected?.kind === "chip" && selected.id === c.id ? "map-chip--holo-selected" : ""}` : selected?.kind === "chip" && selected.id === c.id ? "outline outline-2 outline-offset-4 outline-white" : ""} ${tool === "move" ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={{ left: `${c.x}%`, top: `${c.y}%`, width: c.size, height: c.size, borderColor: c.color,
                           fontSize: Math.max(12, c.size * 0.32), touchAction: "none", "--holo": c.color } as React.CSSProperties}>
                         {holoOn ? <ChipHologram preset={c.preset!} color={c.color} size={c.size} fallback={<ChipPortrait chip={c} />} />

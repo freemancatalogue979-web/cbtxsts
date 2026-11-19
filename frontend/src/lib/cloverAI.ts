@@ -258,10 +258,11 @@ export function isShareToken(value: string | undefined): value is string {
 // Reader settings stay on this device.
 export type ReaderFont = "system" | "serif" | "mono";
 export type ReaderPrefs = { font: ReaderFont; size: number; zoom: number; spacing: "compact" | "normal" | "airy"; width: "narrow" | "wide" };
-export const READER_DEFAULTS: ReaderPrefs = { font: "system", size: 17, zoom: 1, spacing: "normal", width: "narrow" };
+// Courier New first, like the rest of the app; System and Serif stay as options.
+export const READER_DEFAULTS: ReaderPrefs = { font: "mono", size: 17, zoom: 1, spacing: "normal", width: "narrow" };
 export const READER_SIZE = { min: 13, max: 30 };
 export const READER_ZOOM = { min: 0.8, max: 1.8 };
-const READER_KEY = "clover_reader_prefs";
+const READER_KEY = "clover_reader_prefs_v2"; // v2: Courier New became the default
 const clampNum = (n: unknown, min: number, max: number, fallback: number) =>
   typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 
@@ -270,7 +271,7 @@ export function readReaderPrefs(storage: Pick<Storage, "getItem"> | null): Reade
     const raw = JSON.parse(storage?.getItem(READER_KEY) ?? "null") as Partial<ReaderPrefs> | null;
     if (!raw || typeof raw !== "object") return READER_DEFAULTS;
     return {
-      font: raw.font === "serif" || raw.font === "mono" ? raw.font : "system",
+      font: raw.font === "serif" || raw.font === "system" ? raw.font : "mono",
       size: Math.round(clampNum(raw.size, READER_SIZE.min, READER_SIZE.max, READER_DEFAULTS.size)),
       zoom: Math.round(clampNum(raw.zoom, READER_ZOOM.min, READER_ZOOM.max, 1) * 10) / 10,
       spacing: raw.spacing === "compact" || raw.spacing === "airy" ? raw.spacing : "normal",

@@ -91,6 +91,10 @@ test("every objective preset has a 3D hologram model and three.js loads lazily",
   assert.doesNotMatch(editor, /from "\.\.\/lib\/holoEngine"/, "editor must not pull three.js into the main bundle");
   assert.match(editor, /<ChipHologram preset=/);
   assert.match(css, /\.map-holo__canvas/);
+  // Free-standing models: no projector ring, light cone or chip ring under them.
+  assert.doesNotMatch(engine, /RingGeometry|projector\(/);
+  assert.doesNotMatch(holo, /map-holo__pad/);
+  assert.match(css, /\.map-chip--holo \{[^}]*border-color: transparent/);
 });
 
 test("chip names can be hidden for the board or per chip, and both are saved", () => {
