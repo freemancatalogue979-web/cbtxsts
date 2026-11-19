@@ -375,6 +375,13 @@ def _run() -> None:
                     except HeroSyncError:
                         pass  # recorded in the state row
                     refresh_art()
+                    wallpapers_due = True
+                else:
+                    wallpapers_due = False
+            from . import wallpaper_sync
+
+            if wallpapers_due or not wallpaper_sync.MANIFEST.exists():  # first boot gets wallpapers right away
+                wallpaper_sync.refresh()
         except Exception:
             logger.exception("Hero sync worker encountered an error")
         _wake.wait(300)

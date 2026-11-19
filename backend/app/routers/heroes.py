@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -52,6 +53,24 @@ def hero_sync_now(db: Session = Depends(get_db), user=Depends(get_current_user))
     except HeroSyncError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
     return status(db)
+
+
+@router.get("/art/{slug}/{kind}")
+def official_hero_art(slug: str, kind: str):
+    """Moonton's official picture of a hero (saved daily), for heroes newer than the bundled art pack.
+
+    Public like the bundled `/heroes/*.webp` files. kind: head (square face) or smallmap (tall card).
+    """
+    import re as _re
+
+    from ..hero_art_sync import ART_DIR, KINDS
+
+    if not _re.fullmatch(r"[a-z0-9.\-]{1,40}", slug or "") or kind not in KINDS:
+        raise HTTPException(status_code=404, detail="Not found")
+    path = ART_DIR / slug / f"{kind}.png"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/{hero_id}")

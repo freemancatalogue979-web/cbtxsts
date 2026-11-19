@@ -57,3 +57,4 @@ image-search/
 
 # Archive locker uploads (private files live server-side only).
 backend/data/archive/
+backend/data/wallpapers/
