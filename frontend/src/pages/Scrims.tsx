@@ -1,11 +1,11 @@
-import { AlertTriangle, Crown, FileText, Film, ImageIcon, Link2, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, FileText, Film, ImageIcon, Link2, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, qs } from "../lib/api";
 import type { Hero, Meta, Scrim, ScoreboardRead, ScrimSummary, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate, pct, ResultBadge } from "../lib/util";
 import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Tabs, Ign } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
-import { HeroImg } from "../components/HeroImg";
+import { MatchLineup } from "../components/MatchLineup";
 import { TournamentStats } from "../components/TournamentStats";
 import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, ScoreboardReader, sumLines, type LineForm } from "../components/Scoreboard";
 import { nice } from "../lib/caseText";
@@ -370,56 +370,12 @@ function GameForm({ scrim, initial, onSaved, onClose }: {
   );
 }
 
-/** One game's players: lane, hero and K/D/A (sub-ins marked). */
-function GamePlayers({ g }: { g: Scrim["games"][number] }) {
-  const lanes = LANES.filter((lane) => g.players?.[lane] || g.draft?.our_picks?.[lane]);
-  if (!lanes.length && !Object.keys(g.enemy_stats ?? {}).length) return null;
+/** One game's players, both teams: lane, hero, IGN, K/D/A, rating (sub-ins marked). */
+function GamePlayers({ g, opponent }: { g: Scrim["games"][number]; opponent: string }) {
   return (
-    <div className="mt-3">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="label">Who played</span>
-        {!g.lineup_from_scrim && <span className="chip !py-0 !text-[9px] text-amber border-amber/40">changed from the booked lineup</span>}
-      </div>
-      <ul className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-        {lanes.map((lane) => {
-          const hero = g.draft?.our_picks?.[lane];
-          const line = g.player_stats?.[lane];
-          return (
-            <li key={lane} data-lane={lane} className="scrim-player flex items-center gap-2 rounded-lg border border-edge/60 bg-raised/50 p-1.5 min-w-0">
-              {hero ? <HeroImg name={hero} size={30} className="rounded shrink-0" /> : <span className="h-[30px] w-[30px] shrink-0 rounded bg-panel" />}
-              <span className="min-w-0 leading-tight">
-                <span className="block text-[11.5px] truncate">{g.players?.[lane] ? <Ign text={g.players[lane]} /> : "—"}</span>
-                <span className="block text-[10px] text-faint truncate">{nice(lane)}{hero ? ` · ${hero}` : ""}</span>
-                {line && (line.kills != null || line.deaths != null || line.assists != null || line.rating != null) && (
-                  <span className="block text-[10.5px] tabular-nums text-mute">
-                    {line.kills != null || line.deaths != null || line.assists != null ? `${line.kills ?? 0}/${line.deaths ?? 0}/${line.assists ?? 0}` : ""}
-                    {line.rating != null && <span className="text-text/80"> · {line.rating.toFixed(1)}</span>}
-                    {line.mvp && <Crown size={10} className="inline ml-1 -mt-0.5 text-amber" aria-label="MVP" />}
-                  </span>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {g.enemy_stats && Object.keys(g.enemy_stats).length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Enemy scoreboard">
-          <span className="label mr-1">Enemy</span>
-          {LANES.filter((lane) => g.enemy_stats?.[lane]).map((lane) => {
-            const line = g.enemy_stats![lane];
-            const hero = line.hero || g.draft?.enemy_picks?.[lane];
-            return (
-              <span key={lane} className="chip !py-0.5 text-mute border-edge" title={line.name || undefined}>
-                {line.name && <Ign text={line.name} className="max-w-[7rem] truncate" />}
-                {hero ? <HeroImg name={hero} size={16} className="rounded" /> : <span className="text-faint">{nice(lane)}</span>}
-                <span className="tabular-nums">{line.kills ?? 0}/{line.deaths ?? 0}/{line.assists ?? 0}</span>
-                {line.rating != null && <span className="tabular-nums text-text/70">{line.rating.toFixed(1)}</span>}
-                {line.mvp && <Crown size={10} className="text-amber" aria-label="MVP" />}
-              </span>
-            );
-          })}
-        </div>
-      )}
+    <div className="mt-3 lineup-wrap">
+      <MatchLineup theirLabel={opponent || "Enemy"} players={g.players} ourPicks={g.draft?.our_picks} playerStats={g.player_stats}
+        enemyStats={g.enemy_stats} enemyPicks={g.draft?.enemy_picks} note={g.lineup_from_scrim ? undefined : "Changed from the booked lineup"} />
     </div>
   );
 }
@@ -727,7 +683,7 @@ export function ScrimsPage({ me, meta, parts }: { me: User; meta: Meta; parts: s
                       </div>
                     ))}
                   </div>
-                  <GamePlayers g={g} />
+                  <GamePlayers g={g} opponent={s.opponent} />
                   {(g.draft?.our_picks || g.draft?.our_bans) && (
                     <details className="mt-3">
                       <summary className="label cursor-pointer hover:text-mute">Draft</summary>

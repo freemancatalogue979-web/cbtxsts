@@ -1,14 +1,15 @@
-import { ClipboardList, Crown, Pencil, Plus, Trash2, Trophy } from "lucide-react";
+import { ClipboardList, Pencil, Plus, Trash2, Trophy } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Draft, Hero, Meta, ScoreboardRead, Tournament, TournamentGameDraft, TournamentMatchT, TournamentStatsT, User } from "../lib/types";
 import { dayLabel, fmtTime, navigate } from "../lib/util";
-import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile, Ign } from "../components/ui";
+import { Badge, Empty, ErrorNote, Field, Modal, PageTitle, SectionTitle, Spinner, StatTile } from "../components/ui";
 import { DraftBoard, DraftBoardEditor } from "../components/DraftBoard";
 import { FilePick } from "../components/FilePick";
 import { FileText, Film, ImageIcon, Link2 } from "lucide-react";
 import { nice } from "../lib/caseText";
 import { TournamentStats } from "../components/TournamentStats";
+import { MatchLineup } from "../components/MatchLineup";
 import { EnemyScoreboard, formToLines, linesToForm, ScoreboardFields, ScoreboardReader, type LineForm } from "../components/Scoreboard";
 
 const LANES = ["EXP", "JUNGLE", "MID", "GOLD", "ROAM"];
@@ -399,21 +400,10 @@ function SeriesDrafts({ match }: { match: TournamentMatchT }) {
       <div className="text-[11px] text-faint">
         Game {game.game_no}{game.result ? ` · ${game.result === "WIN" ? "Win" : "Loss"}` : ""}
       </div>
-      {game.players && Object.keys(game.players).length > 0 && (
-        <div className="flex flex-wrap gap-1.5" aria-label={`Who played game ${game.game_no}`}>
-          {LANES.filter((lane) => game.players?.[lane]).map((lane) => (
-            <span key={lane} className="chip !py-0.5 text-text border-edge-2">
-              <span className="text-faint">{nice(lane)}</span> <Ign text={game.players![lane]} />
-              {game.draft.our_picks?.[lane] && <span className="text-mute">· {game.draft.our_picks[lane]}</span>}
-              {game.player_stats?.[lane] && (game.player_stats[lane].kills != null || game.player_stats[lane].deaths != null || game.player_stats[lane].assists != null) && (
-                <span className="tabular-nums text-mute">· {game.player_stats[lane].kills ?? 0}/{game.player_stats[lane].deaths ?? 0}/{game.player_stats[lane].assists ?? 0}</span>
-              )}
-              {game.player_stats?.[lane]?.rating != null && <span className="tabular-nums text-text/70">{game.player_stats[lane].rating!.toFixed(1)}</span>}
-              {game.player_stats?.[lane]?.mvp && <Crown size={10} className="text-amber" aria-label="MVP" />}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="lineup-wrap">
+        <MatchLineup theirLabel={match.opponent || "Enemy"} players={game.players} ourPicks={game.draft.our_picks} playerStats={game.player_stats}
+          enemyStats={game.enemy_stats} enemyPicks={game.draft.enemy_picks} />
+      </div>
       {hasDraft(game.draft)
         ? <DraftBoard draft={game.draft} theirsLabel={(match.opponent || "Enemy")} players={game.players} />
         : <p className="text-[11px] text-faint">No draft saved for this game.</p>}

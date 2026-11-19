@@ -1673,3 +1673,103 @@ html [data-lane="ROAM"] { --lane: #7db5f5; }
 
 html[data-effects="calm"] .board-score__fill { animation: none; }
 @media (prefers-reduced-motion: reduce) { .board-score__fill { animation: none; } .podium-card:hover { transform: none; } }
+
+/* ---- Who played: both teams as esports scoreboards (components/MatchLineup.tsx) ---------- */
+.lineup-wrap { container-type: inline-size; }
+.lineup { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.lineup__vs { display: none; }
+@container (min-width: 620px) {
+  .lineup { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 12px; }
+  .lineup__vs {
+    display: grid; place-items: center; align-self: center; width: 30px; height: 30px; border-radius: 99px;
+    font-size: 10px; font-weight: 900; font-style: italic; color: var(--color-amber);
+    border: 1px solid color-mix(in srgb, var(--color-amber) 40%, transparent);
+    background: radial-gradient(circle, color-mix(in srgb, var(--color-amber) 18%, transparent), transparent 70%);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--color-amber) 22%, transparent);
+  }
+  /* Enemy side mirrors ours, like a broadcast scoreboard. */
+  .lineup__team--theirs .lineup__row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .lineup__team--theirs .lineup__face { order: 3; }
+  .lineup__team--theirs .lineup__who { order: 2; text-align: right; }
+  .lineup__team--theirs .lineup__score { order: 1; align-items: flex-start; }
+  .lineup__team--theirs .lineup__row { border-left: 1px solid color-mix(in srgb, var(--lane) 20%, var(--color-edge)); border-right: 3px solid var(--lane); padding: 6px 6px 8px 10px; }
+  .lineup__team--theirs .lineup__row { background: linear-gradient(270deg, color-mix(in srgb, var(--lane) 13%, transparent), color-mix(in srgb, var(--color-panel) 70%, transparent) 62%); }
+  .lineup__team--theirs .lineup__bar { left: auto; right: 0; }
+  .lineup__team--theirs .lineup__head { flex-direction: row-reverse; }
+}
+.lineup__team {
+  --side: #34d399;
+  min-width: 0; border-radius: 14px; padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--side) 22%, var(--color-edge));
+  background:
+    radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--side) 12%, transparent), transparent 70%),
+    color-mix(in srgb, var(--color-ink) 55%, transparent);
+}
+.lineup__team--theirs { --side: #fb7185; }
+.lineup__head { display: flex; align-items: center; gap: 8px; padding: 0 4px 7px; min-width: 0; }
+.lineup__team-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 900; font-style: italic; color: var(--side);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--side) 40%, transparent);
+}
+.lineup__totals { margin-left: auto; font-size: 11px; }
+.lineup__team--theirs .lineup__totals { margin-left: 0; margin-right: auto; }
+.lineup__rows { display: grid; gap: 5px; }
+.lineup__row {
+  position: relative; overflow: hidden; min-width: 0;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 6px 10px 8px 6px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--lane) 20%, var(--color-edge));
+  border-left: 3px solid var(--lane);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--lane) 13%, transparent), color-mix(in srgb, var(--color-panel) 70%, transparent) 62%);
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+.lineup__row:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--lane) 45%, var(--color-edge)); }
+.lineup__row--mvp { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-amber) 45%, transparent), 0 0 18px color-mix(in srgb, var(--color-amber) 14%, transparent); }
+.lineup__face { position: relative; display: block; width: 40px; height: 40px; flex: none; }
+.lineup__face img, .lineup__face > div { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--lane) 70%, transparent), 0 4px 10px rgb(0 0 0 / 0.45); }
+.lineup__noface { display: block; width: 40px; height: 40px; border-radius: 9px; border: 1px dashed var(--color-edge-2); }
+.lineup__lane {
+  position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
+  padding: 0 5px; border-radius: 99px; white-space: nowrap;
+  font-size: 8.5px; font-weight: 800; line-height: 13px; color: #0b0f17;
+  background: var(--lane); box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+}
+.lineup__who { display: grid; min-width: 0; line-height: 1.25; }
+.lineup__name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.lineup__hero { font-size: 10.5px; font-weight: 600; color: var(--color-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lineup__score { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.lineup__kda { font-size: 14px; font-weight: 900; font-style: normal; letter-spacing: 0; white-space: nowrap; }
+.lineup__kda i, .lineup__totals i { font-style: normal; color: var(--color-faint); padding: 0 1px; font-weight: 600; }
+.lineup__k { color: var(--color-text); }
+.lineup__d { color: var(--color-danger); }
+.lineup__a { color: var(--color-mute); }
+.lineup__badges { display: flex; align-items: center; gap: 4px; }
+.lineup__rating {
+  min-width: 34px; text-align: center; padding: 1px 6px; border-radius: 6px;
+  font-size: 11px; font-weight: 900; font-style: normal; border: 1px solid transparent;
+}
+.lineup__rating--gold { color: #1a1204; background: linear-gradient(135deg, #fde68a, #f59e0b); box-shadow: 0 0 12px rgb(245 158 11 / 0.35); }
+.lineup__rating--great { color: #34d399; background: rgb(52 211 153 / 0.12); border-color: rgb(52 211 153 / 0.35); }
+.lineup__rating--fine { color: var(--color-text); background: var(--color-raised); border-color: var(--color-edge); }
+.lineup__rating--low { color: var(--color-danger); background: rgb(251 113 133 / 0.1); border-color: rgb(251 113 133 / 0.3); }
+.lineup__mvp {
+  display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 6px;
+  font-size: 9.5px; font-weight: 900; font-style: normal; color: #1a1204; background: linear-gradient(135deg, #fde68a, #f59e0b);
+}
+/* Kill participation (kills + assists) against the best of all ten players. */
+.lineup__bar {
+  position: absolute; left: 0; bottom: 0; height: 2px; width: var(--share, 0%);
+  background: linear-gradient(90deg, var(--lane), color-mix(in srgb, var(--lane) 30%, transparent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lane) 60%, transparent);
+  transform-origin: left; animation: lineup-grow 700ms cubic-bezier(0.22, 0.68, 0.24, 1) both;
+}
+.lineup__team--theirs .lineup__bar { transform-origin: right; }
+@keyframes lineup-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (max-width: 380px) {
+  .lineup__row { gap: 8px; padding-right: 7px; }
+  .lineup__kda { font-size: 13px; }
+  .lineup__name { font-size: 12.5px; }
+}
+html[data-effects="calm"] .lineup__bar, html[data-effects="calm"] .lineup__row { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) { .lineup__bar { animation: none; } .lineup__row { transition: none; } .lineup__row:hover { transform: none; } }

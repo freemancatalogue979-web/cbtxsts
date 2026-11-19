@@ -23,11 +23,26 @@ test("lineup card has lane colours, avatars and IGNs; subs are chips", () => {
 });
 
 test("every player name on scrims and tournaments wears the IGN look", () => {
-  assert.match(page, /<Ign text=\{g\.players\[lane\]\}/);
-  assert.match(tournaments, /<Ign text=\{game\.players!\[lane\]\}/);
+  // Both pages show who played through the shared two-team scoreboard.
+  assert.match(page, /<MatchLineup theirLabel=\{opponent \|\| "Enemy"\} players=\{g\.players\}/);
+  assert.match(tournaments, /<MatchLineup theirLabel=\{match\.opponent \|\| "Enemy"\} players=\{game\.players\}/);
   assert.match(tStats, /<Ign text=\{p\.name\}/);
 });
 
 test("a missing scrim says so instead of spinning forever", () => {
   assert.match(page, /That scrim isn't here/);
+});
+
+test("who played: both teams as scoreboards, IGNs, lane badges, ratings, MVP and kill share", async () => {
+  const lineup = await readFile(new URL("../src/components/MatchLineup.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
+  assert.match(lineup, /r\.name \? <Ign text=\{r\.name\} \/>/);
+  assert.match(lineup, /name: enemyStats\?\.\[lane\]\?\.name, hero: enemyStats\?\.\[lane\]\?\.hero \|\| enemyPicks\?\.\[lane\]/);
+  assert.match(lineup, /lineup__rating--\$\{ratingTier\(l\.rating\)\}/);
+  assert.match(lineup, /<span className="lineup__vs" aria-hidden>vs<\/span>/);
+  // Side by side only when the card is wide enough; phones stack the teams.
+  assert.match(css, /\.lineup-wrap \{ container-type: inline-size; \}/);
+  assert.match(css, /@container \(min-width: 620px\) \{\n  \.lineup \{ grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
+  assert.match(css, /\.lineup__name \{ display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;/);
+  assert.match(css, /html\[data-effects="calm"\] \.lineup__bar/);
 });
